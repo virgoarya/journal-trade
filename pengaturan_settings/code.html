@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#f2ca50",
+              "primary-container": "#d4af37",
+              "surface-dim": "#050508",
+              "surface-container": "#0A0A12",
+              "surface-container-low": "#1b1b1f",
+              "surface-container-high": "#2a292e",
+              "surface-container-highest": "#353439",
+              "surface-variant": "#353439",
+              "outline-variant": "#4d4635",
+              "on-surface": "#e5e1e7",
+              "on-surface-variant": "#d0c5af",
+              "error": "#FF1744",
+              "success": "#00E676"
+            },
+            fontFamily: {
+              "headline": ["Inter", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "label": ["Inter", "sans-serif"],
+              "mono": ["JetBrains Mono", "monospace"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #050508;
+            color: #e5e1e7;
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(53, 52, 57, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #1b1b1f;
+            border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #D4AF37;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar (Shared Component) -->
+<aside class="w-[260px] h-screen sticky left-0 top-0 bg-[#0A0A12] flex flex-col justify-between py-6 border-r border-white/5 z-50">
+<div>
+<div class="px-6 mb-10">
+<h1 class="text-[16px] font-bold text-[#D4AF37] tracking-[0.1em]">HUNTER TRADES</h1>
+<p class="text-[10px] text-gray-500 tracking-[0.2em] mt-1">ELITE LEDGER</p>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="dashboard">dashboard</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Dasbor</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="edit_note">edit_note</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Catat Trade</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="menu_book">menu_book</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Playbook</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="query_stats">query_stats</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Analitik</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="psychology">psychology</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">AI Review</span>
+</a>
+</nav>
+</div>
+<div class="space-y-1">
+<a class="flex items-center h-[48px] text-[#D4AF37] bg-[#D4AF37]/[0.08] border-l-[3px] border-[#D4AF37] px-4 transition-all duration-200 ease-in-out" href="/settings">
+<span class="material-symbols-outlined mr-4" data-icon="settings">settings</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Pengaturan</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="logout">logout</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Keluar</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-[#050508]">
+<!-- TopAppBar (Shared Component) -->
+<header class="h-[64px] sticky top-0 z-40 bg-[#0A0A12]/70 backdrop-blur-xl border-b border-white/5 flex justify-between items-center px-8 w-full">
+<div class="flex items-center gap-4">
+<h2 class="font-['Inter'] font-semibold text-[18px] text-white">Pengaturan</h2>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative cursor-pointer hover:opacity-80">
+<span class="material-symbols-outlined text-[#D4AF37]" data-icon="notifications">notifications</span>
+<span class="absolute -top-1 -right-1 w-2 h-2 bg-[#FF1744] rounded-full"></span>
+</div>
+<div class="w-8 h-8 rounded-lg overflow-hidden border border-white/10">
+<img alt="Discord User Avatar" class="w-full h-full object-cover" data-alt="close-up of a high-tech digital avatar with neon accents and futuristic helmet in a dark moody setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsaGAwwvGhPqgxmF9VoCqy_bJrBnlj_foS_pfyQ-YxTVG05YS2i7GLThPl7ISKeqDUHSCKwEfEDUdbGvhtVfnix48-uIx1qf3EE2qZLvD714EBXwzlZ9Y7O5Q9E0yEJNZ8ypCXCTd1tv0QmCP-hny7V5u9DMuQU-lEgNnFWi4OFr5ZUjHjTGojgk_qu5cYLUmN2-CdLwvK2E8d2V_bULva_1QVF_HiYhhVS9xkZfNfDye04bQOdsJ8TZOOs__eD2Ek-aI_i2NKDh8"/>
+</div>
+</div>
+</header>
+<!-- Settings Canvas -->
+<div class="flex-1 overflow-y-auto px-8 py-10">
+<div class="max-w-[720px] mx-auto space-y-12">
+<!-- 1. Profil -->
+<section class="space-y-6">
+<h3 class="font-headline font-bold text-sm tracking-widest text-[#D4AF37] uppercase">Profil</h3>
+<div class="glass-panel p-8 rounded-2xl flex items-center gap-8">
+<div class="relative">
+<div class="w-20 h-20 rounded-full border-2 border-[#D4AF37] p-1 shadow-[0_0_15px_rgba(212,175,55,0.2)]">
+<img alt="Profile Avatar" class="w-full h-full rounded-full object-cover" data-alt="stylized digital portrait of a professional trader with gold rimmed glasses and futuristic aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUaLMQfHQhP1KAYTiP2XA61zGvzV4i6FjHXUqeuBdpvrQkHk-SS1HuYI8isEy-SCL0cwbaGoS--T--3sw_K5Q88ZO1qXvmE32PqBW4CyzP6yolZ-DHV1A5elIViTKNDLDcQj2NhW7d-iduwaJbSIBzAYETV7h8pFQeELknlZkrC1ESjSZnFaScfHivHMVQvD7c4SaW-TnT3J9MX0nOVwkzE7UQztsGOP_TGN-esf4YHTW12F8S--mAqxmZNdKzY_q1IMxBfvDV04s"/>
+</div>
+<button class="absolute bottom-0 right-0 bg-[#D4AF37] text-[#050508] p-1.5 rounded-full shadow-lg hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-sm" data-icon="photo_camera">photo_camera</span>
+</button>
+</div>
+<div class="space-y-1">
+<h4 class="text-xl font-bold text-white tracking-tight">Vantage_Hunter_01</h4>
+<p class="text-xs text-on-surface-variant/60 font-medium">Member sejak <span class="font-mono text-[#D4AF37]">JANUARI 2024</span></p>
+</div>
+</div>
+</section>
+<!-- 2. Akun Trading -->
+<section class="space-y-6">
+<h3 class="font-headline font-bold text-sm tracking-widest text-[#D4AF37] uppercase">Akun Trading</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="text-[10px] font-medium text-on-surface-variant/60 uppercase tracking-widest px-1">Nama Akun</label>
+<input class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-[#D4AF37]/50 transition-all font-medium" type="text" value="Personal Prime Ledger"/>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-medium text-on-surface-variant/60 uppercase tracking-widest px-1">Saldo Awal</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#D4AF37]">USD</span>
+<input class="w-full bg-surface-container-low border-none rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:ring-1 focus:ring-[#D4AF37]/50 transition-all font-mono" type="text" value="50,000.00"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-medium text-on-surface-variant/60 uppercase tracking-widest px-1">Mata Uang</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-[#D4AF37]/50 transition-all appearance-none">
+<option>USD - United States Dollar</option>
+<option>EUR - Euro</option>
+<option>IDR - Indonesian Rupiah</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-medium text-on-surface-variant/60 uppercase tracking-widest px-1">Broker</label>
+<input class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-[#D4AF37]/50 transition-all font-medium" placeholder="e.g. IC Markets, Pepperstone" type="text"/>
+</div>
+</div>
+</section>
+<!-- 3. Aturan Risiko -->
+<section class="space-y-6">
+<div class="flex items-center justify-between">
+<h3 class="font-headline font-bold text-sm tracking-widest text-[#D4AF37] uppercase">Aturan Risiko</h3>
+<span class="material-symbols-outlined text-on-surface-variant/40" data-icon="shield">shield</span>
+</div>
+<div class="glass-panel p-8 rounded-2xl space-y-10">
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="text-xs font-semibold text-white">Max Daily Drawdown</label>
+<span class="font-mono text-[#D4AF37] text-sm">4.0%</span>
+</div>
+<input class="w-full" max="10" min="1" type="range" value="4"/>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="text-xs font-semibold text-white">Max Total Drawdown</label>
+<span class="font-mono text-[#D4AF37] text-sm">10.0%</span>
+</div>
+<input class="w-full" max="20" min="1" type="range" value="10"/>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="text-xs font-semibold text-white">Max Trades per Hari</label>
+<span class="font-mono text-[#D4AF37] text-sm">5</span>
+</div>
+<input class="w-full" max="15" min="1" type="range" value="5"/>
+</div>
+</div>
+</section>
+<!-- 4. Data Management -->
+<section class="space-y-6 pb-20">
+<h3 class="font-headline font-bold text-sm tracking-widest text-[#D4AF37] uppercase">Manajemen Data</h3>
+<div class="bg-surface-container-low/50 rounded-2xl p-6 border border-white/5 flex flex-col sm:flex-row gap-4 items-center justify-between">
+<div class="space-y-1">
+<p class="text-sm font-semibold text-white">Ekspor Data Jurnal</p>
+<p class="text-[10px] text-on-surface-variant/60">Unduh seluruh riwayat transaksi dalam format .CSV</p>
+</div>
+<button class="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#D4AF37]/40 text-[#D4AF37] text-xs font-bold tracking-widest hover:bg-[#D4AF37]/10 transition-colors uppercase">
+                            Ekspor ke CSV
+                        </button>
+</div>
+<div class="bg-error/5 rounded-2xl p-6 border border-error/10 flex flex-col sm:flex-row gap-4 items-center justify-between">
+<div class="space-y-1">
+<p class="text-sm font-semibold text-error">Reset Semua Data</p>
+<p class="text-[10px] text-on-surface-variant/60">Tindakan ini permanen dan tidak dapat dibatalkan.</p>
+</div>
+<button class="w-full sm:w-auto px-6 py-3 rounded-xl border border-error/40 text-error text-xs font-bold tracking-widest hover:bg-error/10 transition-colors uppercase">
+                            Hapus Data
+                        </button>
+</div>
+</section>
+</div>
+</div>
+<!-- Sticky Save Action (Mobile/Floating) -->
+<div class="fixed bottom-8 right-8 z-50">
+<button class="flex items-center gap-2 bg-[#D4AF37] text-[#050508] px-6 py-4 rounded-2xl font-bold shadow-2xl shadow-[#D4AF37]/20 hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="save">save</span>
+<span class="text-sm tracking-widest uppercase">Simpan Perubahan</span>
+</button>
+</div>
+</main>
+</body></html>

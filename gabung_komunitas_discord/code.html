@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error": "#ffb4ab",
+                        "surface": "#131317",
+                        "inverse-primary": "#735c00",
+                        "surface-dim": "#050508",
+                        "outline": "#99907c",
+                        "outline-variant": "rgba(77, 70, 53, 0.2)",
+                        "primary-container": "#D4AF37",
+                        "on-primary-container": "#050508",
+                        "on-surface": "#e5e1e7",
+                        "background": "#050508",
+                        "surface-container": "#0A0A12",
+                        "primary": "#f2ca50",
+                        "surface-variant": "rgba(53, 52, 57, 0.4)",
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #050508;
+            background-image: radial-gradient(rgba(212, 175, 55, 0.15) 1px, transparent 0);
+            background-size: 40px 40px;
+            background-position: center;
+        }
+        .glass-card {
+            background: rgba(10, 10, 18, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body text-on-surface min-h-screen flex items-center justify-center p-6">
+<!-- Main Container -->
+<main class="w-full max-w-[480px] animate-fade-in">
+<!-- Center-Aligned Entry Card -->
+<div class="glass-card rounded-2xl p-8 md:p-12 flex flex-col items-center text-center shadow-[0_24px_48px_rgba(0,0,0,0.4)]">
+<!-- Hero Icon -->
+<div class="mb-8 relative">
+<div class="absolute inset-0 bg-primary-container/20 blur-3xl rounded-full"></div>
+<div class="relative w-24 h-24 flex items-center justify-center rounded-2xl bg-surface-container border border-white/5">
+<span class="material-symbols-outlined text-6xl text-primary-container" style="font-variation-settings: 'FILL' 1;">groups</span>
+</div>
+</div>
+<!-- Heading Section -->
+<header class="mb-6">
+<h1 class="font-headline font-bold text-2xl md:text-3xl text-primary-container tracking-tight leading-tight uppercase">
+                    BERGABUNG DENGAN HUNTER TRADES
+                </h1>
+<p class="mt-4 text-white/60 text-sm md:text-base leading-relaxed max-w-[340px] mx-auto">
+                    Dapatkan akses eksklusif ke jurnal trading, analitik harian, dan komunitas trader profesional kami.
+                </p>
+</header>
+<!-- Benefits Grid (Asymmetric List) -->
+<section class="w-full mb-10 text-left space-y-4">
+<div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors group">
+<span class="material-symbols-outlined text-primary-container mt-0.5">smart_toy</span>
+<div>
+<h3 class="text-xs font-bold uppercase tracking-widest text-primary-container mb-1">Review Trade Otomatis</h3>
+<p class="text-[13px] text-white/40">Evaluasi instan berbasis data untuk setiap posisi Anda.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-primary-container mt-0.5">query_stats</span>
+<div>
+<h3 class="text-xs font-bold uppercase tracking-widest text-primary-container mb-1">Analitik Performa Mendalam</h3>
+<p class="text-[13px] text-white/40">Visualisasi statistik Win Rate dan Profit Factor yang akurat.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-primary-container mt-0.5">forum</span>
+<div>
+<h3 class="text-xs font-bold uppercase tracking-widest text-primary-container mb-1">Komunitas Discord Eksklusif</h3>
+<p class="text-[13px] text-white/40">Diskusi real-time dengan ratusan elite trader setiap hari.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-primary-container mt-0.5">menu_book</span>
+<div>
+<h3 class="text-xs font-bold uppercase tracking-widest text-primary-container mb-1">Playbook Strategi Terkurasi</h3>
+<p class="text-[13px] text-white/40">Akses perpustakaan strategi yang telah teruji validitasnya.</p>
+</div>
+</div>
+</section>
+<!-- Action Area -->
+<div class="w-full space-y-6">
+<button class="w-full bg-primary-container hover:bg-primary transition-all text-on-primary-container font-bold py-4 rounded-xl flex items-center justify-center gap-3 active:scale-95">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="tracking-wide">GABUNG DISCORD SEKARANG</span>
+</button>
+<a class="block text-xs uppercase tracking-widest text-white/30 hover:text-primary-container transition-colors" href="#">
+                    Kembali ke halaman masuk
+                </a>
+</div>
+<!-- Footer Decorative Element -->
+<div class="mt-10 flex items-center gap-4 w-full">
+<div class="h-[1px] flex-grow bg-white/5"></div>
+<div class="font-mono text-[10px] text-white/20 tracking-[0.3em]">HT-v2.04</div>
+<div class="h-[1px] flex-grow bg-white/5"></div>
+</div>
+</div>
+<!-- System Branding (Terminal Style) -->
+<div class="mt-8 text-center">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-outline-variant bg-surface-container-low">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+<span class="font-mono text-[10px] uppercase text-white/40 tracking-tighter">Terminal Noir | Secure Gateway</span>
+</div>
+</div>
+</main>
+<!-- Visual Polish: Ambient Glows -->
+<div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-container/5 blur-[120px] rounded-full pointer-events-none"></div>
+<div class="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-container/5 blur-[120px] rounded-full pointer-events-none"></div>
+</body></html>

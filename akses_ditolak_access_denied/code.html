@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed-dim": "#c8c5d1",
+              "on-tertiary-container": "#254188",
+              "on-primary-container": "#554300",
+              "primary-fixed-dim": "#e9c349",
+              "secondary-fixed": "#e4e1ed",
+              "outline-variant": "#4d4635",
+              "surface-container-highest": "#353439",
+              "on-primary-fixed": "#241a00",
+              "tertiary-fixed-dim": "#b4c5ff",
+              "primary-fixed": "#ffe088",
+              "on-secondary-fixed-variant": "#47464f",
+              "background": "#050508",
+              "surface-tint": "#e9c349",
+              "on-surface": "#e5e1e7",
+              "on-error": "#690005",
+              "on-background": "#e5e1e7",
+              "tertiary-container": "#97b0ff",
+              "tertiary": "#bfcdff",
+              "surface-container-high": "#2a292e",
+              "primary-container": "#d4af37",
+              "on-tertiary-fixed-variant": "#27438a",
+              "primary": "#f2ca50",
+              "inverse-on-surface": "#303034",
+              "surface-dim": "#050508",
+              "inverse-surface": "#e5e1e7",
+              "on-tertiary": "#082b72",
+              "surface-variant": "#353439",
+              "surface-bright": "#39393d",
+              "secondary": "#c8c5d1",
+              "on-primary-fixed-variant": "#574500",
+              "on-error-container": "#ffdad6",
+              "on-primary": "#3c2f00",
+              "on-secondary-container": "#b9b7c3",
+              "inverse-primary": "#735c00",
+              "on-secondary": "#302f39",
+              "surface": "#131317",
+              "surface-container-low": "#1b1b1f",
+              "on-tertiary-fixed": "#00174b",
+              "surface-container": "#0A0A12",
+              "surface-container-lowest": "#0e0e12",
+              "secondary-container": "#494852",
+              "error": "#FF1744",
+              "error-container": "#93000a",
+              "on-secondary-fixed": "#1b1b23",
+              "on-surface-variant": "#d0c5af",
+              "outline": "#99907c",
+              "tertiary-fixed": "#dbe1ff"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(16, 16, 24, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .gold-glow {
+        box-shadow: 0 24px 48px -12px rgba(212, 175, 55, 0.04);
+      }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body min-h-screen flex items-center justify-center p-6 selection:bg-primary/30">
+<!-- Access Denied Main Container -->
+<main class="w-full max-w-[440px] flex flex-col items-center text-center">
+<!-- Animated Background Element (Subtle) -->
+<div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-error/5 blur-[120px]"></div>
+</div>
+<!-- Terminal Identifier -->
+<div class="mb-12 font-mono text-[10px] tracking-[0.3em] text-outline uppercase opacity-40">
+            System Error Code: 403_RESTRICTED_ACCESS
+        </div>
+<!-- Shield Icon -->
+<div class="mb-8 relative group">
+<div class="absolute inset-0 bg-error/20 blur-2xl rounded-full scale-110"></div>
+<div class="relative w-20 h-20 rounded-2xl glass-card flex items-center justify-center border-error/20">
+<span class="material-symbols-outlined text-[56px] text-error" data-icon="shield">
+                    shield
+                </span>
+</div>
+</div>
+<!-- Content -->
+<h1 class="font-headline font-bold text-[28px] leading-tight text-[#E8E6E3] mb-4 tracking-tight">
+            AKSES DIBATASI
+        </h1>
+<p class="text-[15px] leading-relaxed text-secondary mb-10 px-4">
+            Akun Discord Anda belum terdaftar sebagai member Hunter Trades atau belum memiliki role yang diperlukan.
+        </p>
+<!-- Actions -->
+<div class="w-full space-y-6">
+<button class="w-full h-[52px] bg-primary-container text-surface-dim font-headline font-bold text-[15px] rounded-[10px] gold-glow hover:opacity-90 transition-all active:scale-[0.98] flex items-center justify-center gap-2 group">
+                Gabung Hunter Trades
+                <span class="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">
+                    arrow_forward
+                </span>
+</button>
+<div class="flex flex-col items-center gap-4">
+<a class="text-primary-container font-headline font-medium text-[14px] hover:underline transition-all tracking-wide underline-offset-4" href="/login">
+                    Coba masuk ulang
+                </a>
+<div class="mt-8 flex items-center gap-2 opacity-30">
+<span class="h-[1px] w-8 bg-outline"></span>
+<span class="font-mono text-[10px] tracking-widest uppercase">Hunter Trades Ledger</span>
+<span class="h-[1px] w-8 bg-outline"></span>
+</div>
+</div>
+</div>
+<!-- Decorative Footer Elements -->
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 opacity-20 pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]" data-icon="security">security</span>
+<span class="font-mono text-[10px] uppercase">Encrypted</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]" data-icon="terminal">terminal</span>
+<span class="font-mono text-[10px] uppercase">v2.0.4-Gold</span>
+</div>
+</div>
+</main>
+</body></html>

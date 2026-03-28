@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#050508",
+              "tertiary-fixed-dim": "#b4c5ff",
+              "tertiary-fixed": "#dbe1ff",
+              "outline": "#99907c",
+              "inverse-primary": "#735c00",
+              "on-primary-container": "#554300",
+              "secondary-fixed-dim": "#c8c5d1",
+              "surface-container-lowest": "#0e0e12",
+              "on-primary": "#3c2f00",
+              "secondary-fixed": "#e4e1ed",
+              "outline-variant": "#4d4635",
+              "on-error": "#690005",
+              "on-secondary-fixed": "#1b1b23",
+              "on-primary-fixed": "#241a00",
+              "on-tertiary-fixed": "#00174b",
+              "secondary": "#c8c5d1",
+              "surface-tint": "#e9c349",
+              "surface-variant": "#353439",
+              "primary": "#d4af37",
+              "primary-container": "#d4af37",
+              "surface-container-highest": "#353439",
+              "on-secondary-fixed-variant": "#47464f",
+              "tertiary": "#bfcdff",
+              "on-surface-variant": "#d0c5af",
+              "surface-container-high": "#2a292e",
+              "on-primary-fixed-variant": "#574500",
+              "on-error-container": "#ffdad6",
+              "background": "#050508",
+              "primary-fixed": "#ffe088",
+              "inverse-surface": "#e5e1e7",
+              "surface-bright": "#39393d",
+              "surface-container-low": "#1b1b1f",
+              "on-secondary": "#302f39",
+              "inverse-on-surface": "#303034",
+              "error-container": "#93000a",
+              "secondary-container": "#494852",
+              "surface-container": "#0A0A12",
+              "on-tertiary-container": "#254188",
+              "primary-fixed-dim": "#e9c349",
+              "on-background": "#e5e1e7",
+              "tertiary-container": "#97b0ff",
+              "surface-dim": "#050508",
+              "on-tertiary": "#082b72",
+              "on-secondary-container": "#b9b7c3",
+              "on-tertiary-fixed-variant": "#27438a",
+              "error": "#ffb4ab",
+              "on-surface": "#e5e1e7",
+              "discord-blurple": "#5865F2"
+            },
+            fontFamily: {
+              "headline": ["Inter", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "label": ["Inter", "sans-serif"],
+              "mono": ["JetBrains Mono", "monospace"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .dot-grid {
+            background-image: radial-gradient(#d4af37 0.5px, transparent 0.5px);
+            background-size: 24px 24px;
+            opacity: 0.05;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(10, 10, 18, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface min-h-screen flex items-center justify-center overflow-hidden">
+<!-- Background Layer (Hunter Trades Login Page Mockup) -->
+<div class="fixed inset-0 z-0">
+<div class="absolute inset-0 dot-grid"></div>
+<div class="flex flex-col items-center justify-center h-full opacity-20 pointer-events-none">
+<h1 class="font-headline font-extrabold text-6xl text-primary tracking-tighter mb-4">Hunter Trades</h1>
+<p class="font-label tracking-[0.2em] text-on-surface-variant uppercase text-sm">Terminal Noir Login</p>
+<div class="mt-12 w-64 h-10 bg-surface-container-high rounded-lg"></div>
+<div class="mt-4 w-64 h-10 bg-surface-container-high rounded-lg"></div>
+</div>
+</div>
+<!-- Modal Overlay Backdrop -->
+<div class="fixed inset-0 z-10 bg-black/60 backdrop-blur-md"></div>
+<!-- Discord Authorization Modal -->
+<div class="relative z-20 w-full max-w-md px-6">
+<div class="glass-card rounded-[16px] p-8 flex flex-col items-center border border-primary/20 shadow-[0_24px_48px_rgba(212,175,55,0.04)]">
+<!-- Discord Branding Icon -->
+<div class="w-16 h-16 bg-discord-blurple rounded-full flex items-center justify-center mb-8 shadow-lg">
+<!-- Using icon name from JSON logic or standard representation -->
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings: 'FILL' 1;">
+                    account_circle
+                </span>
+</div>
+<!-- Content Section -->
+<div class="text-center space-y-4 mb-10">
+<h2 class="font-headline font-bold text-xl text-on-surface leading-tight">
+                    Izinkan Hunter Trades untuk mengakses profil Discord Anda?
+                </h2>
+<p class="text-on-surface-variant text-sm font-medium">
+                    Anda akan dialihkan ke aplikasi Discord untuk verifikasi.
+                </p>
+</div>
+<!-- Action Cluster -->
+<div class="w-full space-y-3">
+<!-- Primary Action -->
+<button class="w-full bg-discord-blurple hover:bg-opacity-90 active:scale-[0.98] transition-all text-white font-bold py-3.5 rounded-[10px] flex items-center justify-center gap-2 group">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">login</span>
+                    Izinkan
+                </button>
+<!-- Secondary Action -->
+<button class="w-full bg-transparent hover:bg-white/5 active:scale-[0.98] transition-all border border-white/10 text-on-surface-variant font-medium py-3 rounded-[10px]">
+                    Batal
+                </button>
+</div>
+<!-- Technical Detail Footer (Terminal Aesthetic) -->
+<div class="mt-8 pt-6 border-t border-white/5 w-full">
+<div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-on-surface-variant/60">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                        SECURE_AUTH_V2
+                    </div>
+<span>HUNTER_TRADES_TERMINAL</span>
+</div>
+</div>
+</div>
+<!-- App Branding Anchor below modal -->
+<div class="mt-6 flex justify-center items-center gap-2 opacity-40">
+<span class="font-headline font-bold text-primary tracking-tight">Hunter Trades</span>
+<span class="text-xs font-mono text-on-surface-variant">|</span>
+<span class="text-xs font-mono text-on-surface-variant">ID: 8829-X</span>
+</div>
+</div>
+<!-- Design System Decoration: Ambient Glow -->
+<div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+</body></html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed-dim": "#c8c5d1",
+              "on-tertiary-container": "#254188",
+              "on-primary-container": "#554300",
+              "primary-fixed-dim": "#e9c349",
+              "secondary-fixed": "#e4e1ed",
+              "outline-variant": "#4d4635",
+              "surface-container-highest": "#353439",
+              "on-primary-fixed": "#241a00",
+              "tertiary-fixed-dim": "#b4c5ff",
+              "primary-fixed": "#ffe088",
+              "on-secondary-fixed-variant": "#47464f",
+              "background": "#050508",
+              "surface-tint": "#e9c349",
+              "on-surface": "#e5e1e7",
+              "on-error": "#690005",
+              "on-background": "#e5e1e7",
+              "tertiary-container": "#97b0ff",
+              "tertiary": "#bfcdff",
+              "surface-container-high": "#2a292e",
+              "primary-container": "#d4af37",
+              "on-tertiary-fixed-variant": "#27438a",
+              "primary": "#D4AF37",
+              "inverse-on-surface": "#303034",
+              "surface-dim": "#050508",
+              "inverse-surface": "#e5e1e7",
+              "on-tertiary": "#082b72",
+              "surface-variant": "#353439",
+              "surface-bright": "#39393d",
+              "secondary": "#c8c5d1",
+              "on-primary-fixed-variant": "#574500",
+              "on-error-container": "#ffdad6",
+              "on-primary": "#3c2f00",
+              "on-secondary-container": "#b9b7c3",
+              "inverse-primary": "#735c00",
+              "on-secondary": "#302f39",
+              "surface": "#131317",
+              "surface-container-low": "#1b1b1f",
+              "on-tertiary-fixed": "#00174b",
+              "surface-container": "#0A0A12",
+              "surface-container-lowest": "#0e0e12",
+              "secondary-container": "#494852",
+              "error": "#FF1744",
+              "error-container": "#93000a",
+              "on-secondary-fixed": "#1b1b23",
+              "on-surface-variant": "#d0c5af",
+              "outline": "#99907c",
+              "tertiary-fixed": "#dbe1ff"
+            },
+            fontFamily: {
+              "headline": ["Inter", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "label": ["Inter", "sans-serif"],
+              "mono": ["JetBrains Mono", "monospace"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(53, 52, 57, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .best-playbook-glow {
+            box-shadow: 0 0 24px 0 rgba(212, 175, 55, 0.04);
+            border: 1px solid rgba(212, 175, 55, 0.4);
+        }
+        body {
+            background-color: #050508;
+            color: #e5e1e7;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar -->
+<aside class="w-[260px] h-screen sticky left-0 top-0 flex flex-col justify-between py-6 border-r border-white/5 bg-[#0A0A12]">
+<div class="flex flex-col gap-8">
+<div class="px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-[#D4AF37]/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[#D4AF37]" style="font-variation-settings: 'FILL' 1;">gps_fixed</span>
+</div>
+<div>
+<h1 class="text-[16px] font-bold text-[#D4AF37] tracking-[0.1em]">HUNTER TRADES</h1>
+<p class="text-[10px] text-gray-500 tracking-[0.2em] uppercase">Elite Ledger</p>
+</div>
+</div>
+</div>
+<nav class="flex flex-col">
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+                    Dasbor
+                </a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">edit_note</span>
+                    Catat Trade
+                </a>
+<!-- Active State: Playbook -->
+<a class="flex items-center h-[48px] text-[#D4AF37] bg-[#D4AF37]/[0.08] border-l-[3px] border-[#D4AF37] px-4 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+                    Playbook
+                </a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">query_stats</span>
+                    Analitik
+                </a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">psychology</span>
+                    AI Review
+                </a>
+</nav>
+</div>
+<div class="flex flex-col border-t border-white/5 pt-4">
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">settings</span>
+                Pengaturan
+            </a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 transition-colors hover:bg-white/5 font-['Inter'] font-medium text-[14px] tracking-[0.1em]" href="#">
+<span class="material-symbols-outlined mr-3">logout</span>
+                Keluar
+            </a>
+</div>
+</aside>
+<main class="flex-1 flex flex-col bg-[#050508]">
+<!-- TopAppBar -->
+<header class="h-[64px] sticky top-0 z-40 bg-[#0A0A12]/70 backdrop-blur-xl border-b border-white/5 flex justify-between items-center px-8 w-full">
+<h2 class="font-['Inter'] font-semibold text-[18px] text-white">Playbook Saya</h2>
+<div class="flex items-center gap-6">
+<button class="bg-[#D4AF37] text-[#050508] px-6 py-2 rounded-[10px] font-bold text-[14px] hover:opacity-90 transition-opacity flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                    + Buat Playbook
+                </button>
+<div class="flex items-center gap-4 border-l border-white/10 pl-6">
+<span class="material-symbols-outlined text-white cursor-pointer hover:opacity-80">notifications</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden cursor-pointer hover:opacity-80">
+<img alt="Discord User Avatar" class="w-full h-full object-cover" data-alt="minimalist profile avatar with abstract geometric patterns in dark slate and gold accents" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEXi604cbjJjKWN4ftc62A46Tu2vdCa5-Um2MIqZMtMuvv3GIo41SKX-ywxco-IS1Juo4UL-yQ-d6b9AKC5PSrUjO2pH8x0xlnnY6z51tRDkV1ObH03o3Bbd68nCRRSqzIJ7BITEgIo1AOusq3mMoBBwy8Z5dSMkN6udFwT8pChMnPdCjgptA1TsxKunV_eQE3NhT6O1FYsYFiPg9UuNWsH8oq-McAJXtjqbKPWiSP4aP_LfRjD2E4Tv_YF1bUzztsH73hGLHtDCU"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="p-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Best Playbook Card -->
+<div class="glass-card best-playbook-glow rounded-[16px] p-6 flex flex-col justify-between relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-3">
+<span class="bg-[#D4AF37]/20 text-[#D4AF37] text-[10px] font-bold px-2 py-1 rounded tracking-widest uppercase">Performa Terbaik</span>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-[#D4AF37]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="font-['Inter'] font-bold text-[20px]">London Breakout</h3>
+</div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">GBP/USD</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">EUR/USD</span>
+<span class="px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] rounded-full text-[12px] font-mono border border-[#D4AF37]/20">London Session</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-white/5">
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</span>
+<span class="font-mono text-[24px] text-[#00E676] font-medium">68.4%</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Avg R-Multiple</span>
+<span class="font-mono text-[24px] text-white font-medium">2.45R</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Trades</span>
+<span class="font-mono text-[14px] text-white">142 Eksekusi</span>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="glass-card rounded-[16px] p-6 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all group">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-gray-400">trending_up</span>
+<h3 class="font-['Inter'] font-bold text-[20px]">ICT Silver Bullet</h3>
+</div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">NAS100</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">US30</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">NY Session</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-white/5">
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</span>
+<span class="font-mono text-[24px] text-[#00E676] font-medium">54.2%</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Avg R-Multiple</span>
+<span class="font-mono text-[24px] text-white font-medium">3.10R</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Trades</span>
+<span class="font-mono text-[14px] text-white">89 Eksekusi</span>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="glass-card rounded-[16px] p-6 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all group">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-gray-400">filter_list</span>
+<h3 class="font-['Inter'] font-bold text-[20px]">Mean Reversion</h3>
+</div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">XAU/USD</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">Asia Session</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-white/5">
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</span>
+<span class="font-mono text-[24px] text-[#FF1744] font-medium">41.8%</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Avg R-Multiple</span>
+<span class="font-mono text-[24px] text-white font-medium">1.85R</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Trades</span>
+<span class="font-mono text-[14px] text-white">204 Eksekusi</span>
+</div>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="glass-card rounded-[16px] p-6 flex flex-col justify-between hover:border-[#D4AF37]/30 transition-all group">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-gray-400">stacks</span>
+<h3 class="font-['Inter'] font-bold text-[20px]">Trend Continuation</h3>
+</div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">BTC/USDT</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">ETH/USDT</span>
+<span class="px-3 py-1 bg-white/5 rounded-full text-[12px] font-mono border border-white/5">All Sessions</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-white/5">
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</span>
+<span class="font-mono text-[24px] text-[#00E676] font-medium">59.1%</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Avg R-Multiple</span>
+<span class="font-mono text-[24px] text-white font-medium">2.10R</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Trades</span>
+<span class="font-mono text-[14px] text-white">56 Eksekusi</span>
+</div>
+</div>
+</div>
+<!-- Placeholder Create New -->
+<div class="border-2 border-dashed border-white/5 rounded-[16px] p-6 flex flex-col items-center justify-center text-gray-500 hover:border-[#D4AF37]/30 hover:text-[#D4AF37] transition-all cursor-pointer group min-h-[320px]">
+<div class="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[32px]">add</span>
+</div>
+<p class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Tambah Strategi Baru</p>
+<p class="text-[12px] opacity-60 mt-1">Definisikan aturan main Anda</p>
+</div>
+</div>
+<!-- Stats Overview Footer Section -->
+<div class="mt-12 p-8 glass-card rounded-[24px] border-l-4 border-l-[#D4AF37]">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div>
+<h4 class="font-['Inter'] font-bold text-[18px] mb-1">Ringkasan Efektivitas</h4>
+<p class="text-[14px] text-gray-400">Berdasarkan data dari 4 Playbook aktif bulan ini.</p>
+</div>
+<div class="flex gap-12">
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Profit Factor</span>
+<span class="font-mono text-[20px] text-[#D4AF37]">2.14</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Average Win Rate</span>
+<span class="font-mono text-[20px] text-white">55.8%</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Best Edge</span>
+<span class="font-mono text-[20px] text-white">London Session</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050508;
+        }
+        .mono {
+            font-family: 'JetBrains+Mono', monospace;
+        }
+        .dot-grid {
+            background-image: radial-gradient(#1A1A2E 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .gold-glow {
+            background: radial-gradient(circle at center, rgba(212, 175, 55, 0.03) 0%, rgba(5, 5, 8, 0) 70%);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#D4AF37",
+                        "on-primary": "#050508",
+                        "surface-dim": "#050508",
+                        "surface-container": "#0A0A12",
+                        "surface-container-low": "#1b1b1f",
+                        "outline-variant": "rgba(212, 175, 55, 0.2)",
+                        "background": "#050508"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface-dim text-white min-h-screen selection:bg-primary/30 selection:text-primary">
+<!-- Background Layering -->
+<div class="fixed inset-0 dot-grid pointer-events-none"></div>
+<div class="fixed inset-0 gold-glow pointer-events-none"></div>
+<!-- Main Content Container -->
+<main class="relative flex flex-col items-center justify-center min-h-screen p-6 z-10">
+<div class="w-full max-w-[400px] flex flex-col items-center text-center">
+<!-- Logo Section -->
+<div class="mb-8 flex items-center justify-center w-20 h-20 rounded-xl bg-surface-container border border-white/5 shadow-2xl">
+<span class="material-symbols-outlined text-[48px] text-primary" data-icon="track_changes" style="font-variation-settings: 'FILL' 0;">
+                    track_changes
+                </span>
+</div>
+<!-- Identity Section -->
+<header class="space-y-4 mb-12">
+<h1 class="text-[28px] font-bold text-primary tracking-[0.15em] font-headline uppercase">
+                    HUNTER TRADES
+                </h1>
+<p class="text-[16px] text-[#6B7280] leading-relaxed max-w-[320px] mx-auto">
+                    Jurnal trading eksklusif untuk member Hunter Trades
+                </p>
+</header>
+<!-- Action Section -->
+<div class="w-full space-y-6">
+<!-- Discord Login Button -->
+<button class="group w-full h-[56px] bg-primary hover:bg-primary/90 text-on-primary font-bold rounded-[10px] flex items-center justify-center gap-3 transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98]">
+<!-- Discord Custom SVG Icon implementation with sizing to match system -->
+<svg class="w-6 h-6 fill-current" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.946 2.419-2.157 2.419z"></path>
+</svg>
+<span>Masuk dengan Discord</span>
+</button>
+<!-- Decoration / Ghost Element -->
+<div class="pt-4">
+<div class="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+</div>
+</div>
+<!-- Footer Section -->
+<footer class="mt-16">
+<p class="text-[12px] text-[#374151] tracking-wider uppercase font-medium">
+                    Khusus member komunitas Hunter Trades
+                </p>
+</footer>
+</div>
+</main>
+<!-- Visual Accents for Luxury Depth -->
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-primary opacity-[0.02] blur-[120px] pointer-events-none rounded-full"></div>
+<!-- Abstract Design Element - Bottom Right -->
+<div class="fixed bottom-12 right-12 opacity-5 hidden lg:block">
+<div class="grid grid-cols-4 gap-4">
+<div class="w-1 h-1 bg-primary"></div>
+<div class="w-1 h-1 bg-primary/40"></div>
+<div class="w-1 h-1 bg-primary/20"></div>
+<div class="w-1 h-1 bg-primary/10"></div>
+</div>
+</div>
+</body></html>

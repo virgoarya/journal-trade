@@ -1,0 +1,712 @@
+# Hunter Trades Journal — Frontend UI/UX Architecture Plan
+
+> [!IMPORTANT]
+> Dokumen ini adalah **blueprint frontend lengkap** untuk platform Hunter Trades Journal. Mencakup design system, navigasi, layout halaman, komponen, dan spesifikasi visual. Silakan review dan berikan persetujuan sebelum pengembangan dimulai.
+
+---
+
+## Visual Direction & Mockups
+
+Berikut adalah mockup visual yang menggambarkan arah desain platform:
+
+````carousel
+### Landing Page
+![Landing Page — Hero section dengan Discord Login CTA dan preview fitur](C:\Users\virga\.gemini\antigravity\brain\2f8abab2-7a35-4ab4-acf4-1641877ca882\landing_page_mockup_1774725466516.png)
+<!-- slide -->
+### Dashboard (Risk Control Center)
+![Dashboard — Equity Curve, Risk Gauge, Account Summary, dan Today's Trades](C:\Users\virga\.gemini\antigravity\brain\2f8abab2-7a35-4ab4-acf4-1641877ca882\dashboard_mockup_1774725452257.png)
+<!-- slide -->
+### Trade Logger Form
+![Trade Logger — Form input komprehensif dengan live Risk Calculator sidebar](C:\Users\virga\.gemini\antigravity\brain\2f8abab2-7a35-4ab4-acf4-1641877ca882\trade_form_mockup_1774725482985.png)
+<!-- slide -->
+### Performance Analytics
+![Analytics — Multi-dimensional breakdown dengan chart PnL, Playbook, dan Pair performance](C:\Users\virga\.gemini\antigravity\brain\2f8abab2-7a35-4ab4-acf4-1641877ca882\analytics_mockup_1774725536170.png)
+````
+
+---
+
+## 1. Tech Stack (Frontend)
+
+| Layer | Technology | Rationale |
+|:---|:---|:---|
+| **Framework** | Next.js 14 (App Router) | SSR, RSC, Middleware auth guard, file-based routing |
+| **Styling** | Vanilla CSS + CSS Variables | Kontrol penuh atas design system, tanpa overhead framework CSS |
+| **Charts** | Lightweight Charts (TradingView) + Recharts | Equity curve = Lightweight Charts; Bar/Donut = Recharts |
+| **Auth** | NextAuth.js v5 (Auth.js) | Discord OAuth2 SSO, JWT sessions, middleware protection |
+| **Icons** | Lucide React | Konsisten, ringan, tree-shakeable |
+| **Fonts** | JetBrains Mono + Inter | Monospace untuk angka/data, Sans untuk body text |
+| **State** | React Context + Server Components | Minimal client state; data-fetch di server |
+| **DB ORM** | Prisma | Type-safe, mendukung MongoDB |
+
+---
+
+## 2. Design System — "Terminal Noir"
+
+### 2.1 Color Tokens
+
+```css
+:root {
+  /* === BACKGROUNDS === */
+  --bg-void:        #050508;   /* App background (near-black) */
+  --bg-surface:     #0A0A12;   /* Card/panel background */
+  --bg-elevated:    #10101C;   /* Hover states, modal overlays */
+  --bg-input:       #0D0D18;   /* Form input backgrounds */
+
+  /* === BORDERS & DIVIDERS === */
+  --border-subtle:  #1A1A2E;   /* Card borders */
+  --border-glow:    rgba(212, 175, 55, 0.15); /* Gold glow on focus */
+
+  /* === TEXT === */
+  --text-primary:   #E8E6E3;   /* Main text (warm white) */
+  --text-secondary: #6B7280;   /* Labels, captions */
+  --text-muted:     #374151;   /* Disabled, placeholders */
+
+  /* === ACCENTS === */
+  --accent-gold:    #D4AF37;   /* Primary brand accent (Hunter Gold) */
+  --accent-gold-dim:#8B7722;   /* Muted gold for secondary elements */
+  --accent-cyan:    #22D3EE;   /* Info, links, secondary accent */
+  --accent-purple:  #5865F2;   /* Discord brand, CTA buttons */
+
+  /* === SEMANTIC === */
+  --profit:         #00E676;   /* Green — profit, safe state */
+  --profit-dim:     rgba(0, 230, 118, 0.1); /* Green tint bg */
+  --loss:           #FF1744;   /* Red — loss, danger state */
+  --loss-dim:       rgba(255, 23, 68, 0.1); /* Red tint bg */
+  --warning:        #FFA726;   /* Orange — warning state */
+  --warning-dim:    rgba(255, 167, 38, 0.1);
+
+  /* === GLASSMORPHISM === */
+  --glass-bg:       rgba(10, 10, 18, 0.7);
+  --glass-border:   rgba(255, 255, 255, 0.06);
+  --glass-blur:     12px;
+
+  /* === SPACING SCALE (4px base) === */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px;  --space-10: 40px; --space-12: 48px;
+  --space-16: 64px;
+
+  /* === TYPOGRAPHY === */
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans:  'Inter', -apple-system, sans-serif;
+
+  --text-xs:  0.75rem;   /* 12px */
+  --text-sm:  0.875rem;  /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg:  1.125rem;  /* 18px */
+  --text-xl:  1.25rem;   /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+  --text-4xl: 2.25rem;   /* 36px */
+  --text-hero: 3.5rem;   /* 56px — Landing page headline */
+
+  /* === RADIUS === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* === TRANSITIONS === */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* === SIDEBAR === */
+  --sidebar-width: 260px;
+  --sidebar-collapsed: 72px;
+  --header-height: 64px;
+}
+```
+
+### 2.2 Glassmorphism Card Recipe
+
+```css
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.glass-card:hover {
+  border-color: rgba(212, 175, 55, 0.12);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.04);
+}
+```
+
+### 2.3 Typography Rules
+
+| Context | Font | Weight | Size | Tracking |
+|:---|:---|:---|:---|:---|
+| **Headline (H1)** | Inter | 700 | `--text-hero` / `--text-3xl` | -0.02em |
+| **Section Title (H2)** | Inter | 600 | `--text-2xl` | -0.01em |
+| **Card Title (H3)** | Inter | 600 | `--text-lg` | 0 |
+| **Body text** | Inter | 400 | `--text-base` | 0 |
+| **Label / Caption** | Inter | 500 | `--text-sm` | 0.02em |
+| **Numeric Data** | JetBrains Mono | 500 | varies | 0 |
+| **Code / Terminal** | JetBrains Mono | 400 | `--text-sm` | 0 |
+
+---
+
+## 3. Navigation Architecture
+
+### 3.1 Layout Structure
+
+Platform menggunakan **persistent sidebar navigation** (untuk halaman authenticated) dan **full-page layout** (untuk Landing & Access Denied).
+
+```
+┌─────────────────────────────────────────────────┐
+│  HEADER BAR (64px)                              │
+│  [☰ Toggle]  HUNTER TRADES    [🔔] [Avatar ▾]  │
+├────────┬────────────────────────────────────────┤
+│        │                                        │
+│  SIDE  │         MAIN CONTENT AREA              │
+│  BAR   │                                        │
+│ (260px)│     (scrollable, padded 32px)           │
+│        │                                        │
+│  🏠 Dashboard                                   │
+│  📝 Log Trade                                   │
+│  📖 Playbook                                    │
+│  📊 Analytics                                   │
+│        │                                        │
+│  ───── │                                        │
+│  ⚙ Settings                                    │
+│  🚪 Logout                                     │
+│        │                                        │
+└────────┴────────────────────────────────────────┘
+```
+
+### 3.2 Sidebar Behavior
+
+| Breakpoint | Behavior |
+|:---|:---|
+| **Desktop** (≥1280px) | Sidebar expanded (260px), selalu visible |
+| **Tablet** (768–1279px) | Sidebar collapsed (72px, icon-only), expand on hover |
+| **Mobile** (<768px) | Sidebar hidden, muncul sebagai slide-over overlay dengan hamburger trigger |
+
+### 3.3 Route Map
+
+```
+/                      → Landing Page (public)
+/access-denied         → Access Denied Page (public)
+
+/onboarding            → Onboarding Wizard (authenticated, first-time only)
+
+/dashboard             → Risk Control Center (authenticated)
+/log-trade             → Trade Logger Form (authenticated)
+/log-trade/[id]/edit   → Edit Existing Trade (authenticated)
+/playbook              → Playbook Manager (authenticated)
+/playbook/[id]         → Playbook Detail / Rules (authenticated)
+/analytics             → Performance Analytics (authenticated)
+/settings              → Account Settings (authenticated)
+```
+
+### 3.4 Navigation Items
+
+| Icon | Label | Route | Badge / Indicator |
+|:---|:---|:---|:---|
+| `LayoutDashboard` | Dashboard | `/dashboard` | Live drawdown % chip |
+| `PenLine` | Log Trade | `/log-trade` | — |
+| `BookOpen` | Playbook | `/playbook` | Count of playbooks |
+| `BarChart3` | Analytics | `/analytics` | — |
+| ─── divider ─── | | | |
+| `Settings` | Settings | `/settings` | — |
+| `LogOut` | Logout | (action) | — |
+
+---
+
+## 4. Page Specifications
+
+### 4.1 Landing Page (`/`)
+
+**Purpose:** Akuisisi & konversi — memastikan hanya member Hunter Trades yang masuk.
+
+**Layout:** Full-page, no sidebar. Centered content.
+
+**Sections:**
+
+1. **Hero Section**
+   - Tagline: `"YOUR EDGE. TRACKED."` (H1, `--text-hero`, gold accent pada "EDGE")
+   - Subline: `"Jurnal trading eksklusif untuk member Hunter Trades"` (muted)
+   - CTA Button: `"Login with Discord"` (bg: `--accent-purple`, icon Discord, rounded-full)
+   - Background: Subtle animated grid/dot pattern dengan parallax
+
+2. **Feature Triptych** (3 kartu glassmorphism horizontal)
+   - 🛡 **Risk Engine** — "Prop-firm style drawdown tracking"
+   - 📖 **Playbook System** — "Disiplinkan trading dengan metodologi"
+   - 📊 **Deep Analytics** — "Breakdown performa per pair & strategi"
+
+3. **Social Proof Footer**
+   - "Powered by Hunter Trades Community"
+   - Statistik: member count, total trades logged (dynamic, fetched from DB)
+
+**Animations:**
+- Hero text: staggered fade-up (0ms, 200ms, 400ms)
+- Feature cards: fade-up on scroll intersection
+- Grid background: subtle floating animation
+
+---
+
+### 4.2 Access Denied (`/access-denied`)
+
+**Purpose:** Halaman rejection untuk non-member Discord.
+
+**Layout:** Full-page, centered.
+
+**Content:**
+- Icon: `ShieldX` (besar, merah)
+- Heading: `"ACCESS RESTRICTED"`
+- Message: `"Akun Discord Anda belum terdaftar sebagai member Hunter Trades atau belum memiliki role yang diperlukan."`
+- CTA: `"Gabung Hunter Trades"` (link ke invite server Discord)
+- Secondary: `"Coba login ulang"` (link ke `/`)
+
+---
+
+### 4.3 Onboarding Wizard (`/onboarding`)
+
+**Purpose:** Konfigurasi awal akun trading sebelum akses dashboard.
+
+**Layout:** Full-page, centered card (max-width 640px). Stepper progress bar di atas.
+
+**Steps (3-step wizard):**
+
+```
+[1. WELCOME] ──→ [2. AKUN TRADING] ──→ [3. RISK RULES]
+     ●                 ○                      ○
+```
+
+**Step 1 — Welcome**
+- Avatar Discord user + Welcome message
+- "Halo, {username}! Mari setup jurnal trading Anda."
+- Button: "Mulai Setup →"
+
+**Step 2 — Account Config**
+- Input: **Nama Akun** (text, e.g. "Akun Prop Firm FTMO")
+- Input: **Initial Balance** (currency input, e.g. "$10,000")
+- Input: **Mata Uang Akun** (dropdown: USD, IDR)
+- Input: **Broker** (optional text)
+
+**Step 3 — Risk Parameters**
+- Input: **Max Daily Drawdown %** (slider + number, default 5%)
+- Input: **Max Total Drawdown %** (slider + number, default 10%)
+- Input: **Max Daily Trades** (number, optional)
+- Preview card: visual summary of rules yang baru di-set
+- Button: "Aktifkan Dashboard ✓"
+
+**Transitions:** Steps slide horizontally, active step indicator fills with gold.
+
+---
+
+### 4.4 Dashboard — Risk Control Center (`/dashboard`)
+
+**Purpose:** Pusat komando utama. Trader harus bisa memahami status risiko dalam **5 detik**.
+
+**Layout:** Bento grid, 3 kolom pada desktop.
+
+```
+┌─────────────┬──────────────────────┬──────────────┐
+│  ACCOUNT    │    EQUITY CURVE      │  TODAY'S     │
+│  SUMMARY    │    (Line Chart)      │  TRADES      │
+│  + RISK     │                      │  (List)      │
+│  GAUGES     │                      │              │
+├─────────────┴──────────────────────┴──────────────┤
+│   METRIC STRIP: Win Rate | Profit Factor |        │
+│   Avg Win | Avg Loss | Total Trades | Best Streak │
+├───────────────────────┬───────────────────────────┤
+│   DAILY PnL HEATMAP   │   RISK STATUS PANEL      │
+│   (Calendar/Grid)     │   (Drawdown Bars + Alert) │
+└───────────────────────┴───────────────────────────┘
+```
+
+**Components Detail:**
+
+#### A. Account Summary Card
+- **Current Equity:** Large monospace number, animates on change
+- **Daily PnL:** Green/Red with ▲/▼ icon
+- **Account Name** & **Broker** label
+
+#### B. Risk Gauges (2 circular gauge meters)
+- **Daily Drawdown:** Circular progress (0% → max daily DD%)
+  - 0-50% of limit: `--profit` (hijau)
+  - 50-80%: `--warning` (kuning)
+  - 80-100%: `--loss` (merah, pulsing glow)
+- **Total Drawdown:** Same visualization logic
+- Center text: current percentage, outer ring shows limit
+
+#### C. Equity Curve Chart
+- **Library:** TradingView Lightweight Charts
+- **Type:** Area chart with gradient fill (green-to-transparent)
+- **Interactivity:** Tooltip on hover showing date + equity value
+- **Timeframe selector:** 1W / 1M / 3M / All (pill buttons)
+- **Annotation:** High-Water Mark dotted line + Max Drawdown marker
+
+#### D. Today's Trades List
+- Compact list of today's logged trades
+- Each row: `[PAIR] [LONG↑/SHORT↓] [PnL ±$X] [Playbook tag]`
+- Bottom: "View All →" link to Analytics
+- Empty state: "Belum ada trade hari ini. Log trade pertamamu →"
+
+#### E. Metric Strip (6 KPI cards inline)
+- Win Rate %
+- Profit Factor
+- Avg Win ($)
+- Avg Loss ($)
+- Total Trades (count)
+- Best Win Streak
+
+Each card: icon, label (muted), value (mono, large), and trend arrow vs last period.
+
+#### F. Risk Status Panel
+- Horizontal progress bars for Daily DD & Total DD
+- **Traffic light badge:**
+  - 🟢 `SAFE` — Drawdown < 50% of limit
+  - 🟡 `WARNING` — 50-80%
+  - 🔴 `VIOLATED` — 80%+ (with pulsing border animation)
+- Text: "*Anda telah menggunakan X% dari batas drawdown harian*"
+
+---
+
+### 4.5 Trade Logger (`/log-trade`)
+
+**Purpose:** Input entri trade yang cepat, efisien, dan disiplin (wajib link ke playbook).
+
+**Layout:** 2-column: Main form (left, 60%) + Live Risk Preview (right, 40%)
+
+**Form Fields (grouped):**
+
+#### Group 1 — Meta
+| Field | Type | Required | Notes |
+|:---|:---|:---|:---|
+| Tanggal & Waktu | DateTime picker | ✅ | Default: sekarang |
+| Pair / Asset | Searchable dropdown | ✅ | Pre-populated: XAUUSD, EURUSD, GBPUSD, USDJPY, dll |
+| Direction | Toggle button | ✅ | `LONG` (green) / `SHORT` (red) |
+| Playbook | Dropdown | ✅ | **Hanya menampilkan playbook yang sudah dibuat user** |
+
+#### Group 2 — Financials
+| Field | Type | Required | Notes |
+|:---|:---|:---|:---|
+| Entry Price | Number input | ✅ | Monospace styling |
+| Stop Loss | Number input | ✅ | Auto-calculates risk |
+| Take Profit | Number input | ❌ | Optional (trailing exit, etc) |
+| Lot Size | Number input | ✅ | Position sizing |
+| Actual PnL | Number input | ✅ | Green/red text based on value |
+
+#### Group 3 — Metrics (Auto-calculated where possible)
+| Field | Type | Required | Notes |
+|:---|:---|:---|:---|
+| R-Multiple | Auto / Manual | ✅ | Auto = PnL / Risk. Editable override. |
+| Result | Toggle 3-way | ✅ | `WIN` / `LOSS` / `BREAK-EVEN` |
+
+#### Group 4 — Psychology & Notes
+| Field | Type | Required | Notes |
+|:---|:---|:---|:---|
+| Emotional State | 5-point emoji scale | ❌ | 😡 Tilted → 😐 Neutral → 😌 Confident |
+| Notes / Journaling | Textarea | ❌ | Markdown support |
+| Chart Link | URL input | ❌ | TradingView deeplink |
+
+#### Live Risk Preview Sidebar
+Sidebar yang meng-update secara real-time seiring user mengisi form:
+- **"Dampak Trade Ini"**
+- Position Size: X lots
+- Risk Amount: $Y (berdasarkan Entry - SL × lot)
+- Risk as % of Equity: Z%
+- **Drawdown Impact Preview:**
+  - "Jika trade ini LOSS, drawdown harian Anda menjadi: **X% → Y%**"
+  - Visual bar showing before/after
+  - ⚠️ Warning jika akan melampaui batas
+
+#### Submit Flow:
+1. Validasi semua required fields
+2. Jika risk melebihi daily limit → Confirmation modal: "Trade ini akan membuat Anda **melampaui batas drawdown harian**. Tetap lanjutkan?"
+3. Submit → Success toast → Redirect ke Dashboard
+
+---
+
+### 4.6 Playbook Manager (`/playbook`)
+
+**Purpose:** Definisikan dan kelola strategi trading (playbook).
+
+**Layout:** Grid view (default) / List view (toggle). Card-based.
+
+**Playbook Card:**
+```
+┌──────────────────────────────┐
+│  📖 London Breakout          │
+│  ─────────────────────────   │
+│  Pairs: GBPUSD, EURUSD      │
+│  Session: London             │
+│  Win Rate: 68% (34/50)       │
+│  Avg R: 1.8R                 │
+│                              │
+│  [Edit]  [View Rules]        │
+└──────────────────────────────┘
+```
+
+**Create / Edit Playbook Modal/Page:**
+- **Name:** Text input (e.g. "SMC Liquidity Sweep")
+- **Description:** Textarea
+- **Applicable Pairs:** Multi-select Tags
+- **Session:** Dropdown (London / NY / Asian / All)
+- **Rules / Checklist:** Repeatable text fields
+  - e.g. "Tunggu Break of Structure (BOS) pada M15"
+  - e.g. "Entry hanya jika ada imbalance / FVG"
+  - e.g. "Minimum RR 1:2"
+- **Tags:** Freeform tags for categorization
+
+**Playbook Detail View (`/playbook/[id]`):**
+- Full rules checklist
+- Historical stats: Win rate, total trades, avg R, profit factor
+- Recent trades using this playbook (linked from trade log)
+- Mini equity curve for trades under this playbook
+
+---
+
+### 4.7 Analytics — Performance Breakdown (`/analytics`)
+
+**Purpose:** Deep-dive reporting dan evaluasi multi-dimensi.
+
+**Layout:** Full-width, vertically scrolling sections.
+
+**Header Controls:**
+- **Period Selector:** Pill tabs `Daily | Weekly | Monthly | All-Time`
+- **Date Range Picker:** Custom range
+- **Filter Chips:** Pair filter (multi-select) + Playbook filter (multi-select)
+
+**Section 1 — Overall Metrics (KPI strip)**
+- Win Rate, Profit Factor, Avg Win, Avg Loss, Expectancy, Sharpe Ratio
+- Each with sparkline trend vs previous period
+
+**Section 2 — PnL Over Time**
+- **Chart:** Combo chart (bars = daily PnL, line = cumulative PnL)
+- **Timeframe:** Auto-adjusts grouping based on period selector
+- **Colors:** Green bars for positive days, red for negative
+
+**Section 3 — Breakdown by Pair (Asset Analytics)**
+- **Chart:** Horizontal bar chart, sorted by total PnL
+- **Table below:**
+
+| Pair | Trades | Win Rate | Total PnL | Avg R | Profit Factor |
+|:---|:---|:---|:---|:---|:---|
+| XAUUSD | 45 | 71% | +$3,200 | 1.9R | 2.4 |
+| EURUSD | 32 | 56% | +$890 | 1.2R | 1.5 |
+| GBPUSD | 28 | 43% | -$420 | 0.8R | 0.9 |
+
+**Section 4 — Breakdown by Playbook (Method Analytics)**
+- **Chart:** Donut chart showing trade distribution by playbook
+- **Table:** Same metrics as pair breakdown, grouped by playbook
+- **Insight callout:** "🏆 Best Playbook: *London Breakout* (68% WR, 2.1 PF)"
+
+**Section 5 — Trade Log Table (Paginated)**
+- Full trade history with sortable columns
+- Quick filters: Win/Loss toggle, pair, playbook
+- Row click → Expand detail (or navigate to edit form)
+
+---
+
+### 4.8 Settings (`/settings`)
+
+**Purpose:** Account management dan konfigurasi.
+
+**Sections:**
+1. **Profile** — Discord avatar, username (read-only), member since
+2. **Trading Account** — Edit initial balance, currency, broker
+3. **Risk Rules** — Edit drawdown limits, daily trade cap
+4. **Data Management** — Export trades (CSV), Reset account (dengan konfirmasi)
+
+---
+
+## 5. Component Library
+
+### 5.1 Core Components
+
+| Component | Description |
+|:---|:---|
+| `<GlassCard>` | Reusable glassmorphism card container |
+| `<MetricCard>` | KPI display: icon, label, value, trend |
+| `<RiskGauge>` | Circular SVG gauge for drawdown |
+| `<RiskBar>` | Horizontal progress bar with color zones |
+| `<TradeRow>` | Compact trade entry (pair, dir, PnL, playbook tag) |
+| `<StatusBadge>` | Traffic light badge (SAFE / WARNING / VIOLATED) |
+| `<PillTabs>` | Segmented controller for period/filter selection |
+| `<EmotionPicker>` | 5-point emoji scale input |
+| `<SearchableSelect>` | Dropdown with search (pairs, playbooks) |
+| `<StepperProgress>` | Horizontal stepper for onboarding wizard |
+
+### 5.2 Layout Components
+
+| Component | Description |
+|:---|:---|
+| `<AppShell>` | Sidebar + Header + Main area wrapper |
+| `<Sidebar>` | Navigation sidebar with collapse logic |
+| `<Header>` | Top bar: toggle, branding, notifications, avatar |
+| `<PageHeader>` | Page title + description + action buttons |
+| `<BentoGrid>` | CSS Grid layout helper for dashboard |
+
+### 5.3 Feedback Components
+
+| Component | Description |
+|:---|:---|
+| `<Toast>` | Success/error/warning notification (bottom-right) |
+| `<ConfirmModal>` | Destructive action confirmation dialog |
+| `<EmptyState>` | Illustrated placeholder for empty data |
+| `<LoadingSkeleton>` | Shimmer skeletons for async data |
+
+---
+
+## 6. Micro-Animations Spec
+
+| Trigger | Animation | Duration | Easing |
+|:---|:---|:---|:---|
+| Page transition | Fade + slide up (8px) | 300ms | `--ease-out` |
+| Card hover | Border glow + subtle lift | 250ms | `--ease-out` |
+| Number change (PnL, equity) | Count-up/down animation | 500ms | `ease-out` |
+| Risk gauge update | Arc fill animation | 600ms | `ease-in-out` |
+| Trade logged (success) | Confetti burst (subtle, 3-4 particles) | 800ms | spring |
+| Sidebar expand/collapse | Width transition + icon fade | 200ms | `--ease-out` |
+| Toast notification | Slide in from right + fade | 300ms | `--ease-out` |
+| Drawdown breach | Pulsing red border glow (infinite) | 1500ms | sine |
+| Button press | Scale down 0.97 → 1.0 | 100ms | `ease-out` |
+| Modal open | Backdrop fade + card scale 0.95→1 | 250ms | `--ease-out` |
+
+---
+
+## 7. Responsive Design Strategy
+
+### Breakpoints
+
+```css
+/* Mobile First */
+@media (min-width: 640px)  { /* sm — Small tablet */ }
+@media (min-width: 768px)  { /* md — Tablet */ }
+@media (min-width: 1024px) { /* lg — Small desktop */ }
+@media (min-width: 1280px) { /* xl — Desktop (primary) */ }
+@media (min-width: 1536px) { /* 2xl — Large monitor */ }
+```
+
+### Layout Adaptations
+
+| Page | Desktop (≥1280) | Tablet (768-1279) | Mobile (<768) |
+|:---|:---|:---|:---|
+| **Dashboard** | 3-col bento grid | 2-col grid | 1-col stack |
+| **Log Trade** | Form + sidebar | Form full-width, sidebar below | Single column |
+| **Playbook** | 3-col card grid | 2-col grid | 1-col stack |
+| **Analytics** | Charts + tables side-by-side | Charts stacked | Charts stacked, horizontal scroll table |
+
+### Mobile-Specific UX
+- **Bottom Action Bar:** Floating button "＋ Log Trade" selalu terlihat di mobile
+- **Swipe gestures:** Swipe trade row → quick actions (edit / delete)
+- **Collapsible sections:** Accordion-style for analytics breakdowns
+
+---
+
+## 8. Folder Structure (Frontend)
+
+```
+src/
+├── app/
+│   ├── layout.tsx              # Root layout (fonts, metadata)
+│   ├── page.tsx                # Landing page (/)
+│   ├── globals.css             # Design system tokens + base styles
+│   │
+│   ├── access-denied/
+│   │   └── page.tsx
+│   │
+│   ├── onboarding/
+│   │   └── page.tsx
+│   │
+│   ├── (authenticated)/        # Route group — shared sidebar layout
+│   │   ├── layout.tsx          # AppShell (sidebar + header)
+│   │   ├── dashboard/
+│   │   │   └── page.tsx
+│   │   ├── log-trade/
+│   │   │   ├── page.tsx
+│   │   │   └── [id]/
+│   │   │       └── edit/
+│   │   │           └── page.tsx
+│   │   ├── playbook/
+│   │   │   ├── page.tsx
+│   │   │   └── [id]/
+│   │   │       └── page.tsx
+│   │   ├── analytics/
+│   │   │   └── page.tsx
+│   │   └── settings/
+│   │       └── page.tsx
+│   │
+│   └── api/
+│       └── auth/
+│           └── [...nextauth]/
+│               └── route.ts
+│
+├── components/
+│   ├── core/                   # GlassCard, MetricCard, StatusBadge, etc.
+│   ├── layout/                 # AppShell, Sidebar, Header
+│   ├── charts/                 # EquityCurve, RiskGauge, PnLChart
+│   ├── forms/                  # TradeForm, PlaybookForm, OnboardingSteps
+│   └── feedback/               # Toast, ConfirmModal, EmptyState
+│
+├── lib/
+│   ├── auth.ts                 # NextAuth config (Discord provider)
+│   ├── prisma.ts               # Prisma client singleton
+│   └── utils.ts                # Helper functions (formatters, calculators)
+│
+├── hooks/
+│   ├── useRiskCalculator.ts    # Live risk preview calculations
+│   └── useTradeStats.ts        # Trade statistics aggregation
+│
+└── styles/
+    ├── components.css          # Component-specific styles
+    ├── animations.css          # Keyframe definitions
+    └── utilities.css           # Helper classes
+```
+
+---
+
+## 9. User Review Required
+
+> [!IMPORTANT]
+> **Keputusan desain berikut memerlukan persetujuan Anda:**
+
+### 9.1 Sidebar vs Top Navigation
+Plan ini menggunakan **persistent sidebar** (ala terminal/dashboard profesional). Alternatifnya adalah **top navigation bar** yang lebih simpel. Mana yang Anda prefer?
+
+### 9.2 Bahasa Interface
+Apakah seluruh label UI menggunakan **Bahasa Inggris** (terminal-style, lebih natural untuk trading) atau **campuran Indonesia-Inggris**?
+
+### 9.3 Chart Library Priority
+Rencana menggunakan **TradingView Lightweight Charts** untuk equity curve (terlihat sangat pro) + **Recharts** untuk bar/donut charts. Setuju?
+
+### 9.4 Mobile Priority
+Apakah platform ini akan **heavy-used di mobile** atau mayoritas **desktop**? Ini akan mempengaruhi prioritas responsive design.
+
+### 9.5 Additional Features
+Apakah ada fitur tambahan yang ingin dimasukkan sebelum kita mulai coding? Beberapa ide:
+- **Command Palette** (`Ctrl+K`) untuk quick-access (cari trade, log cepat)
+- **AI Trade Review** — AI memberikan feedback otomatis per trade
+- **Leaderboard** — Perbandingan performa antar member (opsional, privacy-sensitive)
+- **Daily Journal / Notes page** — Catatan harian terpisah dari trade log
+
+---
+
+## 10. Verification Plan
+
+### Automated
+- ✅ Next.js build berhasil (`next build` tanpa error)
+- ✅ Semua route terender dengan benar
+- ✅ Responsive test di 3 breakpoint (Chrome DevTools)
+- ✅ Lighthouse audit: Performance ≥ 90, Accessibility ≥ 90
+
+### Manual / Visual
+- 🖥 Browser test di Chrome, Firefox, Edge
+- 📱 Mobile test di viewport 375px dan 390px
+- 🎨 Visual consistency check: semua komponen mengikuti design tokens
+- ⌨️ Keyboard navigation test untuk aksesibilitas
+
+---
+
+*Plan Version 1.0 — Hunter Trades Journal Frontend Architecture*
+*Created: March 29, 2026*

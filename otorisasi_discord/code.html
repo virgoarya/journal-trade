@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-dim": "#050508",
+              "primary-container": "#d4af37",
+              "on-secondary-container": "#b9b7c3",
+              "on-background": "#e5e1e7",
+              "on-error-container": "#ffdad6",
+              "error": "#ffb4ab",
+              "surface-bright": "#39393d",
+              "on-tertiary-fixed-variant": "#27438a",
+              "inverse-surface": "#e5e1e7",
+              "surface-container-high": "#2a292e",
+              "on-primary-fixed": "#241a00",
+              "on-surface-variant": "#d0c5af",
+              "secondary-container": "#494852",
+              "on-tertiary-container": "#254188",
+              "on-secondary-fixed-variant": "#47464f",
+              "tertiary-container": "#97b0ff",
+              "inverse-primary": "#735c00",
+              "tertiary-fixed": "#dbe1ff",
+              "tertiary": "#bfcdff",
+              "primary-fixed": "#ffe088",
+              "on-primary-fixed-variant": "#574500",
+              "surface-container-low": "#1b1b1f",
+              "secondary-fixed": "#e4e1ed",
+              "on-tertiary-fixed": "#00174b",
+              "surface-container-highest": "#353439",
+              "on-primary": "#3c2f00",
+              "on-primary-container": "#554300",
+              "error-container": "#93000a",
+              "surface-container-lowest": "#0e0e12",
+              "outline-variant": "#4d4635",
+              "outline": "#99907c",
+              "surface-variant": "#353439",
+              "surface-tint": "#e9c349",
+              "on-error": "#690005",
+              "secondary-fixed-dim": "#c8c5d1",
+              "surface": "#131317",
+              "on-secondary-fixed": "#1b1b23",
+              "background": "#050508",
+              "secondary": "#c8c5d1",
+              "inverse-on-surface": "#303034",
+              "primary-fixed-dim": "#e9c349",
+              "on-tertiary": "#082b72",
+              "on-surface": "#e5e1e7",
+              "tertiary-fixed-dim": "#b4c5ff",
+              "primary": "#d4af37",
+              "on-secondary": "#302f39",
+              "surface-container": "#0A0A12"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body {
+        background-color: #050508;
+        background-image: radial-gradient(rgba(212, 175, 55, 0.05) 1px, transparent 0);
+        background-size: 32px 32px;
+      }
+      .glass-card {
+        background: rgba(10, 10, 18, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: 0 24px 48px -12px rgba(212, 175, 55, 0.04);
+      }
+      .gold-glow {
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+      }
+      .terminal-text {
+        font-family: 'JetBrains Mono', monospace;
+      }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-body text-on-surface selection:bg-primary selection:text-surface-dim">
+<!-- Top Navigation Anchor (As per Shared Components JSON) -->
+<header class="fixed top-0 w-full flex items-center justify-center h-16 px-6 w-full bg-[#050508] no-border z-50">
+<div class="flex items-center justify-between w-full max-w-7xl">
+<span class="text-xl font-bold text-[#D4AF37] tracking-widest uppercase font-['Inter']">Terminal Noir</span>
+<div class="hidden md:flex gap-8">
+<span class="text-[10px] terminal-text uppercase tracking-[0.2em] text-slate-500">Hunter Trades v2.0</span>
+</div>
+</div>
+</header>
+<!-- Main Authorization Canvas -->
+<main class="flex-grow flex items-center justify-center px-4 py-24 relative overflow-hidden">
+<!-- Abstract Background Glows -->
+<div class="absolute top-1/4 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-1/4 -right-20 w-96 h-96 bg-primary/5 rounded-full blur-[120px]"></div>
+<!-- Authorization Card -->
+<div class="glass-card w-full max-w-md p-10 rounded-[16px] flex flex-col items-center text-center relative z-10">
+<!-- Discord Visual Branding -->
+<div class="mb-8 p-6 bg-surface-container rounded-full relative">
+<div class="absolute inset-0 bg-primary/10 blur-xl rounded-full"></div>
+<!-- Discord Icon Representation using Material Symbols for UI Consistency -->
+<span class="material-symbols-outlined text-6xl text-primary relative" style="font-variation-settings: 'FILL' 1;">
+                    account_circle
+                </span>
+<div class="absolute -bottom-1 -right-1 bg-[#5865F2] p-2 rounded-lg border-2 border-surface-container-lowest">
+<svg class="w-5 h-5 text-white fill-current" viewbox="0 0 24 24">
+<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.946 2.419-2.157 2.419z"></path>
+</svg>
+</div>
+</div>
+<!-- Header Text -->
+<h1 class="text-2xl font-bold font-headline mb-4 tracking-tight">Hubungkan Akun Discord Anda</h1>
+<p class="text-on-secondary-container text-sm leading-relaxed mb-10 px-4">
+                Dapatkan akses eksklusif ke channel komunitas, notifikasi trade real-time, dan review AI harian.
+            </p>
+<!-- Metadata Ledger (Terminal Style) -->
+<div class="w-full bg-surface-container-low rounded-lg p-4 mb-10 text-left border border-white/5">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] terminal-text text-slate-500 uppercase tracking-widest">Aplikasi</span>
+<span class="text-[10px] terminal-text text-primary uppercase tracking-widest">Hunter Trades Elite</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-[10px] terminal-text text-slate-500 uppercase tracking-widest">Izin</span>
+<span class="text-[10px] terminal-text text-on-surface uppercase tracking-widest">Identity, Email, Guilds</span>
+</div>
+</div>
+<!-- Action Cluster -->
+<div class="w-full space-y-4">
+<button class="w-full py-4 bg-primary text-surface-dim font-bold rounded-[10px] transition-all gold-glow hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
+<span class="material-symbols-outlined text-xl">login</span>
+<span>Otorisasi Discord</span>
+</button>
+<a class="inline-block w-full py-2 text-slate-500 hover:text-white transition-colors terminal-text text-xs uppercase tracking-[0.2em]" href="#">
+                    Batal
+                </a>
+</div>
+<!-- Security Badge -->
+<div class="mt-8 pt-6 border-t border-white/5 w-full">
+<div class="flex items-center justify-center gap-2 text-slate-600">
+<span class="material-symbols-outlined text-sm">lock</span>
+<span class="text-[9px] uppercase tracking-widest terminal-text">Prosedur Otorisasi Aman</span>
+</div>
+</div>
+</div>
+<!-- Decorative Elements -->
+<div class="absolute inset-0 pointer-events-none opacity-20">
+<div class="absolute top-1/2 left-10 transform -translate-y-1/2 flex flex-col gap-4">
+<div class="h-px w-24 bg-gradient-to-r from-primary/0 via-primary to-primary/0"></div>
+<div class="h-px w-16 bg-gradient-to-r from-primary/0 via-primary to-primary/0 ml-4"></div>
+</div>
+<div class="absolute top-1/2 right-10 transform -translate-y-1/2 flex flex-col gap-4">
+<div class="h-px w-24 bg-gradient-to-l from-primary/0 via-primary to-primary/0"></div>
+<div class="h-px w-16 bg-gradient-to-l from-primary/0 via-primary to-primary/0 mr-4"></div>
+</div>
+</div>
+</main>
+<!-- Footer Anchor (As per Shared Components JSON) -->
+<footer class="fixed bottom-0 w-full bg-[#050508] border-t border-white/5 z-50">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 py-4 w-full">
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-slate-600 mb-2 md:mb-0">
+                © 2024 Terminal Noir. Prosedur Otorisasi Aman.
+            </span>
+<div class="flex gap-6">
+<a class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-slate-600 hover:text-[#D4AF37] transition-opacity opacity-80 hover:opacity-100" href="#">Bantuan</a>
+<a class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-slate-600 hover:text-[#D4AF37] transition-opacity opacity-80 hover:opacity-100" href="#">Privasi</a>
+<a class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-slate-600 hover:text-[#D4AF37] transition-opacity opacity-80 hover:opacity-100" href="#">Syarat Layanan</a>
+</div>
+</div>
+</footer>
+</body></html>

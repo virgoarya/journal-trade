@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-fixed": "#e4e1ed",
+                        "on-tertiary-fixed": "#00174b",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#dbe1ff",
+                        "on-surface": "#e5e1e7",
+                        "surface-bright": "#39393d",
+                        "primary-fixed": "#ffe088",
+                        "on-primary-fixed": "#241a00",
+                        "inverse-surface": "#e5e1e7",
+                        "primary": "#f2ca50",
+                        "on-secondary-fixed-variant": "#47464f",
+                        "tertiary-fixed-dim": "#b4c5ff",
+                        "secondary-container": "#494852",
+                        "surface-container-high": "#2a292e",
+                        "secondary-fixed-dim": "#c8c5d1",
+                        "primary-container": "#d4af37",
+                        "on-primary-container": "#554300",
+                        "tertiary": "#bfcdff",
+                        "on-error": "#690005",
+                        "background": "#131317",
+                        "surface-dim": "#131317",
+                        "on-secondary": "#302f39",
+                        "on-tertiary-container": "#254188",
+                        "on-background": "#e5e1e7",
+                        "surface-tint": "#e9c349",
+                        "inverse-on-surface": "#303034",
+                        "on-tertiary": "#082b72",
+                        "surface-variant": "#353439",
+                        "surface-container-lowest": "#0e0e12",
+                        "error-container": "#93000a",
+                        "surface-container-highest": "#353439",
+                        "on-secondary-fixed": "#1b1b23",
+                        "surface": "#131317",
+                        "on-secondary-container": "#b9b7c3",
+                        "error": "#ffb4ab",
+                        "surface-container-low": "#1b1b1f",
+                        "secondary": "#c8c5d1",
+                        "outline-variant": "#4d4635",
+                        "outline": "#99907c",
+                        "on-tertiary-fixed-variant": "#27438a",
+                        "on-surface-variant": "#d0c5af",
+                        "tertiary-container": "#97b0ff",
+                        "on-primary": "#3c2f00",
+                        "primary-fixed-dim": "#e9c349",
+                        "inverse-primary": "#735c00",
+                        "surface-container": "#1f1f23",
+                        "on-primary-fixed-variant": "#574500"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(53, 52, 57, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .gold-glow {
+            box-shadow: 0 24px 24px rgba(212, 175, 55, 0.04);
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #050508; }
+        ::-webkit-scrollbar-thumb { background: #d4af3733; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-[#050508] text-on-surface font-body selection:bg-primary selection:text-surface-dim">
+<!-- SideNavBar Component -->
+<aside class="fixed left-0 top-0 h-full w-64 border-r border-white/5 bg-[#050508] flex flex-col py-8 z-50">
+<div class="px-6 mb-10">
+<h1 class="text-[#D4AF37] font-bold text-xl tracking-widest uppercase">Elite Ledger</h1>
+<p class="text-gray-500 text-[10px] font-mono mt-1">Terminal Noir V1</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-6 py-3 text-gray-400 opacity-70 hover:bg-[#0A0A12] hover:text-[#D4AF37] transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">dashboard</span>
+<span class="font-medium text-sm tracking-wide">Ringkasan</span>
+</a>
+<a class="flex items-center px-6 py-3 text-gray-400 opacity-70 hover:bg-[#0A0A12] hover:text-[#D4AF37] transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">receipt_long</span>
+<span class="font-medium text-sm tracking-wide">Riwayat Transaksi</span>
+</a>
+<a class="flex items-center px-6 py-3 text-gray-400 opacity-70 hover:bg-[#0A0A12] hover:text-[#D4AF37] transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">analytics</span>
+<span class="font-medium text-sm tracking-wide">Analisis Jurnal</span>
+</a>
+<a class="flex items-center px-6 py-3 border-l-2 border-[#D4AF37] bg-[#0A0A12] text-[#D4AF37] font-bold transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">menu_book</span>
+<span class="font-medium text-sm tracking-wide">Panduan</span>
+</a>
+<a class="flex items-center px-6 py-3 text-gray-400 opacity-70 hover:bg-[#0A0A12] hover:text-[#D4AF37] transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">query_stats</span>
+<span class="font-medium text-sm tracking-wide">Statistik</span>
+</a>
+<a class="flex items-center px-6 py-3 text-gray-400 opacity-70 hover:bg-[#0A0A12] hover:text-[#D4AF37] transition-all group" href="#">
+<span class="material-symbols-outlined mr-3 group-hover:translate-x-1 transition-transform">settings</span>
+<span class="font-medium text-sm tracking-wide">Pengaturan</span>
+</a>
+</nav>
+<div class="px-6 mt-auto space-y-4">
+<button class="w-full py-3 bg-[#D4AF37] text-[#050508] font-bold rounded-lg text-sm active:scale-95 transition-transform">
+                Tambah Jurnal
+            </button>
+<div class="pt-6 border-t border-white/5 space-y-1">
+<a class="flex items-center py-2 text-gray-400 opacity-70 hover:text-[#D4AF37] transition-colors" href="#">
+<span class="material-symbols-outlined mr-3 text-lg">help</span>
+<span class="text-xs font-medium uppercase tracking-wider">Bantuan</span>
+</a>
+<a class="flex items-center py-2 text-gray-400 opacity-70 hover:text-[#D4AF37] transition-colors" href="#">
+<span class="material-symbols-outlined mr-3 text-lg">logout</span>
+<span class="text-xs font-medium uppercase tracking-wider">Keluar</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 min-h-screen bg-[#050508]">
+<!-- TopAppBar Component -->
+<header class="fixed top-0 left-64 right-0 h-16 bg-[#050508] flex justify-between items-center px-8 z-40">
+<h2 class="font-headline font-bold text-lg tracking-tight text-[#D4AF37]">Panduan Penggunaan</h2>
+<div class="flex items-center space-x-6">
+<div class="relative">
+<span class="material-symbols-outlined text-gray-500 hover:text-[#D4AF37] transition-colors cursor-pointer">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-[#FF1744] rounded-full"></span>
+</div>
+<div class="flex items-center space-x-3 cursor-pointer group">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Premium User</p>
+<p class="text-[10px] text-gray-500 font-mono">ID: 0092-TH</p>
+</div>
+<span class="material-symbols-outlined text-3xl text-gray-400 group-hover:text-[#D4AF37] transition-colors">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="pt-24 px-12 pb-20 max-w-6xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-16">
+<div class="relative overflow-hidden rounded-2xl h-64 glass-card flex items-center px-12 gold-glow">
+<div class="relative z-10 max-w-lg">
+<span class="text-[#D4AF37] font-mono text-xs uppercase tracking-[0.3em] mb-4 block">Platform Education</span>
+<h3 class="text-4xl font-headline font-extrabold text-white mb-4 leading-tight">Mastering Terminal Noir</h3>
+<p class="text-gray-400 text-sm leading-relaxed">
+                            Pelajari cara mengoptimalkan setiap fitur Hunter Trades untuk mengubah data transaksi Anda menjadi instrumen profitabilitas yang presisi.
+                        </p>
+</div>
+<div class="absolute right-0 top-0 w-1/2 h-full opacity-20 pointer-events-none">
+<img alt="Digital trading chart" class="w-full h-full object-cover" data-alt="Close-up of a high-tech financial trading interface with golden data lines and abstract digital patterns in a dark environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6bNCSQU7VC7mFR0tE8gJk7mj_EVgCj0tfZX4Ftb8cJLYUWwiEi2Bir_hTn2pX-aKfEnnWIIhER2NpczF02X3CwjWqSlqdddPKSTv9FMRcRDl7bNWiP30K6_RqbkY0hJ9RTccFQ7NWT5EWhHG7sflU323iQF9WlxMFuWjUI5X5yMVe9viWDZGDpx4X_tuxNd57jTveFsjAZ9ceFSVlFSKGynKfpK01YvB0pm3klh-iKbuekncO93TjP3yGgj7F2lIPLdximP9MaIQ"/>
+</div>
+</div>
+</section>
+<!-- Grid Layout for Content -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Left Column: Main Guides -->
+<div class="lg:col-span-2 space-y-8">
+<!-- Section 1: Memulai -->
+<div class="glass-card rounded-2xl p-8 transition-all hover:bg-surface-container-high group">
+<div class="flex items-start justify-between mb-8">
+<div>
+<div class="w-12 h-12 rounded-lg bg-primary-container/10 flex items-center justify-center mb-4 border border-primary/20">
+<span class="material-symbols-outlined text-[#D4AF37]">rocket_launch</span>
+</div>
+<h4 class="text-xl font-bold text-white">1. Memulai (Get Started)</h4>
+<p class="text-gray-500 text-sm mt-1">Langkah awal mengintegrasikan akun trading Anda.</p>
+</div>
+<span class="font-mono text-xs text-[#D4AF37]">01 / 04</span>
+</div>
+<ul class="space-y-6">
+<li class="flex items-start">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-[#D4AF37] flex items-center justify-center text-[10px] font-bold mr-4 mt-0.5 shrink-0">01</span>
+<div>
+<p class="text-white font-medium text-sm">Hubungkan Broker &amp; Exchange</p>
+<p class="text-gray-400 text-xs mt-1 leading-relaxed">Gunakan API Key dengan akses 'Read-Only' untuk keamanan maksimal. Mendukung Binance, Bybit, dan MetaTrader.</p>
+</div>
+</li>
+<li class="flex items-start">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-[#D4AF37] flex items-center justify-center text-[10px] font-bold mr-4 mt-0.5 shrink-0">02</span>
+<div>
+<p class="text-white font-medium text-sm">Selesaikan Profil Psikologi</p>
+<p class="text-gray-400 text-xs mt-1 leading-relaxed">Isi kuesioner risiko untuk membantu AI menentukan profil 'Hunter' Anda dan menyesuaikan ambang batas emosional.</p>
+</div>
+</li>
+</ul>
+</div>
+<!-- Section 2: Mencatat Trade -->
+<div class="glass-card rounded-2xl p-8 transition-all hover:bg-surface-container-high group">
+<div class="flex items-start justify-between mb-8">
+<div>
+<div class="w-12 h-12 rounded-lg bg-primary-container/10 flex items-center justify-center mb-4 border border-primary/20">
+<span class="material-symbols-outlined text-[#D4AF37]">edit_note</span>
+</div>
+<h4 class="text-xl font-bold text-white">2. Mencatat Trade (Logging Trades)</h4>
+<p class="text-gray-500 text-sm mt-1">Gunakan 'Trade Logger' untuk dokumentasi yang akurat.</p>
+</div>
+<span class="font-mono text-xs text-[#D4AF37]">02 / 04</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="p-4 rounded-xl bg-surface-dim border border-white/5">
+<h5 class="text-[#D4AF37] text-xs font-bold uppercase tracking-wider mb-2">Risk Impact</h5>
+<p class="text-gray-400 text-xs leading-relaxed">Sistem akan secara otomatis menghitung drawdown dan impact terhadap total ekuitas secara real-time.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-dim border border-white/5">
+<h5 class="text-[#D4AF37] text-xs font-bold uppercase tracking-wider mb-2">Emotional Scaling</h5>
+<p class="text-gray-400 text-xs leading-relaxed">Catat tingkat keyakinan (1-10) sebelum entri. Ini penting untuk analisis bias psikologis di kemudian hari.</p>
+</div>
+</div>
+</div>
+<!-- Section 3: Menganalisis Performa -->
+<div class="glass-card rounded-2xl p-8 transition-all hover:bg-surface-container-high group">
+<div class="flex items-start justify-between mb-8">
+<div>
+<div class="w-12 h-12 rounded-lg bg-primary-container/10 flex items-center justify-center mb-4 border border-primary/20">
+<span class="material-symbols-outlined text-[#D4AF37]">psychology</span>
+</div>
+<h4 class="text-xl font-bold text-white">3. Menganalisis Performa</h4>
+<p class="text-gray-500 text-sm mt-1">Gunakan wawasan berbasis data untuk perbaikan kontinu.</p>
+</div>
+<span class="font-mono text-xs text-[#D4AF37]">03 / 04</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center p-4 rounded-xl bg-[#0A0A12] border-l-2 border-[#D4AF37]">
+<span class="material-symbols-outlined text-[#D4AF37] mr-4">analytics</span>
+<div>
+<p class="text-sm font-bold text-white">Analitik Visual</p>
+<p class="text-xs text-gray-500">Distribusi P&amp;L berdasarkan waktu, hari, dan tipe aset.</p>
+</div>
+</div>
+<div class="flex items-center p-4 rounded-xl bg-[#0A0A12] border-l-2 border-[#D4AF37]">
+<span class="material-symbols-outlined text-[#D4AF37] mr-4">auto_awesome</span>
+<div>
+<p class="text-sm font-bold text-white">AI Review</p>
+<p class="text-xs text-gray-500">Dapatkan kritik objektif dari AI terhadap strategi yang Anda gunakan.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Quick Links & Stats -->
+<div class="space-y-8">
+<!-- Progress Card -->
+<div class="glass-card rounded-2xl p-6 border-primary/10">
+<h4 class="text-xs font-bold text-[#D4AF37] uppercase tracking-widest mb-6">Progress Onboarding</h4>
+<div class="space-y-6">
+<div class="relative pt-1">
+<div class="flex mb-2 items-center justify-between">
+<div>
+<span class="text-[10px] font-semibold inline-block py-1 px-2 uppercase rounded-full text-[#D4AF37] bg-primary/10">
+                                            Setup Akun
+                                        </span>
+</div>
+<div class="text-right">
+<span class="text-xs font-mono font-semibold inline-block text-[#D4AF37]">
+                                            75%
+                                        </span>
+</div>
+</div>
+<div class="overflow-hidden h-1.5 mb-4 text-xs flex rounded bg-surface-variant">
+<div class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-[#D4AF37]" style="width:75%"></div>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center text-xs text-on-surface">
+<span class="material-symbols-outlined text-[#00E676] text-sm mr-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                    Registrasi Berhasil
+                                </div>
+<div class="flex items-center text-xs text-on-surface">
+<span class="material-symbols-outlined text-[#00E676] text-sm mr-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                    Hubungkan API
+                                </div>
+<div class="flex items-center text-xs text-gray-500">
+<span class="material-symbols-outlined text-gray-600 text-sm mr-2">circle</span>
+                                    Entri Jurnal Pertama
+                                </div>
+</div>
+</div>
+</div>
+<!-- Quick Links -->
+<div class="glass-card rounded-2xl p-6">
+<h4 class="text-xs font-bold text-white uppercase tracking-widest mb-4">Tautan Cepat</h4>
+<div class="space-y-2">
+<a class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors group" href="#">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-gray-400 text-lg mr-3">videocam</span>
+<span class="text-sm text-gray-300">Video Tutorial</span>
+</div>
+<span class="material-symbols-outlined text-gray-600 group-hover:text-[#D4AF37] transition-colors">chevron_right</span>
+</a>
+<a class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors group" href="#">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-gray-400 text-lg mr-3">description</span>
+<span class="text-sm text-gray-300">PDF Dokumentasi</span>
+</div>
+<span class="material-symbols-outlined text-gray-600 group-hover:text-[#D4AF37] transition-colors">chevron_right</span>
+</a>
+<a class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors group" href="#">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-gray-400 text-lg mr-3">forum</span>
+<span class="text-sm text-gray-300">Komunitas Discord</span>
+</div>
+<span class="material-symbols-outlined text-gray-600 group-hover:text-[#D4AF37] transition-colors">chevron_right</span>
+</a>
+</div>
+</div>
+<!-- Playbook Hint -->
+<div class="rounded-2xl p-6 bg-gradient-to-br from-[#D4AF37]/10 to-transparent border border-[#D4AF37]/20 relative overflow-hidden">
+<div class="relative z-10">
+<h4 class="text-sm font-bold text-[#D4AF37] mb-2">Manajemen Playbook</h4>
+<p class="text-[11px] text-gray-400 leading-relaxed mb-4">
+                                Bangun strategi trading yang terukur. Filter transaksi berdasarkan sistem "Hunter" untuk melihat strategi mana yang memberikan profit paling konsisten.
+                            </p>
+<button class="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest flex items-center group">
+                                Buka Playbook 
+                                <span class="material-symbols-outlined text-sm ml-1 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+<span class="material-symbols-outlined absolute -right-4 -bottom-4 text-7xl text-[#D4AF37]/5 rotate-12">ads_click</span>
+</div>
+</div>
+</div>
+<!-- Footer Support -->
+<footer class="mt-20 pt-12 border-t border-white/5 text-center">
+<p class="text-gray-500 text-sm">Butuh bantuan lebih lanjut?</p>
+<div class="mt-6 flex justify-center space-x-4">
+<button class="px-6 py-2 rounded-lg border border-primary/40 text-[#D4AF37] text-xs font-bold hover:bg-primary/5 transition-colors">
+                        Hubungi Support
+                    </button>
+<button class="px-6 py-2 rounded-lg border border-white/10 text-white text-xs font-bold hover:bg-white/5 transition-colors">
+                        FAQ Platform
+                    </button>
+</div>
+<p class="mt-12 text-[10px] text-gray-600 font-mono uppercase tracking-[0.2em]">© 2024 Terminal Noir - Elite Ledger Ecosystem</p>
+</footer>
+</div>
+</main>
+</body></html>

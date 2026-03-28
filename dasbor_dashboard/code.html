@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f2ca50",
+                        "primary-container": "#d4af37",
+                        "surface-dim": "#050508",
+                        "surface-container": "#0A0A12",
+                        "surface-container-low": "#1b1b1f",
+                        "surface-container-high": "#2a292e",
+                        "surface-container-highest": "#353439",
+                        "surface-variant": "#353439",
+                        "on-surface": "#e5e1e7",
+                        "outline-variant": "#4d4635",
+                        "profit": "#00E676",
+                        "loss": "#FF1744",
+                        "warning": "#FFA726"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(10, 10, 18, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .gold-glow {
+            box-shadow: 0 24px 48px -12px rgba(212, 175, 55, 0.04);
+        }
+        body {
+            background-color: #050508;
+            color: #e5e1e7;
+            font-family: 'Inter', sans-serif;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar (Shared Component) -->
+<aside class="w-[260px] h-screen sticky left-0 top-0 bg-[#0A0A12] flex flex-col justify-between py-6 border-r border-white/5">
+<div>
+<!-- Header Brand -->
+<div class="px-8 mb-10">
+<h1 class="text-[16px] font-bold text-[#D4AF37] tracking-[0.1em]">HUNTER TRADES</h1>
+<p class="text-[10px] text-gray-500 tracking-[0.2em] mt-1 uppercase">Elite Ledger</p>
+</div>
+<!-- Navigation Links -->
+<nav class="space-y-1">
+<a class="flex items-center h-[48px] text-[#D4AF37] bg-[#D4AF37]/[0.08] border-l-[3px] border-[#D4AF37] px-4 transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-4" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Dasbor</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">edit_note</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Catat Trade</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">menu_book</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Playbook</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">query_stats</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Analitik</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">psychology</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">AI Review</span>
+</a>
+</nav>
+</div>
+<!-- Footer Links -->
+<div class="space-y-1 border-t border-white/5 pt-6">
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">settings</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Pengaturan</span>
+</a>
+<a class="flex items-center h-[48px] text-gray-400 hover:text-[#D4AF37] px-4 hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-4">logout</span>
+<span class="font-['Inter'] font-medium text-[14px] tracking-[0.1em]">Keluar</span>
+</a>
+</div>
+</aside>
+<div class="flex-1 flex flex-col">
+<!-- TopAppBar (Shared Component) -->
+<header class="h-[64px] sticky top-0 z-40 bg-[#0A0A12]/70 backdrop-blur-xl border-b border-white/5 flex justify-between items-center px-8 w-full">
+<div class="flex items-center space-x-4">
+<h2 class="font-['Inter'] font-semibold text-[18px] text-white">Dasbor</h2>
+</div>
+<div class="flex items-center space-x-6">
+<div class="relative cursor-pointer hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-[#D4AF37]">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-loss rounded-full border border-[#0A0A12]"></span>
+</div>
+<div class="flex items-center space-x-3 cursor-pointer group">
+<div class="text-right">
+<p class="text-[12px] font-medium text-white group-hover:text-[#D4AF37] transition-colors">Elite Hunter</p>
+<p class="text-[10px] text-gray-500">Pro Plan</p>
+</div>
+<div class="w-10 h-10 rounded-full border border-[#D4AF37]/30 p-0.5 overflow-hidden">
+<img alt="Avatar" class="w-full h-full object-cover rounded-full" data-alt="Modern geometric avatar icon with gold and dark violet gradients, high-end professional digital art style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHLojq_cY-HcNIjZLM486djoSVcZN9GdOejBOBdHb4FyaYfEIFUPKUrjqFDvU-fPr0y215JURXCoE8jgwW9ZpOsPigbhWtRZH-vpcWG5-a_Rz6oKYEryChRDVUZjj9-g3-taIcehA_zh9MDtpg68KF0g9Vf5TFgYF0WkWmzb_EWsC8yakh7Iz7hwCMeiB7JGAudP-w7RAT8nhuQ1HMFzn345GMjnIyUYidsg1b6Tn1n5sEjbOn9VhtsTA9E7cgs6ynOPUrZMMV90M"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="p-8 space-y-8 max-w-[1600px] mx-auto w-full">
+<!-- Bento Grid - Section 1 -->
+<div class="grid grid-cols-12 gap-6">
+<!-- 1. Account Summary & Risk Gauge -->
+<div class="col-span-12 lg:col-span-4 glass-card rounded-2xl p-6 gold-glow flex flex-col justify-between min-h-[280px]">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-1">Total Ekuitas</p>
+<h3 class="mono text-3xl font-bold text-[#D4AF37]">$12,450.00</h3>
+<div class="flex items-center mt-2">
+<span class="material-symbols-outlined text-profit text-[18px] mr-1">trending_up</span>
+<span class="mono text-profit text-sm font-medium">+$340.00 (2.8%)</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-600">account_balance_wallet</span>
+</div>
+<div class="flex justify-around items-center pt-6 border-t border-white/5">
+<div class="text-center">
+<div class="relative w-20 h-20 mb-2">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" stroke-width="6"></circle>
+<circle class="text-[#D4AF37]" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" stroke-dasharray="213.6" stroke-dashoffset="64" stroke-linecap="round" stroke-width="6"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="mono text-[10px] text-white">70%</span>
+</div>
+</div>
+<p class="text-[10px] text-gray-500 uppercase font-medium">Eksposur</p>
+</div>
+<div class="text-center">
+<div class="relative w-20 h-20 mb-2">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" stroke-width="6"></circle>
+<circle class="text-loss" cx="40" cy="40" fill="transparent" r="34" stroke="currentColor" stroke-dasharray="213.6" stroke-dashoffset="180" stroke-linecap="round" stroke-width="6"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="mono text-[10px] text-white">15%</span>
+</div>
+</div>
+<p class="text-[10px] text-gray-500 uppercase font-medium">Risiko Sesi</p>
+</div>
+</div>
+</div>
+<!-- 2. Equity Curve -->
+<div class="col-span-12 lg:col-span-5 glass-card rounded-2xl p-6 flex flex-col justify-between">
+<div class="flex justify-between items-center mb-4">
+<h4 class="font-semibold text-white">Kurva Ekuitas</h4>
+<div class="flex bg-surface-container-low p-1 rounded-lg">
+<button class="px-3 py-1 text-[10px] mono text-gray-500 hover:text-white transition-colors">1M</button>
+<button class="px-3 py-1 text-[10px] mono bg-[#D4AF37] text-[#050508] font-bold rounded">3B</button>
+<button class="px-3 py-1 text-[10px] mono text-gray-500 hover:text-white transition-colors">6B</button>
+<button class="px-3 py-1 text-[10px] mono text-gray-500 hover:text-white transition-colors">SEMUA</button>
+</div>
+</div>
+<div class="flex-1 relative mt-4 h-[160px]">
+<!-- Area Chart Mockup -->
+<div class="absolute bottom-0 w-full h-full flex items-end overflow-hidden">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 400 100">
+<defs>
+<lineargradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#D4AF37" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#D4AF37" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,80 Q50,60 100,75 T200,40 T300,55 T400,20 L400,100 L0,100 Z" fill="url(#chartGradient)"></path>
+<path d="M0,80 Q50,60 100,75 T200,40 T300,55 T400,20" fill="none" stroke="#D4AF37" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+</div>
+<!-- Grid Lines -->
+<div class="absolute inset-0 border-b border-white/5 flex flex-col justify-between">
+<div class="w-full border-t border-white/5 opacity-50"></div>
+<div class="w-full border-t border-white/5 opacity-50"></div>
+<div class="w-full border-t border-white/5 opacity-50"></div>
+</div>
+</div>
+</div>
+<!-- 3. Today's Trades -->
+<div class="col-span-12 lg:col-span-3 glass-card rounded-2xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h4 class="font-semibold text-white">Transaksi Hari Ini</h4>
+<span class="mono text-[10px] text-gray-500">22 JUN 2024</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+<div class="flex items-center">
+<div class="w-10 h-10 rounded-lg bg-profit/10 flex items-center justify-center text-profit mr-3">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">north_east</span>
+</div>
+<div>
+<p class="font-bold text-sm tracking-tight text-white">XAUUSD</p>
+<p class="text-[10px] text-gray-500 mono uppercase">Long</p>
+</div>
+</div>
+<p class="mono text-profit font-bold">+$340.00</p>
+</div>
+<div class="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+<div class="flex items-center">
+<div class="w-10 h-10 rounded-lg bg-loss/10 flex items-center justify-center text-loss mr-3">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">south_east</span>
+</div>
+<div>
+<p class="font-bold text-sm tracking-tight text-white">EURUSD</p>
+<p class="text-[10px] text-gray-500 mono uppercase">Short</p>
+</div>
+</div>
+<p class="mono text-loss font-bold">-$120.00</p>
+</div>
+<button class="w-full py-3 mt-2 text-[11px] font-bold text-[#D4AF37] uppercase tracking-[0.2em] border border-[#D4AF37]/20 rounded-xl hover:bg-[#D4AF37]/5 transition-all">
+                            Lihat Semua
+                        </button>
+</div>
+</div>
+</div>
+<!-- KPI Strip -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+<div class="glass-card rounded-xl p-4 text-center">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Win Rate</p>
+<p class="mono text-lg font-bold text-white">67.3%</p>
+</div>
+<div class="glass-card rounded-xl p-4 text-center">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Profit Factor</p>
+<p class="mono text-lg font-bold text-[#D4AF37]">1.84</p>
+</div>
+<div class="glass-card rounded-xl p-4 text-center">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Avg Win</p>
+<p class="mono text-lg font-bold text-profit">$420</p>
+</div>
+<div class="glass-card rounded-xl p-4 text-center">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Avg Loss</p>
+<p class="mono text-lg font-bold text-loss">-$210</p>
+</div>
+<div class="glass-card rounded-xl p-4 text-center">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Total Trade</p>
+<p class="mono text-lg font-bold text-white">142</p>
+</div>
+<div class="glass-card rounded-xl p-4 text-center border-[#D4AF37]/30">
+<p class="text-[9px] text-gray-500 uppercase tracking-widest mb-1">Best Streak</p>
+<p class="mono text-lg font-bold text-[#D4AF37]">8 WINS</p>
+</div>
+</div>
+<!-- Bottom Section -->
+<div class="grid grid-cols-12 gap-6">
+<!-- 5. PnL Heatmap -->
+<div class="col-span-12 lg:col-span-8 glass-card rounded-2xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h4 class="font-semibold text-white">Kalender Performa (PnL Heatmap)</h4>
+<div class="flex items-center space-x-2">
+<span class="text-[10px] text-gray-500">Loss</span>
+<div class="flex space-x-1">
+<div class="w-3 h-3 rounded bg-loss/80"></div>
+<div class="w-3 h-3 rounded bg-loss/40"></div>
+<div class="w-3 h-3 rounded bg-surface-container-high border border-white/5"></div>
+<div class="w-3 h-3 rounded bg-profit/40"></div>
+<div class="w-3 h-3 rounded bg-profit/80"></div>
+</div>
+<span class="text-[10px] text-gray-500">Profit</span>
+</div>
+</div>
+<div class="grid grid-cols-7 gap-2">
+<!-- Header Days -->
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Sen</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Sel</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Rab</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Kam</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Jum</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Sab</div>
+<div class="text-[9px] text-gray-600 uppercase mono text-center pb-2">Min</div>
+<!-- Calendar Squares -->
+<!-- Row 1 -->
+<div class="aspect-square rounded bg-surface-container-high border border-white/5 opacity-30"></div>
+<div class="aspect-square rounded bg-profit/60 relative group cursor-pointer">
+<span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest px-2 py-1 rounded text-[9px] mono z-10">+$120</span>
+</div>
+<div class="aspect-square rounded bg-profit/30"></div>
+<div class="aspect-square rounded bg-loss/40"></div>
+<div class="aspect-square rounded bg-profit/90"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<!-- Row 2 -->
+<div class="aspect-square rounded bg-profit/20"></div>
+<div class="aspect-square rounded bg-profit/50"></div>
+<div class="aspect-square rounded bg-loss/70"></div>
+<div class="aspect-square rounded bg-profit/40"></div>
+<div class="aspect-square rounded bg-profit/80"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<!-- Row 3 -->
+<div class="aspect-square rounded bg-profit/90 border border-[#D4AF37]/50"></div>
+<div class="aspect-square rounded bg-loss/30"></div>
+<div class="aspect-square rounded bg-profit/40"></div>
+<div class="aspect-square rounded bg-profit/20"></div>
+<div class="aspect-square rounded bg-profit/10"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<!-- Row 4 -->
+<div class="aspect-square rounded bg-profit/60"></div>
+<div class="aspect-square rounded bg-loss/80"></div>
+<div class="aspect-square rounded bg-profit/40"></div>
+<div class="aspect-square rounded bg-profit/90"></div>
+<div class="aspect-square rounded bg-profit/20"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+<div class="aspect-square rounded bg-surface-container-high border border-white/5"></div>
+</div>
+</div>
+<!-- 6. Risk Status Panel -->
+<div class="col-span-12 lg:col-span-4 glass-card rounded-2xl p-6 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-6">
+<h4 class="font-semibold text-white">Risk Control Center</h4>
+<span class="px-2 py-1 rounded bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] font-bold tracking-[0.2em] border border-[#D4AF37]/30">AMAN</span>
+</div>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between text-[11px] mb-2">
+<span class="text-gray-500 uppercase tracking-wider">Harian Drawdown</span>
+<span class="mono text-white">0.4% / 2.0%</span>
+</div>
+<div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-[#D4AF37]" style="width: 20%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[11px] mb-2">
+<span class="text-gray-500 uppercase tracking-wider">Total Drawdown</span>
+<span class="mono text-white">1.2% / 5.0%</span>
+</div>
+<div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-[#D4AF37]" style="width: 24%"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-white/5 space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-warning text-[18px] mr-2">verified_user</span>
+<span class="text-[11px] text-gray-400">Risk Limit Setting</span>
+</div>
+<span class="mono text-[11px] text-white">Ketat</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-[#D4AF37] text-[18px] mr-2">security</span>
+<span class="text-[11px] text-gray-400">Auto Cut-Off</span>
+</div>
+<span class="mono text-[11px] text-white">Aktif</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
