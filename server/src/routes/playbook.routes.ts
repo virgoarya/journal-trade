@@ -2,7 +2,7 @@ import { Router } from "express";
 import { playbookService } from "../services/playbook.service";
 import { validate } from "../middleware/validate";
 import { createPlaybookSchema, updatePlaybookSchema } from "../validators/playbook.validator";
-import { uuidParamSchema } from "../validators/common.validator";
+import { objectIdParamSchema } from "../validators/common.validator";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
 
@@ -23,7 +23,7 @@ router.get("/", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/:id", validate({ params: uuidParamSchema }), async (req, res, next) => {
+router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
     const playbook = await playbookService.getById(req.params.id, req.user.id);
     if (!playbook) return apiResponse.notFound(res, "Playbook tidak ditemukan");
@@ -31,7 +31,7 @@ router.get("/:id", validate({ params: uuidParamSchema }), async (req, res, next)
   } catch (error) { next(error); }
 });
 
-router.patch("/:id", validate({ params: uuidParamSchema, body: updatePlaybookSchema }), async (req, res, next) => {
+router.patch("/:id", validate({ params: objectIdParamSchema, body: updatePlaybookSchema }), async (req, res, next) => {
   try {
     const playbook = await playbookService.update(req.params.id, req.user.id, req.body);
     if (!playbook) return apiResponse.notFound(res, "Playbook tidak valid atau gagal update");
@@ -39,7 +39,7 @@ router.patch("/:id", validate({ params: uuidParamSchema, body: updatePlaybookSch
   } catch (error) { next(error); }
 });
 
-router.delete("/:id", validate({ params: uuidParamSchema }), async (req, res, next) => {
+router.delete("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
     await playbookService.archive(req.params.id, req.user.id);
     return apiResponse.success(res, { message: "Playbook Diarsipkan" });

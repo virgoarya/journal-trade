@@ -4,7 +4,7 @@ import { validate } from "../middleware/validate";
 import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.validator";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
-import { uuidParamSchema } from "../validators/common.validator";
+import { objectIdParamSchema } from "../validators/common.validator";
 
 const router = Router();
 router.use(requireAuth);
@@ -27,7 +27,7 @@ router.get("/", validate({ query: getTradesQuerySchema }), async (req, res, next
   } catch (error) { next(error); }
 });
 
-router.get("/:id", validate({ params: uuidParamSchema }), async (req, res, next) => {
+router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
     const trade = await tradeService.getById(req.params.id, req.user.id);
     if (!trade) return apiResponse.notFound(res, "Data trade tidak ditemukan");

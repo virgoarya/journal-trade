@@ -3,8 +3,8 @@ import { TRADE_RESULTS, TRADE_DIRECTIONS } from "../utils/constants";
 import { paginationQuerySchema, dateRangeQuerySchema } from "./common.validator";
 
 export const logTradeSchema = z.object({
-  tradingAccountId: z.string().uuid("ID Akun tidak valid"),
-  playbookId: z.string().uuid("ID Playbook tidak valid").optional().nullable(),
+  tradingAccountId: z.string().regex(/^[0-9a-fA-F]{24}$/, "ID Akun tidak valid"),
+  playbookId: z.string().regex(/^[0-9a-fA-F]{24}$/, "ID Playbook tidak valid").optional().nullable(),
   tradeDate: z.string().datetime("Format tanggal tidak valid (gunakan ISO-8601)"),
   pair: z.string().min(2, "Pair minimal 2 karakter"),
   direction: z.enum(TRADE_DIRECTIONS as [string, ...string[]]),
@@ -25,7 +25,7 @@ export const logTradeSchema = z.object({
 
 export const getTradesQuerySchema = paginationQuerySchema.merge(dateRangeQuerySchema).extend({
   pair: z.string().optional(),
-  playbookId: z.string().uuid().optional(),
+  playbookId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   result: z.enum(TRADE_RESULTS as [string, ...string[]]).optional(),
   sortBy: z.enum(["tradeDate", "actualPnl", "pair", "createdAt"]).default("tradeDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),

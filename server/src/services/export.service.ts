@@ -1,19 +1,14 @@
-import { eq } from "drizzle-orm";
-import { db } from "../db";
-import { trade } from "../db/schema";
+import { Trade } from "../models/Trade";
 
 export const exportService = {
   async getCsvData(userId: string) {
-    const list = await db.query.trade.findMany({
-      where: eq(trade.userId, userId),
-      orderBy: (t, { asc }) => [asc(t.tradeDate)]
-    });
+    const list = await Trade.find({ userId }).sort('tradeDate');
 
     if (list.length === 0) return "";
 
     const headers = ["Waktu", "Pair", "Arah", "Entry", "StopLoss", "Lot", "PnL", "Hasil", "Catatan"];
     const rows = list.map(t => [
-      new Date(t.tradeDate).toISOString(),
+      t.tradeDate.toISOString(),
       t.pair,
       t.direction,
       t.entryPrice,

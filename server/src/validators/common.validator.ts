@@ -10,6 +10,7 @@ export const dateRangeQuerySchema = z.object({
   endDate: z.string().datetime().optional(),
 });
 
-export const uuidParamSchema = z.object({
-  id: z.string().uuid("ID tidak valid"),
+// Zod validator for MongoDB ObjectId (24 hex characters)
+export const objectIdParamSchema = z.object({
+  id: z.string().regex(/^[0-9a-fA-F]{24}$/, "ObjectId MongoDB tidak valid"),
 });

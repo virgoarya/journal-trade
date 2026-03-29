@@ -1,16 +1,11 @@
-import { eq, sql, and } from "drizzle-orm";
-import { db } from "../db";
-import { trade, tradingAccount } from "../db/schema";
+import mongoose from "mongoose";
+import { Trade } from "../models/Trade";
 import { calculateProfitFactor, calculateExpectancy } from "../utils/calculations";
 
 export const analyticsService = {
   
   async getOverview(userId: string, accountId: string) {
-    const rawTrades = await db.select({
-      pnl: trade.actualPnl,
-      result: trade.result
-    }).from(trade)
-    .where(and(eq(trade.tradingAccountId, accountId), eq(trade.userId, userId)));
+    const rawTrades = await Trade.find({ tradingAccountId: accountId, userId }).select('actualPnl result');
     
     let winCount = 0;
     let lossCount = 0;
@@ -18,7 +13,7 @@ export const analyticsService = {
     let grossLoss = 0;
 
     for (const t of rawTrades) {
-      const p = parseFloat(t.pnl);
+      const p = t.actualPnl;
       if (t.result === "WIN") { winCount++; grossProfit += p; }
       else if (t.result === "LOSS") { lossCount++; grossLoss += Math.abs(p); }
     }
@@ -36,25 +31,21 @@ export const analyticsService = {
       avgWin: Number(avgWin.toFixed(2)),
       avgLoss: Number(avgLoss.toFixed(2)),
       totalTrades: rawTrades.length,
-      bestWinStreak: 0, // Placeholder
+      bestWinStreak: 0,
       expectancy,
-      sharpeRatio: 0 // Placeholder
+      sharpeRatio: 0
     };
   },
 
   async getEquityCurve(userId: string, accountId: string) {
-    // Usually aggregated by day from daily_snapshot. Using a simplified mock
-    const points = await db.select({
-      date: trade.tradeDate,
-      pnl: trade.actualPnl
-    }).from(trade)
-    .where(and(eq(trade.tradingAccountId, accountId), eq(trade.userId, userId)))
-    .orderBy(trade.tradeDate);
+    const points = await Trade.find({ tradingAccountId: accountId, userId })
+      .select('tradeDate actualPnl')
+      .sort('tradeDate');
 
     let cumulative = 0;
     const equityCurve = points.map(p => {
-      cumulative += parseFloat(p.pnl);
-      return { date: p.date, equity: cumulative };
+      cumulative += p.actualPnl;
+      return { date: p.tradeDate.toISOString(), equity: cumulative };
     });
 
     return {

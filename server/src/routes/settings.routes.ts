@@ -3,9 +3,11 @@ import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
 import { exportService } from "../services/export.service";
 import { tradingAccountService } from "../services/trading-account.service";
-import { db } from "../db";
-import { eq } from "drizzle-orm";
-import { trade, tradingAccount, playbook } from "../db/schema";
+import { Trade } from "../models/Trade";
+import { TradingAccount } from "../models/TradingAccount";
+import { Playbook } from "../models/Playbook";
+import { AiReview } from "../models/AiReview";
+import { DailySnapshot } from "../models/DailySnapshot";
 
 const router = Router();
 router.use(requireAuth);
@@ -29,11 +31,11 @@ router.post("/reset-data", async (req, res, next) => {
   try {
     const userId = req.user.id;
     // WARNING: Destructive operation
-    await db.transaction(async (tx) => {
-      await tx.delete(trade).where(eq(trade.userId, userId));
-      await tx.delete(playbook).where(eq(playbook.userId, userId));
-      await tx.delete(tradingAccount).where(eq(tradingAccount.userId, userId));
-    });
+    await Trade.deleteMany({ userId });
+    await Playbook.deleteMany({ userId });
+    await TradingAccount.deleteMany({ userId });
+    await AiReview.deleteMany({ userId });
+    await DailySnapshot.deleteMany({ userId });
 
     return apiResponse.success(res, { message: "Seluruh data trading dan pengaturan berhasil dihapus" });
   } catch (error) { next(error); }

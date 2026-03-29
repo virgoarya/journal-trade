@@ -1,83 +1,75 @@
-import { eq, and, sql } from "drizzle-orm";
-import { db } from "../db";
-import { trade, tradingAccount, dailySnapshot } from "../db/schema";
+import mongoose from "mongoose";
+import { Trade } from "../models/Trade";
+import { TradingAccount } from "../models/TradingAccount";
 import { z } from "zod";
 import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.validator";
 import { calculateRMultiple, calculateRiskAmount } from "../utils/calculations";
+import { DailySnapshot } from "../models/DailySnapshot";
 
 export const tradeService = {
   
   async create(userId: string, data: z.infer<typeof logTradeSchema>) {
-    return await db.transaction(async (tx) => {
-      // 1. Validate Account
-      const [account] = await tx.select().from(tradingAccount).where(and(eq(tradingAccount.id, data.tradingAccountId), eq(tradingAccount.userId, userId)));
-      if (!account) throw { status: 404, message: "Akun tidak valid" };
+    // If running a replica set, we can use sessions: const session = await mongoose.startSession();
+    // For simplicity locally, we do non-transactional inserts, but Mongoose supports sessions.
+    
+    const account = await TradingAccount.findOne({ _id: data.tradingAccountId, userId });
+    if (!account) throw { status: 404, message: "Akun tidak valid" };
 
-      // 2. Auto-calc rMultiple if missing
-      let rMult = data.rMultiple;
-      if (rMult == null) {
-        const riskAmount = calculateRiskAmount(data.entryPrice, data.stopLoss, data.lotSize);
-        rMult = calculateRMultiple(data.actualPnl, riskAmount);
-      }
+    let rMult = data.rMultiple;
+    if (rMult == null) {
+      const riskAmount = calculateRiskAmount(data.entryPrice, data.stopLoss, data.lotSize);
+      rMult = calculateRMultiple(data.actualPnl, riskAmount);
+    }
 
-      // 3. Insert Trade
-      const [newTrade] = await tx.insert(trade).values({
-        userId,
-        tradingAccountId: data.tradingAccountId,
-        playbookId: data.playbookId ?? null,
-        tradeDate: new Date(data.tradeDate),
-        pair: data.pair,
-        direction: data.direction,
-        entryPrice: data.entryPrice.toString(),
-        stopLoss: data.stopLoss.toString(),
-        takeProfit: data.takeProfit?.toString(),
-        lotSize: data.lotSize.toString(),
-        actualPnl: data.actualPnl.toString(),
-        rMultiple: rMult?.toString(),
-        result: data.result,
-        emotionalState: data.emotionalState,
-        notes: data.notes,
-        chartLink: data.chartLink,
-      }).returning();
-
-      // 4. Update Account Equity (simplified: currentEquity + actualPnl)
-      const newEquity = parseFloat(account.currentEquity) + data.actualPnl;
-      const newHwm = Math.max(parseFloat(account.highWaterMark), newEquity);
-
-      await tx.update(tradingAccount)
-        .set({
-          currentEquity: newEquity.toString(),
-          highWaterMark: newHwm.toString(),
-        })
-        .where(eq(tradingAccount.id, data.tradingAccountId));
-
-      return newTrade;
+    const newTrade = await Trade.create({
+      userId,
+      tradingAccountId: data.tradingAccountId,
+      playbookId: data.playbookId ?? null,
+      tradeDate: new Date(data.tradeDate),
+      pair: data.pair,
+      direction: data.direction,
+      entryPrice: data.entryPrice,
+      stopLoss: data.stopLoss,
+      takeProfit: data.takeProfit,
+      lotSize: data.lotSize,
+      actualPnl: data.actualPnl,
+      rMultiple: rMult,
+      result: data.result,
+      emotionalState: data.emotionalState,
+      notes: data.notes,
+      chartLink: data.chartLink,
     });
+
+    const newEquity = account.currentEquity + data.actualPnl;
+    const newHwm = Math.max(account.highWaterMark, newEquity);
+
+    account.currentEquity = newEquity;
+    account.highWaterMark = newHwm;
+    await account.save();
+
+    return newTrade;
   },
 
   async getAll(userId: string, query: z.infer<typeof getTradesQuerySchema>) {
-    // Pagination placeholder
     const limit = query.limit || 20;
     const offset = ((query.page || 1) - 1) * limit;
 
-    const list = await db.query.trade.findMany({
-      where: eq(trade.userId, userId),
-      limit,
-      offset,
-      orderBy: (trade, { desc }) => [desc(trade.tradeDate)],
-      with: { playbook: true }
-    });
+    const filter: any = { userId };
+    if (query.playbookId) filter.playbookId = query.playbookId;
+    if (query.result) filter.result = query.result;
+    
+    const list = await Trade.find(filter)
+      .populate("playbookId", "name")
+      .sort({ [query.sortBy]: query.sortOrder === "desc" ? -1 : 1 })
+      .skip(offset)
+      .limit(limit);
 
-    const [{ count }] = await db.select({ count: sql<number>`cast(count(*) as int)` }).from(trade).where(eq(trade.userId, userId));
+    const count = await Trade.countDocuments(filter);
     
     return { list, count };
   },
 
   async getById(id: string, userId: string) {
-    const t = await db.query.trade.findFirst({
-      where: and(eq(trade.id, id), eq(trade.userId, userId)),
-      with: { playbook: true }
-    });
-    return t;
+    return await Trade.findOne({ _id: id, userId }).populate("playbookId");
   }
 };

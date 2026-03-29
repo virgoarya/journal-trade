@@ -2,13 +2,13 @@ import { Router } from "express";
 import { aiReviewService } from "../services/ai-review.service";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
-import { uuidParamSchema } from "../validators/common.validator";
+import { objectIdParamSchema } from "../validators/common.validator";
 import { validate } from "../middleware/validate";
 
 const router = Router();
 router.use(requireAuth);
 
-router.post("/generate/:id", validate({ params: uuidParamSchema }), async (req, res, next) => {
+router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
     const review = await aiReviewService.generateReview(req.params.id, req.user.id);
     return apiResponse.success(res, review, 201);
