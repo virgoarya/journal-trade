@@ -1,5 +1,4 @@
 import { Router } from "express";
-import authRoutes from "./auth.routes";
 import tradingAccountRoutes from "./trading-account.routes";
 import tradeRoutes from "./trade.routes";
 import playbookRoutes from "./playbook.routes";
@@ -9,7 +8,9 @@ import settingsRoutes from "./settings.routes";
 
 const router = Router();
 
-router.use("/auth", authRoutes); // Better Auth
+// Auth routes are mounted directly in index.ts after DB connection
+// router.use("/auth", authRoutes);
+
 router.use("/v1/trading-accounts", tradingAccountRoutes);
 router.use("/v1/trades", tradeRoutes);
 router.use("/v1/playbooks", playbookRoutes);

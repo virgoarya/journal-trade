@@ -13,7 +13,9 @@ export const connectDB = async () => {
     }
     
     // Connect Mongoose
-    await mongoose.connect(env.DATABASE_URL);
+    await mongoose.connect(env.DATABASE_URL, {
+      serverSelectionTimeoutMS: 10000, // 10 detik timeout
+    });
     console.log("🚀 Mongoose Connected.");
     
     // Connect Native Client for Auth

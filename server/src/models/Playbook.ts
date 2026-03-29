@@ -4,11 +4,13 @@ export interface IPlaybook extends Document {
   userId: string;
   name: string;
   description?: string;
-  applicablePairs: string[];
-  session?: string;
+  markets: string[]; // formerly applicablePairs
+  timeframe?: string;
+  category?: "breakout" | "reversal" | "scalping" | "swing" | "news";
   tags: string[];
-  rules: string[]; // Embedded array rather than separate table
+  rules: string[];
   isArchived: boolean;
+  avgRr?: number; // Computed field
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,11 +19,13 @@ const PlaybookSchema = new Schema<IPlaybook>({
   userId: { type: String, required: true, index: true },
   name: { type: String, required: true },
   description: { type: String },
-  applicablePairs: { type: [String], default: [] },
-  session: { type: String },
+  markets: { type: [String], default: [] }, // renamed from applicablePairs
+  timeframe: { type: String },
+  category: { type: String, enum: ["breakout", "reversal", "scalping", "swing", "news"] },
   tags: { type: [String], default: [] },
   rules: { type: [String], default: [] },
-  isArchived: { type: Boolean, required: true, default: false }
+  isArchived: { type: Boolean, required: true, default: false },
+  avgRr: { type: Number, default: 0 } // cached/computed value
 }, {
   timestamps: true,
   collection: "playbooks"

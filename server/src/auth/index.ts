@@ -14,6 +14,7 @@ export const auth = betterAuth({
       scope: ["identify", "email", "guilds"]
     },
   },
+  trustedOrigins: ["http://localhost:3000"],
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,

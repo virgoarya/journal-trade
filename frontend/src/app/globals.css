@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-void: #050508;
+  --color-bg-surface: #0A0A12;
+  --color-bg-elevated: #10101C;
+  --color-bg-input: #0D0D18;
+  --color-border-subtle: #1A1A2E;
+  --color-accent-gold: #D4AF37;
+  --color-accent-gold-dim: #8B7722;
+  --color-text-primary: #E8E6E3;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #374151;
+  --color-data-profit: #00E676;
+  --color-data-loss: #FF1744;
+  --color-data-warning: #FFA726;
+
+  --font-sans: "Inter", "Geist Sans", sans-serif;
+  --font-mono: "JetBrains Mono", "Geist Mono", monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+@layer base {
+  :root {
+    background-color: var(--color-bg-void);
+    color: var(--color-text-primary);
+  }
+
+  body {
+    @apply antialiased min-h-screen bg-bg-void text-text-primary;
+    line-height: normal;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(10, 10, 18, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-lg);
+  }
+
+  .glass:hover {
+    border-color: rgba(212, 175, 55, 0.12);
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.04);
+  }
+
+  .btn-gold {
+    @apply bg-accent-gold text-bg-void font-semibold px-6 py-2.5 rounded-md transition-all hover:brightness-110 active:scale-95 shadow-sm;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent border border-border-subtle text-text-primary px-6 py-2.5 rounded-md transition-all hover:border-accent-gold hover:text-accent-gold;
+  }
+}

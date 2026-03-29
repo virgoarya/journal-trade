@@ -16,14 +16,26 @@ router.post("/", validate({ body: logTradeSchema }), async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/", validate({ query: getTradesQuerySchema }), async (req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
-    const { list, count } = await tradeService.getAll(req.user.id, req.query as any);
+    // Manual validation
+    const limit = parseInt(req.query.limit as string) || 20;
+    const page = parseInt(req.query.page as string) || 1;
+    const { list, count } = await tradeService.getAll(req.user.id, { limit, page, ...req.query });
     return apiResponse.success(res, list, 200, {
-      page: req.query.page || 1,
-      limit: req.query.limit || 20,
+      page,
+      limit,
       total: count
     });
+  } catch (error) { next(error); }
+});
+
+// Get recent trades (shortcut for dashboard)
+router.get("/recent", async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 5;
+    const trades = await tradeService.getRecent(req.user.id, limit);
+    return apiResponse.success(res, trades);
   } catch (error) { next(error); }
 });
 
@@ -31,10 +43,43 @@ router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, n
   try {
     const trade = await tradeService.getById(req.params.id, req.user.id);
     if (!trade) return apiResponse.notFound(res, "Data trade tidak ditemukan");
+    // Transform result enum to lowercase for frontend compatibility
+    if (trade) {
+      trade.result = trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven";
+      trade.direction = trade.direction === "LONG" ? "Long" : "Short";
+    }
     return apiResponse.success(res, trade);
   } catch (error) { next(error); }
 });
 
-// Additional update/delete routes omitted for brevity but fit similar pattern
+// Get trade summary
+router.get("/summary", async (req, res, next) => {
+  try {
+    const summary = await tradeService.getSummary(req.user.id);
+    return apiResponse.success(res, summary);
+  } catch (error) { next(error); }
+});
+
+// Update trade
+router.patch("/:id", validate({ params: objectIdParamSchema, body: logTradeSchema }), async (req, res, next) => {
+  try {
+    const trade = await tradeService.update(req.params.id, req.user.id, req.body);
+    if (!trade) return apiResponse.notFound(res, "Data trade tidak ditemukan");
+    // Transform result enum to lowercase for frontend compatibility
+    if (trade) {
+      trade.result = trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven";
+      trade.direction = trade.direction === "LONG" ? "Long" : "Short";
+    }
+    return apiResponse.success(res, trade);
+  } catch (error) { next(error); }
+});
+
+// Delete trade (archive/soft delete)
+router.delete("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
+  try {
+    await tradeService.delete(req.params.id, req.user.id);
+    return apiResponse.success(res, { message: "Trade deleted successfully" });
+  } catch (error) { next(error); }
+});
 
 export default router;

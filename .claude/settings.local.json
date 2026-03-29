@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(grep -r \"router.get\\\\|router.post\" src/routes/*.ts)",
+      "Bash(curl -s http://localhost:5000/api/v1/trades -H \"Content-Type: application/json\")",
+      "Bash(curl:*)",
+      "Bash(findstr :5000)",
+      "Bash(xargs -r kill)",
+      "Bash(npm install:*)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}

@@ -12,15 +12,19 @@ export const validate = (schemas: ValidationSchemas) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       if (schemas.body) {
-        req.body = schemas.body.parse(req.body);
+        const parsed = schemas.body.parse(req.body);
+        // Store parsed body in a separate property to avoid Express 5+ restrictions
+        (req as any).validatedBody = parsed;
       }
-      
+
       if (schemas.query) {
-        req.query = schemas.query.parse(req.query);
+        const parsed = schemas.query.parse(req.query);
+        (req as any).validatedQuery = parsed;
       }
-      
+
       if (schemas.params) {
-        req.params = schemas.params.parse(req.params);
+        const parsed = schemas.params.parse(req.params);
+        (req as any).validatedParams = parsed;
       }
 
       next();
@@ -30,10 +34,10 @@ export const validate = (schemas: ValidationSchemas) => {
           path: err.path.join("."),
           message: err.message,
         }));
-        
+
         return apiResponse.badRequest(res, "Gagal validasi input", errors);
       }
-      
+
       next(error);
     }
   };

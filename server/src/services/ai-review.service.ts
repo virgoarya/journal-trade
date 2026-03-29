@@ -2,10 +2,11 @@ import { AiReview } from "../models/AiReview";
 import { env } from "../config/env";
 
 export const aiReviewService = {
-  
-  async getFeed(userId: string, limit = 10, offset = 0) {
-    return await AiReview.find({ userId })
-      .populate("tradeId", "tradeDate pair result actualPnl")
+
+  async getFeed(userId: string, limit = 10, offset = 0, filter: any = {}) {
+    const query = { userId, ...filter };
+    return await AiReview.find(query)
+      .populate("tradeId", "tradeDate pair result actualPnl emotionalState notes")
       .sort("-createdAt")
       .skip(offset)
       .limit(limit);
@@ -13,7 +14,7 @@ export const aiReviewService = {
 
   async generateReview(tradeId: string, userId: string) {
     if (!env.GEMINI_API_KEY) throw new Error("Fitur AI dinonaktifkan");
-    
+
     let existing = await AiReview.findOne({ tradeId, userId });
     if (existing) return existing;
 
@@ -36,5 +37,10 @@ export const aiReviewService = {
     });
 
     return review;
+  },
+
+  async deleteReview(id: string, userId: string) {
+    const result = await AiReview.deleteOne({ _id: id, userId });
+    return result.deletedCount > 0;
   }
 };
