@@ -21,11 +21,13 @@ router.get("/", async (req, res, next) => {
     // Manual validation
     const limit = parseInt(req.query.limit as string) || 20;
     const page = parseInt(req.query.page as string) || 1;
-    // Convert req.query to plain object to avoid getter issues
+    // Build query object explicitly (avoid spreading req.query in Express 5)
     const query: any = { limit, page };
-    Object.keys(req.query).forEach(key => {
-      query[key] = req.query[key];
-    });
+    if (req.query.pair) query.pair = req.query.pair;
+    if (req.query.playbookId) query.playbookId = req.query.playbookId;
+    if (req.query.result) query.result = req.query.result;
+    if (req.query.sortBy) query.sortBy = req.query.sortBy;
+    if (req.query.sortOrder) query.sortOrder = req.query.sortOrder;
     const { list, count } = await tradeService.getAll(req.user.id, query);
     return apiResponse.success(res, list, 200, {
       page,
