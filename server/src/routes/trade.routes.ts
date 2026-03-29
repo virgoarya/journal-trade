@@ -21,7 +21,12 @@ router.get("/", async (req, res, next) => {
     // Manual validation
     const limit = parseInt(req.query.limit as string) || 20;
     const page = parseInt(req.query.page as string) || 1;
-    const { list, count } = await tradeService.getAll(req.user.id, { limit, page, ...req.query });
+    // Convert req.query to plain object to avoid getter issues
+    const query: any = { limit, page };
+    Object.keys(req.query).forEach(key => {
+      query[key] = req.query[key];
+    });
+    const { list, count } = await tradeService.getAll(req.user.id, query);
     return apiResponse.success(res, list, 200, {
       page,
       limit,
