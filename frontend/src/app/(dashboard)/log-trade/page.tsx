@@ -16,10 +16,10 @@ export default function LogTradePage() {
       try {
         setLoading(true);
         const result = await tradeService.getAll();
-        if (result.success && result.data) {
+        if (result.success && Array.isArray(result.data)) {
           setTrades(result.data);
         } else {
-          setError(result.error || "Failed to load trades");
+          setTrades([]);
         }
       } catch (err: any) {
         setError(err.message || "Network error");
@@ -86,9 +86,9 @@ export default function LogTradePage() {
     ? trades
     : trades.filter(t => t.result === selectedFilter);
 
-  const totalPnl = filteredTrades.reduce((sum, t) => sum + t.pnl, 0);
-  const winningTrades = trades.filter(t => t.result === "win");
-  const losingTrades = trades.filter(t => t.result === "loss");
+  const totalPnl = Array.isArray(filteredTrades) ? filteredTrades.reduce((sum, t) => sum + t.pnl, 0) : 0;
+  const winningTrades = Array.isArray(trades) ? trades.filter(t => t.result === "win") : [];
+  const losingTrades = Array.isArray(trades) ? trades.filter(t => t.result === "loss") : [];
   const avgWin = winningTrades.length > 0
     ? winningTrades.reduce((sum, t) => sum + t.pnl, 0) / winningTrades.length
     : 0;

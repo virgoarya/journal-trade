@@ -11,7 +11,7 @@ router.use(requireAuth);
 
 router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
-    const review = await aiReviewService.generateReview(req.params.id, req.user.id);
+    const review = await aiReviewService.generateReview(req.params.id as string, req.user.id);
     // Transform to frontend format
     const formattedReview = {
       id: review._id.toString(),
@@ -34,8 +34,8 @@ router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (r
 
 router.get("/", async (req, res, next) => {
   try {
-    const limit = Number(req.query.limit) || 10;
-    const offset = (Number(req.query.page || 1) - 1) * limit;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (parseInt(req.query.page as string) || 1 - 1) * limit;
 
     const list = await aiReviewService.getFeed(req.user.id, limit, offset);
 
@@ -119,7 +119,7 @@ router.get("/trade/:tradeId", validate({ params: objectIdParamSchema }), async (
 
 router.delete("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
-    await aiReviewService.deleteReview(req.params.id, req.user.id);
+    await aiReviewService.deleteReview(req.params.id as string, req.user.id);
     return apiResponse.success(res, { message: "Review deleted" });
   } catch (error) { next(error); }
 });

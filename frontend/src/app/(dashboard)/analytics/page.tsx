@@ -17,7 +17,20 @@ export default function AnalyticsPage() {
         setError(null);
         const result = await analyticsService.getOverview(timeRange);
         if (result.success && result.data) {
-          setAnalytics(result.data);
+          // Merge with defaults to ensure all fields exist
+          const data = result.data;
+          data.monthlyPnL = data.monthlyPnL || [];
+          data.weeklyStats = data.weeklyStats || [];
+          data.sessionPerformance = data.sessionPerformance || [];
+          data.streakStats = data.streakStats || { longestWin: 0, longestLoss: 0, currentStreak: { type: "win" as const, count: 0 }, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 };
+          data.bestPerformingPairs = data.bestPerformingPairs || [];
+          data.riskMetrics = data.riskMetrics || { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0 };
+          data.tradingBehaviour = data.tradingBehaviour || { avgTradeDuration: "0h 0m", avgPnlPerTrade: 0, tradesPerDay: 0, planAdherence: 0 };
+          data.totalPnL = data.totalPnL ?? 0;
+          data.totalTrades = data.totalTrades ?? 0;
+          data.winRate = data.winRate ?? 0;
+          data.profitFactor = data.profitFactor ?? 0;
+          setAnalytics(data as AnalyticsData);
         } else {
           setError(result.error || "Failed to load analytics");
         }

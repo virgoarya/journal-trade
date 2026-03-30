@@ -87,7 +87,7 @@ export const analyticsService = {
     });
 
     // Streak stats
-    let currentStreak = { type: "win" as const, count: 0 };
+    let currentStreak: { type: "win" | "loss"; count: number } = { type: "win", count: 0 };
     let longestWin = 0, longestLoss = 0, currentWin = 0, currentLoss = 0;
     for (const t of rawTrades.sort((a,b) => new Date(a.tradeDate).getTime() - new Date(b.tradeDate).getTime())) {
       if (t.result === "WIN") {

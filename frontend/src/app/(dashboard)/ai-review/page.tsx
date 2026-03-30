@@ -22,11 +22,15 @@ export default function AIReviewPage() {
           tradeService.getAll(),
         ]);
 
-        if (reviewsResult.success && reviewsResult.data) {
+        if (reviewsResult.success && Array.isArray(reviewsResult.data)) {
           setReviews(reviewsResult.data);
+        } else {
+          setReviews([]);
         }
-        if (tradesResult.success && tradesResult.data) {
+        if (tradesResult.success && Array.isArray(tradesResult.data)) {
           setTrades(tradesResult.data);
+        } else {
+          setTrades([]);
         }
       } catch (err: any) {
         setError(err.message || "Failed to load data");

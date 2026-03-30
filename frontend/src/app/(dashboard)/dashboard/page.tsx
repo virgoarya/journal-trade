@@ -30,14 +30,18 @@ export default function DashboardPage() {
 
         // Fetch recent trades
         const tradesResult = await tradeService.getRecent(5);
-        if (tradesResult.success && tradesResult.data) {
+        if (tradesResult.success && Array.isArray(tradesResult.data)) {
           setRecentTrades(tradesResult.data);
+        } else {
+          setRecentTrades([]);
         }
 
         // Fetch analytics overview
         const analyticsResult = await analyticsService.getOverview();
         if (analyticsResult.success && analyticsResult.data) {
           setAnalytics(analyticsResult.data);
+        } else {
+          setAnalytics(null);
         }
       } catch (err: any) {
         setError(err.message || "Failed to load data");
@@ -72,38 +76,38 @@ export default function DashboardPage() {
   const kpis = [
     {
       label: "Win Rate",
-      value: analytics ? `${analytics.winRate.toFixed(1)}%` : "0%",
-      sub: analytics ? `+${(analytics.winRate - 50).toFixed(1)}%` : "-",
+      value: analytics && typeof analytics.winRate === 'number' ? `${analytics.winRate.toFixed(1)}%` : "0.0%",
+      sub: analytics && typeof analytics.winRate === 'number' ? `+${(analytics.winRate - 50).toFixed(1)}%` : "-",
       icon: Trophy,
       isGold: true
     },
     {
       label: "Profit Factor",
-      value: analytics ? analytics.profitFactor.toFixed(2) : "0.00",
-      sub: analytics ? (analytics.profitFactor >= 1 ? "Profitable" : "Loss") : "-",
+      value: analytics && typeof analytics.profitFactor === 'number' ? analytics.profitFactor.toFixed(2) : "0.00",
+      sub: analytics && typeof analytics.profitFactor === 'number' ? (analytics.profitFactor >= 1 ? "Profitable" : "Loss") : "-",
       icon: Target,
       isGold: true
     },
     {
       label: "Avg Win",
-      value: analytics ? `$${analytics.riskMetrics.expectancy.toFixed(0)}` : "$0",
+      value: analytics && analytics.riskMetrics && typeof analytics.riskMetrics.expectancy === 'number' ? `$${analytics.riskMetrics.expectancy.toFixed(0)}` : "$0",
       color: "text-data-profit",
       icon: TrendingUp
     },
     {
       label: "Avg Loss",
-      value: analytics ? `-$${Math.abs(analytics.riskMetrics.expectancy * 0.7).toFixed(0)}` : "$0",
+      value: analytics && analytics.riskMetrics && typeof analytics.riskMetrics.expectancy === 'number' ? `-$${Math.abs(analytics.riskMetrics.expectancy * 0.7).toFixed(0)}` : "$0",
       color: "text-data-loss",
       icon: TrendingDown
     },
     {
       label: "Total Trade",
-      value: analytics ? analytics.totalTrades.toString() : "0",
+      value: analytics && typeof analytics.totalTrades === 'number' ? analytics.totalTrades.toString() : "0",
       icon: Activity
     },
     {
       label: "Best Streak",
-      value: analytics ? `${analytics.streakStats.longestWin} WINS` : "0",
+      value: analytics && analytics.streakStats && typeof analytics.streakStats.longestWin === 'number' ? `${analytics.streakStats.longestWin} WINS` : "0",
       isGold: true,
       icon: Zap
     },
@@ -130,12 +134,12 @@ export default function DashboardPage() {
             <div>
               <p className="text-[10px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Ekuitas</p>
               <h3 className="font-mono text-3xl font-bold text-accent-gold">
-                {analytics ? `$${analytics.totalPnL.toLocaleString()}` : "$0.00"}
+                {analytics && typeof analytics.totalPnL === 'number' ? `$${analytics.totalPnL.toLocaleString()}` : "$0.00"}
               </h3>
               <div className="flex items-center mt-2">
                 <TrendingUp className="text-data-profit w-4 h-4 mr-1" />
                 <span className={`font-mono text-sm font-medium ${analytics && analytics.totalPnL >= 0 ? "text-data-profit" : "text-data-loss"}`}>
-                  {analytics ? `${analytics.totalPnL >= 0 ? "+" : ""}$${analytics.totalPnL.toLocaleString()} (${analytics.winRate}%)` : "N/A"}
+                  {analytics && typeof analytics.totalPnL === 'number' && typeof analytics.winRate === 'number' ? `${analytics.totalPnL >= 0 ? "+" : ""}$${analytics.totalPnL.toLocaleString()} (${analytics.winRate.toFixed(1)}%)` : "N/A"}
                 </span>
               </div>
             </div>
@@ -208,7 +212,8 @@ export default function DashboardPage() {
             <History className="w-4 h-4 text-text-muted" />
           </div>
           <div className="space-y-3">
-             {recentTrades.map((t, idx) => (
+             {Array.isArray(recentTrades) && recentTrades.length > 0 ? (
+              recentTrades.map((t, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-transparent hover:border-accent-gold/20 hover:bg-white/10 transition-all cursor-default">
                    <div className="flex items-center">
                       <div className={`w-9 h-9 rounded-lg ${t.result === "win" ? "bg-data-profit/10 text-data-profit" : t.result === "loss" ? "bg-data-loss/10 text-data-loss" : "bg-accent-gold/10 text-accent-gold"} flex items-center justify-center mr-3`}>
@@ -223,7 +228,12 @@ export default function DashboardPage() {
                      {formatPnL(t.pnl)}
                    </p>
                 </div>
-             ))}
+              ))
+            ) : (
+              <div className="text-center py-8 text-text-muted text-sm italic">
+                Belum ada trade. Mulai logging trade pertama Anda!
+              </div>
+            )}
           </div>
           <button className="w-full py-3 mt-6 text-[11px] font-bold text-accent-gold uppercase tracking-[0.2em] border border-accent-gold/20 rounded-xl hover:bg-accent-gold/5 transition-all active:scale-95">
              Lihat Semua

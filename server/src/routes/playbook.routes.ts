@@ -38,7 +38,7 @@ router.get("/", async (req, res, next) => {
 
 router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
-    const playbook = await playbookService.getById(req.params.id, req.user.id);
+    const playbook = await playbookService.getById(req.params.id as string, req.user.id);
     if (!playbook) return apiResponse.notFound(res, "Playbook tidak ditemukan");
     const response = {
       ...playbook.toObject(),
@@ -52,7 +52,7 @@ router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, n
 
 router.patch("/:id", validate({ params: objectIdParamSchema, body: updatePlaybookSchema }), async (req, res, next) => {
   try {
-    const playbook = await playbookService.update(req.params.id, req.user.id, req.body);
+    const playbook = await playbookService.update(req.params.id as string, req.user.id, req.body);
     if (!playbook) return apiResponse.notFound(res, "Playbook tidak valid atau gagal update");
     const response = {
       ...playbook.toObject(),
@@ -66,14 +66,14 @@ router.patch("/:id", validate({ params: objectIdParamSchema, body: updatePlayboo
 
 router.delete("/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
-    await playbookService.archive(req.params.id, req.user.id);
+    await playbookService.archive(req.params.id as string, req.user.id);
     return apiResponse.success(res, { message: "Playbook Diarsipkan" });
   } catch (error) { next(error); }
 });
 
 router.post("/:id/duplicate", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
-    const duplicated = await playbookService.duplicate(req.params.id, req.user.id);
+    const duplicated = await playbookService.duplicate(req.params.id as string, req.user.id);
     if (!duplicated) return apiResponse.notFound(res, "Playbook tidak ditemukan");
     const response = {
       ...duplicated.toObject(),

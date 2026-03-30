@@ -25,14 +25,14 @@ router.post("/", validate({ body: createTradingAccountSchema }), async (req, res
 
 router.patch("/:id", validate({ body: updateTradingAccountSchema }), async (req, res, next) => {
   try {
-    const account = await tradingAccountService.updateInfo(req.params.id, req.user.id, req.body);
+    const account = await tradingAccountService.updateInfo(req.params.id as string, req.user.id, req.body);
     return apiResponse.success(res, account);
   } catch (error) { next(error); }
 });
 
 router.patch("/:id/risk-rules", validate({ body: updateRiskRulesSchema }), async (req, res, next) => {
   try {
-    const account = await tradingAccountService.updateRiskRules(req.params.id, req.user.id, req.body);
+    const account = await tradingAccountService.updateRiskRules(req.params.id as string, req.user.id, req.body);
     return apiResponse.success(res, account);
   } catch (error) { next(error); }
 });

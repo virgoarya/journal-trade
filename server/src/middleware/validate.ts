@@ -30,9 +30,9 @@ export const validate = (schemas: ValidationSchemas) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map(err => ({
-          path: err.path.join("."),
-          message: err.message,
+        const errors = error.issues.map(issue => ({
+          path: issue.path.join("."),
+          message: issue.message,
         }));
 
         return apiResponse.badRequest(res, "Gagal validasi input", errors);

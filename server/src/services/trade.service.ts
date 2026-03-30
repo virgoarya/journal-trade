@@ -23,12 +23,14 @@ export const tradeService = {
         // Create a default account for user
         account = await TradingAccount.create({
           userId,
-          name: "Main Account",
+          accountName: "Main Account",
+          initialBalance: 0,
           currentEquity: 0,
           highWaterMark: 0,
           isActive: true,
           currency: "USD",
-          broker: "Default"
+          broker: "Default",
+          onboardingCompleted: true
         });
       }
     }
