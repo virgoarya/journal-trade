@@ -203,19 +203,41 @@ export default function PlaybookPage() {
                 ✕
               </button>
             </div>
-            <form className="space-y-4">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const strategyData = {
+                name: formData.get('name') as string,
+                description: (formData.get('description') as string | null) || undefined,
+                category: formData.get('category') as "breakout" | "reversal" | "scalping" | "swing" | "news",
+                timeframe: formData.get('timeframe') as string,
+                markets: ((formData.get('markets') as string | null) || "").split(',').map(m => m.trim()).filter(m => m),
+                rules: ((formData.get('rules') as string | null) || "").split('\n').filter(r => r.trim()),
+                tags: [],
+              };
+              const result = await playbookService.create(strategyData);
+              if (result.success && result.data) {
+                setStrategies(prev => [result.data!, ...prev]);
+                setShowForm(false);
+                e.currentTarget.reset();
+              } else {
+                alert(result.error || "Failed to create strategy");
+              }
+            }} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Strategy Name</label>
                   <input
+                    name="name"
                     type="text"
                     placeholder="ex: London Breakout"
+                    required
                     className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Category</label>
-                  <select className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none">
+                  <select name="category" required className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none">
                     <option value="breakout">Breakout</option>
                     <option value="reversal">Reversal</option>
                     <option value="scalping">Scalping</option>
@@ -226,16 +248,20 @@ export default function PlaybookPage() {
                 <div>
                   <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Timeframe</label>
                   <input
+                    name="timeframe"
                     type="text"
                     placeholder="ex: M15, H1"
+                    required
                     className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Markets</label>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Markets (comma separated)</label>
                   <input
+                    name="markets"
                     type="text"
                     placeholder="ex: EURUSD, GBPUSD"
+                    required
                     className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none"
                   />
                 </div>
@@ -244,6 +270,7 @@ export default function PlaybookPage() {
               <div>
                 <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Description</label>
                 <textarea
+                  name="description"
                   rows={2}
                   placeholder="Brief description of your strategy"
                   className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none resize-none"
@@ -251,10 +278,12 @@ export default function PlaybookPage() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Entry Rules</label>
+                <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Entry Rules (one per line)</label>
                 <textarea
+                  name="rules"
                   rows={4}
                   placeholder="1. Identify...&#10;2. Wait for...&#10;3. Enter when..."
+                  required
                   className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:outline-none resize-none"
                 />
               </div>

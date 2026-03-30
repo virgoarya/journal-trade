@@ -142,7 +142,7 @@ export const analyticsService = {
       winRate: Number(winRate.toFixed(1)),
       profitFactor,
       bestPerformingPairs,
-      riskMetrics: { sharpeRatio, maxDrawdown, avgRR: avgWin / avgLoss || 0, expectancy },
+      riskMetrics: { sharpeRatio, maxDrawdown, avgRR: avgLoss > 0 ? avgWin / avgLoss : 0, expectancy },
       tradingBehaviour: { avgTradeDuration, avgPnlPerTrade, tradesPerDay: Number(tradesPerDay.toFixed(1)), planAdherence }
     };
   },

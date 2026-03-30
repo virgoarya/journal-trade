@@ -9,7 +9,6 @@ export interface Strategy {
   timeframe: string;
   markets: string[];
   rules: string[];
-  examples: string[];
   winRate: number;
   avgRr: number;
   tags: string[];
@@ -19,14 +18,11 @@ export interface Strategy {
 
 export interface CreateStrategyDto {
   name: string;
-  description: string;
+  description?: string;
   category: "breakout" | "reversal" | "scalping" | "swing" | "news";
-  timeframe: string;
+  timeframe?: string;
   markets: string[];
   rules: string[];
-  examples?: string[];
-  winRate?: number;
-  avgRr?: number;
   tags?: string[];
 }
 

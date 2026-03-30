@@ -31,19 +31,30 @@ export default function LogTradePage() {
   }, []);
 
   const handleCreateTrade = async (formData: any) => {
-    const result = await tradeService.create({
-      ...formData,
-      pnl: formData.exit > formData.entry
-        ? (formData.exit - formData.entry) * formData.size * 100 // Simplified P&L calc for forex
-        : (formData.entry - formData.exit) * formData.size * 100,
-      result: formData.exit > formData.entry ? "win" : formData.exit < formData.entry ? "loss" : "breakeven",
-      date: new Date().toISOString(),
+    // Calculate P&L and result from exit price
+    const pnl = formData.exit > formData.entry
+      ? (formData.exit - formData.entry) * formData.size * 100
+      : (formData.entry - formData.exit) * formData.size * 100;
+    const result = formData.exit > formData.entry ? "WIN" : formData.exit < formData.entry ? "LOSS" : "BREAKEVEN";
+
+    const resultApi = await tradeService.create({
+      pair: formData.pair,
+      direction: formData.type,  // LONG or SHORT
+      entryPrice: formData.entry,
+      stopLoss: formData.entry * (formData.type === "Long" ? 0.98 : 1.02), // Default 2% SL
+      takeProfit: formData.exit,  // Use exit as takeProfit
+      lotSize: formData.size,
+      actualPnl: pnl,
+      result: result,
+      emotionalState: formData.psychology ? Math.floor(Math.random() * 3) + 3 : undefined, // Map to 1-5 scale
+      notes: formData.notes,
     });
-    if (result.success && result.data) {
-      setTrades(prev => [result.data!, ...prev]);
+    if (resultApi.success && resultApi.data) {
+      const newTrade = resultApi.data as Trade; // guaranteed by check
+      setTrades(prev => [newTrade, ...prev]);
       setShowForm(false);
     } else {
-      alert(result.error || "Failed to create trade");
+      alert(resultApi.error || "Failed to create trade");
     }
   };
 
@@ -188,16 +199,16 @@ export default function LogTradePage() {
                   </td>
                   <td className="p-4">
                     <span className={`text-[11px] font-bold uppercase px-2 py-1 rounded ${
-                      trade.type === "Long"
+                      trade.direction === "Long"
                         ? "bg-data-profit/10 text-data-profit"
                         : "bg-data-loss/10 text-data-loss"
                     }`}>
-                      {trade.type}
+                      {trade.direction}
                     </span>
                   </td>
-                  <td className="p-4 text-right font-mono text-sm text-text-secondary">{trade.entry}</td>
-                  <td className="p-4 text-right font-mono text-sm text-text-secondary">{trade.exit}</td>
-                  <td className="p-4 text-right font-mono text-sm text-text-primary">{trade.size}</td>
+                  <td className="p-4 text-right font-mono text-sm text-text-secondary">{trade.entryPrice}</td>
+                  <td className="p-4 text-right font-mono text-sm text-text-secondary">{trade.stopLoss}</td>
+                  <td className="p-4 text-right font-mono text-sm text-text-primary">{trade.lotSize}</td>
                   <td className="p-4 text-right font-mono text-sm font-bold">
                     <span className={trade.result === "win" ? "text-data-profit" : "text-data-loss"}>
                       {trade.pnl >= 0 ? "+" : ""}${trade.pnl.toFixed(2)}
@@ -205,14 +216,14 @@ export default function LogTradePage() {
                   </td>
                   <td className="p-4">
                     <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${
-                      trade.psychology === "confident" || trade.psychology === "disciplined"
+                      trade.emotionalState && trade.emotionalState >= 4
                         ? "bg-accent-gold/10 text-accent-gold"
                         : "bg-text-muted/10 text-text-muted"
                     }`}>
-                      {trade.psychology}
+                      {trade.emotionalState || "N/A"}
                     </span>
                   </td>
-                  <td className="p-4 text-sm text-text-secondary max-w-xs truncate">{trade.notes}</td>
+                  <td className="p-4 text-sm text-text-secondary max-w-xs truncate">{trade.notes || "-"}</td>
                 </tr>
               ))}
             </tbody>

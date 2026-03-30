@@ -28,7 +28,7 @@ export default function DashboardPage() {
         setLoading(true);
         setError(null);
 
-        // Fetch recent trades
+        // Fetch recent trades (service already transforms)
         const tradesResult = await tradeService.getRecent(5);
         if (tradesResult.success && Array.isArray(tradesResult.data)) {
           setRecentTrades(tradesResult.data);
@@ -221,7 +221,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <p className="font-bold text-sm text-text-primary">{t.pair}</p>
-                        <p className="text-[10px] text-text-secondary uppercase">{t.type}</p>
+                        <p className="text-[10px] text-text-secondary uppercase">{t.direction}</p>
                       </div>
                    </div>
                    <p className={`font-mono font-bold ${getPnlColor(t.result)}`}>

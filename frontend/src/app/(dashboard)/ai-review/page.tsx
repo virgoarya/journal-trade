@@ -113,7 +113,7 @@ export default function AIReviewPage() {
               <option value="" disabled>Analyze a trade...</option>
               {trades.slice(0, 10).map((trade) => (
                 <option key={trade.id} value={trade.id}>
-                  {trade.pair} - {trade.type} (${Math.abs(trade.pnl).toFixed(2)})
+                  {trade.pair} - {trade.direction} (${Math.abs(trade.pnl).toFixed(2)})
                 </option>
               ))}
             </select>

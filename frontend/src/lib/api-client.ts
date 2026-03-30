@@ -49,7 +49,7 @@ export class ApiClient {
       if (!response.ok) {
         return {
           success: false,
-          error: data?.message || `HTTP ${response.status}`,
+          error: data?.error?.message || data?.message || `HTTP ${response.status}`,
           data,
         };
       }
