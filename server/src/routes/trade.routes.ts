@@ -7,11 +7,7 @@ import { requireAuth } from "../middleware/auth";
 import { objectIdParamSchema } from "../validators/common.validator";
 
 const router = Router();
-// TEMPORARY: Bypass auth for debugging
-router.use((req, res, next) => {
-  req.user = { id: "test_user_123" };
-  next();
-});
+router.use(requireAuth);
 
 router.post("/", validate({ body: logTradeSchema }), async (req, res, next) => {
   try {

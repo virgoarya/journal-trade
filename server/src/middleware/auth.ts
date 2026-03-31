@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { auth } from "../auth";
+import { authInstance } from "../auth-context";
 import { apiResponse } from "../utils/api-response";
 
 // Extend Express Request object to include user and session
@@ -14,7 +14,11 @@ declare global {
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const session = await auth.api.getSession({
+    if (!authInstance) {
+      return apiResponse.error(res, "Auth belum diinisialisasi", "SERVER_ERROR", 500);
+    }
+
+    const session = await authInstance.api.getSession({
       headers: req.headers,
     });
 
@@ -24,8 +28,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
     req.user = session.user;
     req.session = session.session;
-    
-    // Additional check for guild ID can be placed here or during sign-in logic
 
     next();
   } catch (error) {

@@ -1,11 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   async rewrites() {
     return [
+      // Catch-all API proxy (handles Auth, V1, etc.)
       {
-        source: "/api/auth/:path*",
-        destination: "http://localhost:5000/api/auth/:path*",
+        source: "/api/:path*",
+        destination: "http://localhost:5000/api/:path*",
       },
     ];
   },

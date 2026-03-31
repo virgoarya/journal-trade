@@ -37,6 +37,13 @@ router.patch("/:id/risk-rules", validate({ body: updateRiskRulesSchema }), async
   } catch (error) { next(error); }
 });
 
+router.post("/:id/generate-api-key", async (req, res, next) => {
+  try {
+    const account = await tradingAccountService.generateApiKey(req.params.id as string, req.user.id);
+    return apiResponse.success(res, { apiKey: account?.apiKey });
+  } catch (error) { next(error); }
+});
+
 // NOTE: Reset data route will be implemented in settings.routes.ts
 
 export default router;

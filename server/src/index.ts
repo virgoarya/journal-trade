@@ -1,38 +1,36 @@
+// Force Google DNS for SRV lookups (MongoDB Atlas requires SRV resolution)
+// Indonesian ISPs often block or don't support SRV DNS queries
 import dns from "node:dns";
-// Bypassing ISP DNS hijacking for MongoDB SRV records
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
 import express from "express";
 import { env } from "./config/env";
 import { corsMiddleware } from "./config/cors";
 import apiRoutes from "./routes";
 import { errorHandler } from "./middleware/error-handler";
-import { connectDB, mongoClient } from "./db/mongoose";
-import { betterAuth } from "better-auth";
-import { mongodbAdapter } from "@better-auth/mongo-adapter";
+import { connectDB } from "./db/mongoose";
+import { createAuth } from "./auth";
 import { toNodeHandler } from "better-auth/node";
+import { setAuthInstance } from "./auth-context";
 
 const app = express();
 
-let authHandler: express.RequestHandler;
-
-// Middleware
+// CORS - must be first
 app.use(corsMiddleware);
 
-// JSON body parser for all routes except auth (auth handles its own parsing)
+// JSON body parser — SKIP for /api/auth routes (Better Auth needs raw stream)
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/auth")) {
     return next();
   }
-  express.json()(req, res, next);
+  return express.json()(req, res, next);
 });
 
 // Welcome route
 app.get("/", (req, res) => {
   res.status(200).json({
     message: "🚀 Hunter Trades Journal API is Running",
-    docs: "/health",
-    status: "online"
+    status: "online",
   });
 });
 
@@ -41,47 +39,49 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Global Error Handler
-app.use(errorHandler);
-
 const PORT = env.PORT || 5000;
 
-// Initialize everything after DB connection
-connectDB().then(() => {
-  // Initialize auth with database connection
-  const auth = betterAuth({
-    database: mongodbAdapter(mongoClient.db()),
-    baseURL: env.BETTER_AUTH_URL,
-    secret: env.BETTER_AUTH_SECRET,
-    socialProviders: {
-      discord: {
-        clientId: env.DISCORD_CLIENT_ID,
-        clientSecret: env.DISCORD_CLIENT_SECRET,
-        scope: ["identify", "email", "guilds"]
-      },
-    },
-    trustedOrigins: env.NODE_ENV === "production"
-      ? [env.FRONTEND_URL]
-      : ["http://localhost:3000"],
-    session: {
-      expiresIn: 60 * 60 * 24 * 7,
-      updateAge: 60 * 60 * 24,
-    },
+// Initialize after DB connection
+connectDB()
+  .then(() => {
+    try {
+      const auth = createAuth();
+      setAuthInstance(auth);
+      const authHandler = toNodeHandler(auth);
+
+      // ─── Better Auth Middleware ───
+      // CRITICAL: Do NOT use app.use("/api/auth", handler).
+      // Express 5 strips the mount path from req.url, so the handler
+      // receives "/callback/discord" instead of "/api/auth/callback/discord".
+      // Better Auth needs the FULL path to match its internal routes.
+      app.use((req, res, next) => {
+        if (req.url.startsWith("/api/auth")) {
+          console.log(`[AUTH] ${req.method} ${req.url}`);
+          authHandler(req, res).catch((err: unknown) => {
+            console.error("❌ Auth error:", err);
+            next(err);
+          });
+        } else {
+          next();
+        }
+      });
+
+      // Other API routes
+      app.use("/api", apiRoutes);
+
+      // Error handler — must be last
+      app.use(errorHandler);
+
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+        console.log(`✅ Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
+      });
+    } catch (error) {
+      console.error("❌ Failed to initialize:", error);
+      process.exit(1);
+    }
+  })
+  .catch((error) => {
+    console.error("❌ Database connection failed:", error);
+    process.exit(1);
   });
-
-  // Use toNodeHandler to convert to Express middleware
-  authHandler = toNodeHandler(auth);
-
-  // Mount auth routes FIRST (highest priority)
-  app.use("/api/auth", authHandler);
-
-  // Mount other API routes
-  app.use("/api", apiRoutes);
-
-  // Start server after all routes are ready
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running in ${env.NODE_ENV} mode on port ${PORT}`);
-    console.log(`📚 Better Auth URL: ${env.BETTER_AUTH_URL}`);
-    console.log("✅ Auth initialized with database connection");
-  });
-});

@@ -5,10 +5,16 @@ import { signIn } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const handleLogin = async () => {
-    await signIn.social({
-      provider: "discord",
-      callbackURL: "/dashboard",
-    });
+    try {
+      console.log("[AUTH] Starting Discord login...");
+      await signIn.social({
+        provider: "discord",
+        callbackURL: "http://localhost:3000/dashboard",
+      });
+      console.log("[AUTH] Redirect to Discord initiated.");
+    } catch (error) {
+      console.error("[AUTH] Error during login initiation:", error);
+    }
   };
 
   return (

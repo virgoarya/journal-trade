@@ -7,7 +7,8 @@ export const corsOptions: cors.CorsOptions = {
     : [env.FRONTEND_URL, "http://localhost:3000"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie", "x-requested-with", "referer", "origin"],
+  exposedHeaders: ["Set-Cookie"],
 };
 
 export const corsMiddleware = cors(corsOptions);

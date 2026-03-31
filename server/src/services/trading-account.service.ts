@@ -55,5 +55,18 @@ export const tradingAccountService = {
     );
 
     return updated;
+  },
+
+  async generateApiKey(accountId: string, userId: string) {
+    const crypto = await import("crypto");
+    const key = `ht_live_${crypto.randomBytes(24).toString("hex")}`;
+    
+    const updated = await TradingAccount.findOneAndUpdate(
+      { _id: accountId, userId },
+      { $set: { apiKey: key } },
+      { new: true }
+    );
+
+    return updated;
   }
 };

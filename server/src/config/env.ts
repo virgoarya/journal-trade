@@ -5,7 +5,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(5000),
   DATABASE_URL: z.string().min(1),
-  
+
+  // Database name (default: journal_trade_dev)
+  DATABASE_NAME: z.string().optional().default("journal_trade_dev"),
+
   // Better Auth config (Discord required, Better Auth requires URL/Secret)
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url(),

@@ -20,4 +20,6 @@ export const updateTradingAccountSchema = z.object({
   accountName: z.string().min(2).max(50).optional(),
   currency: z.enum(["USD", "IDR"]).optional(),
   broker: z.string().optional(),
+  bio: z.string().max(500).optional(),
+  discordWebhook: z.string().url("Format URL Webhook tidak valid").or(z.literal("")).optional(),
 });

@@ -54,10 +54,15 @@ export class ApiClient {
         };
       }
 
+      // Unwrap backend's { success, data } structure if it exists
+      const unwrappedData = (data && typeof data === 'object' && 'success' in data) 
+        ? (data as any).data 
+        : data;
+
       return {
         success: true,
-        data: data || null,
-        message: data?.message,
+        data: unwrappedData ?? null,
+        message: (data as any)?.message,
       };
     } catch (error: any) {
       console.error(`API Error (${endpoint}):`, error);
@@ -77,6 +82,14 @@ export class ApiClient {
   async post<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // PATCH
+  async patch<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: "PATCH",
       body: JSON.stringify(body),
     });
   }

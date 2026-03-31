@@ -13,6 +13,9 @@ export interface ITradingAccount extends Document {
   highWaterMark: number;
   isActive: boolean;
   onboardingCompleted: boolean;
+  bio?: string;
+  discordWebhook?: string;
+  apiKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,7 +32,10 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
   maxDailyTrades: { type: Number },
   highWaterMark: { type: Number, required: true },
   isActive: { type: Boolean, required: true, default: true },
-  onboardingCompleted: { type: Boolean, required: true, default: false }
+  onboardingCompleted: { type: Boolean, required: true, default: false },
+  bio: { type: String, default: "" },
+  discordWebhook: { type: String, default: "" },
+  apiKey: { type: String, unique: true, sparse: true }
 }, {
   timestamps: true,
   collection: "trading_accounts"

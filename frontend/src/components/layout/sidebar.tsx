@@ -15,6 +15,8 @@ import {
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+import { useSession } from "@/lib/auth-client";
+
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -35,6 +37,17 @@ const utilityNav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  // Get initials for profile placeholder
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   return (
     <aside className="w-[260px] h-screen sticky left-0 top-0 bg-bg-surface flex flex-col justify-between py-6 border-r border-white/5">
@@ -99,14 +112,24 @@ export function Sidebar() {
           </Link>
         ))}
         
-        {/* User Profile Hook (Placeholder) */}
+        {/* User Profile Footer */}
         <div className="mt-6 px-4 pt-6 border-t border-white/5 flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-full bg-accent-gold bg-opacity-10 border border-accent-gold border-opacity-20 flex items-center justify-center">
-            <span className="text-accent-gold text-xs font-bold">HT</span>
+          <div className="w-9 h-9 rounded-full bg-accent-gold bg-opacity-10 border border-accent-gold border-opacity-20 flex items-center justify-center overflow-hidden">
+            {session?.user?.image ? (
+              <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-accent-gold text-xs font-bold">
+                {getInitials(session?.user?.name || "HT")}
+              </span>
+            )}
           </div>
-          <div>
-            <p className="text-[13px] font-semibold text-text-primary">Elite Hunter</p>
-            <p className="text-[10px] text-text-secondary uppercase">Pro Plan</p>
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-text-primary truncate">
+              {session?.user?.name || "Elite Hunter"}
+            </p>
+            <p className="text-[10px] text-text-secondary uppercase">
+              {(session?.user as any)?.role === "admin" ? "Founder" : "Elite Member"}
+            </p>
           </div>
         </div>
       </div>

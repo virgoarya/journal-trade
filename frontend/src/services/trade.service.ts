@@ -24,6 +24,7 @@ export interface Trade {
 }
 
 export interface CreateTradeDto {
+  tradeDate: string;
   pair: string;
   direction: "LONG" | "SHORT";  // Send uppercase to backend
   entryPrice: number;
