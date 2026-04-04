@@ -30,22 +30,27 @@ export default function LoginPage() {
       {/* Login Card — Discord Dark Glass */}
       <main className="relative z-10 flex flex-col items-center w-full max-w-[420px] px-10 py-12 text-center animate-in fade-in zoom-in-95 duration-1000"
         style={{
-          backgroundColor: '#2B2D31',
-          borderRadius: '16px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.2), 0 20px 40px rgba(0,0,0,0.4)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(43,45,49,0.6) 40%, rgba(30,31,34,0.95) 100%)',
+          backdropFilter: 'blur(28px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(140%)',
+          borderTop: '1px solid rgba(255,255,255,0.2)',
+          borderLeft: '1px solid rgba(255,255,255,0.12)',
+          borderRight: '1px solid rgba(0,0,0,0.5)',
+          borderBottom: '1px solid rgba(0,0,0,0.7)',
+          borderRadius: '24px',
+          boxShadow: 'inset 1px 1px 2px rgba(255,255,255,0.1), inset -1px -1px 4px rgba(0,0,0,0.6), 0 6px 12px rgba(0,0,0,0.5), 0 24px 48px rgba(0,0,0,0.8), 0 0 80px rgba(212,175,55,0.04)',
         }}
       >
         
-        {/* Logo */}
+        {/* Logo — with gold glow */}
         <div className="mb-6 relative">
           <div className="absolute inset-0 rounded-full blur-[40px] scale-150"
-            style={{ backgroundColor: 'rgba(88,101,242,0.1)' }} />
+            style={{ backgroundColor: 'rgba(212,175,55,0.1)' }} />
           <img 
             src="/logo.png" 
             alt="Hunter Trades Logo" 
             className="relative w-24 h-auto mx-auto object-contain hover:scale-110 transition-transform duration-500"
-            style={{ filter: 'drop-shadow(0 0 16px rgba(88,101,242,0.4))' }}
+            style={{ filter: 'drop-shadow(0 0 16px rgba(212,175,55,0.4))' }}
           />
         </div>
         
