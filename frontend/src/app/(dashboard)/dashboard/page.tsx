@@ -307,41 +307,71 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 2. Account Summary & Gauges */}
-        <div className="lg:col-span-4 glass p-4 flex flex-col justify-between min-h-[140px] self-start">
+        {/* 2. Account Summary, Gauges & Risk Guard */}
+        <div className="lg:col-span-4 glass p-5 flex flex-col gap-5 self-start">
+          
+          {/* Total Equity */}
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[8px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-0.5">Total Equity</p>
-              <h3 className="font-mono text-lg font-bold text-accent-gold leading-none">
+              <p className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Equity</p>
+              <h3 className="font-mono text-xl font-bold text-accent-gold leading-none">
                 ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </h3>
             </div>
-            <Wallet className="text-text-muted w-3.5 h-3.5" />
+            <Wallet className="text-text-muted w-4 h-4" />
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex justify-around mt-3">
+          {/* Gauges */}
+          <div className="pt-4 border-t border-white/5 flex justify-around">
             <div className="text-center" title="Total risk of trades today">
-              <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
-                <svg className="w-full h-full transform -rotate-90">
+              <div className="relative w-14 h-14 flex items-center justify-center mx-auto">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
-                <span className="absolute font-mono text-[8px] text-text-primary">{exposure.toFixed(1)}%</span>
+                <span className="absolute font-mono text-[9px] text-text-primary">{exposure.toFixed(1)}%</span>
               </div>
-              <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Exposure</p>
+              <p className="text-[8px] text-text-secondary uppercase tracking-widest mt-2">Exposure</p>
             </div>
 
             <div className="text-center" title="Percentage of daily risk limit used today">
-              <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
-                <svg className="w-full h-full transform -rotate-90">
+              <div className="relative w-14 h-14 flex items-center justify-center mx-auto">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
-                <span className="absolute font-mono text-[8px] text-text-primary">{Math.round(sessionRisk)}%</span>
+                <span className="absolute font-mono text-[9px] text-text-primary">{Math.round(sessionRisk)}%</span>
               </div>
-              <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Session Risk</p>
+              <p className="text-[8px] text-text-secondary uppercase tracking-widest mt-2">Session Risk</p>
             </div>
           </div>
+
+          {/* Risk Guard */}
+          <div className="pt-4 border-t border-white/5 space-y-4">
+             <div className="flex items-center space-x-2 -mt-1 mb-3 text-text-muted">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="text-[9px] uppercase tracking-widest font-semibold">Risk Guard</span>
+             </div>
+             <div>
+                 <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
+                   <span className="text-text-secondary">Daily Drawdown</span>
+                   <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
+                 </div>
+                 <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                   <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
+                 </div>
+             </div>
+             <div>
+                 <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
+                   <span className="text-text-secondary">Total Drawdown</span>
+                   <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
+                 </div>
+                 <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                   <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
+                 </div>
+             </div>
+          </div>
+
         </div>
       </div>
 
@@ -410,34 +440,6 @@ export default function DashboardPage() {
                 <p className="text-[9px] text-text-muted uppercase tracking-widest">Calculating Assets...</p>
               </div>
             )}
-          </div>
-
-          {/* Risk Guard */}
-          <div className="glass p-4">
-            <div className="flex items-center space-x-3 mb-4">
-               <ShieldCheck className="w-4 h-4 text-accent-gold" />
-               <h4 className="font-bold text-xs text-text-primary uppercase tracking-widest">Risk Guard</h4>
-            </div>
-            <div className="space-y-4">
-               <div>
-                   <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                     <span className="text-text-secondary">Daily Drawdown</span>
-                     <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
-                   </div>
-                   <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                     <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                   </div>
-               </div>
-               <div>
-                   <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                     <span className="text-text-secondary">Total Drawdown</span>
-                     <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
-                   </div>
-                   <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                     <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                   </div>
-               </div>
-            </div>
           </div>
           
         </div>
