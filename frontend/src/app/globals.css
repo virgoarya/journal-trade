@@ -89,6 +89,37 @@
     border-bottom-right-radius: var(--radius-xl);
   }
 
+  /* 3D Glass Menu Items for Sidebar */
+  .glass-nav-item {
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+  }
+  
+  .glass-nav-item:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(212, 175, 55, 0.05) 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.6);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.4), 
+      inset 1px 1px 2px rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+  }
+
+  .glass-nav-item.active {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(30, 30, 40, 0.4) 100%);
+    border-top: 1px solid rgba(212, 175, 55, 0.4);
+    border-left: 1px solid rgba(212, 175, 55, 0.3);
+    border-right: 1px solid rgba(0, 0, 0, 0.6);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.8);
+    box-shadow: 
+      0 8px 24px rgba(0, 0, 0, 0.6), 
+      inset 1px 1px 3px rgba(212, 175, 55, 0.3);
+    transform: translateX(6px);
+  }
+
   .btn-gold {
     @apply bg-accent-gold text-bg-void font-semibold px-6 py-2.5 rounded-md transition-all hover:brightness-110 active:scale-95 shadow-sm;
   }

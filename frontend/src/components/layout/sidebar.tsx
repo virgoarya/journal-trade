@@ -75,7 +75,7 @@ export function Sidebar() {
         <AccountSwitcher />
 
         {/* Main Navigation */}
-        <nav className="space-y-1">
+        <nav className="space-y-2 px-3">
           {mainNav.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -83,19 +83,19 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center h-[48px] px-4 transition-all duration-200 group border-l-[3px]",
+                  "flex items-center h-[48px] px-3 group glass-nav-item",
                   isActive 
-                    ? "text-accent-gold bg-accent-gold/5 border-accent-gold" 
-                    : "text-text-secondary hover:text-accent-gold hover:bg-white/5 border-transparent"
+                    ? "text-accent-gold active" 
+                    : "text-text-secondary hover:text-accent-gold"
                 )}
               >
                 <item.icon className={cn(
-                  "mr-4 w-6 h-6",
+                  "mr-4 w-5 h-5",
                   isActive ? "text-accent-gold" : "text-text-secondary group-hover:text-accent-gold"
                 )} />
                 <span className={cn(
-                  "font-sans font-medium text-[14px] tracking-wide",
-                  isActive ? "font-semibold" : ""
+                  "font-sans font-medium text-[13px] tracking-wide",
+                  isActive ? "font-bold" : ""
                 )}>
                   {item.name}
                 </span>
@@ -106,16 +106,16 @@ export function Sidebar() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="space-y-1">
-        <div className="border-t border-white/5 mx-4 pt-6 mb-4" />
+      <div className="space-y-2 px-3">
+        <div className="border-t border-white/5 mx-2 pt-6 mb-4" />
         {utilityNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="flex items-center h-[48px] text-text-secondary hover:text-accent-gold px-4 hover:bg-white/5 transition-colors duration-200 group"
+            className="flex items-center h-[48px] px-3 text-text-secondary hover:text-accent-gold group glass-nav-item"
           >
-            <item.icon className="mr-4 w-6 h-6 group-hover:text-accent-gold" />
-            <span className="font-sans font-medium text-[14px] tracking-wide">
+            <item.icon className="mr-4 w-5 h-5 group-hover:text-accent-gold" />
+            <span className="font-sans font-medium text-[13px] tracking-wide">
               {item.name}
             </span>
           </Link>
