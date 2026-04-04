@@ -61,7 +61,7 @@ export function Sidebar() {
         {/* Brand Logo */}
         <div className="mx-4 mb-8 px-4 py-3 flex items-center space-x-3 glass cursor-pointer transition-all hover:scale-[1.02]">
           <div className="relative flex-shrink-0">
-            <div className="absolute inset-0 bg-accent-gold rounded-full" style={{ animation: 'glowBreath 3s ease-in-out infinite' }} />
+            <div className="absolute inset-0 bg-accent-gold/10 rounded-full" style={{ animation: 'glowBreath 3s ease-in-out infinite' }} />
             <img src="/logo.png" alt="Hunter Trades Logo" className="relative w-[48px] h-[48px] object-contain" style={{ animation: 'logoPulse 3s ease-in-out infinite' }} />
           </div>
           <div>
