@@ -5,15 +5,40 @@ import { createTradingAccountSchema, updateRiskRulesSchema, updateTradingAccount
 export const tradingAccountService = {
   
   async getActiveAccount(userId: string) {
-    const account = await TradingAccount.findOne({ userId, isActive: true });
+    let account = await TradingAccount.findOne({ userId, isActive: true });
+    // Jika tidak ada akun aktif tapi ada akun yang terdaftar, jadikan akun pertama aktif
+    if (!account) {
+      const firstAccount = await TradingAccount.findOne({ userId });
+      if (firstAccount) {
+        firstAccount.isActive = true;
+        await firstAccount.save();
+        return firstAccount;
+      }
+    }
     return account;
   },
 
+  async getAllAccounts(userId: string) {
+    return await TradingAccount.find({ userId }).sort({ createdAt: 1 });
+  },
+
+  async setActiveAccount(accountId: string, userId: string) {
+    // Matikan semua akun
+    await TradingAccount.updateMany({ userId }, { $set: { isActive: false } });
+    
+    // Aktifkan akun target
+    const activeAccount = await TradingAccount.findOneAndUpdate(
+      { _id: accountId, userId },
+      { $set: { isActive: true } },
+      { returnDocument: 'after' }
+    );
+    return activeAccount;
+  },
+
   async create(userId: string, data: z.infer<typeof createTradingAccountSchema>) {
-    const existing = await this.getActiveAccount(userId);
-    if (existing) {
-      throw { status: 400, message: "User sudah memiliki akun trading aktif" };
-    }
+    // Akun pertama otomatis aktif, akun ke-dua dst default-nya pasif (bisa diganti dari switcher)
+    const count = await TradingAccount.countDocuments({ userId });
+    const isActive = count === 0;
 
     const newAccount = await TradingAccount.create({
       userId,
@@ -27,7 +52,7 @@ export const tradingAccountService = {
       maxTotalDrawdownPct: data.maxTotalDrawdownPct,
       maxDailyTrades: data.maxDailyTrades,
       onboardingCompleted: true,
-      isActive: true,
+      isActive: isActive,
     });
 
     return newAccount;
@@ -37,21 +62,33 @@ export const tradingAccountService = {
     const updated = await TradingAccount.findOneAndUpdate(
       { _id: accountId, userId },
       { $set: data },
-      { new: true }
+      { returnDocument: 'after' }
     );
       
     return updated;
   },
 
   async updateRiskRules(accountId: string, userId: string, data: z.infer<typeof updateRiskRulesSchema>) {
+    const updateData: any = {
+      maxDailyDrawdownPct: data.maxDailyDrawdownPct,
+      maxTotalDrawdownPct: data.maxTotalDrawdownPct,
+      maxDailyTrades: data.maxDailyTrades,
+    };
+
+    // Only update riskTier if provided
+    if (data.riskTier !== undefined) {
+      updateData.riskTier = data.riskTier;
+    }
+
+    // Only update defaultRiskPercent if provided
+    if (data.defaultRiskPercent !== undefined) {
+      updateData.defaultRiskPercent = data.defaultRiskPercent;
+    }
+
     const updated = await TradingAccount.findOneAndUpdate(
       { _id: accountId, userId },
-      { $set: {
-        maxDailyDrawdownPct: data.maxDailyDrawdownPct,
-        maxTotalDrawdownPct: data.maxTotalDrawdownPct,
-        maxDailyTrades: data.maxDailyTrades,
-      }},
-      { new: true }
+      { $set: updateData },
+      { returnDocument: 'after' }
     );
 
     return updated;
@@ -64,7 +101,7 @@ export const tradingAccountService = {
     const updated = await TradingAccount.findOneAndUpdate(
       { _id: accountId, userId },
       { $set: { apiKey: key } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return updated;

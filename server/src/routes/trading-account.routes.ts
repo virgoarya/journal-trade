@@ -16,6 +16,21 @@ router.get("/active", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get("/", async (req, res, next) => {
+  try {
+    const accounts = await tradingAccountService.getAllAccounts(req.user.id);
+    return apiResponse.success(res, accounts);
+  } catch (error) { next(error); }
+});
+
+router.patch("/:id/set-active", async (req, res, next) => {
+  try {
+    const account = await tradingAccountService.setActiveAccount(req.params.id as string, req.user.id);
+    if (!account) return apiResponse.notFound(res, "Akun tidak ditemukan");
+    return apiResponse.success(res, account);
+  } catch (error) { next(error); }
+});
+
 router.post("/", validate({ body: createTradingAccountSchema }), async (req, res, next) => {
   try {
     const account = await tradingAccountService.create(req.user.id, req.body);

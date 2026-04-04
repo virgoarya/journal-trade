@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Sparkles, MessageSquare, TrendingUp, AlertTriangle, Lightbulb, Target, Clock, RefreshCw, Loader2 } from "lucide-react";
+import { Bot, Sparkles, MessageSquare, TrendingUp, AlertTriangle, Lightbulb, Target, Clock, RefreshCw, Loader2, Trash2 } from "lucide-react";
 import { aiReviewService, type AIReview } from "@/services/ai-review.service";
 import { tradeService, type Trade } from "@/services/trade.service";
+import { toast } from "sonner";
 
 export default function AIReviewPage() {
   const [selectedReview, setSelectedReview] = useState<AIReview | null>(null);
@@ -12,6 +13,7 @@ export default function AIReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [clearingReviews, setClearingReviews] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,6 +55,28 @@ export default function AIReviewPage() {
       }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const clearAllAiReviews = async () => {
+    if (!confirm("Yakin ingin hapus semua AI review? Ini tidak bisa dibatalkan.")) return;
+
+    setClearingReviews(true);
+    try {
+      const response = await aiReviewService.clearAll();
+
+      if (response.success) {
+        toast.success(response.message || 'Berhasil hapus semua AI review');
+        // Refresh directly
+        setReviews([]);
+        setSelectedReview(null);
+      } else {
+        throw new Error(response.error || 'Failed to clear reviews');
+      }
+    } catch (error: any) {
+      toast.error('Gagal hapus AI review: ' + error.message);
+    } finally {
+      setClearingReviews(false);
     }
   };
 
@@ -102,7 +126,16 @@ export default function AIReviewPage() {
           <p className="text-sm text-text-secondary mt-1">Machine-powered analysis of your trades</p>
         </div>
         {trades.length > 0 && (
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={clearAllAiReviews}
+              disabled={clearingReviews || reviews.length === 0}
+              className="px-3 py-2 text-[10px] font-bold text-data-loss uppercase tracking-widest border border-data-loss/30 rounded-lg hover:bg-data-loss/10 transition-all disabled:opacity-30 flex items-center space-x-2"
+              title="Clear all AI reviews"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{clearingReviews ? "Clearing..." : "Clear AI"}</span>
+            </button>
             <select
               onChange={(e) => {
                 if (e.target.value) handleRequestReview(e.target.value);
@@ -243,18 +276,26 @@ export default function AIReviewPage() {
 
             {/* Metadata Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-bg-void/50 rounded-lg">
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Market Context</p>
-                <p className="text-sm text-text-primary">{selectedReview.marketContext}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Risk Management</p>
-                <p className="text-sm text-text-primary">{selectedReview.riskManagement}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Psychology Notes</p>
-                <p className="text-sm text-text-primary">{selectedReview.psychologyNotes}</p>
-              </div>
+              {selectedReview.marketContext && selectedReview.marketContext.trim() ? (
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Market Context</p>
+                  <p className="text-sm text-text-primary">{selectedReview.marketContext}</p>
+                </div>
+              ) : null}
+
+              {selectedReview.riskManagement && selectedReview.riskManagement.trim() ? (
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Risk Management</p>
+                  <p className="text-sm text-text-primary">{selectedReview.riskManagement}</p>
+                </div>
+              ) : null}
+
+              {selectedReview.psychologyNotes && selectedReview.psychologyNotes.trim() ? (
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Psychology Notes</p>
+                  <p className="text-sm text-text-primary">{selectedReview.psychologyNotes}</p>
+                </div>
+              ) : null}
             </div>
 
             {/* Strengths & Improvements */}
@@ -297,12 +338,14 @@ export default function AIReviewPage() {
                 <h3 className="font-semibold text-accent-gold">Actionable Suggestions</h3>
               </div>
               <ul className="space-y-3">
-                {selectedReview.suggestions.map((suggestion, idx) => (
-                  <li key={idx} className="flex items-start">
+                {selectedReview.recommendation ? (
+                  <li className="flex items-start">
                     <span className="text-accent-gold mr-2 mt-1">→</span>
-                    <span className="text-sm text-text-secondary">{suggestion}</span>
+                    <span className="text-sm text-text-secondary">{selectedReview.recommendation}</span>
                   </li>
-                ))}
+                ) : (
+                  <li className="text-text-muted text-sm italic">No recommendation</li>
+                )}
               </ul>
             </div>
 

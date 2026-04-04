@@ -13,17 +13,22 @@ export const validate = (schemas: ValidationSchemas) => {
     try {
       if (schemas.body) {
         const parsed = schemas.body.parse(req.body);
-        // Store parsed body in a separate property to avoid Express 5+ restrictions
+        // Overwrite req.body with parsed body to ensure transformed data reaches the routes
+        req.body = parsed;
         (req as any).validatedBody = parsed;
       }
 
       if (schemas.query) {
         const parsed = schemas.query.parse(req.query);
+        // Overwrite req.query with parsed query
+        req.query = parsed as any;
         (req as any).validatedQuery = parsed;
       }
 
       if (schemas.params) {
         const parsed = schemas.params.parse(req.params);
+        // Overwrite req.params with parsed params
+        req.params = parsed as any;
         (req as any).validatedParams = parsed;
       }
 

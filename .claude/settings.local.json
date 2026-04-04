@@ -19,7 +19,8 @@
       "Read(//c/Users/virga/AppData/Local/Temp/claude/D--Journal-Trade/37755640-e777-4604-a593-61cc20fca252/tasks/**)",
       "Bash(node -e \"import\\(''''./src/index.ts''''\\).catch\\(e => console.error\\(''''STARTUP ERROR:'''', e.message, e.stack\\)\\)\")",
       "Bash(node -e \"import\\(''mongodb''\\).then\\(m => console.log\\(''mongodb module OK''\\)\\).catch\\(e => console.error\\(''Module error:'', e\\)\\)\")",
-      "Bash(nslookup cluster0.7dzhhrn.mongodb.net)"
+      "Bash(nslookup cluster0.7dzhhrn.mongodb.net)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

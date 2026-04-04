@@ -5,7 +5,7 @@ import { calculateProfitFactor, calculateExpectancy } from "../utils/calculation
 export const analyticsService = {
 
   async getOverview(userId: string, accountId: string) {
-    const rawTrades = await Trade.find({ tradingAccountId: accountId, userId })
+    const rawTrades = await Trade.find({ tradingAccountId: accountId, userId, isDeleted: { $ne: true } })
       .select('actualPnl result tradeDate pair');
 
     // Calculate basic stats
@@ -74,11 +74,11 @@ export const analyticsService = {
     });
     weeklyStats.forEach(w => { if (w.trades > 0) w.avgPnl = w.avgPnl / w.trades; });
 
-    // Session performance (simplified: by hour)
+    // Session performance (UTC)
     const sessions = [
-      { session: "Sydney", start: 0, end: 8, pnl: 0, trades: 0 },
-      { session: "Tokyo", start: 8, end: 16, pnl: 0, trades: 0 },
-      { session: "London", start: 16, end: 24, pnl: 0, trades: 0 },
+      { session: "Asia", start: 0, end: 8, pnl: 0, trades: 0 },
+      { session: "London", start: 8, end: 16, pnl: 0, trades: 0 },
+      { session: "NY", start: 16, end: 24, pnl: 0, trades: 0 },
     ];
     rawTrades.forEach(t => {
       const hour = new Date(t.tradeDate).getUTCHours();
@@ -125,30 +125,104 @@ export const analyticsService = {
     const stdDev = Math.sqrt(variance);
     const sharpeRatio = stdDev > 0 ? avgReturn / stdDev : 0;
     const maxDrawdown = 0; // Placeholder
+    const avgRR = avgLoss > 0 ? avgWin / avgLoss : 0;
 
-    // Trading behaviour
+    // Trading behaviour (Real-time calculation) Pip.
     const avgPnlPerTrade = total > 0 ? (grossProfit - grossLoss) / total : 0;
-    const avgTradeDuration = "2h 15m"; // Placeholder
-    const tradesPerDay = rawTrades.length / Math.max(1, Math.ceil(rawTrades.length / 30));
-    const planAdherence = 87; // Placeholder
+    
+    // Average Plan Adherence based on emotionalState (1=20%, 5=100%)
+    const tradesWithEmotion = rawTrades.filter(t => t.emotionalState);
+    const avgPlanAdherence = tradesWithEmotion.length > 0 
+      ? (tradesWithEmotion.reduce((sum, t) => sum + (t.emotionalState || 3), 0) / (tradesWithEmotion.length * 5)) * 100
+      : 80;
+
+    // Trades per day (active days)
+    const uniqueDays = new Set(rawTrades.map(t => new Date(t.tradeDate).toDateString())).size;
+    const tradesPerDay = uniqueDays > 0 ? rawTrades.length / uniqueDays : 0;
+
+    // Average Trade Duration calculation Pip.
+    const tradesWithDuration = rawTrades.filter(t => t.exitDate && t.tradeDate);
+    let avgTradeDuration = "0m";
+    if (tradesWithDuration.length > 0) {
+      const totalMs = tradesWithDuration.reduce((sum, t) => {
+        const duration = new Date(t.exitDate!).getTime() - new Date(t.tradeDate).getTime();
+        return sum + (duration > 0 ? duration : 0);
+      }, 0);
+      const avgMs = totalMs / tradesWithDuration.length;
+      const hours = Math.floor(avgMs / (1000 * 60 * 60));
+      const mins = Math.floor((avgMs % (1000 * 60 * 60)) / (1000 * 60));
+      avgTradeDuration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    }
+
+    // Heatmap data: Day of Week (Mon-Sun) vs Session (Asia, London, NY) Pip.
+    const heatmapMatrix = weekdays.map(day => ({
+      day,
+      sessions: [
+        { name: "Asia", pnl: 0, count: 0 },
+        { name: "London", pnl: 0, count: 0 },
+        { name: "NY", pnl: 0, count: 0 }
+      ]
+    }));
+
+    rawTrades.forEach(t => {
+      const date = new Date(t.tradeDate);
+      const dayIdx = (date.getDay() + 6) % 7; // Adjust to Mon-Sun (0=Mon, 6=Sun)
+      const hour = date.getUTCHours();
+      
+      let sessIdx = 2; // Default to NY
+      if (hour >= 0 && hour < 8) sessIdx = 0; // Asia
+      else if (hour >= 8 && hour < 16) sessIdx = 1; // London
+
+      const dayData = heatmapMatrix[dayIdx];
+      if (dayData) {
+        dayData.sessions[sessIdx].pnl += t.actualPnl;
+        dayData.sessions[sessIdx].count++;
+      }
+    });
 
     return {
       monthlyPnL,
       weeklyStats,
       sessionPerformance: sessions.map(s => ({ session: s.session, pnl: s.pnl, trades: s.trades })),
+      heatmap: heatmapMatrix,
       streakStats: { longestWin, longestLoss, currentStreak, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 },
       totalPnL: grossProfit - grossLoss,
       totalTrades: total,
       winRate: Number(winRate.toFixed(1)),
       profitFactor,
       bestPerformingPairs,
-      riskMetrics: { sharpeRatio, maxDrawdown, avgRR: avgLoss > 0 ? avgWin / avgLoss : 0, expectancy },
-      tradingBehaviour: { avgTradeDuration, avgPnlPerTrade, tradesPerDay: Number(tradesPerDay.toFixed(1)), planAdherence }
+      riskMetrics: {
+        sharpeRatio,
+        maxDrawdown,
+        avgRR: avgLoss > 0 ? avgWin / avgLoss : 0,
+        expectancy,
+        avgWin,
+        avgLoss
+      },
+      tradingBehaviour: { avgTradeDuration, avgPnlPerTrade, tradesPerDay: Number(tradesPerDay.toFixed(1)), planAdherence: avgPlanAdherence },
+      assetDistribution: (() => {
+        const counts = Array.from(pairMap.entries())
+          .map(([asset, data]) => ({ asset, count: data.total }))
+          .sort((a,b) => b.count - a.count);
+        
+        const top5 = counts.slice(0, 5);
+        const othersCount = counts.slice(5).reduce((sum, c) => sum + c.count, 0);
+        
+        const finalDist = [...top5];
+        if (othersCount > 0) {
+          finalDist.push({ asset: "Others", count: othersCount });
+        }
+        
+        return finalDist.map(d => ({
+          ...d,
+          percentage: Number(((d.count / (total || 1)) * 100).toFixed(1))
+        }));
+      })()
     };
   },
 
   async getEquityCurve(userId: string, accountId: string) {
-    const points = await Trade.find({ tradingAccountId: accountId, userId })
+    const points = await Trade.find({ tradingAccountId: accountId, userId, isDeleted: { $ne: true } })
       .select('tradeDate actualPnl')
       .sort('tradeDate');
 

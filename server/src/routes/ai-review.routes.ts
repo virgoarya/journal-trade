@@ -5,8 +5,16 @@ import { requireAuth } from "../middleware/auth";
 import { objectIdParamSchema } from "../validators/common.validator";
 import { validate } from "../middleware/validate";
 import { Trade } from "../models/Trade";
+import { AiReview } from "../models/AiReview";
 
 const router = Router();
+
+// Log all routes for debugging
+router.use((req, res, next) => {
+  console.log(`[AI Review Route] ${req.method} ${req.path}`);
+  next();
+});
+
 router.use(requireAuth);
 
 router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
@@ -25,7 +33,7 @@ router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (r
       suggestions: review.recommendation ? [review.recommendation] : [],
       psychologyNotes: "", // TODO: extract from trade emotionalState
       marketContext: "", // TODO: derive from trade context
-      riskManagement: "", // TODO: derive from risk metrics
+      riskManagement: review.riskWarning || "",
       timestamp: review.createdAt.toISOString()
     };
     return apiResponse.success(res, formattedReview, 201);
@@ -40,13 +48,16 @@ router.get("/", async (req, res, next) => {
     const list = await aiReviewService.getFeed(req.user.id, limit, offset);
 
     // Transform to frontend format
-    const formatted = await Promise.all(list.map(async (review) => {
-      const trade = await Trade.findById(review.tradeId);
+    const formatted = list.map((review) => {
+      const t = review.tradeId as any;
+      const tradeIdStr = t && t._id ? t._id.toString() : review.tradeId.toString();
+      const pair = t && t.pair ? t.pair : "Unknown";
+
       return {
         id: review._id.toString(),
         date: review.createdAt.toISOString().split('T')[0],
-        tradeId: review.tradeId.toString(),
-        pair: trade?.pair || "Unknown",
+        tradeId: tradeIdStr,
+        pair: pair,
         overallScore: review.score,
         summary: review.summary || "",
         strengths: review.strengths || [],
@@ -54,10 +65,10 @@ router.get("/", async (req, res, next) => {
         suggestions: review.recommendation ? [review.recommendation] : [],
         psychologyNotes: "",
         marketContext: "",
-        riskManagement: "",
+        riskManagement: review.riskWarning || "",
         timestamp: review.createdAt.toISOString()
       };
-    }));
+    });
 
     return apiResponse.success(res, formatted);
   } catch (error) { next(error); }
@@ -69,13 +80,16 @@ router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, n
     if (!review || review.length === 0) {
       return apiResponse.notFound(res, "Review not found");
     }
-    const trade = await Trade.findById(review[0].tradeId);
     const r = review[0];
+    const t = r.tradeId as any;
+    const tradeIdStr = t && t._id ? t._id.toString() : r.tradeId.toString();
+    const pair = t && t.pair ? t.pair : "Unknown";
+
     const formatted = {
       id: r._id.toString(),
-      tradeId: r.tradeId.toString(),
+      tradeId: tradeIdStr,
       date: r.createdAt.toISOString().split('T')[0],
-      pair: trade?.pair || "Unknown",
+      pair: pair,
       overallScore: r.score,
       summary: r.summary || "",
       strengths: r.strengths || [],
@@ -83,11 +97,25 @@ router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, n
       suggestions: r.recommendation ? [r.recommendation] : [],
       psychologyNotes: "",
       marketContext: "",
-      riskManagement: "",
+      riskManagement: r.riskWarning || "",
       timestamp: r.createdAt.toISOString()
     };
     return apiResponse.success(res, formatted);
   } catch (error) { next(error); }
+});
+
+// TEMPORARY: Clear all AI reviews for current user
+// MUST come before /:id route to avoid routing conflict
+router.delete("/clear-all", async (req, res, next) => {
+  try {
+    console.log("Clear AI reviews requested by user:", req.user?.id);
+    const result = await AiReview.deleteMany({ userId: req.user.id });
+    console.log("Deleted count:", result.deletedCount);
+    return apiResponse.success(res, { message: `Cleared ${result.deletedCount} reviews` });
+  } catch (error) {
+    console.error("Clear AI reviews error:", error);
+    next(error);
+  }
 });
 
 router.get("/trade/:tradeId", validate({ params: objectIdParamSchema }), async (req, res, next) => {
@@ -96,13 +124,16 @@ router.get("/trade/:tradeId", validate({ params: objectIdParamSchema }), async (
     if (!review || review.length === 0) {
       return apiResponse.notFound(res, "No review for this trade");
     }
-    const trade = await Trade.findById(req.params.tradeId);
     const r = review[0];
+    const t = r.tradeId as any;
+    const tradeIdStr = t && t._id ? t._id.toString() : r.tradeId.toString();
+    const pair = t && t.pair ? t.pair : "Unknown";
+
     const formatted = {
       id: r._id.toString(),
-      tradeId: r.tradeId.toString(),
+      tradeId: tradeIdStr,
       date: r.createdAt.toISOString().split('T')[0],
-      pair: trade?.pair || "Unknown",
+      pair: pair,
       overallScore: r.score,
       summary: r.summary || "",
       strengths: r.strengths || [],
@@ -110,7 +141,7 @@ router.get("/trade/:tradeId", validate({ params: objectIdParamSchema }), async (
       suggestions: r.recommendation ? [r.recommendation] : [],
       psychologyNotes: "",
       marketContext: "",
-      riskManagement: "",
+      riskManagement: r.riskWarning || "",
       timestamp: r.createdAt.toISOString()
     };
     return apiResponse.success(res, formatted);

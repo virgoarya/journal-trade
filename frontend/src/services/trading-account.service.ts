@@ -39,6 +39,14 @@ export class TradingAccountService {
     return apiClient.get<TradingAccount>(`${this.basePath}/active`);
   }
 
+  async getAll(): Promise<ApiResponse<TradingAccount[]>> {
+    return apiClient.get<TradingAccount[]>(this.basePath);
+  }
+
+  async setActive(id: string): Promise<ApiResponse<TradingAccount>> {
+    return apiClient.patch<TradingAccount>(`${this.basePath}/${id}/set-active`, {});
+  }
+
   async create(data: CreateAccountDto): Promise<ApiResponse<TradingAccount>> {
     return apiClient.post<TradingAccount>(this.basePath, data);
   }

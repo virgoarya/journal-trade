@@ -77,10 +77,10 @@ export default function OnboardingPage() {
       if (result.success) {
         router.push("/dashboard");
       } else {
-        setError(result.error || "Gagal menyimpan konfigurasi");
+        setError(result.error || "Failed to save configuration");
       }
     } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan sistem");
+      setError(err.message || "System error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,7 +128,7 @@ export default function OnboardingPage() {
               <span className={`font-sans text-[9px] font-bold tracking-wider uppercase ${
                 currentStep >= step ? "text-[#e5e1e7]" : "text-white/20"
               }`}>
-                {step === 1 ? "Selamat Datang" : step === 2 ? "Akun Trading" : "Aturan Risiko"}
+                {step === 1 ? "Welcome" : step === 2 ? "Trading Account" : "Risk Rules"}
               </span>
             </div>
           ))}
@@ -150,9 +150,9 @@ export default function OnboardingPage() {
                   <div className="w-16 h-16 bg-[#d4af37]/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <ShieldCheck className="w-8 h-8 text-[#d4af37]" />
                   </div>
-                  <h2 className="text-2xl font-bold text-white">Siap Menguasai Market?</h2>
+                  <h2 className="text-2xl font-bold text-white">Ready to Master the Market?</h2>
                   <p className="text-[#d0c5af]/70 text-sm leading-relaxed max-w-md mx-auto">
-                    Selamat datang di Hunter Trades. Langkah awal menjadi <span className="text-[#d4af37] font-bold">Elite Trader</span> dimulai dengan kedisiplinan pencatatan data. Mari siapkan akun trading Anda.
+                    Welcome to Hunter Trades. The first step to becoming an <span className="text-[#d4af37] font-bold">Elite Trader</span> starts with disciplined record-keeping. Let's set up your trading account.
                   </p>
                   <div className="pt-6">
                     <button 
@@ -160,7 +160,7 @@ export default function OnboardingPage() {
                       onClick={handleNext}
                       className="px-10 py-3 bg-[#d4af37] text-[#050508] text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all shadow-[0_0_20px_rgba(212,175,55,0.2)] uppercase flex items-center mx-auto gap-2"
                     >
-                      Mulai Setup <ArrowRight className="w-4 h-4" />
+                      Start Setup <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 </motion.div>
@@ -175,17 +175,17 @@ export default function OnboardingPage() {
                   className="space-y-6"
                 >
                   <div>
-                    <h2 className="text-xl font-bold text-white mb-2">Konfigurasi Akun</h2>
-                    <p className="text-[#d0c5af]/70 text-sm">Tentukan modal dasar dan platform eksekusi untuk perhitungan presisi.</p>
+                    <h2 className="text-xl font-bold text-white mb-2">Account Configuration</h2>
+                    <p className="text-[#d0c5af]/70 text-sm">Set your initial capital and execution platform for precise calculations.</p>
                   </div>
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Nama Akun</label>
+                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Account Name</label>
                       <input 
                         required
                         className="w-full bg-[#1b1b1f] border-transparent focus:border-[#f2ca50]/50 focus:ring-0 rounded-xl px-4 py-3 text-sm transition-all placeholder:text-white/10" 
-                        placeholder="Contoh: Aggressive Intraday" 
+                        placeholder="e.g. Aggressive Intraday" 
                         type="text"
                         value={formData.accountName}
                         onChange={(e) => setFormData({...formData, accountName: e.target.value})}
@@ -194,7 +194,7 @@ export default function OnboardingPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Saldo Awal</label>
+                        <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Initial Balance</label>
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-[#d4af37]/60">$</span>
                           <input 
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Mata Uang</label>
+                        <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Currency</label>
                         <div className="w-full bg-[#1b1b1f] border-transparent rounded-xl px-4 py-3 text-sm flex items-center text-[#d4af37] font-bold">
                           USD - United States Dollar
                         </div>
@@ -216,11 +216,11 @@ export default function OnboardingPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Platform Broker</label>
+                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Broker Platform</label>
                       <input 
                         required
                         className="w-full bg-[#1b1b1f] border-transparent focus:border-[#f2ca50]/50 focus:ring-0 rounded-xl px-4 py-3 text-sm transition-all placeholder:text-white/10" 
-                        placeholder="Nama platform broker Anda" 
+                        placeholder="Your broker platform name" 
                         type="text"
                         value={formData.broker}
                         onChange={(e) => setFormData({...formData, broker: e.target.value})}
@@ -234,14 +234,14 @@ export default function OnboardingPage() {
                       onClick={handleBack}
                       className="flex items-center gap-2 text-xs font-bold text-[#d0c5af]/60 hover:text-[#d4af37] uppercase tracking-widest transition-colors"
                     >
-                      <ArrowLeft className="w-4 h-4" /> Kembali
+                      <ArrowLeft className="w-4 h-4" /> Back
                     </button>
                     <button 
                       type="button"
                       onClick={handleNext}
                       className="px-10 py-3 bg-[#d4af37] text-[#050508] text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all shadow-[0_0_20px_rgba(212,175,55,0.2)] uppercase"
                     >
-                      Lanjut
+                      Continue
                     </button>
                   </div>
                 </motion.div>
@@ -256,13 +256,13 @@ export default function OnboardingPage() {
                   className="space-y-6"
                 >
                   <div>
-                    <h2 className="text-xl font-bold text-white mb-2">Aturan Risiko</h2>
-                    <p className="text-[#d0c5af]/70 text-sm">Patuhi batasan ini untuk menjaga umur trading Anda tetap panjang.</p>
+                    <h2 className="text-xl font-bold text-white mb-2">Risk Rules</h2>
+                    <p className="text-[#d0c5af]/70 text-sm">Follow these limits to ensure your trading longevity.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Max Daily Drawdown</label>
+                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Max Daily Drawdown (%)</label>
                       <div className="relative">
                         <input 
                           required
@@ -275,7 +275,7 @@ export default function OnboardingPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Max Total Drawdown</label>
+                      <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Max Total Drawdown (%)</label>
                       <div className="relative">
                         <input 
                           required
@@ -313,7 +313,7 @@ export default function OnboardingPage() {
                       onClick={handleBack}
                       className="flex items-center gap-2 text-xs font-bold text-[#d0c5af]/60 hover:text-[#d4af37] uppercase tracking-widest transition-colors"
                     >
-                      <ArrowLeft className="w-4 h-4" /> Kembali
+                      <ArrowLeft className="w-4 h-4" /> Back
                     </button>
                     <button 
                       disabled={isSubmitting}
@@ -322,10 +322,10 @@ export default function OnboardingPage() {
                     >
                       {isSubmitting ? (
                         <div className="flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Sedang Memproses...
+                          <Loader2 className="w-4 h-4 animate-spin" /> Processing...
                         </div>
                       ) : (
-                        "Simpan Akun Elite"
+                        "Save Elite Account"
                       )}
                     </button>
                   </div>
@@ -361,7 +361,7 @@ export default function OnboardingPage() {
           </div>
           <div className="px-6 py-4 bg-black/20">
              <p className="font-mono text-[9px] text-[#d0c5af]/40 leading-relaxed italic">
-                [SYSTEM]: Menunggu sinkronisasi parameter trading untuk inisialisasi algoritma performa...
+                [SYSTEM]: Waiting for trading parameters sync to initialize performance algorithm...
              </p>
           </div>
         </section>

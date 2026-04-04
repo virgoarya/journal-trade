@@ -8,6 +8,7 @@ export interface IAiReview extends Document {
   improvements: string[];
   summary?: string;
   recommendation?: string;
+  riskWarning?: string;
   createdAt: Date;
 }
 
@@ -19,9 +20,12 @@ const AiReviewSchema = new Schema<IAiReview>({
   improvements: { type: [String], required: true },
   summary: { type: String },
   recommendation: { type: String },
+  riskWarning: { type: String },
 }, {
   timestamps: { createdAt: true, updatedAt: false },
-  collection: "ai_reviews"
+  collection: "ai_reviews",
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 export const AiReview = mongoose.models.AiReview || mongoose.model<IAiReview>("AiReview", AiReviewSchema);

@@ -17,6 +17,15 @@ export interface ITrade extends Document {
   emotionalState?: number;
   notes?: string;
   chartLink?: string;
+  exitDate?: Date;
+  // New fields for playbook matching
+  marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
+  session?: "Asia" | "London" | "NY" | "Sydney" | "Other";
+  riskPercent?: number; // Risk exposure as percentage of account equity
+  // Soft delete
+  isDeleted?: boolean;
+  deletedAt?: Date;
+  deletionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,10 +46,26 @@ const TradeSchema = new Schema<ITrade>({
   result: { type: String, enum: ["WIN", "LOSS", "BREAKEVEN"], required: true },
   emotionalState: { type: Number, min: 1, max: 5 },
   notes: { type: String },
-  chartLink: { type: String }
+  chartLink: { type: String },
+  exitDate: { type: Date },
+  marketCondition: {
+    type: String,
+    enum: ["TRENDING", "RANGING", "VOLATILE", "LIQUID", "ALL"],
+    default: "ALL"
+  },
+  session: {
+    type: String,
+    enum: ["Asia", "London", "NY", "Sydney", "Other"]
+  },
+  riskPercent: { type: Number, min: 0, max: 100 },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date },
+  deletionReason: { type: String }
 }, {
   timestamps: true,
-  collection: "trades"
+  collection: "trades",
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 export const Trade = mongoose.models.Trade || mongoose.model<ITrade>("Trade", TradeSchema);

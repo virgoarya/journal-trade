@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -14,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Hunter Trades Journal",
-  description: "Jurnal trading eksklusif untuk member Hunter Trades",
+  description: "Exclusive trading journal for Hunter Trades members",
 };
 
 export default function RootLayout({
@@ -24,11 +25,13 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="id"
+      lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans mb-0">
+      <body className="min-h-full flex flex-col font-sans mb-0" suppressHydrationWarning>
         {children}
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

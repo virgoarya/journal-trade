@@ -8,12 +8,16 @@ export const createTradingAccountSchema = z.object({
   maxDailyDrawdownPct: z.number().min(0).max(100).default(5),
   maxTotalDrawdownPct: z.number().min(0).max(100).default(10),
   maxDailyTrades: z.number().int().positive().optional(),
+  riskTier: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE", "SPECULATIVE"]).optional(),
+  defaultRiskPercent: z.number().min(0.1).max(10).optional(),
 });
 
 export const updateRiskRulesSchema = z.object({
   maxDailyDrawdownPct: z.number().min(0).max(100),
   maxTotalDrawdownPct: z.number().min(0).max(100),
   maxDailyTrades: z.number().int().positive().optional(),
+  riskTier: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE", "SPECULATIVE"]).optional(),
+  defaultRiskPercent: z.number().min(0.1).max(10).optional(),
 });
 
 export const updateTradingAccountSchema = z.object({

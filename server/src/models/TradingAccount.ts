@@ -16,6 +16,9 @@ export interface ITradingAccount extends Document {
   bio?: string;
   discordWebhook?: string;
   apiKey?: string;
+  riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
+  defaultRiskPercent?: number;
+  riskNotificationEnabled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,10 +38,27 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
   onboardingCompleted: { type: Boolean, required: true, default: false },
   bio: { type: String, default: "" },
   discordWebhook: { type: String, default: "" },
-  apiKey: { type: String, unique: true, sparse: true }
+  apiKey: { type: String, unique: true, sparse: true },
+  riskTier: {
+    type: String,
+    enum: ["CONSERVATIVE", "MODERATE", "AGGRESSIVE", "SPECULATIVE"],
+    default: "MODERATE"
+  },
+  defaultRiskPercent: {
+    type: Number,
+    min: 0.1,
+    max: 10,
+    default: 1.0
+  },
+  riskNotificationEnabled: {
+    type: Boolean,
+    default: true
+  }
 }, {
   timestamps: true,
-  collection: "trading_accounts"
+  collection: "trading_accounts",
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 export const TradingAccount = mongoose.models.TradingAccount || mongoose.model<ITradingAccount>("TradingAccount", TradingAccountSchema);

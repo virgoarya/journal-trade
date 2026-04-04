@@ -2,20 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  PenLine, 
-  BookOpen, 
-  BarChart3, 
-  Bot, 
-  Settings, 
-  LogOut,
-  Target
+import { useEffect, useState } from "react";
+import {
+  LayoutDashboard,
+  PenLine,
+  BookOpen,
+  BarChart3,
+  Bot,
+  Settings,
+  LogOut
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 import { useSession } from "@/lib/auth-client";
+import { AccountSwitcher } from "./account-switcher";
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -23,21 +24,26 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const mainNav = [
-  { name: "Dasbor", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Catat Trade", href: "/log-trade", icon: PenLine },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Log Trade", href: "/log-trade", icon: PenLine },
   { name: "Playbook", href: "/playbook", icon: BookOpen },
-  { name: "Analitik", href: "/analytics", icon: BarChart3 },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "AI Review", href: "/ai-review", icon: Bot },
 ];
 
 const utilityNav = [
-  { name: "Pengaturan", href: "/settings", icon: Settings },
-  { name: "Keluar", href: "/logout", icon: LogOut },
+  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Logout", href: "/logout", icon: LogOut },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Get initials for profile placeholder
   const getInitials = (name: string) => {
@@ -54,7 +60,7 @@ export function Sidebar() {
       <div>
         {/* Brand Logo */}
         <div className="px-8 mb-10 flex items-center space-x-3">
-          <Target className="w-5 h-5 text-accent-gold" />
+          <img src="/logo.png" alt="Hunter Trades Logo" className="w-10 h-auto object-contain" />
           <div>
             <h1 className="text-[16px] font-bold text-accent-gold tracking-[0.15em] leading-none">
               HUNTER TRADES
@@ -64,6 +70,9 @@ export function Sidebar() {
             </p>
           </div>
         </div>
+
+        {/* Global Account Context Switcher */}
+        <AccountSwitcher />
 
         {/* Main Navigation */}
         <nav className="space-y-1">
@@ -81,7 +90,7 @@ export function Sidebar() {
                 )}
               >
                 <item.icon className={cn(
-                  "mr-4 w-5 h-5",
+                  "mr-4 w-6 h-6",
                   isActive ? "text-accent-gold" : "text-text-secondary group-hover:text-accent-gold"
                 )} />
                 <span className={cn(
@@ -105,33 +114,12 @@ export function Sidebar() {
             href={item.href}
             className="flex items-center h-[48px] text-text-secondary hover:text-accent-gold px-4 hover:bg-white/5 transition-colors duration-200 group"
           >
-            <item.icon className="mr-4 w-5 h-5 group-hover:text-accent-gold" />
+            <item.icon className="mr-4 w-6 h-6 group-hover:text-accent-gold" />
             <span className="font-sans font-medium text-[14px] tracking-wide">
               {item.name}
             </span>
           </Link>
         ))}
-        
-        {/* User Profile Footer */}
-        <div className="mt-6 px-4 pt-6 border-t border-white/5 flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-full bg-accent-gold bg-opacity-10 border border-accent-gold border-opacity-20 flex items-center justify-center overflow-hidden">
-            {session?.user?.image ? (
-              <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-accent-gold text-xs font-bold">
-                {getInitials(session?.user?.name || "HT")}
-              </span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-text-primary truncate">
-              {session?.user?.name || "Elite Hunter"}
-            </p>
-            <p className="text-[10px] text-text-secondary uppercase">
-              {(session?.user as any)?.role === "admin" ? "Founder" : "Elite Member"}
-            </p>
-          </div>
-        </div>
       </div>
     </aside>
   );

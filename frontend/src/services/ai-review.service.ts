@@ -2,17 +2,17 @@ import { apiClient, ApiResponse } from "@/lib/api-client";
 
 export interface AIReview {
   id: string;
-  date: string;
   tradeId: string;
+  date: string;
   pair: string;
   overallScore: number;
   summary: string;
   strengths: string[];
   improvements: string[];
-  suggestions: string[];
-  psychologyNotes: string;
-  marketContext: string;
-  riskManagement: string;
+  recommendation?: string;
+  psychologyNotes?: string;
+  marketContext?: string;
+  riskManagement?: string;
   timestamp: string;
 }
 
@@ -43,6 +43,10 @@ export class AIReviewService {
 
   async delete(id: string): Promise<ApiResponse<null>> {
     return apiClient.delete<null>(`${this.basePath}/${id}`);
+  }
+
+  async clearAll(): Promise<ApiResponse<{ deletedCount: number }>> {
+    return apiClient.delete<{ deletedCount: number }>(`${this.basePath}/clear-all`);
   }
 }
 

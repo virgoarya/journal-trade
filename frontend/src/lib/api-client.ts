@@ -20,18 +20,10 @@ export class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
-      // Get session token
-      const { data: session } = await authClient.getSession();
-
       const headers: HeadersInit = {
         "Content-Type": "application/json",
         ...options.headers,
       };
-
-      // Add auth header if session exists
-      if (session?.user?.id) {
-        (headers as Record<string, string>)["Authorization"] = `Bearer ${session.user.id}`;
-      }
 
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,

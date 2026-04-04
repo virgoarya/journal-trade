@@ -3,7 +3,7 @@
 import { 
   Settings as SettingsIcon, 
   User, Bell, Palette, Shield, Database, Globe, Key, Save, Moon, Sun, 
-  Volume2, VolumeX, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle 
+  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus 
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
@@ -23,6 +23,14 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]);
+  const [newAccountForm, setNewAccountForm] = useState({
+    accountName: "",
+    initialBalance: 1000,
+    broker: "",
+    currency: "USD"
+  });
+
   // Appearance State
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
 
@@ -33,13 +41,22 @@ export default function SettingsPage() {
       if (response.success && response.data) {
         setActiveAccount(response.data);
         setRiskDefaults({
-          defaultRiskPercent: 1.0, 
+          // Use stored value, fallback to tier mid if not set
+          defaultRiskPercent: response.data.defaultRiskPercent || 1.0,
           maxDailyDrawdown: response.data.maxDailyDrawdownPct,
           maxTotalDrawdown: response.data.maxTotalDrawdownPct,
           maxDailyTrades: response.data.maxDailyTrades || 3,
         });
         setBio(response.data.bio || "");
         setDiscordWebhook(response.data.discordWebhook || "");
+        // Load risk tier
+        if (response.data.riskTier) {
+          setRiskTier(response.data.riskTier);
+        }
+        // Load notification setting
+        if (response.data.riskNotificationEnabled !== undefined) {
+          setRiskNotificationEnabled(response.data.riskNotificationEnabled);
+        }
       }
     };
 
@@ -50,12 +67,22 @@ export default function SettingsPage() {
       document.documentElement.classList.toggle("light", savedTheme === "light");
     }
 
+    const fetchAccounts = async () => {
+      const allRes = await tradingAccountService.getAll();
+      if (allRes.success && allRes.data) {
+        setUserAccounts(allRes.data);
+      }
+    };
+
     fetchAccount();
+    fetchAccounts();
   }, []);
 
   // Form States
   const [bio, setBio] = useState("");
   const [discordWebhook, setDiscordWebhook] = useState("");
+  const [riskTier, setRiskTier] = useState<"CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE">("MODERATE");
+  const [riskNotificationEnabled, setRiskNotificationEnabled] = useState(true);
 
   const handleSaveProfile = async () => {
     if (!activeAccount) return;
@@ -64,13 +91,13 @@ export default function SettingsPage() {
     try {
       const response = await tradingAccountService.updateInfo(activeAccount.id, { bio });
       if (response.success) {
-        setStatusMsg({ type: 'success', text: "Profil berhasil diperbarui!" });
+        setStatusMsg({ type: 'success', text: "Profile updated successfully!" });
         setActiveAccount(response.data || activeAccount);
       } else {
-        setStatusMsg({ type: 'error', text: response.error || "Gagal menyimpan profil." });
+        setStatusMsg({ type: 'error', text: response.error || "Failed to save profile." });
       }
     } catch (e) {
-      setStatusMsg({ type: 'error', text: "Kesalahan jaringan." });
+      setStatusMsg({ type: 'error', text: "Network error." });
     } finally {
       setIsLoading(false);
       setTimeout(() => setStatusMsg(null), 3000);
@@ -84,13 +111,13 @@ export default function SettingsPage() {
     try {
       const response = await tradingAccountService.updateInfo(activeAccount.id, { discordWebhook });
       if (response.success) {
-        setStatusMsg({ type: 'success', text: "Integrasi berhasil diperbarui!" });
+        setStatusMsg({ type: 'success', text: "Integration updated successfully!" });
         setActiveAccount(response.data || activeAccount);
       } else {
-        setStatusMsg({ type: 'error', text: response.error || "Gagal menyimpan integrasi." });
+        setStatusMsg({ type: 'error', text: response.error || "Failed to save integration." });
       }
     } catch (e) {
-      setStatusMsg({ type: 'error', text: "Kesalahan jaringan." });
+      setStatusMsg({ type: 'error', text: "Network error." });
     } finally {
       setIsLoading(false);
       setTimeout(() => setStatusMsg(null), 3000);
@@ -111,7 +138,33 @@ export default function SettingsPage() {
         if (accResponse.data) setActiveAccount(accResponse.data);
       }
     } catch (e) {
-      setStatusMsg({ type: 'error', text: "Gagal membuat API Key." });
+      setStatusMsg({ type: 'error', text: "Failed to create API Key." });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setStatusMsg(null), 3000);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    if (!newAccountForm.accountName || newAccountForm.initialBalance <= 0) return;
+    setIsLoading(true);
+    setStatusMsg(null);
+    try {
+      const res = await tradingAccountService.create({
+        ...newAccountForm,
+        maxDailyDrawdownPct: 5.0,
+        maxTotalDrawdownPct: 10.0,
+        maxDailyTrades: 5
+      });
+      if (res.success && res.data) {
+        setStatusMsg({ type: 'success', text: "Berhasil membuat akun Trading baru!" });
+        setUserAccounts(prev => [...prev, res.data!]);
+        setNewAccountForm({ accountName: "", initialBalance: 1000, broker: "", currency: "USD" });
+      } else {
+        setStatusMsg({ type: 'error', text: res.error || "Gagal membuat akun." });
+      }
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: "Network error." });
     } finally {
       setIsLoading(false);
       setTimeout(() => setStatusMsg(null), 3000);
@@ -148,18 +201,24 @@ export default function SettingsPage() {
 
   const handleSaveRisk = async () => {
     if (!activeAccount) return;
-    
+
     setIsLoading(true);
     setStatusMsg(null);
-    
+
     try {
       const response = await tradingAccountService.updateRiskRules(activeAccount.id, {
         maxDailyDrawdownPct: riskDefaults.maxDailyDrawdown,
         maxTotalDrawdownPct: riskDefaults.maxTotalDrawdown,
-        maxDailyTrades: riskDefaults.maxDailyTrades
+        maxDailyTrades: riskDefaults.maxDailyTrades,
+        riskTier: riskTier,
+        defaultRiskPercent: riskDefaults.defaultRiskPercent
       });
-      
+
+      // Save notification setting separately via updateInfo
       if (response.success) {
+        await tradingAccountService.updateInfo(activeAccount.id, {
+          riskNotificationEnabled: riskNotificationEnabled
+        });
         setStatusMsg({ type: 'success', text: "Parameter risiko berhasil diperbarui!" });
         // Refresh local account state
         setActiveAccount(response.data || activeAccount);
@@ -167,7 +226,7 @@ export default function SettingsPage() {
         setStatusMsg({ type: 'error', text: response.error || "Gagal menyimpan perubahan." });
       }
     } catch (error) {
-      setStatusMsg({ type: 'error', text: "Terjadi kesalahan jaringan." });
+      setStatusMsg({ type: 'error', text: "Network error occurred." });
     } finally {
       setIsLoading(false);
       setTimeout(() => setStatusMsg(null), 3000);
@@ -187,13 +246,13 @@ export default function SettingsPage() {
     try {
       const response = await apiClient.post("/api/v1/settings/reset-data", {});
       if (response.success) {
-        alert("Seluruh data berhasil dihapus. Halaman akan dimuat ulang.");
+        alert("All data successfully deleted. Page will reload.");
         window.location.href = "/onboarding";
       } else {
-        alert("Gagal menghapus data: " + response.error);
+        alert("Failed to delete data: " + response.error);
       }
     } catch (error) {
-      alert("Terjadi kesalahan jaringan.");
+      alert("Network error occurred.");
     } finally {
       setIsLoading(false);
     }
@@ -211,6 +270,7 @@ export default function SettingsPage() {
 
   const sections: SettingsSection[] = [
     { id: "profile", label: "Profile", icon: User },
+    { id: "accounts", label: "Broker Accounts", icon: Briefcase },
     { id: "appearance", label: "Appearance", icon: Palette },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "risk", label: "Risk Management", icon: Shield },
@@ -234,8 +294,8 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">Pengaturan</h1>
-          <p className="text-sm text-text-secondary mt-1">Kelola preferensi dan pengaturan akun Anda</p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">Settings</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage your account preferences and settings</p>
         </div>
       </div>
 
@@ -299,10 +359,10 @@ export default function SettingsPage() {
                     </p>
                     <div className="flex space-x-2">
                       <button className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-bg-elevated text-text-secondary rounded-lg border border-white/5 hover:border-accent-gold/40 hover:text-accent-gold transition-all">
-                        Ubah Avatar
+                        Change Avatar
                       </button>
                       <button className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-bg-elevated text-text-secondary rounded-lg border border-white/5 hover:border-data-loss/40 hover:text-data-loss transition-all">
-                        Hapus
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -311,17 +371,17 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Nama Tampilan</label>
+                      <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Display Name</label>
                       <input
                         type="text"
                         defaultValue={session?.user?.name || ""}
                         readOnly
                         className="w-full bg-bg-input/50 border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none opacity-80 cursor-not-allowed"
                       />
-                      <p className="text-[10px] text-text-muted mt-2">Dikelola melalui akun Discord Anda</p>
+                      <p className="text-[10px] text-text-muted mt-2">Managed through your Discord account</p>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Alamat Email</label>
+                      <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Email Address</label>
                       <input
                         type="email"
                         defaultValue={session?.user?.email || ""}
@@ -331,12 +391,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Bio Singkat</label>
+                    <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Short Bio</label>
                     <textarea
                       rows={3}
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
-                      placeholder="Ceritakan sedikit tentang gaya trading Anda..."
+                      placeholder="Tell us a bit about your trading style..."
                       className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none resize-none transition-all"
                     />
                   </div>
@@ -347,9 +407,75 @@ export default function SettingsPage() {
                       className="px-6 py-3 bg-accent-gold text-bg-void rounded-xl font-bold uppercase text-[11px] tracking-widest flex items-center space-x-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      <span>Simpan Perubahan</span>
+                      <span>Save Changes</span>
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Accounts Section */}
+          {activeSection === "accounts" && (
+            <div className="space-y-6">
+              <div className="glass p-6">
+                <div className="flex justify-between items-center mb-6">
+                   <h2 className="text-lg font-semibold text-text-primary">Your Broker Accounts</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                   {userAccounts.map(account => (
+                     <div key={account.id} className={`p-5 rounded-xl border ${account.isActive ? 'border-accent-gold bg-accent-gold/5 shadow-[0_0_15px_rgba(212,175,55,0.1)]' : 'border-white/5 bg-bg-elevated'}`}>
+                        <div className="flex justify-between items-start mb-4">
+                           <div>
+                              <h3 className="font-bold text-text-primary flex items-center gap-2">
+                                 {account.accountName}
+                                 {account.isActive && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-accent-gold text-bg-void">Active</span>}
+                              </h3>
+                              <p className="text-[11px] text-text-secondary mt-1">{account.broker || "No Broker Specified"}</p>
+                           </div>
+                           <Briefcase className="w-5 h-5 text-text-muted" />
+                        </div>
+                        <div className="flex justify-between items-end border-t border-white/5 pt-4">
+                           <div>
+                              <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
+                              <p className="text-sm font-mono font-bold text-accent-gold">{account.currency} {account.initialBalance.toLocaleString()}</p>
+                           </div>
+                           {!account.isActive && (
+                              <button onClick={() => {
+                                 tradingAccountService.setActive(account.id).then(() => window.location.reload());
+                              }} className="text-[10px] uppercase font-bold tracking-wider text-text-secondary hover:text-accent-gold">
+                                 Set Active
+                              </button>
+                           )}
+                        </div>
+                     </div>
+                   ))}
+                </div>
+
+                <div className="pt-6 border-t border-white/5">
+                   <h3 className="text-sm font-bold text-text-primary mb-4 flex items-center"><Plus className="w-4 h-4 mr-2" /> Add New Trading Account</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Account Name</label>
+                        <input type="text" placeholder="e.g. FTMO Challenge 100k" value={newAccountForm.accountName} onChange={e => setNewAccountForm({...newAccountForm, accountName: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Broker Name</label>
+                        <input type="text" placeholder="e.g. FTMO, IC Markets" value={newAccountForm.broker} onChange={e => setNewAccountForm({...newAccountForm, broker: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Initial Balance</label>
+                        <div className="relative">
+                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-mono">{newAccountForm.currency}</span>
+                           <input type="number" min="0" value={newAccountForm.initialBalance} onChange={e => setNewAccountForm({...newAccountForm, initialBalance: parseFloat(e.target.value)})} className="w-full bg-bg-input border border-white/5 rounded-xl pl-12 pr-4 py-3 text-text-primary font-mono focus:border-accent-gold focus:outline-none" />
+                        </div>
+                      </div>
+                   </div>
+                   <button onClick={handleCreateAccount} disabled={isLoading || !newAccountForm.accountName} className="px-6 py-3 bg-white/5 hover:bg-accent-gold hover:text-bg-void text-text-primary rounded-xl font-bold uppercase text-[11px] tracking-widest border border-white/10 transition-all disabled:opacity-50 mt-2">
+                     Create Broker Account
+                   </button>
+                   <p className="text-[10px] text-text-muted mt-4">Penting: Data setiap akun terpisah sepenuhnya (Dashboard, Analytics, Trade Log & Playbook).</p>
                 </div>
               </div>
             </div>
@@ -359,10 +485,10 @@ export default function SettingsPage() {
           {activeSection === "appearance" && (
             <div className="space-y-6">
               <div className="glass p-6">
-                <h2 className="text-lg font-semibold text-text-primary mb-6">Tampilan Aplikasi</h2>
+                <h2 className="text-lg font-semibold text-text-primary mb-6">Application Appearance</h2>
 
                 <div className="mb-8">
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-3">Tema</label>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-3">Theme</label>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { id: "dark", label: "Dark", icon: Moon },
@@ -424,14 +550,14 @@ export default function SettingsPage() {
           {activeSection === "notifications" && (
             <div className="space-y-6">
               <div className="glass p-6">
-                <h2 className="text-lg font-semibold text-text-primary mb-6">Pengaturan Notifikasi</h2>
+                <h2 className="text-lg font-semibold text-text-primary mb-6">Notification Settings</h2>
 
                 <div className="space-y-2">
                   {[
-                    { key: "tradeAlerts", label: "Trade Alerts", desc: "Dapatkan notifikasi saat trade dieksekusi" },
-                    { key: "aiReviews", label: "AI Reviews Ready", desc: "Notifikasi saat analisis AI baru selesai" },
-                    { key: "weeklyReports", label: "Weekly Performance Reports", desc: "Terima ringkasan mingguan setiap Senin pagi" },
-                    { key: "achievementUnlocked", label: "Achievements & Milestones", desc: "Rayakan pencapaian trading Anda" },
+                    { key: "tradeAlerts", label: "Trade Alerts", desc: "Get notified when trades are executed" },
+                    { key: "aiReviews", label: "AI Reviews Ready", desc: "Notifications when new AI analysis is complete" },
+                    { key: "weeklyReports", label: "Weekly Performance Reports", desc: "Receive weekly summary every Monday morning" },
+                    { key: "achievementUnlocked", label: "Achievements & Milestones", desc: "Celebrate your trading achievements" },
                   ].map((item) => (
                     <div key={item.key} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded-lg">
                       <div className="flex-1">
@@ -458,7 +584,7 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div className="glass p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-text-primary">Manajemen Risiko (Live)</h2>
+                  <h2 className="text-lg font-semibold text-text-primary">Risk Management (Live)</h2>
                   {activeAccount && (
                     <span className="text-[10px] font-mono text-accent-gold bg-accent-gold/5 px-2 py-1 rounded border border-accent-gold/20 tracking-wider">
                       ID: {activeAccount.id.substring(0, 8)}...
@@ -469,7 +595,7 @@ export default function SettingsPage() {
                 <div className="space-y-8">
                   <div>
                     <div className="flex justify-between mb-3 text-sm">
-                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Batas Risiko per Trade (Visual Only)</label>
+                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Risk Limit per Trade (%)</label>
                       <span className="font-mono text-accent-gold font-bold">{riskDefaults.defaultRiskPercent}%</span>
                     </div>
                     <input
@@ -478,14 +604,94 @@ export default function SettingsPage() {
                       max="5"
                       step="0.1"
                       value={riskDefaults.defaultRiskPercent}
-                      onChange={(e) => setRiskDefaults({ ...riskDefaults, defaultRiskPercent: parseFloat(e.target.value) })}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setRiskDefaults(prev => ({ ...prev, defaultRiskPercent: value }));
+                        // Auto-update risk tier based on value
+                        if (value <= 1) setRiskTier("CONSERVATIVE");
+                        else if (value <= 2) setRiskTier("MODERATE");
+                        else if (value <= 3) setRiskTier("AGGRESSIVE");
+                        else setRiskTier("SPECULATIVE");
+                      }}
                       className="w-full h-1.5 bg-bg-void rounded-full appearance-none cursor-pointer accent-accent-gold"
                     />
                   </div>
 
+                  {/* Risk Tier System */}
+                  <div className="pt-4 border-t border-white/5">
+                    <div className="flex justify-between mb-4">
+                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Risk Tier</label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: "CONSERVATIVE", label: "Conservative", desc: "0.5-1%", color: "text-data-profit" },
+                        { id: "MODERATE", label: "Moderate", desc: "1-2%", color: "text-accent-gold" },
+                        { id: "AGGRESSIVE", label: "Aggressive", desc: "2-3%", color: "text-orange-500" },
+                        { id: "SPECULATIVE", label: "Speculative", desc: "3-5%", color: "text-data-loss" },
+                      ].map((tier) => {
+                        const isActive = riskTier === tier.id;
+                        return (
+                          <button
+                            key={tier.id}
+                            onClick={() => {
+                              setRiskTier(tier.id as any);
+                              // Auto-adjust slider to middle of tier range
+                              const tierRiskMap: Record<string, number> = {
+                                CONSERVATIVE: 0.75,
+                                MODERATE: 1.5,
+                                AGGRESSIVE: 2.5,
+                                SPECULATIVE: 4.0
+                              };
+                              setRiskDefaults(prev => ({
+                                ...prev,
+                                defaultRiskPercent: tierRiskMap[tier.id]
+                              }));
+                            }}
+                            className={`p-4 rounded-xl border transition-all text-left ${
+                              isActive
+                                ? "bg-accent-gold/10 border-accent-gold shadow-[0_0_15px_rgba(212,175,55,0.15)]"
+                                : "bg-bg-elevated border-border-subtle hover:border-accent-gold/40"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? "text-accent-gold" : "text-text-secondary"}`}>
+                                {tier.label}
+                              </span>
+                              {isActive && <div className="w-2 h-2 rounded-full bg-accent-gold animate-pulse" />}
+                            </div>
+                            <p className={`text-[10px] ${tier.color} font-mono`}>{tier.desc} default</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-text-muted mt-3 italic">
+                      * Tier mengatur batas risiko default. Anda masih bisa menyesuaikan persentase di atas ini.
+                    </p>
+                  </div>
+
+                  {/* AI Notifications Toggle */}
+                  <div className="pt-6 border-t border-white/5">
+                    <div className="flex items-center justify-between p-4 bg-bg-elevated/40 rounded-xl border border-white/5">
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary uppercase tracking-wider">AI Risk Guard Notifications</p>
+                        <p className="text-[11px] text-text-muted mt-1">
+                          Dapatkan pengingat otomatis dari AI jika risiko melebihi tier atau pattern overtrade terdeteksi
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setRiskNotificationEnabled(!riskNotificationEnabled)}
+                        className={`relative w-14 h-7 rounded-full transition-colors ${
+                          riskNotificationEnabled ? "bg-accent-gold shadow-[0_0_10px_rgba(212,175,55,0.3)]" : "bg-bg-void"
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all ${riskNotificationEnabled ? "left-8" : "left-1"}`} />
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
                     <div className="flex justify-between mb-3 text-sm">
-                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Maksimum Harian Drawdown (%)</label>
+                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Maximum Daily Drawdown (%)</label>
                       <span className="font-mono text-data-loss font-bold">{riskDefaults.maxDailyDrawdown}%</span>
                     </div>
                     <input
@@ -497,12 +703,12 @@ export default function SettingsPage() {
                       onChange={(e) => setRiskDefaults({ ...riskDefaults, maxDailyDrawdown: parseFloat(e.target.value) })}
                       className="w-full h-1.5 bg-bg-void rounded-full appearance-none cursor-pointer accent-data-loss"
                     />
-                    <p className="text-[10px] text-text-muted mt-2 italic">* Trading akan dihentikan otomatis jika loss harian mencapai batas ini.</p>
+                    <p className="text-[10px] text-text-muted mt-2 italic">* Trading will be automatically stopped if daily loss reaches this limit.</p>
                   </div>
 
                   <div>
                     <div className="flex justify-between mb-3 text-sm">
-                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Maksimum Total Drawdown (%)</label>
+                      <label className="font-medium text-text-primary uppercase tracking-wider text-[11px]">Maximum Total Drawdown (%)</label>
                       <span className="font-mono text-data-loss font-bold">{riskDefaults.maxTotalDrawdown}%</span>
                     </div>
                     <input
@@ -523,7 +729,7 @@ export default function SettingsPage() {
                       className="flex-1 py-4 bg-accent-gold text-bg-void rounded-xl font-bold uppercase text-[11px] tracking-widest flex items-center justify-center space-x-3 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      <span>Simpan Aturan Risiko</span>
+                      <span>Save Risk Rules</span>
                     </button>
                   </div>
                 </div>
@@ -531,9 +737,9 @@ export default function SettingsPage() {
                 <div className="mt-8 p-5 bg-accent-gold/5 border border-accent-gold/20 rounded-2xl flex items-start space-x-4 animate-pulse-slow">
                    <Shield className="w-6 h-6 text-accent-gold shrink-0 mt-1" />
                    <div>
-                      <h5 className="text-[12px] font-bold text-accent-gold uppercase tracking-[0.1em] mb-1">Risk Guard Aktif</h5>
+                      <h5 className="text-[12px] font-bold text-accent-gold uppercase tracking-[0.1em] mb-1">Active Risk Guard</h5>
                       <p className="text-[11px] text-text-secondary leading-relaxed font-sans">
-                        Sistem perlindungan modal Anda sedang memantau akun <strong>{activeAccount?.accountName || "Member"}</strong> secara real-time. Parameter drawdown yang Anda simpan akan segera diterapkan pada perhitungan dashboard.
+                        Your capital protection system is monitoring account <strong>{activeAccount?.accountName || "Member"}</strong> in real-time. The drawdown parameters you saved will be applied to dashboard calculations immediately.
                       </p>
                    </div>
                 </div>
@@ -545,12 +751,12 @@ export default function SettingsPage() {
           {activeSection === "integrations" && (
             <div className="space-y-6">
               <div className="glass p-6">
-                <h2 className="text-lg font-semibold text-text-primary mb-6">Integrasi Pihak Ketiga</h2>
+                <h2 className="text-lg font-semibold text-text-primary mb-6">Third-Party Integrations</h2>
                 <div className="space-y-4">
                   {[
-                    { key: "discordNotifications", label: "Discord Webhook", desc: "Kirim sinyal trade ke Discord chanel Anda" },
-                    { key: "tradingViewSync", label: "TradingView Sync", desc: "Impor trade otomatis dari skrip Pine" },
-                    { key: "metatraderConnect", label: "MetaTrader (MT4/MT5)", desc: " capture trade langsung dari terminal" },
+                    { key: "discordNotifications", label: "Discord Webhook", desc: "Send trade signals to your Discord channel" },
+                    { key: "tradingViewSync", label: "TradingView Sync", desc: "Auto-import trades from Pine scripts" },
+                    { key: "metatraderConnect", label: "MetaTrader (MT4/MT5)", desc: "Capture trades directly from terminal" },
                   ].map((item) => (
                     <div key={item.key} className="p-4 bg-bg-elevated/40 rounded-xl border border-white/5 group hover:border-accent-gold/20 transition-all">
                       <div className="flex items-center justify-between">
@@ -573,18 +779,18 @@ export default function SettingsPage() {
                             type="text" 
                             value={item.key === 'discordNotifications' ? discordWebhook : ''}
                             onChange={(e) => item.key === 'discordNotifications' && setDiscordWebhook(e.target.value)}
-                            placeholder="Masukkan Webhook URL atau API Key..."
+                            placeholder="Enter Webhook URL or API Key..."
                             className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none" 
                           />
                           <div className="flex justify-between items-center mt-2">
-                             <p className="text-[9px] text-text-muted">Simpan data ini untuk memulai sinkronisasi otomatis.</p>
+                             <p className="text-[9px] text-text-muted">Save this data to start auto-sync.</p>
                              {item.key === 'discordNotifications' && (
-                                <button 
+                                <button
                                   onClick={handleSaveIntegration}
                                   disabled={isLoading}
                                   className="text-[10px] font-bold text-accent-gold hover:underline"
                                 >
-                                   Simpan
+                                   Save
                                 </button>
                              )}
                           </div>
@@ -607,7 +813,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between mb-4">
                          <div>
                             <p className="text-sm font-bold text-text-primary uppercase tracking-widest">Active API Key</p>
-                            <p className="text-[10px] text-text-muted">Gunakan kunci ini untuk akses programmatic</p>
+                            <p className="text-[10px] text-text-muted">Use this key for programmatic access</p>
                          </div>
                          <button 
                            onClick={handleGenerateApiKey}
@@ -622,7 +828,7 @@ export default function SettingsPage() {
                          <input 
                            type="text" 
                            readOnly
-                           value={activeAccount?.apiKey || "Belum ada API Key yang dibuat"}
+                           value={activeAccount?.apiKey || "No API Key created yet"}
                            className="w-full bg-bg-void border border-white/10 rounded-xl px-4 py-4 text-xs font-mono text-accent-gold focus:outline-none"
                          />
                          {activeAccount?.apiKey && (
@@ -639,7 +845,7 @@ export default function SettingsPage() {
                    <div className="p-4 bg-data-profit/5 border border-data-profit/20 rounded-xl flex items-start space-x-3">
                       <CheckCircle className="w-5 h-5 text-data-profit shrink-0" />
                       <p className="text-[11px] text-text-secondary leading-relaxed">
-                         API Key ini memungkinkan Anda mengimpor data trading secara otomatis dari perangkat lunak lain melalui endpoint REST kami. Selalu jaga kerahasiaan kunci akses Anda.
+                         This API key allows you to auto-import trading data from other software via our REST endpoint. Always keep your access key confidential.
                       </p>
                    </div>
                 </div>
@@ -651,25 +857,25 @@ export default function SettingsPage() {
           {activeSection === "data" && (
             <div className="space-y-6">
               <div className="glass p-6">
-                <h2 className="text-lg font-semibold text-text-primary mb-6">Pusat Data & Privasi</h2>
+                <h2 className="text-lg font-semibold text-text-primary mb-6">Data & Privacy Center</h2>
                 
                 <div className="space-y-8">
                    <div>
-                      <h4 className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-4">Ekspor Data</h4>
+                      <h4 className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-4">Export Data</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <button 
                            onClick={handleExportCsv}
                            className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-transparent hover:border-accent-gold/30 hover:bg-accent-gold/5 transition-all text-left"
                          >
                             <div>
-                               <p className="text-sm font-bold text-text-primary">Format CSV</p>
-                               <p className="text-[10px] text-text-muted mt-1">Lengkap dengan Riwayat PnL</p>
+                               <p className="text-sm font-bold text-text-primary">CSV Format</p>
+                               <p className="text-[10px] text-text-muted mt-1">Complete with P&L History</p>
                             </div>
                             <Download className="w-5 h-5 text-accent-gold" />
                          </button>
                          <button disabled className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-transparent opacity-40 grayscale text-left">
                             <div>
-                               <p className="text-sm font-bold text-text-primary">Format PDF (Report)</p>
+                               <p className="text-sm font-bold text-text-primary">PDF Format (Report)</p>
                                <p className="text-[10px] text-text-muted mt-1">Coming Soon</p>
                             </div>
                             <Globe className="w-5 h-5 text-text-muted" />
@@ -683,8 +889,8 @@ export default function SettingsPage() {
                          <div className="flex items-start space-x-4 mb-6">
                             <Trash2 className="w-6 h-6 text-data-loss shrink-0" />
                             <div>
-                               <h5 className="text-[13px] font-bold text-data-loss uppercase">Hapus Seluruh Data</h5>
-                               <p className="text-[11px] text-text-secondary mt-1">Tindakan ini akan menghapus seluruh trade, playbook, dan statistik Anda secara permanen dari server kami.</p>
+                               <h5 className="text-[13px] font-bold text-data-loss uppercase">Delete All Data</h5>
+                               <p className="text-[11px] text-text-secondary mt-1">This action will permanently delete all your trades, playbook, and statistics from our servers.</p>
                             </div>
                          </div>
                          <button 
@@ -692,7 +898,7 @@ export default function SettingsPage() {
                            disabled={isLoading}
                            className="w-full py-4 bg-data-loss/10 border border-data-loss/30 text-data-loss rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-data-loss hover:text-white transition-all active:scale-95"
                          >
-                            {isLoading ? "Sedang Menghapus..." : "Hapus Permanen Seluruh Trade"}
+                            {isLoading ? "Deleting..." : "Permanently Delete All Trades"}
                          </button>
                       </div>
                    </div>

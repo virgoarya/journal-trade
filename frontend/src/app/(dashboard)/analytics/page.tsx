@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BarChart3, TrendingUp, TrendingDown, Calendar, DollarSign, Percent, Target, Activity, Award, Loader2 } from "lucide-react";
 import { analyticsService, type AnalyticsData } from "@/services/analytics.service";
+import { Heatmap } from "@/components/analytics/Heatmap";
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<string>("6M");
@@ -22,6 +23,7 @@ export default function AnalyticsPage() {
           data.monthlyPnL = data.monthlyPnL || [];
           data.weeklyStats = data.weeklyStats || [];
           data.sessionPerformance = data.sessionPerformance || [];
+          data.heatmap = data.heatmap || [];
           data.streakStats = data.streakStats || { longestWin: 0, longestLoss: 0, currentStreak: { type: "win" as const, count: 0 }, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 };
           data.bestPerformingPairs = data.bestPerformingPairs || [];
           data.riskMetrics = data.riskMetrics || { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0 };
@@ -75,6 +77,7 @@ export default function AnalyticsPage() {
     monthlyPnL: [],
     weeklyStats: [],
     sessionPerformance: [],
+    heatmap: [],
     streakStats: { longestWin: 0, longestLoss: 0, currentStreak: { type: "win" as const, count: 0 }, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 },
     totalPnL: 0,
     totalTrades: 0,
@@ -86,51 +89,39 @@ export default function AnalyticsPage() {
   };
 
   const SimpleBarChart = ({ data, valueKey, color }: { data: any[], valueKey: string, color: string }) => {
-    if (data.length === 0) return <div className="h-48 flex items-center justify-center text-text-muted text-sm">No data</div>;
-    const max = Math.max(...data.map(d => d[valueKey]));
+    if (data.length === 0) return <div className="h-48 flex items-center justify-center text-text-muted text-sm uppercase tracking-widest font-mono opacity-30">No Data Flowing</div>;
+    const max = Math.max(...data.map(d => Math.abs(d[valueKey])));
     return (
-      <div className="flex items-end justify-between h-48 gap-2 px-2">
-        {data.map((item, idx) => (
-          <div key={idx} className="flex-1 flex flex-col items-center group">
-            <div
-              className="w-full rounded-t-sm transition-all group-hover:brightness-110"
-              style={{
-                height: `${max > 0 ? (item[valueKey] / max) * 100 : 0}%`,
-                backgroundColor: color,
-                minHeight: item[valueKey] > 0 ? '4px' : '0',
-              }}
-            />
-            <span className="text-[10px] text-text-muted mt-2">{item.month || item.day || item.session}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
+      <div className="flex items-end justify-between h-48 gap-4 px-2 relative">
+        {/* Background Grid Lines (Subtle) */}
+        <div className="absolute inset-0 flex flex-col justify-between opacity-5">
+           <div className="w-full border-t border-white" />
+           <div className="w-full border-t border-white" />
+           <div className="w-full border-t border-white" />
+        </div>
 
-  const CalendarHeatmap = () => {
-    const days = Array.from({ length: 30 }, (_, i) => ({
-      day: i + 1,
-      intensity: Math.random() > 0.7 ? "high" : Math.random() > 0.4 ? "medium" : "low"
-    }));
-
-    return (
-      <div className="grid grid-cols-7 gap-1.5">
-        {["S", "M", "T", "W", "T", "F", "S"].map((day, idx) => (
-          <div key={idx} className="text-center text-[9px] text-text-muted uppercase mb-1">{day}</div>
-        ))}
-        {days.map((day, idx) => (
-          <div
-            key={idx}
-            className={`aspect-square rounded-sm transition-transform hover:scale-110 cursor-pointer ${
-              day.intensity === "high"
-                ? "bg-data-profit/80"
-                : day.intensity === "medium"
-                ? "bg-data-profit/40"
-                : "bg-bg-elevated border border-border-subtle"
-            }`}
-            title={`Day ${day.day}: ${day.intensity === "high" ? "High P&L" : day.intensity === "medium" ? "Medium P&L" : "Low/Breakeven"}`}
-          />
-        ))}
+        {data.map((item, idx) => {
+          const val = item[valueKey];
+          const height = max > 0 ? (Math.abs(val) / max) * 100 : 0;
+          return (
+            <div key={idx} className="flex-1 flex flex-col items-center group relative z-10">
+              <div
+                className="w-full rounded-t-sm transition-all duration-500 group-hover:brightness-125 group-hover:shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+                style={{
+                  height: `${height}%`,
+                  backgroundColor: val >= 0 ? color : '#FF1744',
+                  minHeight: Math.abs(val) > 0 ? '4px' : '0',
+                }}
+              >
+                 {/* Detail Popup on Hover */}
+                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-surface border border-accent-gold/20 px-2 py-1 rounded text-[9px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-20 shadow-xl font-mono">
+                    ${val.toLocaleString()}
+                 </div>
+              </div>
+              <span className="text-[10px] font-mono text-text-muted mt-2 group-hover:text-accent-gold transition-colors">{item.month || item.day || item.session}</span>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -140,7 +131,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">Analitik</h1>
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">Analytics</h1>
           <p className="text-sm text-text-secondary mt-1">Deep insights into your trading performance</p>
         </div>
         <div className="flex space-x-2">
@@ -162,32 +153,32 @@ export default function AnalyticsPage() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass p-4">
+        <div className="glass p-4 border-b-2 border-accent-gold/20">
           <div className="flex items-center text-text-secondary mb-2">
-            <DollarSign className="w-4 h-4 mr-2" />
+            <DollarSign className="w-4 h-4 mr-2 text-accent-gold" />
             <span className="text-[10px] uppercase tracking-[0.15em]">Total P&L</span>
           </div>
           <p className={`font-mono text-xl font-bold ${displayData.totalPnL >= 0 ? "text-data-profit" : "text-data-loss"}`}>
             {displayData.totalPnL >= 0 ? "+" : ""}${displayData.totalPnL.toLocaleString()}
           </p>
         </div>
-        <div className="glass p-4">
+        <div className="glass p-4 border-b-2 border-accent-gold/20">
           <div className="flex items-center text-text-secondary mb-2">
-            <Percent className="w-4 h-4 mr-2" />
+            <Percent className="w-4 h-4 mr-2 text-accent-gold" />
             <span className="text-[10px] uppercase tracking-[0.15em]">Win Rate</span>
           </div>
           <p className="font-mono text-xl font-bold text-data-profit">{displayData.winRate.toFixed(1)}%</p>
         </div>
-        <div className="glass p-4">
+        <div className="glass p-4 border-b-2 border-accent-gold/20">
           <div className="flex items-center text-text-secondary mb-2">
-            <Activity className="w-4 h-4 mr-2" />
+            <Activity className="w-4 h-4 mr-2 text-accent-gold" />
             <span className="text-[10px] uppercase tracking-[0.15em]">Profit Factor</span>
           </div>
           <p className="font-mono text-xl font-bold text-accent-gold">{displayData.profitFactor.toFixed(2)}</p>
         </div>
-        <div className="glass p-4">
+        <div className="glass p-4 border-b-2 border-accent-gold/20">
           <div className="flex items-center text-text-secondary mb-2">
-            <Target className="w-4 h-4 mr-2" />
+            <Target className="w-4 h-4 mr-2 text-accent-gold" />
             <span className="text-[10px] uppercase tracking-[0.15em]">Total Trades</span>
           </div>
           <p className="font-mono text-xl font-bold text-text-primary">{displayData.totalTrades}</p>
@@ -199,117 +190,112 @@ export default function AnalyticsPage() {
         {/* Monthly P&L Chart */}
         <div className="glass p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Monthly P&L</h3>
+            <h3 className="font-semibold text-text-primary">Monthly P&L (Last 6M)</h3>
             <BarChart3 className="w-4 h-4 text-text-muted" />
           </div>
-          <SimpleBarChart data={displayData.monthlyPnL} valueKey="pnl" color={displayData.totalPnL >= 0 ? "#00E676" : "#FF1744"} />
-          <div className="flex justify-between mt-4 pt-4 border-t border-white/10">
-            {displayData.monthlyPnL.reduce((sum, m) => sum + m.wins, 0) > 0 && (
-              <div className="flex items-center text-data-profit text-[11px]">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                Wins: {displayData.monthlyPnL.reduce((sum, m) => sum + m.wins, 0)}
-              </div>
-            )}
-            {displayData.monthlyPnL.reduce((sum, m) => sum + m.losses, 0) > 0 && (
-              <div className="flex items-center text-data-loss text-[11px]">
-                <TrendingDown className="w-3 h-3 mr-1" />
-                Losses: {displayData.monthlyPnL.reduce((sum, m) => sum + m.losses, 0)}
-              </div>
-            )}
+          <SimpleBarChart data={displayData.monthlyPnL} valueKey="pnl" color="#D4AF37" />
+          <div className="flex justify-between mt-4 pt-4 border-t border-white/5">
+            <div className="flex items-center text-data-profit text-[10px] font-mono tracking-wider">
+              <TrendingUp className="w-3 h-3 mr-1" />
+              WINS: {displayData.monthlyPnL.reduce((sum, m) => sum + m.wins, 0)}
+            </div>
+            <div className="flex items-center text-data-loss text-[10px] font-mono tracking-wider">
+              <TrendingDown className="w-3 h-3 mr-1" />
+              LOSSES: {displayData.monthlyPnL.reduce((sum, m) => sum + m.losses, 0)}
+            </div>
           </div>
         </div>
 
         {/* Weekly Performance */}
         <div className="glass p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Weekly Pattern</h3>
+            <h3 className="font-semibold text-text-primary">Weekly Performance</h3>
             <Calendar className="w-4 h-4 text-text-muted" />
           </div>
           <SimpleBarChart data={displayData.weeklyStats.filter(d => d.trades > 0)} valueKey="avgPnl" color="#D4AF37" />
-          <p className="text-[10px] text-text-muted italic mt-4 text-center">Average P&L by weekday (USD)</p>
+          <p className="text-[10px] text-text-muted italic mt-4 text-center font-mono opacity-50 uppercase tracking-widest">Average P&L by Weekday (Absolute USD)</p>
         </div>
 
-        {/* Session Performance */}
+        {/* New Real Heatmap Component */}
+        <div className="glass p-6 lg:col-span-2">
+           <div className="flex justify-between items-center mb-10">
+              <div className="flex items-center space-x-3">
+                 <div className="w-8 h-8 rounded-lg bg-accent-gold/10 flex items-center justify-center">
+                   <Activity className="w-4 h-4 text-accent-gold" />
+                 </div>
+                 <h3 className="font-bold text-text-primary tracking-wide">Performance Heatmap (Session vs Day)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                 <span className="px-3 py-1 rounded bg-bg-elevated border border-white/5 text-[9px] font-bold text-text-muted tracking-[0.2em] uppercase">Real-Time Data Flow</span>
+              </div>
+           </div>
+           
+           <Heatmap data={displayData.heatmap} />
+        </div>
+
+        {/* Session Performance Detail */}
         <div className="glass p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Session Distribution</h3>
+            <h3 className="font-semibold text-text-primary">Session Alpha</h3>
             <Calendar className="w-4 h-4 text-text-muted" />
           </div>
-          <div className="space-y-4">
-            {displayData.sessionPerformance.map((session) => (
-              <div key={session.session} className="flex items-center">
-                <div className="w-24 text-[11px] font-medium text-text-secondary uppercase">{session.session}</div>
-                <div className="flex-1 bg-bg-void rounded-full h-2 overflow-hidden mx-4">
-                  <div
-                    className="h-full bg-accent-gold"
-                    style={{ width: `${(session.pnl / Math.max(...displayData.sessionPerformance.map(s => s.pnl))) * 100}%` }}
-                  />
+          <div className="space-y-6">
+            {displayData.sessionPerformance.map((session) => {
+              const maxPnl = Math.max(...displayData.sessionPerformance.map(s => Math.abs(s.pnl)));
+              const barWidth = maxPnl > 0 ? (Math.abs(session.pnl) / maxPnl) * 100 : 0;
+              
+              return (
+                <div key={session.session} className="flex items-center">
+                  <div className="w-24 text-[10px] font-bold text-accent-gold uppercase tracking-widest">{session.session}</div>
+                  <div className="flex-1 bg-bg-void/50 rounded-full h-1.5 overflow-hidden mx-4 border border-white/5">
+                    <div
+                      className="h-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000"
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                  <div className="w-24 text-right">
+                    <span className={`font-mono text-sm font-bold ${session.pnl >= 0 ? "text-data-profit" : "text-data-loss"}`}>
+                      {session.pnl >= 0 ? "+" : ""}${session.pnl.toLocaleString()}
+                    </span>
+                    <div className="text-[9px] text-text-muted uppercase tracking-tighter">{session.trades} Executions</div>
+                  </div>
                 </div>
-                <div className="w-20 text-right">
-                  <span className={`font-mono text-sm ${session.pnl >= 0 ? "text-data-profit" : "text-data-loss"}`}>
-                    {session.pnl >= 0 ? "+" : ""}${session.pnl}
-                  </span>
-                  <div className="text-[9px] text-text-muted">{session.trades} trades</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Streak Stats */}
         <div className="glass p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Streak Analysis</h3>
+            <h3 className="font-semibold text-text-primary">Psychological Momentum</h3>
             <Award className="w-4 h-4 text-text-muted" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Longest Win Streak</p>
-              <p className="font-mono text-2xl font-bold text-data-profit">{displayData.streakStats.longestWin}</p>
+            <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5 hover:border-accent-gold/20 transition-all">
+              <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2 font-bold">Longest Win Chain</p>
+              <p className="font-mono text-3xl font-bold text-data-profit">{displayData.streakStats.longestWin}</p>
             </div>
-            <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Longest Loss Streak</p>
-              <p className="font-mono text-2xl font-bold text-data-loss">{displayData.streakStats.longestLoss}</p>
+            <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5 hover:border-accent-gold/20 transition-all">
+              <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2 font-bold">Longest Value Drawdown</p>
+              <p className="font-mono text-3xl font-bold text-data-loss">{displayData.streakStats.longestLoss}</p>
             </div>
-            <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Current Streak</p>
-              <div className="flex items-center justify-center mt-1 space-x-2">
+            <div className="p-4 bg-accent-gold/5 rounded-lg text-center border border-accent-gold/10 flex flex-col justify-center items-center">
+              <p className="text-[9px] text-accent-gold uppercase tracking-widest mb-2 font-bold">Current Cycle</p>
+              <div className="flex items-center justify-center space-x-2">
                 {displayData.streakStats.currentStreak.type === "win" ? (
-                  <TrendingUp className="w-4 h-4 text-data-profit" />
+                  <TrendingUp className="w-5 h-5 text-data-profit" />
                 ) : (
-                  <TrendingDown className="w-4 h-4 text-data-loss" />
+                  <TrendingDown className="w-5 h-5 text-data-loss" />
                 )}
-                <span className={`font-mono text-lg font-bold ${displayData.streakStats.currentStreak.type === "win" ? "text-data-profit" : "text-data-loss"}`}>
-                  {displayData.streakStats.currentStreak.count}
+                <span className={`font-mono text-xl font-bold ${displayData.streakStats.currentStreak.type === "win" ? "text-data-profit" : "text-data-loss"}`}>
+                  {displayData.streakStats.currentStreak.count} {displayData.streakStats.currentStreak.type.toUpperCase()}
                 </span>
               </div>
             </div>
             <div className="p-4 bg-bg-void/50 rounded-lg text-center border border-white/5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Avg Win Streak</p>
+              <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2 font-bold">Avg Consistency</p>
               <p className="font-mono text-2xl font-bold text-accent-gold">{displayData.streakStats.avgConsecutiveWins.toFixed(1)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Calendar Heatmap */}
-        <div className="glass p-6 lg:col-span-2">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Performance Heatmap (Last 30 Days)</h3>
-            <Calendar className="w-4 h-4 text-text-muted" />
-          </div>
-          <CalendarHeatmap />
-          <div className="flex items-center justify-end space-x-4 mt-4 text-[10px] text-text-muted">
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-bg-elevated border border-border-subtle rounded-sm mr-1" />
-              <span>Low</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-data-profit/40 rounded-sm mr-1" />
-              <span>Medium</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-data-profit/80 rounded-sm mr-1" />
-              <span>High</span>
             </div>
           </div>
         </div>
@@ -317,85 +303,80 @@ export default function AnalyticsPage() {
 
       {/* Bottom Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass p-6">
-          <h3 className="font-semibold text-text-primary mb-4 flex items-center">
+        <div className="glass p-6 border-t border-accent-gold/20">
+          <h3 className="font-bold text-text-primary mb-6 flex items-center tracking-widest uppercase text-xs">
             <Target className="w-4 h-4 mr-2 text-accent-gold" />
-            Best Performing Pairs
+            Alpha Assets
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {displayData.bestPerformingPairs.length > 0 ? (
               displayData.bestPerformingPairs.map((item) => (
-                <div key={item.pair} className="flex items-center justify-between">
+                <div key={item.pair} className="flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors">
                   <div>
                     <p className="font-mono font-bold text-text-primary">{item.pair}</p>
-                    <p className="text-[10px] text-text-muted">{item.winRate}% win rate</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-tighter">{item.winRate.toFixed(0)}% strike rate</p>
                   </div>
-                  <p className="font-mono text-sm font-bold text-data-profit">{item.pnl.toLocaleString()}</p>
+                  <p className="font-mono text-sm font-bold text-data-profit">+${item.pnl.toLocaleString()}</p>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-text-muted">No data available</p>
+              <p className="text-[10px] text-text-muted italic uppercase text-center py-4">No Asset Discovery Yet</p>
             )}
           </div>
         </div>
 
-        <div className="glass p-6">
-          <h3 className="font-semibold text-text-primary mb-4 flex items-center">
+        <div className="glass p-6 border-t border-accent-gold/20">
+          <h3 className="font-bold text-text-primary mb-6 flex items-center tracking-widest uppercase text-xs">
             <TrendingUp className="w-4 h-4 mr-2 text-accent-gold" />
             Risk Metrics
           </h3>
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-text-secondary">Sharpe Ratio</span>
+              <div className="flex justify-between text-[10px] mb-2 uppercase font-bold tracking-widest">
+                <span className="text-text-secondary">Sharpe Efficiency</span>
                 <span className="font-mono text-accent-gold">{displayData.riskMetrics.sharpeRatio.toFixed(2)}</span>
               </div>
+              <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                <div className="h-full bg-accent-gold" style={{ width: `${Math.min(displayData.riskMetrics.sharpeRatio * 50, 100)}%` }}></div>
+              </div>
             </div>
             <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-text-secondary">Max Drawdown</span>
+              <div className="flex justify-between text-[10px] mb-2 uppercase font-bold tracking-widest">
+                <span className="text-text-secondary">Measured Drawdown</span>
                 <span className="font-mono text-data-loss">{displayData.riskMetrics.maxDrawdown.toFixed(1)}%</span>
               </div>
-              <div className="w-full h-1.5 bg-bg-void rounded-full overflow-hidden">
-                <div className="h-full bg-data-loss" style={{ width: `${Math.min(displayData.riskMetrics.maxDrawdown * 4, 100)}%` }}></div>
+              <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                <div className="h-full bg-data-loss" style={{ width: `${Math.min(displayData.riskMetrics.maxDrawdown * 10, 100)}%` }}></div>
               </div>
             </div>
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-text-secondary">Avg R:R</span>
-                <span className="font-mono text-accent-gold">{displayData.riskMetrics.avgRR.toFixed(1)}</span>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-text-secondary">Expectancy</span>
-                <span className="font-mono text-data-profit">${displayData.riskMetrics.expectancy.toFixed(0)}</span>
-              </div>
+            <div className="flex justify-between items-center pt-2">
+               <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest">Profit Expectancy</span>
+               <span className="font-mono text-lg font-bold text-data-profit">${displayData.riskMetrics.expectancy.toFixed(0)}</span>
             </div>
           </div>
         </div>
 
-        <div className="glass p-6">
-          <h3 className="font-semibold text-text-primary mb-4 flex items-center">
+        <div className="glass p-6 border-t border-accent-gold/20">
+          <h3 className="font-bold text-text-primary mb-6 flex items-center tracking-widest uppercase text-xs">
             <Activity className="w-4 h-4 mr-2 text-accent-gold" />
-            Trading Behaviour
+            Behavioural Analytics
           </h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-text-secondary uppercase">Avg Trade Duration</span>
-              <span className="font-mono text-sm text-text-primary">{displayData.tradingBehaviour.avgTradeDuration}</span>
+          <div className="space-y-4 font-mono">
+            <div className="flex items-center justify-between p-2 border-b border-white/5">
+              <span className="text-[9px] text-text-secondary uppercase tracking-widest">Avg Exposure Time</span>
+              <span className="text-xs text-text-primary">{displayData.tradingBehaviour.avgTradeDuration}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-text-secondary uppercase">Avg P&L/Trade</span>
-              <span className="font-mono text-sm text-data-profit">${displayData.tradingBehaviour.avgPnlPerTrade.toFixed(0)}</span>
+            <div className="flex items-center justify-between p-2 border-b border-white/5">
+              <span className="text-[9px] text-text-secondary uppercase tracking-widest">Alpha Per Exec</span>
+              <span className="text-xs text-data-profit">${displayData.tradingBehaviour.avgPnlPerTrade.toFixed(0)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-text-secondary uppercase">Trades/Day (Avg)</span>
-              <span className="font-mono text-sm text-text-primary">{displayData.tradingBehaviour.tradesPerDay.toFixed(1)}</span>
+            <div className="flex items-center justify-between p-2 border-b border-white/5">
+              <span className="text-[9px] text-text-secondary uppercase tracking-widest">Daily Velocity</span>
+              <span className="text-xs text-text-primary">{displayData.tradingBehaviour.tradesPerDay.toFixed(1)} <span className="text-[8px] opacity-50">T/D</span></span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-text-secondary uppercase">Plan Adherence</span>
-              <span className="font-mono text-sm text-accent-gold">{displayData.tradingBehaviour.planAdherence.toFixed(0)}%</span>
+            <div className="flex items-center justify-between p-2">
+              <span className="text-[9px] text-accent-gold uppercase tracking-widest font-bold">Rule Compliance</span>
+              <span className="text-xs text-accent-gold font-bold">{displayData.tradingBehaviour.planAdherence.toFixed(0)}%</span>
             </div>
           </div>
         </div>

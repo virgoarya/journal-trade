@@ -34,6 +34,14 @@ export interface AnalyticsData {
   monthlyPnL: MonthlyPnL[];
   weeklyStats: WeeklyStats[];
   sessionPerformance: SessionPerformance[];
+  heatmap: Array<{
+    day: string;
+    sessions: Array<{
+      name: string;
+      pnl: number;
+      count: number;
+    }>;
+  }>;
   streakStats: StreakStats;
   totalPnL: number;
   totalTrades: number;
@@ -45,6 +53,8 @@ export interface AnalyticsData {
     maxDrawdown: number;
     avgRR: number;
     expectancy: number;
+    avgWin: number;
+    avgLoss: number;
   };
   tradingBehaviour: {
     avgTradeDuration: string;
@@ -52,6 +62,22 @@ export interface AnalyticsData {
     tradesPerDay: number;
     planAdherence: number;
   };
+  assetDistribution: Array<{
+    asset: string;
+    count: number;
+    percentage: number;
+  }>;
+}
+
+export interface EquityPoint {
+  date: string;
+  equity: number;
+}
+
+export interface EquityCurveData {
+  points: EquityPoint[];
+  highWaterMark: number;
+  maxDrawdown: { value: number; date: string };
 }
 
 export class AnalyticsService {
@@ -60,6 +86,10 @@ export class AnalyticsService {
   async getOverview(timeRange?: string): Promise<ApiResponse<AnalyticsData>> {
     const params = timeRange ? `?timeRange=${timeRange}` : "";
     return apiClient.get<AnalyticsData>(`${this.basePath}/overview${params}`);
+  }
+
+  async getEquityCurve(): Promise<ApiResponse<EquityCurveData>> {
+    return apiClient.get<EquityCurveData>(`${this.basePath}/equity-curve`);
   }
 
   async getMonthlyPnL(): Promise<ApiResponse<MonthlyPnL[]>> {

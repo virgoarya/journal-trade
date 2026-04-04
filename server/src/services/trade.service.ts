@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Trade } from "../models/Trade";
 import { TradingAccount } from "../models/TradingAccount";
+import { Notification } from "../models/Notification";
 import { z } from "zod";
 import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.validator";
 import { calculateRMultiple, calculateRiskAmount } from "../utils/calculations";
@@ -36,9 +37,39 @@ export const tradeService = {
     }
 
     let rMult = data.rMultiple;
+    let riskPercent: number | undefined;
+
+    // Calculate risk metrics
+    const riskPoints = Math.abs(data.entryPrice - data.stopLoss);
+    if (riskPoints > 0 && account.currentEquity > 0) {
+      // Determine contract size based on pair
+      const pair = data.pair.toUpperCase();
+      let contractSize = 100000; // default forex standard lot
+      if (pair.includes("XAU") || pair.includes("GOLD")) {
+        contractSize = 100; // Gold: 1 lot = 100 oz
+      } else if (pair.includes("BTC") || pair.includes("ETH")) {
+        contractSize = 1; // Crypto: 1 lot = 1 unit
+      } else if (pair.includes("US30") || pair.includes("SPX") || pair.includes("NAS") || pair.includes("SP500")) {
+        contractSize = 1; // Indices: 1 lot = 1 contract
+      }
+
+      const riskAmount = riskPoints * data.lotSize * contractSize;
+      riskPercent = (riskAmount / account.currentEquity) * 100;
+    }
+
     if (rMult == null) {
-      const riskAmount = calculateRiskAmount(data.entryPrice, data.stopLoss, data.lotSize);
-      rMult = calculateRMultiple(data.actualPnl, riskAmount);
+      const pair = data.pair.toUpperCase();
+      let contractSize = 100000; // default forex standard lot
+      if (pair.includes("XAU") || pair.includes("GOLD")) contractSize = 100;
+      else if (pair.includes("BTC") || pair.includes("ETH")) contractSize = 1;
+      else if (pair.includes("US30") || pair.includes("SPX") || pair.includes("NAS") || pair.includes("SP500")) contractSize = 1;
+
+      const riskAmtCurrency = riskPoints * data.lotSize * contractSize;
+      if (riskAmtCurrency > 0) {
+        rMult = parseFloat((data.actualPnl / riskAmtCurrency).toFixed(2));
+      } else {
+        rMult = 0;
+      }
     }
 
     const newTrade = await Trade.create({
@@ -58,6 +89,9 @@ export const tradeService = {
       emotionalState: data.emotionalState,
       notes: data.notes,
       chartLink: data.chartLink,
+      session: data.session ?? null,
+      marketCondition: data.marketCondition ?? null,
+      riskPercent: riskPercent ?? null,
     });
 
     const newEquity = account.currentEquity + data.actualPnl;
@@ -67,14 +101,39 @@ export const tradeService = {
     account.highWaterMark = newHwm;
     await account.save();
 
+    // Create notification for trade logged
+    const resultText = data.result === "WIN" ? "+" : data.result === "LOSS" ? "-" : "BE";
+    await Notification.create({
+      userId,
+      type: "TRADE_LOGGED",
+      title: "Trade Logged",
+      message: `${data.pair} ${data.direction} - ${resultText}$${data.actualPnl.toFixed(2)}`,
+      link: "/analytics", // TODO: link to the trade in list
+      metadata: {
+        tradeId: newTrade._id,
+        pair: data.pair,
+        direction: data.direction,
+        pnl: data.actualPnl,
+        result: data.result
+      }
+    });
+
     return newTrade;
   },
 
-  async getAll(userId: string, query: z.infer<typeof getTradesQuerySchema>) {
+  async getAll(userId: string, query: z.infer<typeof getTradesQuerySchema> & { includeDeleted?: boolean }) {
     const limit = query.limit || 20;
     const offset = ((query.page || 1) - 1) * limit;
 
     const filter: any = { userId };
+    // Filter by active trading account
+    if ((query as any).tradingAccountId) {
+      filter.tradingAccountId = (query as any).tradingAccountId;
+    }
+    if (!query.includeDeleted) {
+      // Include trades that are explicitly not deleted OR missing isDeleted field (for backward compatibility)
+      filter.$or = [{ isDeleted: false }, { isDeleted: { $exists: false } }];
+    }
     if (query.playbookId) filter.playbookId = query.playbookId;
     if (query.result) {
       // Convert lowercase frontend result to uppercase DB enum
@@ -93,18 +152,18 @@ export const tradeService = {
   },
 
   async getById(id: string, userId: string) {
-    return await Trade.findOne({ _id: id, userId }).populate("playbookId");
+    return await Trade.findOne({ _id: id, userId, isDeleted: { $ne: true } }).populate("playbookId");
   },
 
-  async getRecent(userId: string, limit: number = 5) {
-    return await Trade.find({ userId })
+  async getRecent(userId: string, accountId: string, limit: number = 5) {
+    return await Trade.find({ userId, tradingAccountId: accountId, isDeleted: { $ne: true } })
       .populate("playbookId", "name")
       .sort({ createdAt: -1 })
       .limit(limit);
   },
 
-  async getSummary(userId: string) {
-    const trades = await Trade.find({ userId });
+  async getSummary(userId: string, accountId: string) {
+    const trades = await Trade.find({ userId, tradingAccountId: accountId, isDeleted: { $ne: true } });
     const totalPnL = trades.reduce((sum, t) => sum + t.actualPnl, 0);
     const totalTrades = trades.length;
     const wins = trades.filter(t => t.result === "WIN");
@@ -137,19 +196,60 @@ export const tradeService = {
       updateData.result = updateData.result.toUpperCase();
     }
 
+    // Don't allow updating certain fields if trade has AI review
+    if (updateData.entryPrice || updateData.stopLoss || updateData.tradeDate || updateData.pair) {
+      const existing = await Trade.findOne({ _id: id, userId });
+      // Could check for AI review here and restrict if needed
+    }
+
     const updated = await Trade.findOneAndUpdate(
-      { _id: id, userId },
-      updateData,
-      { new: true }
+      { _id: id, userId, isDeleted: { $ne: true } },
+      { $set: updateData, $currentDate: { updatedAt: true } },
+      { returnDocument: 'after' }
     ).populate("playbookId");
 
     return updated;
   },
 
-  async delete(id: string, userId: string) {
-    // Soft delete: actually we'd mark as archived or just remove from playbook
-    // For now, actually delete (hard delete) - consider adding isArchived field
-    const result = await Trade.deleteOne({ _id: id, userId });
-    return result.deletedCount > 0;
+  async delete(id: string, userId: string, reason?: string) {
+    // Soft delete: mark as deleted with reason
+    const result = await Trade.findOneAndUpdate(
+      { _id: id, userId, isDeleted: { $ne: true } },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletionReason: reason || null
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    return result ? true : false;
+  },
+
+  async restore(id: string, userId: string) {
+    // Restore from soft delete
+    const result = await Trade.findOneAndUpdate(
+      { _id: id, userId, isDeleted: true },
+      {
+        $set: { isDeleted: false },
+        $unset: { deletedAt: "", deletionReason: "" }
+      },
+      { returnDocument: 'after' }
+    );
+
+    return result ? true : false;
+  },
+
+  async getDeleted(userId: string, accountId: string, limit = 20, offset = 0) {
+    const list = await Trade.find({ userId, tradingAccountId: accountId, isDeleted: true })
+      .sort({ deletedAt: -1 })
+      .skip(offset)
+      .limit(limit);
+      
+    const count = await Trade.countDocuments({ userId, tradingAccountId: accountId, isDeleted: true });
+    
+    return { list, count };
   }
 };

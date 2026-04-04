@@ -28,7 +28,7 @@ router.get("/overview", async (req: any, res, next) => {
         winRate: 0,
         profitFactor: 0,
         bestPerformingPairs: [],
-        riskMetrics: { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0 },
+        riskMetrics: { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0, avgWin: 0, avgLoss: 0 },
         tradingBehaviour: { avgTradeDuration: "0h 0m", avgPnlPerTrade: 0, tradesPerDay: 0, planAdherence: 0 }
       });
     }
@@ -70,12 +70,10 @@ router.get("/sessions", async (req: any, res, next) => {
 // Heatmap data
 router.get("/heatmap", async (req: any, res, next) => {
   try {
-    const days = parseInt(req.query.days as string) || 30;
-    const heatmapData = Array.from({ length: days }, (_, i) => ({
-      day: i + 1,
-      intensity: Math.floor(Math.random() * 3)
-    }));
-    return apiResponse.success(res, heatmapData);
+    const account = await tradingAccountService.getActiveAccount(req.user.id);
+    if (!account) return apiResponse.success(res, []);
+    const overview = await analyticsService.getOverview(req.user.id, account.id);
+    return apiResponse.success(res, overview.heatmap || []);
   } catch (error) { next(error); }
 });
 
