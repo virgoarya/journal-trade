@@ -277,7 +277,20 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
       
-      {/* SECTION 1: Bento Grid Top - Analysis Hub */}
+      {/* SECTION 1: KPI Strip (Top Metrics) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {kpis.map((k, idx) => (
+            <div key={idx} className={`glass p-5 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
+               <div className="flex justify-center mb-3">
+                  <k.icon className={`w-8 h-8 ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
+               </div>
+               <p className="text-[10px] text-text-secondary uppercase tracking-[0.15em] mb-1.5 font-bold">{k.label}</p>
+               <p className={`font-mono text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
+            </div>
+          ))}
+      </div>
+
+      {/* SECTION 2: Bento Grid Top - Analysis Hub */}
       <div className="grid grid-cols-12 gap-6">
 
         {/* 1. Equity Curve Chart (Main Analysis) - 70% Width */}
@@ -359,19 +372,6 @@ export default function DashboardPage() {
           </div>
 
         </div>
-      </div>
-
-      {/* SECTION 2: KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {kpis.map((k, idx) => (
-            <div key={idx} className={`glass p-4 text-center border-b-2 ${k.isGold ? "border-accent-gold" : "border-transparent"}`}>
-               <div className="flex justify-center mb-2">
-                  <k.icon className={`w-4 h-4 ${k.isGold ? "text-accent-gold" : "text-text-secondary"}`} />
-               </div>
-               <p className="text-[9px] text-text-secondary uppercase tracking-[0.15em] mb-1">{k.label}</p>
-               <p className={`font-mono text-lg font-bold ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
-            </div>
-          ))}
       </div>
 
       {/* SECTION 3: Performance & Risk Grid */}
