@@ -275,7 +275,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
       
       {/* SECTION 1: KPI Strip (Top Metrics) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -291,7 +291,7 @@ export default function DashboardPage() {
       </div>
 
       {/* SECTION 2: Bento Grid Top - Analysis Hub */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-4">
 
         {/* 1. Equity Curve Chart (Main Analysis) - 70% Width */}
         <div className="col-span-12 lg:col-span-8 glass p-5 flex flex-col min-h-[240px]"> 
@@ -375,7 +375,7 @@ export default function DashboardPage() {
       </div>
 
       {/* SECTION 3: Performance & Risk Grid */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-4">
           {/* Left Column: P&L Calendar */}
           <div className="col-span-12 lg:col-span-7 glass p-6 min-h-[400px]">
              <div className="flex justify-between items-center mb-6">
