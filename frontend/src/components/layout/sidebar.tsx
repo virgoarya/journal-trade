@@ -56,7 +56,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-[260px] h-screen sticky left-0 top-0 bg-bg-surface flex flex-col justify-between py-6 border-r border-white/5">
+    <aside className="w-[260px] h-screen sticky left-0 top-0 glass-sidebar flex flex-col justify-between py-6 z-50">
       <div>
         {/* Brand Logo */}
         <div className="px-8 mb-10 flex items-center space-x-3">
