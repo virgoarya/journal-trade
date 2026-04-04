@@ -293,13 +293,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* 1. Equity Curve Chart */}
-        <div className="lg:col-span-6 glass p-5 flex flex-col h-[450px]"> 
+        <div className="lg:col-span-7 glass p-5 flex flex-col h-[450px]"> 
           <div className="flex justify-between items-center mb-0">
-            <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
-            <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
-              <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
-              <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
-            </div>
+             <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
+             <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
+                <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
+                <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+             </div>
           </div>
           
           <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-end rounded-xl mt-3">
@@ -308,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 2. Account Summary, Gauges & Risk Guard */}
-        <div className="lg:col-span-6 glass p-7 flex flex-col gap-6 self-start">
+        <div className="lg:col-span-5 glass p-7 flex flex-col justify-between h-[450px]">
           
           {/* Total Equity */}
           <div className="flex justify-between items-start">
