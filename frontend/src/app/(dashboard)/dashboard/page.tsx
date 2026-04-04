@@ -36,6 +36,15 @@ export default function DashboardPage() {
   const [exposure, setExposure] = useState(0);
   const [sessionRisk, setSessionRisk] = useState(0);
   const [allTradesForCalendar, setAllTradesForCalendar] = useState<Trade[]>([]);
+  const [revvingGauges, setRevvingGauges] = useState<Record<string, boolean>>({});
+
+  const startVarioRev = (id: string) => {
+    if (revvingGauges[id]) return;
+    setRevvingGauges(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => {
+      setRevvingGauges(prev => ({ ...prev, [id]: false }));
+    }, 150);
+  };
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -323,22 +332,26 @@ export default function DashboardPage() {
 
           {/* Gauges */}
           <div className="pt-4 border-t border-white/5 flex justify-around">
-            <div className="text-center w-full vario-gauge-group cursor-pointer" title="Total risk of trades today">
-              <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 transition-all duration-500">
+            <div className="text-center w-full cursor-pointer group" title="Total risk of trades today" onMouseEnter={() => startVarioRev('exposure')}>
+              <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`vario-sweep transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
+                    strokeDashoffset={revvingGauges['exposure'] ? 106.8 : 106.8 * (1 - Math.min(exposure / 2, 1))} 
+                    className={`transition-all ${revvingGauges['exposure'] ? 'duration-0' : 'duration-[800ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]'} ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
               </div>
               <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Exposure</p>
             </div>
 
-            <div className="text-center w-full vario-gauge-group cursor-pointer" title="Percentage of daily risk limit used today">
-              <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 transition-all duration-500">
+            <div className="text-center w-full cursor-pointer group" title="Percentage of daily risk limit used today" onMouseEnter={() => startVarioRev('session')}>
+              <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`vario-sweep transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
+                    strokeDashoffset={revvingGauges['session'] ? 106.8 : 106.8 * (1 - (sessionRisk / 100))} 
+                    className={`transition-all ${revvingGauges['session'] ? 'duration-0' : 'duration-[800ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]'} ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
               </div>
