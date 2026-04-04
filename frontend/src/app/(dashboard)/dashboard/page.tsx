@@ -243,7 +243,7 @@ export default function DashboardPage() {
     const pathData = getSmoothingPath(points);
 
     return (
-      <div className="w-full h-[85%] relative p-6 group"> {/* Height reduced to 85% for "smaller" look */}
+      <div className="w-full h-[70%] relative p-6 group"> {/* Height reduced to 70% for "smaller" look */}
         <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
           <defs>
             <linearGradient id="equityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -282,7 +282,7 @@ export default function DashboardPage() {
           {kpis.map((k, idx) => (
             <div key={idx} className={`glass p-5 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
                <div className="flex justify-center mb-3">
-                  <k.icon className={`w-[50px] h-[50px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
+                  <k.icon className={`w-[30px] h-[30px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
                </div>
                <p className="text-[10px] text-text-secondary uppercase tracking-[0.15em] mb-1.5 font-bold">{k.label}</p>
                <p className={`font-mono text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
