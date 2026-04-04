@@ -74,7 +74,7 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
   return (
-    <div className="w-full h-full flex flex-col scale-[0.98] origin-top"> {/* Slightly scaled down for 'smaller' feel */}
+    <div className="w-full h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-semibold text-text-primary uppercase tracking-widest text-[10px]">{monthYear}</h4>
         <div className="flex gap-2">
@@ -104,11 +104,11 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
               onClick={() => navigateToLogDate(day)}
               className={`aspect-square rounded-lg border p-1.5 flex flex-col justify-between transition-all duration-300 overflow-hidden group hover:scale-[1.02] active:scale-95 ${getCellStyles(day)}`}
             >
-              <span className="text-[9px] font-mono text-text-secondary group-hover:text-text-primary transition-colors">
+              <span className="text-[11px] font-mono font-bold text-text-primary/70 group-hover:text-text-primary transition-colors">
                 {day}
               </span>
               {pnl !== undefined && pnl !== 0 && (
-                <span className={`text-[9px] font-bold font-mono truncate ${pnl > 0 ? 'text-data-profit' : 'text-data-loss'}`}>
+                <span className={`text-[10px] sm:text-[11px] font-bold font-mono truncate ${pnl > 0 ? 'text-data-profit' : 'text-data-loss'}`}>
                   {pnl > 0 ? '+' : ''}${Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </span>
               )}
