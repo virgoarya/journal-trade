@@ -293,7 +293,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* 1. Equity Curve Chart */}
-        <div className="lg:col-span-8 glass p-5 flex flex-col h-[180px]"> 
+        <div className="lg:col-span-8 glass p-5 flex flex-col h-[220px]"> 
           <div className="flex justify-between items-center mb-0">
             <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
             <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
@@ -308,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 2. Account Summary & Gauges */}
-        <div className="lg:col-span-4 glass p-4 flex flex-col justify-between min-h-[180px]">
+        <div className="lg:col-span-4 glass p-4 flex flex-col justify-between min-h-[220px]">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[8px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-0.5">Total Equity</p>
