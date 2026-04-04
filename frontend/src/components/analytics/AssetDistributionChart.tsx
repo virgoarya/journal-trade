@@ -38,8 +38,8 @@ export const AssetDistributionChart: React.FC<AssetDistributionChartProps> = ({ 
   return (
     <div className="w-full h-full flex flex-col md:flex-row items-center gap-6">
       {/* Donut Chart SVG */}
-      <div className="relative w-32 h-32 flex items-center justify-center">
-        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+      <div className="relative w-32 h-32 flex items-center justify-center group/chart">
+        <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90 filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
           {data.map((item, index) => {
             const strokeDashoffset = circumference - (item.percentage / 100) * circumference;
             const rotation = (cumulativePercentage / 100) * 360;
@@ -57,17 +57,17 @@ export const AssetDistributionChart: React.FC<AssetDistributionChartProps> = ({ 
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
-                className="transition-all duration-1000 ease-in-out"
+                className="transition-all duration-1000 ease-in-out hover:stroke-[12px] cursor-pointer"
                 style={{ transformOrigin: 'center', transform: `rotate(${rotation}deg)` }}
               />
             );
           })}
-          {/* Inner Void */}
-          <circle cx="50" cy="50" r={radius - 8} className="fill-bg-void/40" />
+          {/* Inner Void Shadow */}
+          <circle cx="50" cy="50" r={radius - 5} className="fill-transparent stroke-black/40 stroke-[2px]" />
         </svg>
-        <div className="absolute flex flex-col items-center">
+        <div className="absolute flex flex-col items-center group-hover/chart:scale-110 transition-transform">
           <span className="text-[10px] text-text-muted uppercase font-bold tracking-tighter">Total Assets</span>
-          <span className="text-sm font-mono font-bold text-accent-gold">{data.length}</span>
+          <span className="text-sm font-mono font-bold text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">{data.length}</span>
         </div>
       </div>
 

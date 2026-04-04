@@ -36,14 +36,40 @@ export default function DashboardPage() {
   const [exposure, setExposure] = useState(0);
   const [sessionRisk, setSessionRisk] = useState(0);
   const [allTradesForCalendar, setAllTradesForCalendar] = useState<Trade[]>([]);
-  const [revvingGauges, setRevvingGauges] = useState<Record<string, boolean>>({});
+  // 'idle' = show real value | 'zero' = needle at 0 | 'full' = needle at 100% | 'return' = sweep back to real
+  const [gaugePhase, setGaugePhase] = useState<Record<string, 'idle' | 'zero' | 'full' | 'return'>>({});
 
   const startVarioRev = (id: string) => {
-    if (revvingGauges[id]) return;
-    setRevvingGauges(prev => ({ ...prev, [id]: true }));
+    if (gaugePhase[id] && gaugePhase[id] !== 'idle') return; // already animating
+    // Phase 1: instantly snap to zero
+    setGaugePhase(prev => ({ ...prev, [id]: 'zero' }));
+    // Phase 2: after brief hold, sweep to 100%
     setTimeout(() => {
-      setRevvingGauges(prev => ({ ...prev, [id]: false }));
-    }, 150);
+      setGaugePhase(prev => ({ ...prev, [id]: 'full' }));
+    }, 120);
+    // Phase 3: return to actual value
+    setTimeout(() => {
+      setGaugePhase(prev => ({ ...prev, [id]: 'return' }));
+    }, 720);
+    // Phase 4: reset to idle
+    setTimeout(() => {
+      setGaugePhase(prev => ({ ...prev, [id]: 'idle' }));
+    }, 1500);
+  };
+
+  const getGaugeOffset = (id: string, realOffset: number) => {
+    const phase = gaugePhase[id];
+    if (phase === 'zero') return 106.8;       // needle at 0%
+    if (phase === 'full') return 0;            // needle at 100%
+    return realOffset;                         // actual value
+  };
+
+  const getGaugeTransition = (id: string) => {
+    const phase = gaugePhase[id];
+    if (phase === 'zero') return 'duration-0';                                            // instant snap
+    if (phase === 'full') return 'duration-[600ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]';  // smooth sweep up
+    if (phase === 'return') return 'duration-[700ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]'; // bouncy return
+    return 'duration-[800ms] ease-out';                                                   // default
   };
 
   useEffect(() => {
@@ -337,8 +363,8 @@ export default function DashboardPage() {
                 <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
-                    strokeDashoffset={revvingGauges['exposure'] ? 106.8 : 106.8 * (1 - Math.min(exposure / 2, 1))} 
-                    className={`transition-all ${revvingGauges['exposure'] ? 'duration-0' : 'duration-[800ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]'} ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                    strokeDashoffset={getGaugeOffset('exposure', 106.8 * (1 - Math.min(exposure / 2, 1)))} 
+                    className={`transition-all ${getGaugeTransition('exposure')} ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
               </div>
@@ -350,8 +376,8 @@ export default function DashboardPage() {
                 <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
-                    strokeDashoffset={revvingGauges['session'] ? 106.8 : 106.8 * (1 - (sessionRisk / 100))} 
-                    className={`transition-all ${revvingGauges['session'] ? 'duration-0' : 'duration-[800ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]'} ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                    strokeDashoffset={getGaugeOffset('session', 106.8 * (1 - (sessionRisk / 100)))} 
+                    className={`transition-all ${getGaugeTransition('session')} ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
               </div>
@@ -360,28 +386,28 @@ export default function DashboardPage() {
           </div>
 
           {/* Risk Guard */}
-          <div className="pt-4 border-t border-white/5 space-y-4">
-             <div className="flex items-center space-x-2 -mt-1 mb-3 text-text-muted">
+          <div className="pt-4 border-t border-white/5 space-y-5">
+             <div className="flex items-center space-x-2 -mt-1 mb-1 text-text-muted">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span className="text-[9px] uppercase tracking-widest font-semibold">Risk Guard</span>
              </div>
              <div>
-                 <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                   <span className="text-text-secondary">Daily Drawdown</span>
-                   <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
-                 </div>
-                 <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                   <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                 </div>
+                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
+                  <span className="text-text-secondary">Daily Drawdown</span>
+                  <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
+                </div>
+                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
+                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
+                </div>
              </div>
              <div>
-                 <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                   <span className="text-text-secondary">Total Drawdown</span>
-                   <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
-                 </div>
-                 <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                   <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                 </div>
+                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
+                  <span className="text-text-secondary">Total Drawdown</span>
+                  <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
+                </div>
+                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
+                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
+                </div>
              </div>
           </div>
 
@@ -406,7 +432,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-5 flex flex-col gap-4">
           
           {/* Performance Matrix */}
-          <div className="glass p-5 flex flex-col min-h-[220px]">
+          <div className="glass p-6 flex flex-col min-h-[220px]">
             <div className="flex justify-between items-center mb-4">
                <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
             </div>
@@ -420,21 +446,21 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Trades */}
-          <div className="glass p-4">
+          <div className="glass p-5 flex-1 flex flex-col justify-between">
              <div className="flex justify-between items-center mb-3">
-              <h4 className="font-semibold text-[8px] text-text-primary uppercase tracking-widest leading-none">Recent Trades</h4>
-              <History className="w-3 h-3 text-text-muted" />
+              <h4 className="font-semibold text-[9px] text-text-primary uppercase tracking-[0.2em] leading-none">Recent Trades</h4>
+              <History className="w-3.5 h-3.5 text-text-muted" />
             </div>
-            <div className="space-y-1.5">
-              {Array.isArray(recentTrades) && recentTrades.slice(0, 5).map((t, idx) => (
-                <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-white/5 border border-transparent hover:border-accent-gold/20 transition-all text-[9px]">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded bg-${t.result === "win" ? "data-profit" : "data-loss"}/10 flex items-center justify-center`}>
-                      {t.result === "win" ? <TrendingUp className="w-2.5 h-2.5 text-data-profit" /> : <TrendingDown className="text-data-loss w-2.5 h-2.5" />}
+            <div className="space-y-2">
+              {Array.isArray(recentTrades) && recentTrades.slice(0, 4).map((t, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 hover:translate-x-1 transition-all text-[10px] shadow-sm group">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-6 h-6 rounded bg-${t.result === "win" ? "data-profit" : "data-loss"}/10 flex items-center justify-center border border-${t.result === "win" ? "data-profit" : "data-loss"}/20 group-hover:scale-110 transition-transform`}>
+                      {t.result === "win" ? <TrendingUp className="w-3 h-3 text-data-profit" /> : <TrendingDown className="text-data-loss w-3 h-3" />}
                     </div>
-                    <p className="font-bold">{t.pair}</p>
+                    <p className="font-bold tracking-wide text-text-secondary group-hover:text-text-primary">{t.pair}</p>
                   </div>
-                  <p className={`font-mono font-bold ${getPnlColor(t.result)}`}>{formatPnL(t.pnl)}</p>
+                  <p className={`font-mono font-bold tracking-tight ${getPnlColor(t.result)}`}>{formatPnL(t.pnl)}</p>
                 </div>
               ))}
             </div>
