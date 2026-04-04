@@ -323,22 +323,22 @@ export default function DashboardPage() {
 
           {/* Gauges */}
           <div className="pt-4 border-t border-white/5 flex justify-around">
-            <div className="text-center w-full" title="Total risk of trades today">
+            <div className="text-center w-full vario-gauge-group cursor-pointer" title="Total risk of trades today">
               <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 transition-all duration-500">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`vario-sweep transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
               </div>
               <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Exposure</p>
             </div>
 
-            <div className="text-center w-full" title="Percentage of daily risk limit used today">
+            <div className="text-center w-full vario-gauge-group cursor-pointer" title="Percentage of daily risk limit used today">
               <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
+                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 transition-all duration-500">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`vario-sweep transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
                 <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
               </div>

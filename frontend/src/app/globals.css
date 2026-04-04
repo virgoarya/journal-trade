@@ -129,4 +129,19 @@
   .btn-ghost {
     @apply bg-transparent border border-border-subtle text-text-primary px-6 py-2.5 rounded-md transition-all hover:border-accent-gold hover:text-accent-gold;
   }
+
+  /* Vario Speedometer Gauge Animation */
+  @keyframes varioRev {
+    0% { stroke-dashoffset: 106.8; }
+    30% { stroke-dashoffset: 106.8; } /* Hold at zero briefly */
+  }
+
+  .vario-gauge-group:hover .vario-sweep {
+    animation: varioRev 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .vario-gauge-group:hover svg {
+    transform: rotate(-90deg) scale(1.05);
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+  }
 }
