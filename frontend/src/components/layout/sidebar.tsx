@@ -83,10 +83,10 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center h-[48px] px-3 group glass-nav-item",
+                  "flex items-center h-[48px] px-3 group",
                   isActive 
-                    ? "text-accent-gold active" 
-                    : "text-text-secondary hover:text-accent-gold"
+                    ? "text-accent-gold glass-nav-active" 
+                    : "text-text-secondary hover:text-accent-gold glass-nav-item"
                 )}
               >
                 <item.icon className={cn(

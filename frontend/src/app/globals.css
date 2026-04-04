@@ -108,7 +108,7 @@
     transform: translateX(4px);
   }
 
-  .glass-nav-item.active {
+  .glass-nav-active {
     background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(30, 30, 40, 0.4) 100%);
     border-top: 1px solid rgba(212, 175, 55, 0.4);
     border-left: 1px solid rgba(212, 175, 55, 0.3);
@@ -118,6 +118,8 @@
       0 8px 24px rgba(0, 0, 0, 0.6), 
       inset 1px 1px 3px rgba(212, 175, 55, 0.3);
     transform: translateX(6px);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-radius: var(--radius-md);
   }
 
   .btn-gold {
