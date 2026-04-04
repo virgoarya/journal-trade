@@ -60,7 +60,7 @@ export function Sidebar() {
       <div>
         {/* Brand Logo */}
         <div className="px-8 mb-10 flex items-center space-x-3">
-          <img src="/logo.png" alt="Hunter Trades Logo" className="w-10 h-auto object-contain" />
+          <img src="/logo.png" alt="Hunter Trades Logo" className="w-[80px] h-[80px] object-contain" />
           <div>
             <h1 className="text-[16px] font-bold text-accent-gold tracking-[0.15em] leading-none">
               HUNTER TRADES
