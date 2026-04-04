@@ -29,7 +29,11 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans mb-0" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col font-sans mb-0 relative" suppressHydrationWarning>
+        {/* Ambient Background Glows */}
+        <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/10 blur-[120px] pointer-events-none -z-10"></div>
+        <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/5 blur-[100px] pointer-events-none -z-10"></div>
+        
         {children}
         <Toaster position="top-right" richColors />
       </body>

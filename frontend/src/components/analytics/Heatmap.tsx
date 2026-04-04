@@ -25,15 +25,17 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
   const getCellColor = (pnl: number) => {
     if (pnl === 0) return 'bg-white/5 border-white/5';
     
-    // Scale intensity based on PnL
-    const intensity = Math.min(Math.abs(pnl) / maxPnL, 1);
+    // Scale intensity based on PnL (higher base for better visibility)
+    const baseOpacity = 20;
+    const extraOpacity = Math.min(Math.abs(pnl) / maxPnL, 1) * 80;
+    const finalOpacity = Math.round(baseOpacity + extraOpacity);
     
     if (pnl > 0) {
       // Gold/Emerald for profit
-      return `bg-accent-gold/${Math.round(intensity * 100)} border-accent-gold/20 shadow-[0_0_10px_rgba(212,175,55,${intensity * 0.2})]`;
+      return `bg-accent-gold/[${finalOpacity}%] border-accent-gold/30 shadow-[0_0_10px_rgba(212,175,55,0.1)]`;
     } else {
       // Red for loss
-      return `bg-data-loss/${Math.round(intensity * 100)} border-data-loss/20`;
+      return `bg-data-loss/[${finalOpacity}%] border-data-loss/30`;
     }
   };
 
@@ -93,16 +95,16 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
       {/* Legend */}
       <div className="flex items-center justify-end space-x-6 pt-2">
         <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 rounded bg-data-loss/60 border border-data-loss/20" />
-          <span className="text-[9px] text-text-muted uppercase tracking-widest">Net Loss</span>
+          <div className="w-2.5 h-2.5 rounded bg-data-loss/80 border border-data-loss/30" />
+          <span className="text-[9px] text-text-muted uppercase tracking-widest font-bold">Net Loss</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 rounded bg-white/10 border border-white/5" />
-          <span className="text-[9px] text-text-muted uppercase tracking-widest">No Trade</span>
+          <div className="w-2.5 h-2.5 rounded bg-white/20 border border-white/10" />
+          <span className="text-[9px] text-text-muted uppercase tracking-widest font-bold">No Trade</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 rounded bg-accent-gold/60 border border-accent-gold/20" />
-          <span className="text-[9px] text-text-muted uppercase tracking-widest">Net Profit</span>
+          <div className="w-2.5 h-2.5 rounded bg-accent-gold/80 border border-accent-gold/30" />
+          <span className="text-[9px] text-text-muted uppercase tracking-widest font-bold">Net Profit</span>
         </div>
       </div>
     </div>

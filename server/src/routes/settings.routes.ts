@@ -10,8 +10,6 @@ import { AiReview } from "../models/AiReview";
 import { DailySnapshot } from "../models/DailySnapshot";
 
 import { UserSettings } from "../models/UserSettings";
-import { apiResponse } from "../utils/api-response";
-
 const router = Router();
 router.use(requireAuth);
 
