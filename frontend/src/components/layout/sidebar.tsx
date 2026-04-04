@@ -59,13 +59,13 @@ export function Sidebar() {
     <aside className="w-[260px] h-screen sticky left-0 top-0 glass-sidebar flex flex-col justify-between py-6 z-50">
       <div>
         {/* Brand Logo */}
-        <div className="px-8 mb-10 flex items-center space-x-3">
-          <img src="/logo.png" alt="Hunter Trades Logo" className="w-[80px] h-[80px] object-contain" />
+        <div className="mx-4 mb-8 px-4 py-3 flex items-center space-x-3 glass cursor-pointer transition-all hover:scale-[1.02]">
+          <img src="/logo.png" alt="Hunter Trades Logo" className="w-[48px] h-[48px] object-contain drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" />
           <div>
-            <h1 className="text-[16px] font-bold text-accent-gold tracking-[0.15em] leading-none">
+            <h1 className="text-[14px] font-bold text-accent-gold tracking-[0.1em] leading-tight">
               HUNTER TRADES
             </h1>
-            <p className="text-[10px] text-text-secondary tracking-[0.2em] mt-1 uppercase">
+            <p className="text-[8px] text-text-secondary tracking-[0.25em] mt-0.5 uppercase font-semibold">
               Elite Ledger
             </p>
           </div>
