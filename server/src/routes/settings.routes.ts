@@ -9,8 +9,48 @@ import { Playbook } from "../models/Playbook";
 import { AiReview } from "../models/AiReview";
 import { DailySnapshot } from "../models/DailySnapshot";
 
+import { UserSettings } from "../models/UserSettings";
+import { apiResponse } from "../utils/api-response";
+
 const router = Router();
 router.use(requireAuth);
+
+router.get("/", async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    let settings = await UserSettings.findOne({ userId });
+    
+    if (!settings) {
+      settings = await UserSettings.create({ 
+        userId,
+        appearance: { theme: "dark", accentColor: "#D4AF37", soundEnabled: true },
+        notifications: { tradeAlerts: true, aiReviews: true, weeklyReports: true, achievements: true }
+      });
+    }
+    
+    return apiResponse.success(res, settings);
+  } catch (error) { next(error); }
+});
+
+router.patch("/", async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { appearance, notifications } = req.body;
+    
+    const settings = await UserSettings.findOneAndUpdate(
+      { userId },
+      { 
+        $set: { 
+          ...(appearance && { appearance }),
+          ...(notifications && { notifications })
+        } 
+      },
+      { new: true, upsert: true }
+    );
+    
+    return apiResponse.success(res, settings);
+  } catch (error) { next(error); }
+});
 
 router.get("/profile", async (req, res) => {
   // Return Better Auth session user

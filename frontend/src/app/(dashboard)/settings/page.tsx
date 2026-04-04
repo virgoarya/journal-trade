@@ -8,6 +8,7 @@ import {
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
 import { tradingAccountService, TradingAccount } from "@/services/trading-account.service";
+import { settingsService, UserSettingsData } from "@/services/settings.service";
 import { apiClient } from "@/lib/api-client";
 
 interface SettingsSection {
@@ -31,58 +32,111 @@ export default function SettingsPage() {
     currency: "USD"
   });
 
-  // Appearance State
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
-
-  // Load active account and theme
-  useEffect(() => {
-    const fetchAccount = async () => {
-      const response = await tradingAccountService.getActiveAccount();
-      if (response.success && response.data) {
-        setActiveAccount(response.data);
-        setRiskDefaults({
-          // Use stored value, fallback to tier mid if not set
-          defaultRiskPercent: response.data.defaultRiskPercent || 1.0,
-          maxDailyDrawdown: response.data.maxDailyDrawdownPct,
-          maxTotalDrawdown: response.data.maxTotalDrawdownPct,
-          maxDailyTrades: response.data.maxDailyTrades || 3,
-        });
-        setBio(response.data.bio || "");
-        setDiscordWebhook(response.data.discordWebhook || "");
-        // Load risk tier
-        if (response.data.riskTier) {
-          setRiskTier(response.data.riskTier);
-        }
-        // Load notification setting
-        if (response.data.riskNotificationEnabled !== undefined) {
-          setRiskNotificationEnabled(response.data.riskNotificationEnabled);
-        }
-      }
-    };
-
-    // Load theme from localStorage
-    const savedTheme = localStorage.getItem("hunter-trades-theme") as any;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.classList.toggle("light", savedTheme === "light");
-    }
-
-    const fetchAccounts = async () => {
-      const allRes = await tradingAccountService.getAll();
-      if (allRes.success && allRes.data) {
-        setUserAccounts(allRes.data);
-      }
-    };
-
-    fetchAccount();
-    fetchAccounts();
-  }, []);
-
-  // Form States
   const [bio, setBio] = useState("");
   const [discordWebhook, setDiscordWebhook] = useState("");
   const [riskTier, setRiskTier] = useState<"CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE">("MODERATE");
   const [riskNotificationEnabled, setRiskNotificationEnabled] = useState(true);
+
+  const [notifications, setNotifications] = useState({
+    tradeAlerts: true,
+    aiReviews: true,
+    weeklyReports: true,
+    achievements: true,
+  });
+
+  const [appearance, setAppearance] = useState({
+    theme: "dark" as "dark" | "light" | "system",
+    accentColor: "#D4AF37",
+    soundEnabled: true
+  });
+
+  const [riskDefaults, setRiskDefaults] = useState({
+    defaultRiskPercent: 1.0,
+    maxDailyDrawdown: 5.0,
+    maxTotalDrawdown: 10.0,
+    maxDailyTrades: 3,
+  });
+
+  const [integrationSettings, setIntegrationSettings] = useState({
+    discordNotifications: false,
+    tradingViewSync: false,
+    metatraderConnect: false,
+    googleSheetsSync: false,
+  });
+
+  // Load everything
+  useEffect(() => {
+    const fetchData = async () => {
+      // 1. Fetch Trading Account
+      const accRes = await tradingAccountService.getActiveAccount();
+      if (accRes.success && accRes.data) {
+        setActiveAccount(accRes.data);
+        setRiskDefaults({
+          defaultRiskPercent: accRes.data.defaultRiskPercent || 1.0,
+          maxDailyDrawdown: accRes.data.maxDailyDrawdownPct,
+          maxTotalDrawdown: accRes.data.maxTotalDrawdownPct,
+          maxDailyTrades: accRes.data.maxDailyTrades || 3,
+        });
+        setBio(accRes.data.bio || "");
+        setDiscordWebhook(accRes.data.discordWebhook || "");
+        if (accRes.data.riskTier) setRiskTier(accRes.data.riskTier);
+        if (accRes.data.riskNotificationEnabled !== undefined) setRiskNotificationEnabled(accRes.data.riskNotificationEnabled);
+      }
+
+      // 2. Fetch User Settings (Theme, Accents, Notifications)
+      const settingsRes = await settingsService.getSettings();
+      if (settingsRes.success && settingsRes.data) {
+        const { appearance: app, notifications: notif } = settingsRes.data;
+        setAppearance(app);
+        setNotifications(notif);
+        
+        // Apply theme/accent
+        document.documentElement.classList.toggle("light", app.theme === "light");
+        applyAccentColor(app.accentColor);
+      }
+
+      // 3. Fetch All Accounts
+      const allRes = await tradingAccountService.getAll();
+      if (allRes.success && allRes.data) setUserAccounts(allRes.data);
+    };
+
+    fetchData();
+  }, []);
+
+  const applyAccentColor = (color: string) => {
+     document.documentElement.style.setProperty('--color-accent-gold', color);
+     // Generate a dimmer version for shadows/borders
+     document.documentElement.style.setProperty('--color-accent-gold-dim', `${color}88`);
+  };
+
+  const handleUpdateAppearance = async (updates: any) => {
+    const newAppearance = { ...appearance, ...updates };
+    setAppearance(newAppearance);
+    
+    // Immediate Apply
+    if (updates.theme) {
+      document.documentElement.classList.toggle("light", updates.theme === "light");
+    }
+    if (updates.accentColor) {
+      applyAccentColor(updates.accentColor);
+    }
+
+    try {
+      await settingsService.updateSettings({ appearance: newAppearance });
+    } catch (e) {
+      console.error("Failed to save appearance settings");
+    }
+  };
+
+  const handleUpdateNotifications = async (key: string, value: boolean) => {
+    const newNotifs = { ...notifications, [key]: value };
+    setNotifications(newNotifs);
+    try {
+      await settingsService.updateSettings({ notifications: newNotifs });
+    } catch (e) {
+      console.error("Failed to save notification settings");
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!activeAccount) return;
@@ -171,33 +225,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Update theme helper
-  const handleThemeChange = (newTheme: "dark" | "light" | "system") => {
-    setTheme(newTheme);
-    localStorage.setItem("hunter-trades-theme", newTheme);
-    document.documentElement.classList.toggle("light", newTheme === "light");
-  };
-
-  const [notifications, setNotifications] = useState({
-    tradeAlerts: true,
-    aiReviews: false,
-    weeklyReports: true,
-    achievementUnlocked: true,
-  });
-
-  const [riskDefaults, setRiskDefaults] = useState({
-    defaultRiskPercent: 1.0,
-    maxDailyDrawdown: 5.0,
-    maxTotalDrawdown: 10.0,
-    maxDailyTrades: 3,
-  });
-
-  const [integrationSettings, setIntegrationSettings] = useState({
-    discordNotifications: false,
-    tradingViewSync: false,
-    metatraderConnect: false,
-    googleSheetsSync: false,
-  });
 
   const handleSaveRisk = async () => {
     if (!activeAccount) return;
@@ -487,7 +514,7 @@ export default function SettingsPage() {
               <div className="glass p-6">
                 <h2 className="text-lg font-semibold text-text-primary mb-6">Application Appearance</h2>
 
-                <div className="mb-8">
+                 <div className="mb-8">
                   <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-3">Theme</label>
                   <div className="grid grid-cols-3 gap-3">
                     {[
@@ -496,14 +523,14 @@ export default function SettingsPage() {
                       { id: "system", label: "System", icon: Globe },
                     ].map((option) => {
                       const Icon = option.icon;
-                      const isActive = theme === option.id;
+                      const isActive = appearance.theme === option.id;
                       return (
                         <button
                           key={option.id}
-                          onClick={() => handleThemeChange(option.id as any)}
+                          onClick={() => handleUpdateAppearance({ theme: option.id })}
                           className={`p-4 rounded-lg border transition-all flex flex-col items-center space-y-2 ${
                             isActive
-                              ? "bg-accent-gold/10 border-accent-gold text-accent-gold shadow-[0_0_10px_rgba(212,175,55,0.1)]"
+                              ? "bg-accent-gold/10 border-accent-gold text-accent-gold shadow-[0_0_10px_rgba(var(--color-accent-gold),0.1)]"
                               : "bg-bg-elevated border-border-subtle text-text-secondary hover:border-accent-gold"
                           }`}
                         >
@@ -516,13 +543,14 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="mb-8">
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-3">Accent Color (Visual Only)</label>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-3">Accent Color</label>
                   <div className="flex space-x-3">
                     {["#D4AF37", "#00E676", "#FF1744", "#3B82F6", "#A855F7"].map((color) => (
                       <button
                         key={color}
-                        className={`w-10 h-10 rounded-full border-2 transition-transform hover:scale-110 ${
-                          color === "#D4AF37" ? "border-accent-gold scale-110" : "border-transparent"
+                        onClick={() => handleUpdateAppearance({ accentColor: color })}
+                        className={`w-10 h-10 rounded-full border-2 transition-transform hover:scale-110 shadow-sm ${
+                          appearance.accentColor === color ? "border-white scale-110 ring-2 ring-accent-gold/20" : "border-transparent"
                         }`}
                         style={{ backgroundColor: color }}
                       />
@@ -535,11 +563,14 @@ export default function SettingsPage() {
                     <Volume2 className="w-5 h-5 text-text-secondary" />
                     <div>
                       <p className="text-sm font-medium text-text-primary">Sound Effects</p>
-                      <p className="text-[11px] text-text-muted">Play sounds for notifications</p>
+                      <p className="text-[11px] text-text-muted">Play sounds for notifications and alerts</p>
                     </div>
                   </div>
-                  <button className="relative w-12 h-6 rounded-full bg-accent-gold">
-                    <div className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full" />
+                  <button 
+                    onClick={() => handleUpdateAppearance({ soundEnabled: !appearance.soundEnabled })}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${appearance.soundEnabled ? 'bg-accent-gold' : 'bg-bg-void border border-white/5'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${appearance.soundEnabled ? 'left-7' : 'left-1'}`} />
                   </button>
                 </div>
               </div>
@@ -554,25 +585,25 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   {[
-                    { key: "tradeAlerts", label: "Trade Alerts", desc: "Get notified when trades are executed" },
-                    { key: "aiReviews", label: "AI Reviews Ready", desc: "Notifications when new AI analysis is complete" },
-                    { key: "weeklyReports", label: "Weekly Performance Reports", desc: "Receive weekly summary every Monday morning" },
-                    { key: "achievementUnlocked", label: "Achievements & Milestones", desc: "Celebrate your trading achievements" },
-                  ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded-lg">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-text-primary">{item.label}</p>
-                        <p className="text-[11px] text-text-muted mt-0.5">{item.desc}</p>
-                      </div>
-                      <button
-                        onClick={() => setNotifications({ ...notifications, [item.key as keyof typeof notifications]: !notifications[item.key as keyof typeof notifications] })}
-                        className={`relative w-12 h-6 rounded-full transition-colors ${
-                          notifications[item.key as keyof typeof notifications] ? "bg-accent-gold" : "bg-bg-void"
-                        }`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notifications[item.key as keyof typeof notifications] ? "left-7 shadow-[-2px_0_5px_rgba(0,0,0,0.3)]" : "left-1"}`} />
-                      </button>
-                    </div>
+                     { key: "tradeAlerts", label: "Trade Alerts", desc: "Get notified when trades are executed" },
+                     { key: "aiReviews", label: "AI Reviews Ready", desc: "Notifications when new AI analysis is complete" },
+                     { key: "weeklyReports", label: "Weekly Performance Reports", desc: "Receive weekly summary every Monday morning" },
+                     { key: "achievements", label: "Achievements & Milestones", desc: "Celebrate your trading achievements" },
+                   ].map((item) => (
+                     <div key={item.key} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded-lg">
+                       <div className="flex-1">
+                         <p className="text-sm font-medium text-text-primary">{item.label}</p>
+                         <p className="text-[11px] text-text-muted mt-0.5">{item.desc}</p>
+                       </div>
+                       <button
+                         onClick={() => handleUpdateNotifications(item.key, !notifications[item.key as keyof typeof notifications])}
+                         className={`relative w-12 h-6 rounded-full transition-colors ${
+                           notifications[item.key as keyof typeof notifications] ? "bg-accent-gold" : "bg-bg-void"
+                         }`}
+                       >
+                         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notifications[item.key as keyof typeof notifications] ? "left-7 shadow-[-2px_0_5px_rgba(0,0,0,0.3)]" : "left-1"}`} />
+                       </button>
+                     </div>
                   ))}
                 </div>
               </div>
