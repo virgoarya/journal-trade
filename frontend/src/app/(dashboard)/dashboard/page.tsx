@@ -289,27 +289,42 @@ export default function DashboardPage() {
             </div>
           ))}
       </div>
-
-      {/* SECTION 2: Bento Grid Top - Analysis Hub */}
-      <div className="grid grid-cols-12 gap-4">
-
-        {/* 1. Equity Curve Chart (Main Analysis) - 70% Width */}
-        <div className="col-span-12 lg:col-span-8 glass p-5 flex flex-col min-h-[240px]"> 
-          <div className="flex justify-between items-center mb-0">
-            <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
-            <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
-              <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
-              <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+      {/* TWO-COLUMN LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        {/* LEFT COLUMN: Main Analysis */}
+        <div className="lg:col-span-8 flex flex-col gap-4">
+          
+          {/* 1. Equity Curve Chart */}
+          <div className="glass p-5 flex flex-col h-[280px]"> 
+            <div className="flex justify-between items-center mb-0">
+              <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
+              <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
+                <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
+                <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+              </div>
+            </div>
+            
+            <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl mt-3">
+               <EquityLineChart data={equityCurve} />
             </div>
           </div>
-          
-          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl">
-             <EquityLineChart data={equityCurve} />
+
+          {/* 2. Monthly Performance Calendar */}
+          <div className="glass p-6 min-h-[400px]">
+             <div className="flex justify-between items-center mb-6">
+                <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs">Monthly Performance Calendar</h4>
+                <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-3 py-1 rounded-full border border-accent-gold/10">
+                  Daily Tracker
+                </div>
+             </div>
+             <PnLCalendar trades={allTradesForCalendar} />
           </div>
+
         </div>
 
-        {/* 2. Side Panel (Account & Trades) - 30% Width */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6"> 
+        {/* RIGHT COLUMN: Side Panels (Account, Heatmap, Assets, Risk) */}
+        <div className="lg:col-span-4 flex flex-col gap-4">
           
           {/* Account Summary & Gauges */}
           <div className="glass p-4 flex flex-col justify-between min-h-[140px]">
@@ -323,8 +338,7 @@ export default function DashboardPage() {
               <Wallet className="text-text-muted w-3.5 h-3.5" />
             </div>
 
-            <div className="pt-2 border-t border-white/5 flex justify-around">
-              {/* Gauge: Exposure */}
+            <div className="pt-2 border-t border-white/5 flex justify-around mt-3">
               <div className="text-center" title="Total risk of trades today">
                 <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
                   <svg className="w-full h-full transform -rotate-90">
@@ -336,7 +350,6 @@ export default function DashboardPage() {
                 <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Exposure</p>
               </div>
 
-              {/* Gauge: Session Risk */}
               <div className="text-center" title="Percentage of daily risk limit used today">
                 <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
                   <svg className="w-full h-full transform -rotate-90">
@@ -350,8 +363,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent Trades (Limited to 5 rows) */}
-          <div className="glass p-4 min-h-[200px]">
+          {/* Recent Trades */}
+          <div className="glass p-4">
              <div className="flex justify-between items-center mb-3">
               <h4 className="font-semibold text-[8px] text-text-primary uppercase tracking-widest leading-none">Recent Trades</h4>
               <History className="w-3 h-3 text-text-muted" />
@@ -371,82 +384,66 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Performance Matrix */}
+          <div className="glass p-5 flex flex-col min-h-[220px]">
+            <div className="flex justify-between items-center mb-4">
+               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
+            </div>
+            {analytics?.heatmap ? (
+              <Heatmap data={analytics.heatmap} />
+            ) : (
+              <div className="h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
+                <p className="text-[9px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
+              </div>
+            )}
+          </div>
+
+          {/* Asset Distribution */}
+          <div className="glass p-5 flex flex-col min-h-[160px]">
+            <div className="flex justify-between items-center mb-4">
+               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Asset Distribution</h4>
+               <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em]">Top Assets</div>
+            </div>
+            {analytics?.assetDistribution ? (
+              <AssetDistributionChart data={analytics.assetDistribution} />
+            ) : (
+              <div className="h-32 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
+                <p className="text-[9px] text-text-muted uppercase tracking-widest">Calculating Assets...</p>
+              </div>
+            )}
+          </div>
+
+          {/* Risk Guard */}
+          <div className="glass p-4">
+            <div className="flex items-center space-x-3 mb-4">
+               <ShieldCheck className="w-4 h-4 text-accent-gold" />
+               <h4 className="font-bold text-xs text-text-primary uppercase tracking-widest">Risk Guard</h4>
+            </div>
+            <div className="space-y-4">
+               <div>
+                   <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
+                     <span className="text-text-secondary">Daily Drawdown</span>
+                     <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
+                   </div>
+                   <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                     <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
+                   </div>
+               </div>
+               <div>
+                   <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
+                     <span className="text-text-secondary">Total Drawdown</span>
+                     <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
+                   </div>
+                   <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
+                     <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
+                   </div>
+               </div>
+            </div>
+          </div>
+          
         </div>
       </div>
 
-      {/* SECTION 3: Performance & Risk Grid */}
-      <div className="grid grid-cols-12 gap-4">
-          {/* Left Column: P&L Calendar */}
-          <div className="col-span-12 lg:col-span-7 glass p-6 min-h-[400px]">
-             <div className="flex justify-between items-center mb-6">
-                <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs">Monthly Performance Calendar</h4>
-                <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-3 py-1 rounded-full border border-accent-gold/10">
-                  Daily Tracker
-                </div>
-             </div>
-             <PnLCalendar trades={allTradesForCalendar} />
-          </div>
-
-          {/* Right Column: Heatmap & Risk Stack */}
-          <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-             {/* Performance Matrix */}
-             <div className="glass p-5 flex flex-col min-h-[220px]">
-                <div className="flex justify-between items-center mb-4">
-                   <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
-                </div>
-                {analytics?.heatmap ? (
-                  <Heatmap data={analytics.heatmap} />
-                ) : (
-                  <div className="h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
-                    <p className="text-[9px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
-                  </div>
-                )}
-             </div>
-
-             {/* Asset Distribution (Pie Chart) */}
-             <div className="glass p-5 flex flex-col min-h-[160px]">
-                <div className="flex justify-between items-center mb-4">
-                   <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Asset Distribution</h4>
-                   <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em]">Top Assets</div>
-                </div>
-                {analytics?.assetDistribution ? (
-                  <AssetDistributionChart data={analytics.assetDistribution} />
-                ) : (
-                  <div className="h-32 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
-                    <p className="text-[9px] text-text-muted uppercase tracking-widest">Calculating Assets...</p>
-                  </div>
-                )}
-             </div>
-
-             {/* Risk Guard (Small Version) */}
-             <div className="glass p-4">
-                <div className="flex items-center space-x-3 mb-4">
-                   <ShieldCheck className="w-4 h-4 text-accent-gold" />
-                   <h4 className="font-bold text-xs text-text-primary uppercase tracking-widest">Risk Guard</h4>
-                </div>
-                <div className="space-y-4">
-                   <div>
-                       <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                         <span className="text-text-secondary">Daily Drawdown</span>
-                         <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
-                       </div>
-                       <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                         <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                       </div>
-                   </div>
-                   <div>
-                       <div className="flex justify-between text-[9px] mb-1.5 uppercase tracking-wider">
-                         <span className="text-text-secondary">Total Drawdown</span>
-                         <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
-                       </div>
-                       <div className="w-full h-1 bg-bg-void rounded-full overflow-hidden">
-                         <div className="h-full bg-accent-gold" style={{ width: "2%" }}></div>
-                       </div>
-                   </div>
-                </div>
-             </div>
-          </div>
-      </div>
 
     </div>
   );
