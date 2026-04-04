@@ -293,7 +293,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* 1. Equity Curve Chart */}
-        <div className="lg:col-span-7 glass p-5 flex flex-col h-[450px]"> 
+        <div className="lg:col-span-6 glass p-5 flex flex-col h-[450px]"> 
           <div className="flex justify-between items-center mb-0">
             <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
             <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
@@ -308,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 2. Account Summary, Gauges & Risk Guard */}
-        <div className="lg:col-span-5 glass p-5 flex flex-col gap-5 self-start">
+        <div className="lg:col-span-6 glass p-7 flex flex-col gap-6 self-start">
           
           {/* Total Equity */}
           <div className="flex justify-between items-start">
@@ -323,26 +323,26 @@ export default function DashboardPage() {
 
           {/* Gauges */}
           <div className="pt-4 border-t border-white/5 flex justify-around">
-            <div className="text-center" title="Total risk of trades today">
-              <div className="relative w-14 h-14 flex items-center justify-center mx-auto">
+            <div className="text-center w-full" title="Total risk of trades today">
+              <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
                 <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
-                <span className="absolute font-mono text-[9px] text-text-primary">{exposure.toFixed(1)}%</span>
+                <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
               </div>
-              <p className="text-[8px] text-text-secondary uppercase tracking-widest mt-2">Exposure</p>
+              <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Exposure</p>
             </div>
 
-            <div className="text-center" title="Percentage of daily risk limit used today">
-              <div className="relative w-14 h-14 flex items-center justify-center mx-auto">
+            <div className="text-center w-full" title="Percentage of daily risk limit used today">
+              <div className="relative w-24 h-24 flex items-center justify-center mx-auto">
                 <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
                   <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
                 </svg>
-                <span className="absolute font-mono text-[9px] text-text-primary">{Math.round(sessionRisk)}%</span>
+                <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
               </div>
-              <p className="text-[8px] text-text-secondary uppercase tracking-widest mt-2">Session Risk</p>
+              <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Session Risk</p>
             </div>
           </div>
 
