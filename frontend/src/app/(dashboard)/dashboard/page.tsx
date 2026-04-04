@@ -289,78 +289,91 @@ export default function DashboardPage() {
             </div>
           ))}
       </div>
-      {/* TWO-COLUMN LAYOUT */}
+      {/* ROW 1: Top Analysis & Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
-        {/* LEFT COLUMN: Main Analysis */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
+        {/* 1. Equity Curve Chart */}
+        <div className="lg:col-span-8 glass p-5 flex flex-col h-[180px]"> 
+          <div className="flex justify-between items-center mb-0">
+            <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
+            <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
+              <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
+              <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+            </div>
+          </div>
           
-          {/* 1. Equity Curve Chart */}
-          <div className="glass p-5 flex flex-col h-[280px]"> 
-            <div className="flex justify-between items-center mb-0">
-              <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
-              <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
-                <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
-                <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
-              </div>
-            </div>
-            
-            <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl mt-3">
-               <EquityLineChart data={equityCurve} />
-            </div>
+          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl mt-3">
+             <EquityLineChart data={equityCurve} />
           </div>
-
-          {/* 2. Monthly Performance Calendar */}
-          <div className="glass p-6 min-h-[400px]">
-             <div className="flex justify-between items-center mb-6">
-                <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs">Monthly Performance Calendar</h4>
-                <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-3 py-1 rounded-full border border-accent-gold/10">
-                  Daily Tracker
-                </div>
-             </div>
-             <PnLCalendar trades={allTradesForCalendar} />
-          </div>
-
         </div>
 
-        {/* RIGHT COLUMN: Side Panels (Account, Heatmap, Assets, Risk) */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
+        {/* 2. Account Summary & Gauges */}
+        <div className="lg:col-span-4 glass p-4 flex flex-col justify-between min-h-[180px]">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[8px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-0.5">Total Equity</p>
+              <h3 className="font-mono text-lg font-bold text-accent-gold leading-none">
+                ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h3>
+            </div>
+            <Wallet className="text-text-muted w-3.5 h-3.5" />
+          </div>
+
+          <div className="pt-2 border-t border-white/5 flex justify-around mt-3">
+            <div className="text-center" title="Total risk of trades today">
+              <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                </svg>
+                <span className="absolute font-mono text-[8px] text-text-primary">{exposure.toFixed(1)}%</span>
+              </div>
+              <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Exposure</p>
+            </div>
+
+            <div className="text-center" title="Percentage of daily risk limit used today">
+              <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
+                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                </svg>
+                <span className="absolute font-mono text-[8px] text-text-primary">{Math.round(sessionRisk)}%</span>
+              </div>
+              <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Session Risk</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 2: Performance Tracking */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        {/* Left: Monthly Performance Calendar */}
+        <div className="lg:col-span-7 glass p-6 min-h-[400px]">
+           <div className="flex justify-between items-center mb-6">
+              <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs">Monthly Performance Calendar</h4>
+              <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-3 py-1 rounded-full border border-accent-gold/10">
+                Daily Tracker
+              </div>
+           </div>
+           <PnLCalendar trades={allTradesForCalendar} />
+        </div>
+
+        {/* Right: Side Panels */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
           
-          {/* Account Summary & Gauges */}
-          <div className="glass p-4 flex flex-col justify-between min-h-[140px]">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[8px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-0.5">Total Equity</p>
-                <h3 className="font-mono text-lg font-bold text-accent-gold leading-none">
-                  ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </h3>
-              </div>
-              <Wallet className="text-text-muted w-3.5 h-3.5" />
+          {/* Performance Matrix */}
+          <div className="glass p-5 flex flex-col min-h-[220px]">
+            <div className="flex justify-between items-center mb-4">
+               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
             </div>
-
-            <div className="pt-2 border-t border-white/5 flex justify-around mt-3">
-              <div className="text-center" title="Total risk of trades today">
-                <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
-                  <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - Math.min(exposure / 2, 1))} className={`transition-all duration-1000 ease-out ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
-                  </svg>
-                  <span className="absolute font-mono text-[8px] text-text-primary">{exposure.toFixed(1)}%</span>
-                </div>
-                <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Exposure</p>
+            {analytics?.heatmap ? (
+              <Heatmap data={analytics.heatmap} />
+            ) : (
+              <div className="h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
+                <p className="text-[9px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
               </div>
-
-              <div className="text-center" title="Percentage of daily risk limit used today">
-                <div className="relative w-10 h-10 flex items-center justify-center mx-auto">
-                  <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" strokeDashoffset={106.8 * (1 - (sessionRisk / 100))} className={`transition-all duration-1000 ease-out ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
-                  </svg>
-                  <span className="absolute font-mono text-[8px] text-text-primary">{Math.round(sessionRisk)}%</span>
-                </div>
-                <p className="text-[7px] text-text-secondary uppercase tracking-widest mt-1">Session Risk</p>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Recent Trades */}
@@ -382,20 +395,6 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Performance Matrix */}
-          <div className="glass p-5 flex flex-col min-h-[220px]">
-            <div className="flex justify-between items-center mb-4">
-               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
-            </div>
-            {analytics?.heatmap ? (
-              <Heatmap data={analytics.heatmap} />
-            ) : (
-              <div className="h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
-                <p className="text-[9px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
-              </div>
-            )}
           </div>
 
           {/* Asset Distribution */}
