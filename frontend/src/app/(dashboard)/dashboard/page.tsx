@@ -243,7 +243,7 @@ export default function DashboardPage() {
     const pathData = getSmoothingPath(points);
 
     return (
-      <div className="w-full h-[50%] relative p-6 pt-0 group"> {/* Height reduced to 50% for "smaller" look, pt-0 to stick to top */}
+      <div className="w-full h-[85%] relative p-6 group"> {/* Restored to 85% to fit large container */}
         <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
           <defs>
             <linearGradient id="equityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -302,7 +302,7 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl mt-3">
+          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-end rounded-xl mt-3">
              <EquityLineChart data={equityCurve} />
           </div>
         </div>
