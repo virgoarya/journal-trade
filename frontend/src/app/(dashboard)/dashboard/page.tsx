@@ -243,7 +243,7 @@ export default function DashboardPage() {
     const pathData = getSmoothingPath(points);
 
     return (
-      <div className="w-full h-[70%] relative p-6 group"> {/* Height reduced to 70% for "smaller" look */}
+      <div className="w-full h-[50%] relative p-6 pt-0 group"> {/* Height reduced to 50% for "smaller" look, pt-0 to stick to top */}
         <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
           <defs>
             <linearGradient id="equityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -295,7 +295,7 @@ export default function DashboardPage() {
 
         {/* 1. Equity Curve Chart (Main Analysis) - 70% Width */}
         <div className="col-span-12 lg:col-span-8 glass p-5 flex flex-col min-h-[240px]"> 
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-0">
             <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
             <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
               <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
@@ -303,7 +303,7 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-end rounded-xl">
+          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-start rounded-xl">
              <EquityLineChart data={equityCurve} />
           </div>
         </div>
