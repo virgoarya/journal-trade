@@ -42,15 +42,15 @@ export default function LoginPage() {
         }}
       >
         
-        {/* Logo — with gold glow */}
+        {/* Logo — with gold heartbeat */}
         <div className="mb-6 relative">
-          <div className="absolute inset-0 rounded-full blur-[40px] scale-150"
-            style={{ backgroundColor: 'rgba(212,175,55,0.1)' }} />
+          <div className="absolute inset-0 rounded-full bg-accent-gold blur-[40px]"
+            style={{ animation: 'glowBreath 3s ease-in-out infinite' }} />
           <img 
             src="/logo.png" 
             alt="Hunter Trades Logo" 
-            className="relative w-24 h-auto mx-auto object-contain hover:scale-110 transition-transform duration-500"
-            style={{ filter: 'drop-shadow(0 0 16px rgba(212,175,55,0.4))' }}
+            className="relative w-24 h-auto mx-auto object-contain"
+            style={{ animation: 'logoPulse 3s ease-in-out infinite' }}
           />
         </div>
         
