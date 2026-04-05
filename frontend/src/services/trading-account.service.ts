@@ -13,6 +13,7 @@ export interface TradingAccount {
   maxDailyDrawdownPct: number;
   maxTotalDrawdownPct: number;
   maxDailyTrades: number;
+  defaultRiskPercent?: number;
   bio?: string;
   discordWebhook?: string;
   apiKey?: string;

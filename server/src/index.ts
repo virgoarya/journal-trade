@@ -4,6 +4,7 @@ import dns from "node:dns";
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
 import express from "express";
+import next from "next";
 import { env } from "./config/env";
 import { corsMiddleware } from "./config/cors";
 import apiRoutes from "./routes";
@@ -12,6 +13,12 @@ import { connectDB } from "./db/mongoose";
 import { createAuth } from "./auth";
 import { toNodeHandler } from "better-auth/node";
 import { setAuthInstance } from "./auth-context";
+import path from "node:path";
+
+// Next.js app setup
+const dev = process.env.NODE_ENV !== "production";
+const nextAppDir = path.join(process.cwd(), "..", "frontend");
+const nextApp = next({ dev, dir: nextAppDir });
 
 const app = express();
 
@@ -26,14 +33,6 @@ app.use((req, res, next) => {
   return express.json()(req, res, next);
 });
 
-// Welcome route
-app.get("/", (req, res) => {
-  res.status(200).json({
-    message: "🚀 Hunter Trades Journal API is Running",
-    status: "online",
-  });
-});
-
 // Health route
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
@@ -43,7 +42,7 @@ const PORT = env.PORT || 5000;
 
 // Initialize after DB connection
 connectDB()
-  .then(() => {
+  .then(async () => {
     try {
       const auth = createAuth();
       setAuthInstance(auth);
@@ -69,12 +68,20 @@ connectDB()
       // Other API routes
       app.use("/api", apiRoutes);
 
-      // Error handler — must be last
+      // Next.js request handler (must be after API routes)
+      app.all(/.*/, (req, res) => {
+        return nextApp.getRequestHandler()(req, res);
+      });
+
+      // Error handler
       app.use(errorHandler);
 
+      // Start server after Next.js is prepared
+      await nextApp.prepare();
       app.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`✅ Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
+        console.log(`✅ Frontend ready`);
       });
     } catch (error) {
       console.error("❌ Failed to initialize:", error);

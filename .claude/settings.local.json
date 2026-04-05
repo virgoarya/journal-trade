@@ -20,7 +20,9 @@
       "Bash(node -e \"import\\(''''./src/index.ts''''\\).catch\\(e => console.error\\(''''STARTUP ERROR:'''', e.message, e.stack\\)\\)\")",
       "Bash(node -e \"import\\(''mongodb''\\).then\\(m => console.log\\(''mongodb module OK''\\)\\).catch\\(e => console.error\\(''Module error:'', e\\)\\)\")",
       "Bash(nslookup cluster0.7dzhhrn.mongodb.net)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(pkill -9 -f \"next\")",
+      "Bash(pkill -9 -f \"node\")"
     ]
   }
 }

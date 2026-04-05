@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { tradeService, type Trade } from "@/services/trade.service";
+import { tradeService, type Trade, type CreateTradeDto } from "@/services/trade.service";
 import { aiReviewService, type AIReview } from "@/services/ai-review.service";
 import { tradingAccountService, type TradingAccount } from "@/services/trading-account.service";
 import { playbookService, type Strategy as Playbook } from "@/services/playbook.service";
@@ -10,7 +10,9 @@ import { useSession } from "@/lib/auth-client";
 import { Zap, Plus, Loader2, TrendingUp, Target, TrendingDown, Clock, DollarSign, LinkIcon, PenLine, BarChart2, Edit2, Trash2, RotateCcw } from "lucide-react";
 import { PlaybookAssignmentModal } from "@/components/trade/PlaybookAssignmentModal";
 
-export default function LogTradePage() {
+export const dynamic = 'force-dynamic';
+
+function LogTradePageInner() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -313,7 +315,7 @@ export default function LogTradePage() {
     }
 
     // Determine result based on P&L
-    const resultStatus = actualPnl > 0 ? "WIN" : actualPnl < 0 ? "LOSS" : "BREAKEVEN";
+    const resultStatus: "WIN" | "LOSS" | "BREAKEVEN" = actualPnl > 0 ? "WIN" : actualPnl < 0 ? "LOSS" : "BREAKEVEN";
 
     // Detect session
     const tradeDate = new Date(formData.tradeDate);
@@ -321,7 +323,7 @@ export default function LogTradePage() {
     const autoSession = detectSession(tradeDate);
     const session = formData.session && formData.session !== "AUTO" ? formData.session : autoSession;
 
-    const updateData = {
+    const updateData: Partial<CreateTradeDto> = {
       tradeDate: tradeDate.toISOString(),
       pair: formData.pair.toUpperCase(),
       direction: dir as "LONG" | "SHORT",
@@ -344,7 +346,8 @@ export default function LogTradePage() {
     try {
       const result = await tradeService.update(tradeId, updateData);
       if (result.success && result.data) {
-        setTrades(prev => prev.map(t => t.id === tradeId ? result.data : t));
+        const updatedTrade = result.data;
+        setTrades(prev => prev.map(t => t.id === tradeId ? updatedTrade : t));
         setEditingTradeId(null);
         setEditingTrade(null);
         setShowForm(false);
@@ -364,7 +367,7 @@ export default function LogTradePage() {
     }
 
     const actualPnl = parseFloat(formData.actualPnl);
-    const resultStatus = actualPnl > 0 ? "WIN" : actualPnl < 0 ? "LOSS" : "BREAKEVEN";
+    const resultStatus: "WIN" | "LOSS" | "BREAKEVEN" = actualPnl > 0 ? "WIN" : actualPnl < 0 ? "LOSS" : "BREAKEVEN";
 
     // Calculate Actual R
     let rMult: number | undefined;
@@ -1351,5 +1354,13 @@ export default function LogTradePage() {
         suggestedPlaybookIds={[]} // Could be populated with AI suggestions later
       />
     </div>
+  );
+}
+
+export default function LogTradePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <LogTradePageInner />
+    </Suspense>
   );
 }
