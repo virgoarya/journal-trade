@@ -4,7 +4,7 @@ import { Playbook } from "../models/Playbook";
 import { TradingAccount } from "../models/TradingAccount";
 import { Notification } from "../models/Notification";
 import { env } from "../config/env";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 
 function parseFormattedText(text: string): any {
   const result: any = {
@@ -145,10 +145,11 @@ export const aiReviewService = {
 
     const playbook = trade.playbookId as any;
 
-    // Initialize Gemini
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    const model = genAI.getGenerativeModel({ model: modelName });
+    // Initialize Anthropic (OpenRouter)
+    const anthropic = new Anthropic({
+      apiKey: env.ANTHROPIC_AUTH_TOKEN,
+      baseURL: env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
+    });
 
     const prompt = `
 You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
@@ -216,11 +217,15 @@ CRITICAL RULES:
 `;
 
     try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const msg = await anthropic.messages.create({
+        model: env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      });
 
-      console.log("Gemini response (length:", text.length, "):", text);
+      const text = msg.content[0].text;
+
+      console.log("Anthropic response (length:", text.length, "):", text);
 
       let aiData: any = parseFormattedText(text);
 
