@@ -8,7 +8,8 @@ export default function LoginPage() {
       console.log("[AUTH] Starting Discord login...");
       await signIn.social({
         provider: "discord",
-        callbackURL: "http://localhost:3000/dashboard",
+        // Use BETTER_AUTH_URL from environment or default to production URL
+        callbackURL: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://journal-trade-production.up.railway.app'}/dashboard`,
       });
       console.log("[AUTH] Redirect to Discord initiated.");
     } catch (error) {
