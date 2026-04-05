@@ -313,14 +313,14 @@ export default function DashboardPage() {
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
       
       {/* SECTION 1: KPI Strip (Top Metrics) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           {kpis.map((k, idx) => (
-            <div key={idx} className={`glass p-5 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
-               <div className="flex justify-center mb-3">
-                  <k.icon className={`w-[30px] h-[30px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
+            <div key={idx} className={`glass p-3 sm:p-4 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
+               <div className="flex justify-center mb-2 sm:mb-3">
+                  <k.icon className={`w-6 h-6 sm:w-[30px] sm:h-[30px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
                </div>
-               <p className="text-[10px] text-text-secondary uppercase tracking-[0.15em] mb-1.5 font-bold">{k.label}</p>
-               <p className={`font-mono text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
+               <p className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-[0.15em] mb-1 sm:mb-1.5 font-bold">{k.label}</p>
+               <p className={`font-mono text-lg sm:text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
             </div>
           ))}
       </div>
@@ -328,12 +328,12 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* 1. Equity Curve Chart */}
-        <div className="lg:col-span-7 glass p-5 flex flex-col h-[450px]"> 
+        <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
           <div className="flex justify-between items-center mb-0">
-             <h4 className="font-semibold text-text-primary text-[10px] uppercase tracking-widest leading-none">Equity Curve</h4>
+             <h4 className="font-semibold text-text-primary text-xs sm:text-sm uppercase tracking-wider leading-none">Equity Curve</h4>
              <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
-                <button className="px-2 py-0.5 text-[8px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
-                <button className="px-2 py-0.5 text-[8px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+                <button className="px-2 py-1 text-[10px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
+                <button className="px-2 py-1 text-[10px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
              </div>
           </div>
           
@@ -343,17 +343,17 @@ export default function DashboardPage() {
         </div>
 
         {/* 2. Account Summary, Gauges & Risk Guard */}
-        <div className="lg:col-span-5 glass p-7 flex flex-col justify-between h-[450px]">
-          
+        <div className="lg:col-span-5 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
+
           {/* Total Equity */}
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Equity</p>
-              <h3 className="font-mono text-xl font-bold text-accent-gold leading-none">
+              <p className="text-[10px] sm:text-xs font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Equity</p>
+              <h3 className="font-mono text-lg sm:text-xl font-bold text-accent-gold leading-none">
                 ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </h3>
             </div>
-            <Wallet className="text-text-muted w-4 h-4" />
+            <Wallet className="text-text-muted w-5 h-5 sm:w-6 sm:h-6" />
           </div>
 
           {/* Gauges */}
@@ -418,10 +418,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* Left: Monthly Performance Calendar */}
-        <div className="lg:col-span-7 glass p-6 min-h-[400px]">
-           <div className="flex justify-between items-center mb-6">
-              <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs">Monthly Performance Calendar</h4>
-              <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-3 py-1 rounded-full border border-accent-gold/10">
+        <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-6 min-h-[350px] md:min-h-[400px]">
+           <div className="flex justify-between items-center mb-3 sm:mb-6">
+              <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Monthly Performance Calendar</h4>
+              <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
                 Daily Tracker
               </div>
            </div>
@@ -429,33 +429,33 @@ export default function DashboardPage() {
         </div>
 
         {/* Right: Side Panels */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          
+        <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
+
           {/* Performance Matrix */}
-          <div className="glass p-6 flex flex-col min-h-[220px]">
-            <div className="flex justify-between items-center mb-4">
-               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Performance Matrix</h4>
+          <div className="glass p-3 sm:p-4 flex flex-col min-h-[180px] sm:min-h-[220px]">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Performance Matrix</h4>
             </div>
             {analytics?.heatmap ? (
               <Heatmap data={analytics.heatmap} />
             ) : (
-              <div className="h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
-                <p className="text-[9px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
+              <div className="h-16 sm:h-24 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
+                <p className="text-[9px] sm:text-[10px] text-text-muted uppercase tracking-widest">Processing Analytics...</p>
               </div>
             )}
           </div>
 
           {/* Recent Trades */}
-          <div className="glass p-5 flex-1 flex flex-col justify-between">
+          <div className="glass p-3 sm:p-4 flex-1 flex flex-col justify-between">
              <div className="flex justify-between items-center mb-3">
-              <h4 className="font-semibold text-[9px] text-text-primary uppercase tracking-[0.2em] leading-none">Recent Trades</h4>
-              <History className="w-3.5 h-3.5 text-text-muted" />
+              <h4 className="font-semibold text-xs sm:text-sm text-text-primary uppercase tracking-[0.2em] leading-none">Recent Trades</h4>
+              <History className="w-4 h-4 sm:w-5 sm:h-5 text-text-muted" />
             </div>
             <div className="space-y-2">
               {Array.isArray(recentTrades) && recentTrades.slice(0, 4).map((t, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 hover:translate-x-1 transition-all text-[10px] shadow-sm group">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded bg-${t.result === "win" ? "data-profit" : "data-loss"}/10 flex items-center justify-center border border-${t.result === "win" ? "data-profit" : "data-loss"}/20 group-hover:scale-110 transition-transform`}>
+                <div key={idx} className="flex items-center justify-between p-2 sm:p-2.5 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 hover:translate-x-1 transition-all text-xs sm:text-[10px] shadow-sm group">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded bg-${t.result === "win" ? "data-profit" : "data-loss"}/10 flex items-center justify-center border border-${t.result === "win" ? "data-profit" : "data-loss"}/20 group-hover:scale-110 transition-transform`}>
                       {t.result === "win" ? <TrendingUp className="w-3 h-3 text-data-profit" /> : <TrendingDown className="text-data-loss w-3 h-3" />}
                     </div>
                     <p className="font-bold tracking-wide text-text-secondary group-hover:text-text-primary">{t.pair}</p>
@@ -467,16 +467,16 @@ export default function DashboardPage() {
           </div>
 
           {/* Asset Distribution */}
-          <div className="glass p-5 flex flex-col min-h-[160px]">
-            <div className="flex justify-between items-center mb-4">
-               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-[10px]">Asset Distribution</h4>
-               <div className="text-[10px] text-accent-gold font-mono uppercase tracking-[0.2em]">Top Assets</div>
+          <div className="glass p-3 sm:p-4 flex flex-col min-h-[140px] sm:min-h-[160px]">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+               <h4 className="font-semibold text-xs sm:text-sm text-text-primary uppercase tracking-[0.2em]">Asset Distribution</h4>
+               <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em]">Top Assets</div>
             </div>
             {analytics?.assetDistribution ? (
               <AssetDistributionChart data={analytics.assetDistribution} />
             ) : (
-              <div className="h-32 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
-                <p className="text-[9px] text-text-muted uppercase tracking-widest">Calculating Assets...</p>
+              <div className="h-24 sm:h-32 flex items-center justify-center border border-dashed border-white/5 rounded-xl">
+                <p className="text-[9px] sm:text-[10px] text-text-muted uppercase tracking-widest">Calculating Assets...</p>
               </div>
             )}
           </div>
