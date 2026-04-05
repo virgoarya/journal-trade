@@ -33,6 +33,19 @@
   body {
     @apply antialiased min-h-screen bg-bg-void text-text-primary;
     line-height: normal;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  /* ============== LIGHT THEME ============== */
+  :root.light {
+    --color-bg-void: #F5F3EE;
+    --color-bg-surface: #EDEAE4;
+    --color-bg-elevated: #FFFFFF;
+    --color-bg-input: #FFFFFF;
+    --color-border-subtle: #D6D0C4;
+    --color-text-primary: #1A1A1A;
+    --color-text-secondary: #4A4A4A;
+    --color-text-muted: #7A7A7A;
   }
 }
 
@@ -152,4 +165,56 @@
   .btn-ghost {
     @apply bg-transparent border border-border-subtle text-text-primary px-6 py-2.5 rounded-md transition-all hover:border-accent-gold hover:text-accent-gold;
   }
+}
+
+/* ============== LIGHT THEME: Glass Overrides ============== */
+:root.light .glass {
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(245,243,238,0.6) 40%, rgba(237,234,228,0.95) 100%);
+  border-top: 1px solid rgba(255,255,255,0.9);
+  border-left: 1px solid rgba(255,255,255,0.7);
+  border-right: 1px solid rgba(0,0,0,0.06);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 
+    inset 1px 1px 2px rgba(255,255,255,0.8),
+    inset -1px -1px 3px rgba(0,0,0,0.04),
+    0 4px 8px rgba(0,0,0,0.06),
+    0 12px 24px rgba(0,0,0,0.08);
+}
+
+:root.light .glass:hover {
+  background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(245,243,238,0.7) 40%, rgba(237,234,228,0.98) 100%);
+  border-top-color: rgba(212,175,55,0.5);
+  border-left-color: rgba(212,175,55,0.3);
+  box-shadow: 
+    inset 1px 1px 3px rgba(212,175,55,0.2),
+    inset -1px -1px 4px rgba(0,0,0,0.05),
+    0 8px 16px rgba(0,0,0,0.08),
+    0 20px 40px rgba(0,0,0,0.1);
+}
+
+:root.light .glass-sidebar {
+  background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(245,243,238,0.8) 40%, rgba(237,234,228,0.95) 100%);
+  border-right: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 
+    inset -1px 0px 3px rgba(0,0,0,0.03),
+    3px 0px 8px rgba(0,0,0,0.05),
+    12px 0px 24px rgba(0,0,0,0.06);
+}
+
+:root.light .glass-nav-item:hover {
+  background: linear-gradient(135deg, rgba(212,175,55,0.05) 0%, rgba(245,243,238,0.5) 100%);
+  border-top: 1px solid rgba(255,255,255,0.8);
+  border-left: 1px solid rgba(255,255,255,0.6);
+  border-right: 1px solid rgba(0,0,0,0.06);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), inset 1px 1px 2px rgba(255,255,255,0.6);
+}
+
+:root.light .glass-nav-active {
+  background: linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(245,243,238,0.6) 100%);
+  border-top: 1px solid rgba(212,175,55,0.3);
+  border-left: 1px solid rgba(212,175,55,0.2);
+  border-right: 1px solid rgba(0,0,0,0.06);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), inset 1px 1px 2px rgba(212,175,55,0.2);
 }

@@ -115,7 +115,11 @@ export default function SettingsPage() {
     
     // Immediate Apply
     if (updates.theme) {
-      document.documentElement.classList.toggle("light", updates.theme === "light");
+      let isLight = updates.theme === "light";
+      if (updates.theme === "system") {
+        isLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+      }
+      document.documentElement.classList.toggle("light", isLight);
     }
     if (updates.accentColor) {
       applyAccentColor(updates.accentColor);
