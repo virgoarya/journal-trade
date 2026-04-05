@@ -16,7 +16,8 @@ WORKDIR /app
 COPY server/ ./server/
 COPY frontend/ ./frontend/
 
-# Build frontend and backend
+# Build frontend and backend (production)
+ENV NODE_ENV=production
 RUN cd server && npm run build
 
 # Production stage
