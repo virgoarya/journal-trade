@@ -1,21 +1,22 @@
 # Build stage
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+# Install frontend dependencies
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
 
-# Copy server files
+# Install server dependencies
+WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci
 
-# Copy frontend files
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci
-
-# Copy source
+# Copy all source
+WORKDIR /app
 COPY server/ ./server/
 COPY frontend/ ./frontend/
 
-# Build
+# Build frontend and backend
 RUN cd server && npm run build
 
 # Production stage
