@@ -1,10 +1,10 @@
 {
   "build": {
-    "builder": "nixpacks",
-    "buildCommand": "cd server && npm run build"
+    "builder": "docker",
+    "dockerfile": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "cd server && npm start",
+    "startCommand": "node server/dist/index.js",
     "restartPolicy": {
       "type": "onFailure"
     }
