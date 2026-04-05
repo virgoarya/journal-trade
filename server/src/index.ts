@@ -17,7 +17,11 @@ import path from "node:path";
 
 // Next.js app setup
 const dev = process.env.NODE_ENV !== "production";
-const nextAppDir = path.join(process.cwd(), "..", "frontend");
+// In production, frontend is copied to server/dist/frontend
+// In development, frontend is at project root
+const nextAppDir = dev
+  ? path.join(__dirname, "..", "..", "..", "frontend") // dev: server/src -> project/frontend
+  : path.join(__dirname, "frontend");                  // prod: server/dist/frontend
 const nextApp = next({ dev, dir: nextAppDir });
 
 const app = express();

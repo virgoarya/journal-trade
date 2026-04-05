@@ -34,12 +34,8 @@ RUN cd server && npm ci --only=production --ignore-scripts
 # Copy built server files
 COPY --from=builder /app/server/dist ./server/dist
 
-# Copy frontend build
-COPY --from=builder /app/frontend/.next ./server/dist/_next/
-COPY --from=builder /app/frontend/public ./server/dist/public/
-COPY --from=builder /app/frontend/next.config.ts ./server/dist/
-COPY --from=builder /app/frontend/tsconfig.json ./server/dist/
-COPY --from=builder /app/frontend/package.json ./server/dist/
+# Copy entire frontend directory (with .next, public, app, etc.)
+COPY --from=builder /app/frontend ./server/dist/frontend
 
 # Expose port
 EXPOSE 5000
