@@ -937,27 +937,27 @@ function LogTradePageInner() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6">
 
               {/* Risk Tier Warning Banner */}
               {riskWarning && (
-                <div className="mb-6 p-4 bg-data-loss/10 border border-data-loss/30 rounded-xl animate-in slide-in-from-top-2 duration-300">
+                <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-data-loss/10 border border-data-loss/30 rounded-xl animate-in slide-in-from-top-2 duration-300">
                   <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-data-loss/20 flex items-center justify-center shrink-0">
-                      <span className="text-data-loss text-sm">!</span>
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-data-loss/20 flex items-center justify-center shrink-0">
+                      <span className="text-data-loss text-xs sm:text-sm">!</span>
                     </div>
                     <div className="flex-1">
-                      <h5 className="text-xs font-bold text-data-loss uppercase tracking-wider mb-1">Risk Tier Violation</h5>
-                      <p className="text-xs text-text-secondary">{riskWarning}</p>
-                      <div className="mt-3 flex items-center space-x-2">
+                      <h5 className="text-xs sm:text-sm font-bold text-data-loss uppercase tracking-wider mb-1">Risk Tier Violation</h5>
+                      <p className="text-xs sm:text-sm text-text-secondary">{riskWarning}</p>
+                      <div className="mt-2 sm:mt-3 flex items-center space-x-2">
                         <input
                           type="checkbox"
                           id="acknowledgeRisk"
                           checked={acknowledgeRisk}
                           onChange={(e) => setAcknowledgeRisk(e.target.checked)}
-                          className="w-4 h-4 rounded border-white/20 bg-bg-void text-data-loss focus:ring-data-loss/50"
+                          className="w-5 h-5 rounded border-white/20 bg-bg-void text-data-loss focus:ring-data-loss/50"
                         />
-                        <label htmlFor="acknowledgeRisk" className="text-xs text-text-secondary">
+                        <label htmlFor="acknowledgeRisk" className="text-xs sm:text-sm text-text-secondary">
                           Saya memahami risiko ini melampaui batas tier dan tetap ingin melanjutkan
                         </label>
                       </div>
@@ -967,16 +967,16 @@ function LogTradePageInner() {
               )}
 
               {/* Dynamic Warning/Helper Zone */}
-              <div className="mb-6 flex items-center justify-between bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                <p className="text-xs text-text-secondary leading-relaxed max-w-xl">
+              <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between bg-white/[0.02] p-3 sm:p-4 rounded-xl border border-white/5">
+                <p className="text-xs sm:text-sm text-text-secondary leading-relaxed mb-3 sm:mb-0 max-w-xl">
                   Discipline starts here. Calculate risk exposure, write your execution rationale before market movement erases traces of your pure technical analysis.
                 </p>
-                <div className="flex items-center space-x-8">
+                <div className="flex items-center space-x-4 sm:space-x-8">
                    {/* Risk % Badge */}
                    <div className="flex flex-col items-end">
-                     <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-1">Risk Exposure</p>
+                     <p className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-text-muted mb-1">Risk Exposure</p>
                      {riskPercent !== null ? (
-                        <span className={`text-lg font-mono font-bold ${riskPercent > 2 ? "text-data-loss" : riskPercent >= 1 ? "text-accent-gold" : "text-data-profit"}`}>
+                        <span className={`text-base sm:text-lg font-mono font-bold ${riskPercent > 2 ? "text-data-loss" : riskPercent >= 1 ? "text-accent-gold" : "text-data-profit"}`}>
                           {riskPercent}%
                         </span>
                      ) : (
@@ -985,9 +985,9 @@ function LogTradePageInner() {
                    </div>
                    {/* Realtime RR Badge */}
                    <div className="flex flex-col items-end">
-                      <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted mb-1">Estimated Reward/Risk</p>
+                      <p className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-text-muted mb-1">Estimated Reward/Risk</p>
                       {predictedR !== null ? (
-                         <span className={`text-lg font-mono font-bold ${predictedR >= 2 ? "text-accent-gold" : predictedR >= 1 ? "text-data-profit" : "text-data-loss"}`}>
+                         <span className={`text-base sm:text-lg font-mono font-bold ${predictedR >= 2 ? "text-accent-gold" : predictedR >= 1 ? "text-data-profit" : "text-data-loss"}`}>
                            {predictedR} R
                          </span>
                       ) : (
@@ -998,15 +998,15 @@ function LogTradePageInner() {
               </div>
 
               {/* 2-Column Form Layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+
                 {/* Left Column: Core Technicals */}
-                <div className="space-y-5">
-                  <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-[0.2em] border-b border-white/5 pb-2">Market Execution</h3>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4 sm:space-y-5">
+                  <h3 className="text-xs sm:text-sm font-bold text-accent-gold uppercase tracking-[0.2em] border-b border-white/5 pb-2">Market Execution</h3>
+
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Instrument/Pair</label>
+                      <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Instrument/Pair</label>
                       <select
                         name="pair"
                         required
