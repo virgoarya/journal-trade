@@ -1,11 +1,14 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
   devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
+  // Set turbopack root to frontend directory to avoid workspace warning
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   experimental: {
     optimizePackageImports: ["lucide-react"],
-    // Force webpack instead of turbopack for production builds to avoid Docker issues
-    turbopack: false,
   },
   typescript: {
     ignoreBuildErrors: true, // Skip type checking during build for deployment
