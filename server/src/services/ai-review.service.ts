@@ -112,8 +112,10 @@ export const aiReviewService = {
 
   async generateReview(tradeId: string, userId: string) {
     console.log("generateReview called: tradeId=", tradeId, "userId=", userId);
-    console.log("GEMINI_API_KEY present:", !!env.GEMINI_API_KEY);
-    if (!env.GEMINI_API_KEY) throw new Error("Fitur AI dinonaktifkan: GEMINI_API_KEY tidak ditemukan");
+    console.log("ANTHROPIC_AUTH_TOKEN present:", !!env.ANTHROPIC_AUTH_TOKEN);
+    console.log("ANTHROPIC_BASE_URL:", env.ANTHROPIC_BASE_URL);
+    console.log("ANTHROPIC_MODEL:", env.ANTHROPIC_MODEL);
+    if (!env.ANTHROPIC_AUTH_TOKEN) throw new Error("Fitur AI dinonaktifkan: ANTHROPIC_AUTH_TOKEN tidak ditemukan");
 
     // Check for existing review
     console.log("Checking existing review...");
@@ -148,8 +150,11 @@ export const aiReviewService = {
     // Initialize Anthropic (OpenRouter)
     const anthropic = new Anthropic({
       apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      baseURL: env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
+      baseURL: env.ANTHROPIC_BASE_URL
     });
+
+    const model = env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest";
+    console.log("Using Anthropic model:", model);
 
     const prompt = `
 You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
@@ -218,7 +223,7 @@ CRITICAL RULES:
 
     try {
       const msg = await anthropic.messages.create({
-        model: env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest",
+        model: model,
         max_tokens: 1000,
         messages: [{ role: "user", content: prompt }]
       });
@@ -278,7 +283,7 @@ CRITICAL RULES:
 
       return review;
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      console.error("Anthropic API Error:", error);
       throw new Error("Gagal menghasilkan review AI. Silakan coba lagi nanti.");
     }
   },
