@@ -25,6 +25,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Set production environment
+ENV NODE_ENV=production
+
 # Copy server package files
 COPY --from=builder /app/server/package*.json ./server/
 
