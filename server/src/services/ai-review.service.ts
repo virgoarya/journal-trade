@@ -232,14 +232,28 @@ CRITICAL RULES:
         messages: [{ role: "user", content: prompt }]
       });
 
+      console.log("Full Anthropic response:", JSON.stringify(msg, null, 2));
+      console.log("Content array length:", msg.content.length);
+      console.log("Content types:", msg.content.map(c => c.type));
+
       // Extract text from response - handle different content block types
       const textBlock = msg.content.find(block => block.type === 'text');
-      if (!textBlock || !('text' in textBlock)) {
-        throw new Error("Invalid response from Anthropic: no text content found");
-      }
-      const text = textBlock.text;
+      let text: string;
 
-      console.log("Anthropic response (length:", text.length, "):", text);
+      if (!textBlock || !('text' in textBlock)) {
+        // Try to extract text from any block that has text property
+        const anyTextBlock = msg.content.find(block => 'text' in block);
+        if (anyTextBlock) {
+          text = anyTextBlock.text;
+          console.log("Using text from non-text block type:", anyTextBlock.type);
+        } else {
+          throw new Error("Invalid response from Anthropic: no text content found in any block");
+        }
+      } else {
+        text = textBlock.text;
+      }
+
+      console.log("Anthropic response text (length:", text.length, "):", text);
 
       let aiData: any = parseFormattedText(text);
 
