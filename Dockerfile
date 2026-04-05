@@ -22,20 +22,27 @@ RUN cd server && npm run build
 # Production stage
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /app/server
 
-# Copy server dependencies
+# Copy server package files FIRST
 COPY server/package*.json ./
-# Install only production deps, ignore scripts to skip postinstall
+
+# Install only production deps (no postinstall scripts)
 RUN npm ci --only=production --ignore-scripts
 
-# Copy built assets
-COPY --from=builder /app/server/dist ./server/dist
-COPY --from=builder /app/frontend/.next ./frontend/.next
-COPY --from=builder /app/frontend/public ./frontend/public
-COPY --from=builder /app/frontend/next.config.ts ./frontend/
-COPY --from=builder /app/frontend/tsconfig.json ./frontend/
-COPY --from=builder /app/frontend/package.json ./frontend/
+# Copy built server files from builder
+COPY --from=builder /app/server/dist ./dist
+
+# Copy frontend build to appropriate location
+RUN mkdir -p ../frontend
+COPY --from=builder /app/frontend/.next ../frontend/.next
+COPY --from=builder /app/frontend/public ../frontend/public
+COPY --from=builder /app/frontend/next.config.ts ../frontend/
+COPY --from=builder /app/frontend/tsconfig.json ../frontend/
+COPY --from=builder /app/frontend/package.json ../frontend/
+
+# Go back to app root
+WORKDIR /app
 
 # Expose port
 EXPOSE 5000
