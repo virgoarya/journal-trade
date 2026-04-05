@@ -232,7 +232,12 @@ CRITICAL RULES:
         messages: [{ role: "user", content: prompt }]
       });
 
-      const text = msg.content[0].text;
+      // Extract text from response - handle different content block types
+      const textBlock = msg.content.find(block => block.type === 'text');
+      if (!textBlock || !('text' in textBlock)) {
+        throw new Error("Invalid response from Anthropic: no text content found");
+      }
+      const text = textBlock.text;
 
       console.log("Anthropic response (length:", text.length, "):", text);
 
