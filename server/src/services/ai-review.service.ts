@@ -147,10 +147,14 @@ export const aiReviewService = {
 
     const playbook = trade.playbookId as any;
 
-    // Initialize Anthropic (OpenRouter)
+    // Initialize Anthropic (OpenRouter) with required headers
     const anthropic = new Anthropic({
       apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      baseURL: env.ANTHROPIC_BASE_URL
+      baseURL: env.ANTHROPIC_BASE_URL,
+      defaultHeaders: {
+        'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
+        'X-Title': 'Journal Trade AI Review'
+      }
     });
 
     const model = env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest";

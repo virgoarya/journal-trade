@@ -25,7 +25,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
   ANTHROPIC_BASE_URL: z.string().url().optional().default("https://api.anthropic.com"),
-  ANTHROPIC_MODEL: z.string().min(1).optional().default("claude-3-5-haiku-latest"),
+  ANTHROPIC_MODEL: z.string().min(1).optional().default("anthropic/claude-3-5-haiku-latest"),
 });
 
 const _env = envSchema.safeParse(process.env);
