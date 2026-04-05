@@ -22,7 +22,8 @@
       "Bash(nslookup cluster0.7dzhhrn.mongodb.net)",
       "Bash(npx tsc:*)",
       "Bash(pkill -9 -f \"next\")",
-      "Bash(pkill -9 -f \"node\")"
+      "Bash(pkill -9 -f \"node\")",
+      "Bash(git push:*)"
     ]
   }
 }
