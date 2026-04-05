@@ -6,6 +6,12 @@ import { Notification } from "../models/Notification";
 import { env } from "../config/env";
 import Anthropic from "@anthropic-ai/sdk";
 
+function removeKanji(text: string): string {
+  // Remove CJK Unified Ideographs (Kanji/Hanzi) and common East Asian characters
+  // Keeps: Latin alphabet, numbers, Indonesian characters (a-z, A-Z, 0-9, spaces, punctuation)
+  return text.replace(/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/g, '');
+}
+
 function parseFormattedText(text: string): any {
   const result: any = {
     score: 5,
@@ -95,6 +101,13 @@ function parseFormattedText(text: string): any {
   if (result.recommendation) {
     result.recommendation = result.recommendation.replace(/^[→→\s]+/, '').trim();
   }
+
+  // Remove any kanji/CJK characters from all fields
+  result.summary = removeKanji(result.summary);
+  result.strengths = result.strengths.map(removeKanji);
+  result.improvements = result.improvements.map(removeKanji);
+  result.recommendation = removeKanji(result.recommendation);
+  result.riskWarning = removeKanji(result.riskWarning);
 
   return result;
 }
@@ -237,20 +250,42 @@ CRITICAL RULES:
       console.log("Content types:", msg.content.map(c => c.type));
 
       // Extract text from response - handle different content block types
-      const textBlock = msg.content.find(block => block.type === 'text');
-      let text: string;
+      let text: string | undefined;
 
-      if (!textBlock || !('text' in textBlock)) {
-        // Try to extract text from any block that has text property
-        const anyTextBlock = msg.content.find(block => 'text' in block);
-        if (anyTextBlock) {
-          text = anyTextBlock.text;
-          console.log("Using text from non-text block type:", anyTextBlock.type);
-        } else {
-          throw new Error("Invalid response from Anthropic: no text content found in any block");
-        }
-      } else {
+      // First try: find 'text' block
+      const textBlock = msg.content.find(block => block.type === 'text');
+      if (textBlock && 'text' in textBlock) {
         text = textBlock.text;
+      }
+
+      // Second try: if no text block, find 'redacted_thinking' (may contain partial answer)
+      if (!text) {
+        const redactedBlock = msg.content.find(block => block.type === 'redacted_thinking');
+        if (redactedBlock && 'data' in redactedBlock && typeof redactedBlock.data === 'string') {
+          // Try to extract text from base64 encoded data (if present)
+          try {
+            const decoded = Buffer.from(redactedBlock.data, 'base64').toString('utf-8');
+            if (decoded.includes('AI Analysis Report')) {
+              text = decoded;
+              console.log("Extracted text from redacted_thinking (base64 decoded)");
+            }
+          } catch (e) {
+            console.log("Failed to decode redacted_thinking data");
+          }
+        }
+      }
+
+      // Last resort: use thinking block (contains reasoning in English/Chinese)
+      if (!text) {
+        const thinkingBlock = msg.content.find(block => block.type === 'thinking');
+        if (thinkingBlock && 'thinking' in thinkingBlock) {
+          text = thinkingBlock.thinking;
+          console.log("Using thinking block as fallback (may contain reasoning noise)");
+        }
+      }
+
+      if (!text) {
+        throw new Error("Invalid response from Anthropic: no text content found in any block");
       }
 
       console.log("Anthropic response text (length:", text.length, "):", text);
