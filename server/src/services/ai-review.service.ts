@@ -6,6 +6,99 @@ import { Notification } from "../models/Notification";
 import { env } from "../config/env";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+function parseFormattedText(text: string): any {
+  const result: any = {
+    score: 5,
+    strengths: [],
+    improvements: [],
+    summary: "",
+    recommendation: "",
+    riskWarning: ""
+  };
+
+  console.log("Parsing formatted text...");
+
+  // Extract Overall Score - look for "Overall Score: 8" or "Overall Score\n8"
+  const scoreMatch = text.match(/Overall Score\s*[:\n\r]+\s*(\d+)/i);
+  if (scoreMatch) {
+    result.score = parseInt(scoreMatch[1], 10);
+  }
+
+  // Extract Summary: between "AI Analysis Report" and "Overall Score"
+  const summaryMatch = text.match(/AI Analysis Report\s*[\n\r]+([\s\S]*?)(?=Overall Score|$)/i);
+  if (summaryMatch) {
+    result.summary = summaryMatch[1].replace(/\n+/g, ' ').trim();
+  }
+
+  // Extract Strengths - capture all lines after "Strengths:" until next section
+  const strengthsMatch = text.match(/Strengths\s*[:\n\r]+([\s\S]*?)(?=Areas for Improvement|Risk Warning|Actionable Suggestions|$)/i);
+  if (strengthsMatch) {
+    let strengthsText = strengthsMatch[1];
+    const lines = strengthsText.split('\n').filter(line => line.trim());
+    const bullets: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const bulletMatch = trimmed.match(/^[✓!→•\-\*\d\.\)]\s*(.+)$/);
+      if (bulletMatch) {
+        bullets.push(bulletMatch[1].trim());
+      } else if (trimmed.length > 0 && trimmed.length < 100) {
+        bullets.push(trimmed);
+      }
+    }
+    result.strengths = bullets;
+  }
+
+  // Extract Improvements
+  const improvementsMatch = text.match(/Areas for Improvement\s*[:\n\r]+([\s\S]*?)(?=Risk Warning|Actionable Suggestions|$)/i);
+  if (improvementsMatch) {
+    let improvementsText = improvementsMatch[1];
+    const lines = improvementsText.split('\n').filter(line => line.trim());
+    const bullets: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const bulletMatch = trimmed.match(/^[✓!→•\-\*\d\.\)]\s*(.+)$/);
+      if (bulletMatch) {
+        bullets.push(bulletMatch[1].trim());
+      } else if (trimmed.length > 0 && trimmed.length < 100) {
+        bullets.push(trimmed);
+      }
+    }
+    result.improvements = bullets;
+  }
+
+  // Extract Risk Warning
+  const riskWarningMatch = text.match(/Risk Warning\s*[:\n\r]+([\s\S]*?)(?=Actionable Suggestions|$)/i);
+  if (riskWarningMatch) {
+    let warning = riskWarningMatch[1].trim();
+    // Get only the first line or first bullet
+    const firstLine = warning.split('\n')[0].trim();
+    const bulletMatch = firstLine.match(/^[✓!→•\-\*\d\.\)]\s*(.+)$/);
+    result.riskWarning = bulletMatch ? bulletMatch[1].trim() : firstLine;
+  }
+
+  // Extract Recommendation from Actionable Suggestions
+  const recMatch = text.match(/Actionable Suggestions\s*[:\n\r]+([\s\S]*?)$/i) ||
+                  text.match(/→\s*([^\n\r]+)/i);
+  if (recMatch) {
+    let rec = recMatch[1] || (recMatch[0] ? recMatch[0].replace(/^[→→\s]+/, '') : '');
+    rec = rec.trim().split('\n')[0].trim();
+    if (rec.length > 0) {
+      result.recommendation = rec;
+    }
+  }
+
+  console.log("Parsed AI data:", JSON.stringify(result, null, 2));
+
+  // Clean up recommendation arrow if present
+  if (result.recommendation) {
+    result.recommendation = result.recommendation.replace(/^[→→\s]+/, '').trim();
+  }
+
+  return result;
+}
+
 export const aiReviewService = {
 
   async getFeed(userId: string, limit = 10, offset = 0, filter: any = {}) {
