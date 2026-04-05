@@ -41,11 +41,9 @@ COPY --from=builder /app/frontend/next.config.ts ./dist/
 COPY --from=builder /app/frontend/tsconfig.json ./dist/
 COPY --from=builder /app/frontend/package.json ./dist/
 
-# Go back to app root
-WORKDIR /app
-
 # Expose port
 EXPOSE 5000
 
-# Start
-CMD ["node", "server/dist/index.js"]
+# Start server from /app/server directory
+WORKDIR /app/server
+CMD ["node", "dist/index.js"]
