@@ -33,9 +33,9 @@ RUN npm ci --only=production --ignore-scripts
 # Copy built server files from builder
 COPY --from=builder /app/server/dist ./dist
 
-# Copy frontend build into server/dist (where Express expects it)
-COPY --from=builder /app/frontend/.next ./dist/_next
-COPY --from=builder /app/frontend/public ./dist/public
+# Copy entire frontend build (including .next directory with all required files)
+COPY --from=builder /app/frontend/.next ./dist/_next/
+COPY --from=builder /app/frontend/public ./dist/public/
 COPY --from=builder /app/frontend/next.config.ts ./dist/
 COPY --from=builder /app/frontend/tsconfig.json ./dist/
 COPY --from=builder /app/frontend/package.json ./dist/
