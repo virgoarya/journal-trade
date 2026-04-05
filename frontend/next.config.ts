@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
   devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
@@ -7,6 +8,9 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true, // Skip type checking during build for deployment
+  },
+  turbopack: {
+    root: path.join(__dirname, "..", "..", "frontend"),
   },
   // Only use rewrites in development
   ...(process.env.NODE_ENV !== "production" && {
