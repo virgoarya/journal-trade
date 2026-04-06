@@ -24,7 +24,7 @@ export const logTradeSchema = z.object({
   chartLink: z.string().url("Format URL tidak invalid").optional().nullable(),
 
   // New fields for playbook matching
-  session: z.enum(["Asia", "London", "NY", "Sydney", "Other"]).optional().nullable(),
+  session: z.enum(["Asia", "London", "NY AM", "NY PM", "Other"]).optional().nullable(),
   marketCondition: z.enum(["TRENDING", "RANGING", "VOLATILE", "LIQUID", "ALL"]).optional().nullable(),
   riskPercent: z.number().min(0).max(100).optional().nullable(),
 });
