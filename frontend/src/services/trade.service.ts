@@ -21,7 +21,7 @@ export interface Trade {
   notes?: string;
   chartLink?: string;
   exitDate?: string;
-  session?: "Asia" | "London" | "NY" | "Sydney" | "Other";
+  session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk exposure as % of account equity
   isDeleted?: boolean; // soft delete flag
@@ -48,7 +48,7 @@ export interface CreateTradeDto {
   notes?: string;
   chartLink?: string;
   playbookId?: string;
-  session?: "Asia" | "London" | "NY" | "Sydney" | "Other";
+  session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk % of account equity
 }
@@ -155,6 +155,10 @@ export class TradeService {
 
   async restore(id: string): Promise<ApiResponse<null>> {
     return apiClient.patch<null>(`${this.basePath}/${id}/restore`, {});
+  }
+
+  async hardDelete(id: string): Promise<ApiResponse<null>> {
+    return apiClient.delete<null>(`${this.basePath}/${id}/permanent`);
   }
 
   async getSummary(): Promise<ApiResponse<TradeSummary>> {

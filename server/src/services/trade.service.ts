@@ -378,6 +378,19 @@ export const tradeService = {
     }
   },
 
+  async hardDelete(id: string, userId: string) {
+    try {
+      // Permanent delete: completely remove from database
+      const result = await Trade.findOneAndDelete({ _id: id, userId, isDeleted: true });
+      return result ? true : false;
+    } catch (error) {
+      console.error("Error hard deleting trade:", error);
+      throw new Error(
+        `Failed to permanently delete trade: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  },
+
   async getDeleted(userId: string, accountId: string, limit = 20, offset = 0) {
     try {
       const list = await Trade.find({ userId, tradingAccountId: accountId, isDeleted: true })

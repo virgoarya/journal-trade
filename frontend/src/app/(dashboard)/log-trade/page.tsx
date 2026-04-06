@@ -143,6 +143,8 @@ function LogTradePageInner() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [deleteConfirmTrade, setDeleteConfirmTrade] = useState<Trade | null>(null);
   const [deleteReason, setDeleteReason] = useState<string>("MT5 mismatch");
+  const [isHardDelete, setIsHardDelete] = useState(false);
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState(false);
 
   const fetchTrades = async (includeDeleted: boolean = false) => {
     try {
@@ -343,9 +345,25 @@ function LogTradePageInner() {
       // Refetch trades to sync with server
       await fetchTrades(selectedFilter === "deleted");
       setDeleteConfirmTrade(null);
+      setIsHardDelete(false);
+      setHardDeleteConfirm(false);
       alert("Trade deleted successfully");
     } catch (error: any) {
       alert("Failed to delete trade: " + error.message);
+    }
+  };
+
+  const handleHardDelete = async (tradeId: string) => {
+    try {
+      await tradeService.hardDelete(tradeId);
+      // Refetch trades to sync with server
+      await fetchTrades(selectedFilter === "deleted");
+      setDeleteConfirmTrade(null);
+      setIsHardDelete(false);
+      setHardDeleteConfirm(false);
+      alert("Trade permanently deleted");
+    } catch (error: any) {
+      alert("Failed to permanently delete trade: " + error.message);
     }
   };
 
@@ -1423,37 +1441,48 @@ function LogTradePageInner() {
       {/* Delete Confirmation Modal */}
       {deleteConfirmTrade && (
         <div className="fixed inset-0 bg-bg-void/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="relative glass border border-data-loss/30 rounded-2xl max-w-md w-full mx-auto shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b border-white/5 bg-data-loss/5">
+          <div className="relative glass border {isHardDelete ? 'border-data-loss' : 'border-data-loss/30'} rounded-2xl max-w-md w-full mx-auto shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-white/5 {isHardDelete ? 'bg-red-900/20' : 'bg-data-loss/5'}">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-data-loss/20 flex items-center justify-center">
-                  <Trash2 className="w-5 h-5 text-data-loss" />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isHardDelete ? 'bg-red-600/20' : 'bg-data-loss/20'}`}>
+                  <Trash2 className={`w-5 h-5 ${isHardDelete ? 'text-red-500' : 'text-data-loss'}`} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-data-loss tracking-wide">Delete Trade</h2>
-                  <p className="text-[10px] text-data-loss uppercase tracking-[0.2em] font-medium">Confirm deletion</p>
+                  <h2 className={`text-lg font-bold ${isHardDelete ? 'text-red-500' : 'text-data-loss'} tracking-wide`}>
+                    {isHardDelete ? 'Permanent Delete' : 'Delete Trade'}
+                  </h2>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] font-medium ${isHardDelete ? 'text-red-500' : 'text-data-loss'}`}>
+                    {isHardDelete ? 'Irreversible action' : 'Confirm deletion'}
+                  </p>
                 </div>
               </div>
             </div>
             <div className="p-6 space-y-6">
               <p className="text-sm text-text-secondary">
-                Are you sure you want to delete this trade? This action will archive the trade (soft delete) and can be restored later.
+                {isHardDelete
+                  ? "Are you sure you want to PERMANENTLY delete this trade? This action cannot be undone and the data will be lost forever."
+                  : "Are you sure you want to delete this trade? This action will archive the trade (soft delete) and can be restored later."
+                }
               </p>
-              <div>
-                <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Reason (for audit)</label>
-                <select
-                  value={deleteReason}
-                  onChange={(e) => setDeleteReason(e.target.value)}
-                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-data-loss focus:ring-1 focus:ring-data-loss transition-all outline-none"
-                >
-                  <option value="MT5 mismatch">MT5 mismatch</option>
-                  <option value="Duplicate entry">Duplicate entry</option>
-                  <option value="Test/demo trade">Test/demo trade</option>
-                  <option value="Data entry error">Data entry error</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              {deleteReason === "Other" && (
+
+              {!isHardDelete && (
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Reason (for audit)</label>
+                  <select
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-data-loss focus:ring-1 focus:ring-data-loss transition-all outline-none"
+                  >
+                    <option value="MT5 mismatch">MT5 mismatch</option>
+                    <option value="Duplicate entry">Duplicate entry</option>
+                    <option value="Test/demo trade">Test/demo trade</option>
+                    <option value="Data entry error">Data entry error</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              )}
+
+              {!isHardDelete && deleteReason === "Other" && (
                 <div>
                   <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Specify reason</label>
                   <input
@@ -1465,20 +1494,73 @@ function LogTradePageInner() {
                   />
                 </div>
               )}
+
+              {/* Hard delete confirmation checkbox */}
+              {isHardDelete && (
+                <div className="bg-red-900/10 border border-red-500/30 rounded-lg p-4">
+                  <label className="flex items-start space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hardDeleteConfirm}
+                      onChange={(e) => setHardDeleteConfirm(e.target.checked)}
+                      className="mt-1 w-5 h-5 accent-red-500"
+                      required
+                    />
+                    <span className="text-sm text-red-400">
+                      I understand this action is <strong>permanent and irreversible</strong>. All trade data will be completely removed from the database.
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Toggle between soft delete and hard delete */}
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <label className="text-xs text-text-secondary uppercase tracking-wider">Deletion type:</label>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsHardDelete(false); setHardDeleteConfirm(false); }}
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded transition-colors ${!isHardDelete ? 'bg-data-loss text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}
+                  >
+                    Soft Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsHardDelete(true)}
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded transition-colors ${isHardDelete ? 'bg-red-600 text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}
+                  >
+                    Hard Delete
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="p-4 bg-data-loss/5 border-t border-data-loss/10 flex justify-end space-x-3">
+            <div className="p-4 bg-white/5 border-t border-white/10 flex justify-end space-x-3">
               <button
-                onClick={() => setDeleteConfirmTrade(null)}
+                onClick={() => {
+                  setDeleteConfirmTrade(null);
+                  setIsHardDelete(false);
+                  setHardDeleteConfirm(false);
+                }}
                 className="px-6 py-2 text-sm font-bold text-text-secondary hover:text-text-primary border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
-              <button
-                onClick={() => handleDelete(deleteConfirmTrade.id, deleteReason)}
-                className="px-6 py-2 text-sm font-bold text-white bg-data-loss hover:bg-data-loss/80 rounded-lg transition-colors"
-              >
-                Delete Trade
-              </button>
+              {isHardDelete ? (
+                <button
+                  onClick={() => hardDeleteConfirm && handleHardDelete(deleteConfirmTrade.id)}
+                  disabled={!hardDeleteConfirm}
+                  className="px-6 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  Delete Permanently
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDelete(deleteConfirmTrade.id, deleteReason)}
+                  className="px-6 py-2 text-sm font-bold text-white bg-data-loss hover:bg-data-loss/80 rounded-lg transition-colors"
+                >
+                  Delete Trade
+                </button>
+              )}
             </div>
           </div>
         </div>

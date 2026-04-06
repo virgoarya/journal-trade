@@ -131,4 +131,13 @@ router.delete("/:id", validate({ params: objectIdParamSchema }), async (req, res
   } catch (error) { next(error); }
 });
 
+// Permanently delete trade (hard delete - irreversible)
+router.delete("/:id/permanent", validate({ params: objectIdParamSchema }), async (req, res, next) => {
+  try {
+    const hardDeleted = await tradeService.hardDelete(req.params.id as string, req.user.id);
+    if (!hardDeleted) return apiResponse.notFound(res, "Trade tidak ditemukan atau sudah dihapus permanen.");
+    return apiResponse.success(res, { message: "Trade permanently deleted" });
+  } catch (error) { next(error); }
+});
+
 export default router;
