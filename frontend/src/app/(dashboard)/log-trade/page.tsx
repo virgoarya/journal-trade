@@ -431,6 +431,13 @@ function LogTradePageInner() {
       if (result.success && result.data) {
         const updatedTrade = result.data;
         setTrades(prev => prev.map(t => t.id === tradeId ? updatedTrade : t));
+
+        // Check if trade has no playbook assigned, trigger assignment modal
+        if (!updatedTrade.playbookId) {
+          setCreatedTradeId(updatedTrade.id);
+          setShowPlaybookModal(true);
+        }
+
         setEditingTradeId(null);
         setEditingTrade(null);
         setShowForm(false);

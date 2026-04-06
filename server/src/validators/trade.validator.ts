@@ -5,7 +5,8 @@ import { paginationQuerySchema, dateRangeQuerySchema } from "./common.validator"
 export const logTradeSchema = z.object({
   tradingAccountId: z.string().regex(/^[0-9a-fA-F]{24}$/, "ID Akun trading tidak valid"),
   playbookId: z.string().regex(/^[0-9a-fA-F]{24}$/, "ID Playbook tidak valid").optional().nullable(),
-  tradeDate: z.string().datetime("Formattanggal tidak valid (gunakan ISO-8601)"),
+  tradeDate: z.string().datetime("Format tanggal tidak valid (gunakan ISO-8601)"),
+  exitDate: z.string().datetime("Format tanggal exit tidak valid (gunakan ISO-8601)").optional().nullable(),
   pair: z.string().min(2, "Pair minimal 2 karakter"),
   direction: z.enum(TRADE_DIRECTIONS as readonly ["LONG", "SHORT"]),
 
@@ -20,7 +21,7 @@ export const logTradeSchema = z.object({
 
   emotionalState: z.number().min(1).max(5).optional().nullable(),
   notes: z.string().optional().nullable(),
-  chartLink: z.string().url("Format URL tidak valid").optional().nullable(),
+  chartLink: z.string().url("Format URL tidak invalid").optional().nullable(),
 
   // New fields for playbook matching
   session: z.enum(["Asia", "London", "NY", "Sydney", "Other"]).optional().nullable(),
