@@ -14,6 +14,25 @@ export const dynamic = 'force-dynamic';
 
 // ============ TIMEZONE HELPERS (New York) ============
 
+// Helper to calculate trade duration
+function calculateDuration(entryDate: Date | string, exitDate?: Date | string): string {
+  if (!exitDate) return "-";
+  const entry = new Date(entryDate);
+  const exit = new Date(exitDate);
+  const diffMs = exit.getTime() - entry.getTime();
+
+  if (diffMs <= 0) return "0m";
+
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${remainingMinutes}m`;
+  }
+  return `${minutes}m`;
+}
+
 // Determine if a date (in New York local time) is during DST
 function isNewYorkDST(date: Date): boolean {
   const year = date.getFullYear();
@@ -709,6 +728,10 @@ function LogTradePageInner() {
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.01]">
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Pair</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Date</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Entry</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Exit</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Dur.</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Direction</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Playbook</th>
                 <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Setup (Entry/SL/TP)</th>
@@ -723,16 +746,40 @@ function LogTradePageInner() {
             <tbody>
               {filteredTrades.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-text-muted text-sm italic">
+                  <td colSpan={14} className="p-8 text-center text-text-muted text-sm italic">
                     No execution records yet
                   </td>
                 </tr>
               ) : filteredTrades.map((trade, idx) => {
+                // Format dates in New York timezone
+                const tradeDateNY = formatToNYDateTimeLocal(trade.tradeDate);
+                const [datePart, entryTimePart] = tradeDateNY.split('T');
+                const exitTimePart = trade.exitDate ? formatToNYDateTimeLocal(trade.exitDate).split('T')[1] : "-";
+                const duration = calculateDuration(trade.tradeDate, trade.exitDate);
+
                 return (
                   <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                  {/* Pair */}
                   <td className="p-4">
                     <span className="font-mono font-bold text-text-primary text-sm">{trade.pair}</span>
                   </td>
+                  {/* Date */}
+                  <td className="p-4 text-xs font-mono text-text-primary">
+                    {datePart}
+                  </td>
+                  {/* Entry Time */}
+                  <td className="p-4 text-xs font-mono text-text-primary">
+                    {entryTimePart}
+                  </td>
+                  {/* Exit Time */}
+                  <td className="p-4 text-xs font-mono text-text-primary">
+                    {exitTimePart}
+                  </td>
+                  {/* Duration */}
+                  <td className="p-4 text-xs font-mono text-text-primary">
+                    {duration}
+                  </td>
+                  {/* Direction */}
                   <td className="p-4">
                     <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded shadow-sm ${
                       trade.direction.toLowerCase() === "long"
@@ -742,6 +789,7 @@ function LogTradePageInner() {
                       {trade.direction}
                     </span>
                   </td>
+                  {/* Playbook */}
                   <td className="p-4 text-left">
                     <div className="text-left">
                       {trade.playbookId ? (() => {
@@ -764,6 +812,7 @@ function LogTradePageInner() {
                       )}
                     </div>
                   </td>
+                  {/* Setup */}
                   <td className="p-4 text-right">
                     <div className="flex flex-col text-xs font-mono">
                       <span className="text-text-primary">{trade.entryPrice}</span>
@@ -771,16 +820,19 @@ function LogTradePageInner() {
                       {trade.takeProfit && <span className="text-text-muted">TP: {trade.takeProfit}</span>}
                     </div>
                   </td>
+                  {/* Size */}
                   <td className="p-4 text-right font-mono text-sm text-text-primary">{trade.lotSize}</td>
+                  {/* Risk % */}
                   <td className="p-4 text-right font-mono text-xs">
                     {trade.riskPercent ? (
                         <span className={trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : "text-data-profit"}>
-                          {trade.riskPercent}%
+                          {trade.riskPercent.toFixed(2)}%
                         </span>
                     ) : (
                         <span className="text-text-muted">-</span>
                     )}
                   </td>
+                  {/* R-Ratio */}
                   <td className="p-4 text-right font-mono text-xs">
                     {trade.rMultiple ? (
                         <span className="text-accent-gold">{trade.rMultiple}R</span>
@@ -788,11 +840,13 @@ function LogTradePageInner() {
                         <span className="text-text-muted">-</span>
                     )}
                   </td>
+                  {/* Final P&L */}
                   <td className="p-4 text-right font-mono text-sm font-bold">
                     <span className={trade.result.toLowerCase() === "win" ? "text-data-profit" : trade.result.toLowerCase() === "loss" ? "text-data-loss" : "text-text-secondary"}>
                       {trade.pnl > 0 ? "+" : ""}${trade.pnl.toFixed(2)}
                     </span>
                   </td>
+                  {/* Psychology */}
                   <td className="p-4 text-center">
                     <div className="flex justify-center">
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
