@@ -12,6 +12,72 @@ import { PlaybookAssignmentModal } from "@/components/trade/PlaybookAssignmentMo
 
 export const dynamic = 'force-dynamic';
 
+// ============ TIMEZONE HELPERS (New York) ============
+
+// Determine if a date (in New York local time) is during DST
+function isNewYorkDST(date: Date): boolean {
+  const year = date.getFullYear();
+
+  // DST starts: second Sunday in March at 2:00 AM
+  const march1 = new Date(year, 2, 1);
+  const firstSundayMarch = 1 + (7 - march1.getDay()) % 7;
+  const secondSundayMarch = firstSundayMarch + 7;
+  const dstStart = new Date(year, 2, secondSundayMarch, 2, 0, 0, 0);
+
+  // DST ends: first Sunday in November at 2:00 AM
+  const nov1 = new Date(year, 10, 1);
+  const firstSundayNov = 1 + (7 - nov1.getDay()) % 7;
+  const dstEnd = new Date(year, 10, firstSundayNov, 2, 0, 0, 0);
+
+  return date >= dstStart && date < dstEnd;
+}
+
+// Convert New York local datetime (from datetime-local input) to UTC ISO string
+function nyDateTimeToUTC(dateTimeLocal: string): string {
+  if (!dateTimeLocal) return "";
+
+  const [datePart, timePart = ""] = dateTimeLocal.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour = 0, minute = 0] = timePart.split(':').map(Number);
+
+  // Build a Date object representing the NY local time
+  const dateInNY = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const isDST = isNewYorkDST(dateInNY);
+  const offsetMinutes = isDST ? -4 * 60 : -5 * 60; // NY = UTC-4 (EDT) or UTC-5 (EST)
+
+  // Compute UTC milliseconds
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0) - offsetMinutes * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}
+
+// Format UTC date (or ISO string) to New York local datetime-local string (YYYY-MM-DDTHH:MM)
+function formatToNYDateTimeLocal(date: Date | string | undefined): string {
+  if (!date) return "";
+  const d = new Date(date); // interpret as UTC timestamp
+
+  // Use Intl to format in America/New_York timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(d);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  const hour = getPart('hour');
+  const minute = getPart('minute');
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
 function LogTradePageInner() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -212,12 +278,8 @@ function LogTradePageInner() {
   }, [entryPrice, stopLoss, takeProfit, direction, lotSize, activeAccount, accountRiskLimit, pair]);
 
 
-  // Helper for datetime-local inputs
-  const formatDateTimeLocal = (date: Date | string | undefined) => {
-    if (!date) return "";
-    const d = new Date(date);
-    return d.toISOString().slice(0, 16);
-  };
+  // Deprecated: use formatToNYDateTimeLocal instead for New York timezone
+  // Kept for reference but not used
 
   // Edit/Delete handlers
   const startEdit = (trade: Trade) => {
@@ -317,14 +379,16 @@ function LogTradePageInner() {
     // Determine result based on P&L
     const resultStatus: "WIN" | "LOSS" | "BREAKEVEN" = actualPnl > 0 ? "WIN" : actualPnl < 0 ? "LOSS" : "BREAKEVEN";
 
-    // Detect session
-    const tradeDate = new Date(formData.tradeDate);
+    // Convert tradeDate from NY local datetime to UTC ISO for storage
+    const tradeDateISO = nyDateTimeToUTC(formData.tradeDate);
+    // Create a Date object (UTC) for session detection
+    const tradeDateUTC = new Date(tradeDateISO);
     // Gunakan session dari form jika dipilih manual, fallback ke auto-detect
-    const autoSession = detectSession(tradeDate);
+    const autoSession = detectSession(tradeDateUTC);
     const session = formData.session && formData.session !== "AUTO" ? formData.session : autoSession;
 
     const updateData: Partial<CreateTradeDto> = {
-      tradeDate: tradeDate.toISOString(),
+      tradeDate: tradeDateISO,
       pair: formData.pair.toUpperCase(),
       direction: dir as "LONG" | "SHORT",
       entryPrice: entry,
@@ -336,7 +400,7 @@ function LogTradePageInner() {
       emotionalState: parseInt(formData.emotionalState),
       notes: formData.notes,
       chartLink: formData.chartLink || undefined,
-      exitDate: formData.exitDate ? new Date(formData.exitDate).toISOString() : undefined,
+      exitDate: formData.exitDate ? nyDateTimeToUTC(formData.exitDate) : undefined,
       session,
       marketCondition: formData.marketCondition && formData.marketCondition !== "" ? formData.marketCondition : undefined,
       riskPercent: riskPercentCalc,
@@ -388,9 +452,9 @@ function LogTradePageInner() {
       }
     }
 
-    // Convert tradeDate from datetime-local to ISO UTC
-    const tradeDateObj = new Date(formData.tradeDate);
-    const tradeDateISO = tradeDateObj.toISOString();
+    // Convert tradeDate from NY local datetime to UTC ISO
+    const tradeDateISO = nyDateTimeToUTC(formData.tradeDate);
+    const tradeDateObj = new Date(tradeDateISO); // Date object in UTC for session detection
 
     // Gunakan session dari form jika dipilih manual, fallback ke auto-detect
     const autoSession = detectSession(tradeDateObj);
@@ -410,7 +474,7 @@ function LogTradePageInner() {
       emotionalState: parseInt(formData.emotionalState),
       notes: formData.notes,
       chartLink: formData.chartLink || undefined,
-      exitDate: formData.exitDate ? new Date(formData.exitDate).toISOString() : undefined,
+      exitDate: formData.exitDate ? nyDateTimeToUTC(formData.exitDate) : undefined,
       session,
       riskPercent: riskPercent ?? undefined,
       rMultiple: rMult,
@@ -522,10 +586,10 @@ function LogTradePageInner() {
     
     if (!matchesStatus) return false;
 
-    // 3. Filter by date (if parameter exists)
+    // 3. Filter by date (if parameter exists) - compare based on New York local date
     if (dateFilter) {
-      const tradeDate = new Date(t.tradeDate).toISOString().split('T')[0];
-      return tradeDate === dateFilter;
+      const tradeDateNY = formatToNYDateTimeLocal(t.tradeDate).split('T')[0];
+      return tradeDateNY === dateFilter;
     }
 
     return true;
@@ -1157,7 +1221,7 @@ function LogTradePageInner() {
                         name="tradeDate"
                         type="datetime-local"
                         required
-                        defaultValue={editingTrade ? formatDateTimeLocal(editingTrade.tradeDate) : new Date().toISOString().slice(0, 16)}
+                        defaultValue={editingTrade ? formatToNYDateTimeLocal(editingTrade.tradeDate) : formatToNYDateTimeLocal(new Date())}
                         className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold transition-all outline-none"
                       />
                     </div>
@@ -1166,7 +1230,7 @@ function LogTradePageInner() {
                       <input
                         name="exitDate"
                         type="datetime-local"
-                        defaultValue={editingTrade?.exitDate ? formatDateTimeLocal(editingTrade.exitDate) : ""}
+                        defaultValue={editingTrade?.exitDate ? formatToNYDateTimeLocal(editingTrade.exitDate) : ""}
                         className="w-full bg-bg-void/50 border border-accent-gold/20 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold transition-all outline-none"
                       />
                     </div>
