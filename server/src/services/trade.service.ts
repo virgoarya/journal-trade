@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Trade } from "../models/Trade";
 import { TradingAccount } from "../models/TradingAccount";
 import { Notification } from "../models/Notification";
+import { AiReview } from "../models/AiReview";
 import { z } from "zod";
 import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.validator";
 import { calculateRMultiple, calculateRiskAmount } from "../utils/calculations";
@@ -288,7 +289,9 @@ export const tradeService = {
       }
 
       // 3. Check for AI review – prevent editing core trade details if AI review exists
-      const hasAIReview = existing.aiReviewId || existing.aiReviewCompletedAt;
+      const aiReview = await AiReview.findOne({ tradeId: existing._id });
+      const hasAIReview = !!aiReview;
+
       if (hasAIReview) {
         // List of fields that should NOT be edited if AI review exists
         const restrictedFields = ['entryPrice', 'stopLoss', 'takeProfit', 'tradeDate', 'pair', 'direction', 'lotSize'];
