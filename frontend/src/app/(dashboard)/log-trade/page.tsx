@@ -936,15 +936,29 @@ function LogTradePageInner() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                       )}
-                      {/* Delete/Restore button */}
+                      {/* Action buttons */}
                       {trade.isDeleted ? (
-                        <button
-                          onClick={() => handleRestore(trade.id)}
-                          title="Restore trade"
-                          className="text-text-muted hover:text-data-profit transition-colors p-1 rounded-lg hover:bg-white/5"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
+                        <>
+                          {/* Restore button */}
+                          <button
+                            onClick={() => handleRestore(trade.id)}
+                            title="Restore trade"
+                            className="text-text-muted hover:text-data-profit transition-colors p-1 rounded-lg hover:bg-white/5"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                          {/* Hard Delete button (only for soft-deleted trades) */}
+                          <button
+                            onClick={() => {
+                              setDeleteConfirmTrade(trade);
+                              setIsHardDelete(true); //直接进入hard delete mode
+                            }}
+                            title="Permanently delete"
+                            className="text-text-muted hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-white/5"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       ) : (
                         <button
                           onClick={() => setDeleteConfirmTrade(trade)}
