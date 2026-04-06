@@ -55,7 +55,7 @@ const TradeSchema = new Schema<ITrade>({
   },
   session: {
     type: String,
-    enum: ["Asia", "London", "NY AM", "NY PM", "Other"]
+    enum: ["Asia", "London", "NY AM", "NY PM", "Other", "NY"]
   },
   riskPercent: { type: Number, min: 0, max: 100 },
   isDeleted: { type: Boolean, default: false },
