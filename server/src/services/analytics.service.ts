@@ -209,7 +209,7 @@ export const analyticsService = {
     return {
       monthlyPnL,
       weeklyStats,
-      sessionPerformance: sessions.map(s => ({ session: s.session, pnl: s.pnl, trades: s.trades })),
+      sessionPerformance,
       heatmap: heatmapMatrix,
       streakStats: { longestWin, longestLoss, currentStreak, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 },
       totalPnL: grossProfit - grossLoss,
