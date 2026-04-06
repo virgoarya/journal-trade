@@ -78,21 +78,18 @@ export const analyticsService = {
     });
     weeklyStats.forEach(w => { if (w.trades > 0) w.avgPnl = w.avgPnl / w.trades; });
 
-    // Session performance (UTC) - aligned with frontend detection
-    // Helper to determine session based on UTC hour (New York trading sessions)
+    // Session performance (UTC) - New York session split into AM/PM
+    // Helper to determine session based on UTC hour
     const getSessionName = (hour: number): string => {
-      if (hour >= 21 || hour < 5) return "Sydney";
-      if (hour >= 5 && hour < 8) return "Asia";
-      if (hour >= 8 && hour < 13) return "London";
-      if (hour >= 13 && hour < 21) return "NY";
+      // New York session: 13:00-21:00 UTC (8 AM - 5 PM EST)
+      if (hour >= 13 && hour < 17) return "NY AM";   // 13:00-17:00 UTC (8 AM - 12 PM EST)
+      if (hour >= 17 && hour < 21) return "NY PM";   // 17:00-21:00 UTC (12 PM - 5 PM EST)
       return "Other";
     };
 
     const sessionStats: Record<string, { pnl: number; trades: number }> = {
-      Sydney: { pnl: 0, trades: 0 },
-      Asia: { pnl: 0, trades: 0 },
-      London: { pnl: 0, trades: 0 },
-      NY: { pnl: 0, trades: 0 }
+      "NY AM": { pnl: 0, trades: 0 },
+      "NY PM": { pnl: 0, trades: 0 }
     };
 
     rawTrades.forEach(t => {
@@ -104,7 +101,7 @@ export const analyticsService = {
       }
     });
 
-    const sessionOrder = ['Sydney', 'Asia', 'London', 'NY'];
+    const sessionOrder = ['NY AM', 'NY PM'];
     const sessionPerformance = sessionOrder.map(session => ({
       session,
       pnl: sessionStats[session].pnl,
@@ -179,14 +176,12 @@ export const analyticsService = {
       avgTradeDuration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     }
 
-    // Heatmap data: Day of Week (Mon-Sun) vs Session (Sydney, Asia, London, NY) Pip.
+    // Heatmap data: Day of Week (Mon-Sun) vs Session (NY AM, NY PM) Pip.
     const heatmapMatrix = weekdays.map(day => ({
       day,
       sessions: [
-        { name: "Sydney", pnl: 0, count: 0 },
-        { name: "Asia", pnl: 0, count: 0 },
-        { name: "London", pnl: 0, count: 0 },
-        { name: "NY", pnl: 0, count: 0 }
+        { name: "NY AM", pnl: 0, count: 0 },
+        { name: "NY PM", pnl: 0, count: 0 }
       ]
     }));
 

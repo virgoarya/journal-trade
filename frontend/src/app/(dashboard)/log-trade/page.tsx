@@ -167,13 +167,11 @@ function LogTradePageInner() {
     }
   };
 
-  // Detect trading session from tradeDate (UTC)
-  const detectSession = (date: Date): "Asia" | "London" | "NY" | "Sydney" | "Other" => {
+  // Detect trading session from tradeDate (UTC) - New York AM/PM only
+  const detectSession = (date: Date): "NY AM" | "NY PM" | "Other" => {
     const hour = date.getUTCHours();
-    if (hour >= 21 || hour < 5) return "Sydney";
-    if (hour >= 5 && hour < 8) return "Asia";
-    if (hour >= 8 && hour < 13) return "London";
-    if (hour >= 13 && hour < 21) return "NY";
+    if (hour >= 13 && hour < 17) return "NY AM";
+    if (hour >= 17 && hour < 21) return "NY PM";
     return "Other";
   };
 
@@ -1343,10 +1341,8 @@ function LogTradePageInner() {
                         className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
                       >
                         <option value="AUTO">🕐 Auto-Detect</option>
-                        <option value="Asia">🌏 Asia (05:00–08:00 UTC)</option>
-                        <option value="London">🇬🇧 London (08:00–13:00 UTC)</option>
-                        <option value="NY">🇺🇸 New York (13:00–21:00 UTC)</option>
-                        <option value="Sydney">🇦🇺 Sydney (21:00–05:00 UTC)</option>
+                        <option value="NY AM">🇺🇸 NY AM (13:00–17:00 UTC)</option>
+                        <option value="NY PM">🇺🇸 NY PM (17:00–21:00 UTC)</option>
                         <option value="Other">🌐 Other / Overlap</option>
                       </select>
                     </div>
