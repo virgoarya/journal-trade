@@ -735,9 +735,10 @@ function LogTradePageInner() {
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.01]">
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Pair</th>
-                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Date</th>
-                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Entry</th>
-                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Exit</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Entry Date</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Entry Time</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Exit Date</th>
+                <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Exit Time</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Dur.</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Direction</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Playbook</th>
@@ -753,15 +754,17 @@ function LogTradePageInner() {
             <tbody>
               {filteredTrades.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="p-8 text-center text-text-muted text-sm italic">
+                  <td colSpan={15} className="p-8 text-center text-text-muted text-sm italic">
                     No execution records yet
                   </td>
                 </tr>
               ) : filteredTrades.map((trade, idx) => {
                 // Format dates in New York timezone
                 const tradeDateNY = formatToNYDateTimeLocal(trade.tradeDate);
-                const [datePart, entryTimePart] = tradeDateNY.split('T');
-                const exitTimePart = trade.exitDate ? formatToNYDateTimeLocal(trade.exitDate).split('T')[1] : "-";
+                const [entryDatePart, entryTimePart] = tradeDateNY.split('T');
+                const exitDateNY = trade.exitDate ? formatToNYDateTimeLocal(trade.exitDate) : null;
+                const exitDatePart = exitDateNY ? exitDateNY.split('T')[0] : "-";
+                const exitTimePart = exitDateNY ? exitDateNY.split('T')[1] : "-";
                 const duration = calculateDuration(trade.tradeDate, trade.exitDate);
 
                 return (
@@ -770,13 +773,17 @@ function LogTradePageInner() {
                   <td className="p-4">
                     <span className="font-mono font-bold text-text-primary text-sm">{trade.pair}</span>
                   </td>
-                  {/* Date */}
+                  {/* Entry Date */}
                   <td className="p-4 text-xs font-mono text-text-primary">
-                    {datePart}
+                    {entryDatePart}
                   </td>
                   {/* Entry Time */}
                   <td className="p-4 text-xs font-mono text-text-primary">
                     {entryTimePart}
+                  </td>
+                  {/* Exit Date */}
+                  <td className="p-4 text-xs font-mono text-text-primary">
+                    {exitDatePart}
                   </td>
                   {/* Exit Time */}
                   <td className="p-4 text-xs font-mono text-text-primary">
