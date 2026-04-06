@@ -1362,6 +1362,7 @@ function LogTradePageInner() {
                         <option value="London">🇬🇧 London (1:30 AM - 6:00 AM NY)</option>
                         <option value="NY AM">🇺🇸 NY AM (7:30 AM - 12:00 PM NY)</option>
                         <option value="NY PM">🇺🇸 NY PM (1:30 PM - 6:00 PM NY)</option>
+                        <option value="NY">🇺🇸 NY (Legacy - not split)</option>
                         <option value="Other">🌐 Other / Overlap</option>
                       </select>
                     </div>
