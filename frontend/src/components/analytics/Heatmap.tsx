@@ -39,7 +39,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
     }
   };
 
-  const sessions = ["Asia", "London", "NY"];
+  const sessions = ["Sydney", "Asia", "London", "NY"];
 
   return (
     <div className="w-full space-y-4">

@@ -78,17 +78,38 @@ export const analyticsService = {
     });
     weeklyStats.forEach(w => { if (w.trades > 0) w.avgPnl = w.avgPnl / w.trades; });
 
-    // Session performance (UTC)
-    const sessions = [
-      { session: "Asia", start: 0, end: 8, pnl: 0, trades: 0 },
-      { session: "London", start: 8, end: 16, pnl: 0, trades: 0 },
-      { session: "NY", start: 16, end: 24, pnl: 0, trades: 0 },
-    ];
+    // Session performance (UTC) - aligned with frontend detection
+    // Helper to determine session based on UTC hour (New York trading sessions)
+    const getSessionName = (hour: number): string => {
+      if (hour >= 21 || hour < 5) return "Sydney";
+      if (hour >= 5 && hour < 8) return "Asia";
+      if (hour >= 8 && hour < 13) return "London";
+      if (hour >= 13 && hour < 21) return "NY";
+      return "Other";
+    };
+
+    const sessionStats: Record<string, { pnl: number; trades: number }> = {
+      Sydney: { pnl: 0, trades: 0 },
+      Asia: { pnl: 0, trades: 0 },
+      London: { pnl: 0, trades: 0 },
+      NY: { pnl: 0, trades: 0 }
+    };
+
     rawTrades.forEach(t => {
       const hour = new Date(t.tradeDate).getUTCHours();
-      const sess = sessions.find(s => hour >= s.start && hour < s.end);
-      if (sess) { sess.pnl += t.actualPnl; sess.trades++; }
+      const sessName = getSessionName(hour);
+      if (sessionStats[sessName]) {
+        sessionStats[sessName].pnl += t.actualPnl;
+        sessionStats[sessName].trades++;
+      }
     });
+
+    const sessionOrder = ['Sydney', 'Asia', 'London', 'NY'];
+    const sessionPerformance = sessionOrder.map(session => ({
+      session,
+      pnl: sessionStats[session].pnl,
+      trades: sessionStats[session].trades
+    }));
 
     // Streak stats
     let currentStreak: { type: "win" | "loss"; count: number } = { type: "win", count: 0 };
@@ -158,10 +179,11 @@ export const analyticsService = {
       avgTradeDuration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     }
 
-    // Heatmap data: Day of Week (Mon-Sun) vs Session (Asia, London, NY) Pip.
+    // Heatmap data: Day of Week (Mon-Sun) vs Session (Sydney, Asia, London, NY) Pip.
     const heatmapMatrix = weekdays.map(day => ({
       day,
       sessions: [
+        { name: "Sydney", pnl: 0, count: 0 },
         { name: "Asia", pnl: 0, count: 0 },
         { name: "London", pnl: 0, count: 0 },
         { name: "NY", pnl: 0, count: 0 }
@@ -172,15 +194,15 @@ export const analyticsService = {
       const date = new Date(t.tradeDate);
       const dayIdx = (date.getDay() + 6) % 7; // Adjust to Mon-Sun (0=Mon, 6=Sun)
       const hour = date.getUTCHours();
-      
-      let sessIdx = 2; // Default to NY
-      if (hour >= 0 && hour < 8) sessIdx = 0; // Asia
-      else if (hour >= 8 && hour < 16) sessIdx = 1; // London
+      const sessName = getSessionName(hour);
 
       const dayData = heatmapMatrix[dayIdx];
       if (dayData) {
-        dayData.sessions[sessIdx].pnl += t.actualPnl;
-        dayData.sessions[sessIdx].count++;
+        const sess = dayData.sessions.find(s => s.name === sessName);
+        if (sess) {
+          sess.pnl += t.actualPnl;
+          sess.count++;
+        }
       }
     });
 
