@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
+import { apiClient } from "@/lib/api-client";
 
 export default function AccessDeniedPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -16,11 +19,39 @@ export default function AccessDeniedPage() {
     }
   }, [session, isPending, router]);
 
-  // Loading state
+  const handleVerify = async () => {
+    setIsVerifying(true);
+    setError(null);
+    try {
+      const response = await apiClient.get<{ isMember: boolean }>('/api/v1/auth/verify-guild');
+      if (response.success && response.data?.isMember) {
+        // Membership confirmed, redirect to dashboard
+        router.push("/dashboard");
+      } else {
+        setError("Kamu belum terdeteksi di server Hunter Trades. Pastikan sudah join dan coba lagi.");
+      }
+    } catch (err) {
+      setError("Gagal memverifikasi. Silakan coba lagi nanti.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/");
+        },
+      },
+    });
+  };
+
+  // Loading state for session
   if (isPending) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-dim text-on-surface">
-        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[#313338]">
+        <div className="w-8 h-8 border-4 border-[#5865F2]/20 border-t-[#5865F2] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -31,86 +62,107 @@ export default function AccessDeniedPage() {
   }
 
   return (
-    <>
-      {/* Meta viewport for mobile */}
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden"
+      style={{ backgroundColor: '#313338' }}
+    >
+      {/* Ambient Blurple Orbs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[200px] pointer-events-none animate-pulse"
+        style={{ backgroundColor: 'rgba(88,101,242,0.08)' }} />
+      <div className="absolute bottom-[-15%] right-[-5%] w-[400px] h-[400px] rounded-full blur-[180px] pointer-events-none animate-pulse"
+        style={{ backgroundColor: 'rgba(88,101,242,0.05)', animationDelay: '2s' }} />
 
-      <main className="w-full max-w-[440px] flex flex-col items-center text-center p-6 mx-auto relative min-h-screen">
-        {/* Animated Background */}
-        <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-error/5 blur-[120px]"></div>
+      {/* Access Denied Card — Matches Login Design */}
+      <main className="relative z-10 flex flex-col items-center w-full max-w-[420px] px-10 py-12 text-center animate-in fade-in zoom-in-95 duration-1000"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(43,45,49,0.6) 40%, rgba(30,31,34,0.95) 100%)',
+          backdropFilter: 'blur(28px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(140%)',
+          borderTop: '1px solid rgba(255,255,255,0.2)',
+          borderLeft: '1px solid rgba(255,255,255,0.12)',
+          borderRight: '1px solid rgba(0,0,0,0.5)',
+          borderBottom: '1px solid rgba(0,0,0,0.7)',
+          borderRadius: '24px',
+          boxShadow: 'inset 1px 1px 2px rgba(255,255,255,0.1), inset -1px -1px 4px rgba(0,0,0,0.6), 0 6px 12px rgba(0,0,0,0.5), 0 24px 48px rgba(0,0,0,0.8), 0 0 80px rgba(212,175,55,0.04)',
+        }}
+      >
+        {/* Logo — with gold heartbeat */}
+        <div className="mb-6 relative">
+          <div className="absolute inset-0 rounded-full bg-[#D4AF37] blur-[40px]"
+            style={{ animation: 'glowBreath 3s ease-in-out infinite', opacity: 0.15 }} />
+          <img 
+            src="/logo.png" 
+            alt="Hunter Trades Logo" 
+            className="relative w-24 h-auto mx-auto object-contain"
+            style={{ animation: 'logoPulse 3s ease-in-out infinite' }}
+          />
         </div>
 
-        {/* Terminal Identifier */}
-        <div className="mb-12 font-mono text-[10px] tracking-[0.3em] text-outline uppercase opacity-40">
-          System Error Code: 403_RESTRICTED_ACCESS
-        </div>
-
-        {/* Shield Icon */}
-        <div className="mb-8 relative">
-          <div className="absolute inset-0 bg-error/20 blur-2xl rounded-full scale-110"></div>
-          <div className="relative w-20 h-20 rounded-2xl glass-card flex items-center justify-center border-error/20">
-            <span className="material-symbols-outlined text-[56px] text-error">
-              shield
-            </span>
-          </div>
-        </div>
-
-        {/* Content */}
-        <h1 className="font-headline font-bold text-[28px] leading-tight text-[#E8E6E3] mb-4 tracking-tight">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-[0.1em] mb-2 uppercase text-white"
+        >
           AKSES DIBATASI
         </h1>
-        <p className="text-[15px] leading-relaxed text-secondary mb-10 px-4">
-          Anda belum bergabung di server Discord Hunter Trades. Untuk mengakses aplikasi,{" "}
-          <strong>silakan join server terlebih dahulu</strong>.
+
+        <p className="text-[10px] tracking-[0.3em] uppercase font-semibold mb-8 text-[#B5BAC1]"
+        >
+          Hanya Untuk Member Hunter Trades
         </p>
 
-        {/* Actions */}
-        <div className="w-full space-y-6">
-          {/* Button: Gabung Hunter Trades */}
+        <p className="text-[14px] leading-relaxed mb-8 max-w-[300px] text-[#949BA4]"
+        >
+          Maaf, kamu belum bergabung di server Discord **Hunter Trades**. Pastikan kamu sudah bergabung untuk menggunakan platform ini.
+        </p>
+
+        {error && (
+          <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[12px]">
+            {error}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="w-full space-y-4">
+          {/* Join Button */}
           <a
             href="https://discord.gg/eAhtEU44tQ"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full h-[52px] bg-primary-container text-surface-dim font-headline font-bold text-[15px] rounded-[10px] gold-glow hover:opacity-90 transition-all active:scale-[0.98] flex items-center justify-center gap-2 group"
+            className="w-full h-[48px] rounded-[8px] bg-[#5865F2] text-white font-semibold flex items-center justify-center space-x-2 transition-all hover:bg-[#4752C4] active:scale-[0.97]"
           >
-            Gabung Hunter Trades
-            <span className="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform">
-              arrow_forward
-            </span>
+            <span>Gabung Discord Hunter Trades</span>
           </a>
 
-          {/* Link: Coba masuk ulang */}
-          <div className="flex flex-col items-center gap-4">
-            <Link
-              href="/"
-              className="text-primary-container font-headline font-medium text-[14px] hover:underline transition-all tracking-wide underline-offset-4"
-            >
-              Coba masuk ulang
-            </Link>
-
-            {/* Decorative Footer */}
-            <div className="mt-8 flex items-center gap-2 opacity-30">
-              <span className="h-[1px] w-8 bg-outline"></span>
-              <span className="font-mono text-[10px] tracking-widest uppercase">Hunter Trades Ledger</span>
-              <span className="h-[1px] w-8 bg-outline"></span>
-            </div>
-          </div>
+          {/* Verify Button */}
+          <button
+            onClick={handleVerify}
+            disabled={isVerifying}
+            className="w-full h-[48px] rounded-[8px] border border-[#5865F2]/30 text-[#5865F2] font-semibold flex items-center justify-center space-x-2 transition-all hover:bg-[#5865F2]/10 active:scale-[0.97] disabled:opacity-50"
+          >
+            {isVerifying ? (
+              <div className="w-5 h-5 border-2 border-[#5865F2]/20 border-t-[#5865F2] rounded-full animate-spin"></div>
+            ) : (
+              <span>Sudah Join? Verifikasi Ulang</span>
+            )}
+          </button>
         </div>
 
-        {/* Bottom Decorative */}
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 opacity-20 pointer-events-none">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[14px]">security</span>
-            <span className="font-mono text-[10px] uppercase">Encrypted</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[14px]">terminal</span>
-            <span className="font-mono text-[10px] uppercase">v2.0.4-Gold</span>
-          </div>
+        {/* Separator */}
+        <div className="w-full h-[1px] my-8"
+          style={{ background: 'linear-gradient(to right, transparent, rgba(88,101,242,0.15), transparent)' }} />
+
+        {/* Secondary Actions */}
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={handleLogout}
+            className="text-[12px] text-[#B5BAC1] hover:text-white transition-all uppercase tracking-widest font-medium"
+          >
+            Ganti Akun Discord
+          </button>
+          
+          <p className="text-[9px] uppercase tracking-[0.25em] text-[#6D6F78]">
+            Elite Ledger v2.0.4 - Security Encrypted
+          </p>
         </div>
       </main>
-    </>
+    </div>
   );
 }
+

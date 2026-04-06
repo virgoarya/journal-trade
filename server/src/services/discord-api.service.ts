@@ -25,6 +25,7 @@ export class DiscordAPIService {
     userId: string
   ): Promise<boolean> {
     try {
+      console.log(`[DISCORD_API] Verifying membership for user ${userId} in guild ${guildId}`);
       const response = await axios.get(
         `${DISCORD_API_BASE}/guilds/${guildId}/members/${userId}`,
         {
@@ -33,12 +34,22 @@ export class DiscordAPIService {
           },
         }
       );
-      return response.status === 200;
+      
+      const isMember = response.status === 200;
+      console.log(`[DISCORD_API] User ${userId} membership status: ${isMember}`);
+      return isMember;
     } catch (error: any) {
       if (error.response?.status === 404) {
-        return false; // User bukan member guild
+        console.warn(`[DISCORD_API] User ${userId} is NOT a member of guild ${guildId}`);
+        return false;
       }
-      throw error; // Error lain (rate limit, network, etc)
+      
+      if (error.response?.status === 403) {
+        console.error(`[DISCORD_API] Forbidden: Token may be missing 'guilds.members.read' scope or Bot is not in the server.`);
+      }
+      
+      console.error(`[DISCORD_API] error checking membership:`, error.response?.data || error.message);
+      throw error;
     }
   }
 }
