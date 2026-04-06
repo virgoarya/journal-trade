@@ -154,7 +154,7 @@ export class TradeService {
   }
 
   async restore(id: string): Promise<ApiResponse<null>> {
-    return apiClient.patch<null>(`${this.basePath}/${id}/restore`);
+    return apiClient.patch<null>(`${this.basePath}/${id}/restore`, {});
   }
 
   async getSummary(): Promise<ApiResponse<TradeSummary>> {

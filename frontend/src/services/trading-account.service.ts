@@ -17,6 +17,8 @@ export interface TradingAccount {
   bio?: string;
   discordWebhook?: string;
   apiKey?: string;
+  riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
+  riskNotificationEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +33,9 @@ export interface CreateAccountDto {
   maxDailyTrades?: number;
   bio?: string;
   discordWebhook?: string;
+  riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
+  riskNotificationEnabled?: boolean;
+  defaultRiskPercent?: number;
 }
 
 export class TradingAccountService {
@@ -56,7 +61,13 @@ export class TradingAccountService {
     return apiClient.patch<TradingAccount>(`${this.basePath}/${id}`, data);
   }
 
-  async updateRiskRules(id: string, data: { maxDailyDrawdownPct: number; maxTotalDrawdownPct: number; maxDailyTrades?: number }): Promise<ApiResponse<TradingAccount>> {
+  async updateRiskRules(id: string, data: {
+    maxDailyDrawdownPct: number;
+    maxTotalDrawdownPct: number;
+    maxDailyTrades?: number;
+    riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
+    defaultRiskPercent?: number;
+  }): Promise<ApiResponse<TradingAccount>> {
     return apiClient.patch<TradingAccount>(`${this.basePath}/${id}/risk-rules`, data);
   }
 

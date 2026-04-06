@@ -31,6 +31,7 @@ export const logTradeSchema = z.object({
 export const updateTradeSchema = logTradeSchema.partial();
 
 export const getTradesQuerySchema = paginationQuerySchema.merge(dateRangeQuerySchema).extend({
+  tradingAccountId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   pair: z.string().optional(),
   playbookId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   result: z.enum(TRADE_RESULTS as readonly ["WIN", "LOSS", "BREAKEVEN"]).optional(),

@@ -1260,7 +1260,7 @@ function LogTradePageInner() {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || (riskWarning && !acknowledgeRisk)}
+                  disabled={loading || (!!riskWarning && !acknowledgeRisk)}
                   className="btn-gold font-bold uppercase tracking-widest text-sm px-8 py-2.5 animate-in flex items-center space-x-2 disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingTradeId ? <Edit2 className="w-4 h-4" /> : null)}
