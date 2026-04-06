@@ -823,8 +823,14 @@ function LogTradePageInner() {
                   <td className="p-4 text-right">
                     <div className="flex flex-col text-xs font-mono">
                       <span className="text-text-primary">{trade.entryPrice}</span>
-                      <span className="text-text-muted">SL: {trade.stopLoss}</span>
-                      {trade.takeProfit && <span className="text-text-muted">TP: {trade.takeProfit}</span>}
+                      <span className={trade.result === "loss" ? "text-data-loss" : "text-text-muted"}>
+                        SL: {trade.stopLoss}
+                      </span>
+                      {trade.takeProfit && (
+                        <span className={trade.result === "win" ? "text-data-profit" : "text-text-muted"}>
+                          TP: {trade.takeProfit}
+                        </span>
+                      )}
                     </div>
                   </td>
                   {/* Size */}
