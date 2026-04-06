@@ -11,6 +11,7 @@ export const analyticsService = {
     // Calculate basic stats
     let winCount = 0;
     let lossCount = 0;
+    let breakevenCount = 0;
     let grossProfit = 0;
     let grossLoss = 0;
     const wins: number[] = [];
@@ -28,9 +29,12 @@ export const analyticsService = {
         grossLoss += Math.abs(p);
         losses.push(p);
       }
+      else if (t.result === "BREAKEVEN") {
+        breakevenCount++;
+      }
     }
 
-    const total = winCount + lossCount;
+    const total = winCount + lossCount + breakevenCount;
     const winRate = total > 0 ? (winCount / total) * 100 : 0;
     const avgWin = winCount > 0 ? grossProfit / winCount : 0;
     const avgLoss = lossCount > 0 ? grossLoss / lossCount : 0;
