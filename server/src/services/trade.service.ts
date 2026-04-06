@@ -255,26 +255,71 @@ export const tradeService = {
 
   async update(id: string, userId: string, data: Partial<z.infer<typeof logTradeSchema>>) {
     try {
+      // 1. Fetch existing trade to check ownership and AI review status
+      const existing = await Trade.findOne({ _id: id, userId });
+      if (!existing) {
+        throw new Error("Trade not found or you don't have permission to edit it");
+      }
+
+      // 2. Validate direction and result enum values if provided
+      const allowedDirections = ["LONG", "SHORT"] as const;
+      const allowedResults = ["WIN", "LOSS", "BREAKEVEN"] as const;
+
       const updateData: Record<string, unknown> = { ...data };
 
-      if (updateData.direction && typeof updateData.direction === "string") {
-        updateData.direction = updateData.direction.toUpperCase();
-      }
-      if (updateData.result && typeof updateData.result === "string") {
-        updateData.result = updateData.result.toUpperCase();
-      }
-
-      // Don't allow updating certain fields if trade has AI review
-      if (updateData.entryPrice || updateData.stopLoss || updateData.tradeDate || updateData.pair) {
-        const existing = await Trade.findOne({ _id: id, userId });
-        // Could check for AI review here and restrict if needed
+      if (updateData.direction) {
+        const dir = typeof updateData.direction === "string"
+          ? updateData.direction.toUpperCase()
+          : updateData.direction;
+        if (!allowedDirections.includes(dir as any)) {
+          throw new Error(`Invalid direction: ${updateData.direction}. Must be LONG or SHORT.`);
+        }
+        updateData.direction = dir;
       }
 
+      if (updateData.result) {
+        const res = typeof updateData.result === "string"
+          ? updateData.result.toUpperCase()
+          : updateData.result;
+        if (!allowedResults.includes(res as any)) {
+          throw new Error(`Invalid result: ${updateData.result}. Must be WIN, LOSS, or BREAKEVEN.`);
+        }
+        updateData.result = res;
+      }
+
+      // 3. Check for AI review – prevent editing core trade details if AI review exists
+      const hasAIReview = existing.aiReviewId || existing.aiReviewCompletedAt;
+      if (hasAIReview) {
+        // List of fields that should NOT be edited if AI review exists
+        const restrictedFields = ['entryPrice', 'stopLoss', 'takeProfit', 'tradeDate', 'pair', 'direction', 'lotSize'];
+        const hasRestrictedUpdate = restrictedFields.some(field => updateData[field] !== undefined);
+
+        if (hasRestrictedUpdate) {
+          throw new Error(
+            "Cannot edit core trade details (entry, stop loss, take profit, date, pair, direction, lot size) because an AI review has been generated. Please delete the AI review first or create a new trade."
+          );
+        }
+      }
+
+      // 4. Protect sensitive fields from being updated
+      const protectedFields = ['userId', 'tradingAccountId', 'createdAt', 'isDeleted', 'deletedAt', 'deletionReason'];
+      const attemptedProtected = protectedFields.filter(field => updateData[field] !== undefined);
+      if (attemptedProtected.length > 0) {
+        console.warn(`Attempted to update protected fields: ${attemptedProtected.join(', ')} – ignoring.`);
+        // Remove protected fields from updateData
+        attemptedProtected.forEach(field => delete updateData[field]);
+      }
+
+      // 5. Perform update with atomic $set and auto-update updatedAt
       const updated = await Trade.findOneAndUpdate(
         { _id: id, userId, isDeleted: { $ne: true } },
         { $set: updateData, $currentDate: { updatedAt: true } },
         { returnDocument: 'after' }
       ).populate("playbookId");
+
+      if (!updated) {
+        throw new Error("Trade not found or already deleted");
+      }
 
       return updated;
     } catch (error) {
