@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import Head from "next/head";
 import "./globals.css";
 
 const inter = Inter({
@@ -35,11 +36,18 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <Head>
+        {/* Material Symbols Outlined Font */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
       <body className="min-h-full flex flex-col font-sans mb-0 relative" suppressHydrationWarning>
         {/* Ambient Background Glows */}
         <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/10 blur-[120px] pointer-events-none -z-10"></div>
         <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/5 blur-[100px] pointer-events-none -z-10"></div>
-        
+
         {children}
         <Toaster position="top-right" richColors />
       </body>

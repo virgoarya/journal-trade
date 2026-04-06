@@ -15,6 +15,14 @@
   --color-data-loss: #FF1744;
   --color-data-warning: #FFA726;
 
+  /* Access Denied Page Colors */
+  --color-on-surface: #E5E1E7;
+  --color-outline: #99907C;
+  --color-error: #FF1744;
+  --color-primary: #F2CA50;
+  --color-primary-container: #D4AF37;
+  --color-surface-dim: #050508;
+
   --font-sans: "Inter", "Geist Sans", sans-serif;
   --font-mono: "JetBrains Mono", "Geist Mono", monospace;
 
@@ -164,6 +172,43 @@
 
   .btn-ghost {
     @apply bg-transparent border border-border-subtle text-text-primary px-6 py-2.5 rounded-md transition-all hover:border-accent-gold hover:text-accent-gold;
+  }
+
+  /* Access Denied Page: Glass Card & Gold Glow */
+  .glass-card {
+    background: rgba(16, 16, 24, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-lg);
+  }
+
+  .gold-glow {
+    box-shadow: 0 24px 48px -12px rgba(212, 175, 55, 0.04);
+  }
+
+  /* Material Symbols Icon Font */
+  .material-symbols-outlined {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 56px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga";
+    font-variation-settings:
+      "FILL" 0,
+      "wght" 400,
+      "GRAD" 0,
+      "opsz" 24;
   }
 }
 
