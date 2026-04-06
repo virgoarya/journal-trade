@@ -167,11 +167,23 @@ function LogTradePageInner() {
     }
   };
 
-  // Detect trading session from tradeDate (UTC) - New York AM/PM only
-  const detectSession = (date: Date): "NY AM" | "NY PM" | "Other" => {
-    const hour = date.getUTCHours();
-    if (hour >= 13 && hour < 17) return "NY AM";
-    if (hour >= 17 && hour < 21) return "NY PM";
+  // Detect trading session using New York local time with DST
+  const detectSession = (date: Date): "Asia" | "London" | "NY AM" | "NY PM" | "Other" => {
+    // First, determine New York local hour
+    const dateObj = new Date(date);
+    const isDST = isNewYorkDST(dateObj);
+    const offsetHours = isDST ? -4 : -5;
+    const nyHour = (dateObj.getUTCHours() + offsetHours + 24) % 24;
+
+    // Check if within New York session (8 AM - 5 PM local)
+    if (nyHour >= 8 && nyHour < 12) return "NY AM";
+    if (nyHour >= 12 && nyHour < 17) return "NY PM";
+
+    // Outside NY session, approximate Asia/London using UTC
+    const utcHour = dateObj.getUTCHours();
+    if (utcHour >= 0 && utcHour < 8) return "Asia";
+    if (utcHour >= 8 && utcHour < 13) return "London";
+
     return "Other";
   };
 
@@ -1341,8 +1353,10 @@ function LogTradePageInner() {
                         className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
                       >
                         <option value="AUTO">🕐 Auto-Detect</option>
-                        <option value="NY AM">🇺🇸 NY AM (13:00–17:00 UTC)</option>
-                        <option value="NY PM">🇺🇸 NY PM (17:00–21:00 UTC)</option>
+                        <option value="Asia">🌏 Asia (00:00–08:00 UTC)</option>
+                        <option value="London">🇬🇧 London (08:00–13:00 UTC)</option>
+                        <option value="NY AM">🇺🇸 NY AM (8 AM - 12 PM NY)</option>
+                        <option value="NY PM">🇺🇸 NY PM (12 PM - 5 PM NY)</option>
                         <option value="Other">🌐 Other / Overlap</option>
                       </select>
                     </div>

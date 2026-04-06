@@ -2,11 +2,12 @@ import mongoose from "mongoose";
 import { Trade } from "../models/Trade";
 import { calculateProfitFactor, calculateExpectancy } from "../utils/calculations";
 
+
 export const analyticsService = {
 
   async getOverview(userId: string, accountId: string) {
     const rawTrades = await Trade.find({ tradingAccountId: accountId, userId, isDeleted: { $ne: true } })
-      .select('actualPnl result tradeDate pair');
+      .select('actualPnl result tradeDate pair session');
 
     // Calculate basic stats
     let winCount = 0;
@@ -78,30 +79,24 @@ export const analyticsService = {
     });
     weeklyStats.forEach(w => { if (w.trades > 0) w.avgPnl = w.avgPnl / w.trades; });
 
-    // Session performance (UTC) - New York session split into AM/PM
-    // Helper to determine session based on UTC hour
-    const getSessionName = (hour: number): string => {
-      // New York session: 13:00-21:00 UTC (8 AM - 5 PM EST)
-      if (hour >= 13 && hour < 17) return "NY AM";   // 13:00-17:00 UTC (8 AM - 12 PM EST)
-      if (hour >= 17 && hour < 21) return "NY PM";   // 17:00-21:00 UTC (12 PM - 5 PM EST)
-      return "Other";
-    };
-
+    // Session performance based on stored session field (set during trade logging)
     const sessionStats: Record<string, { pnl: number; trades: number }> = {
+      "Asia": { pnl: 0, trades: 0 },
+      "London": { pnl: 0, trades: 0 },
       "NY AM": { pnl: 0, trades: 0 },
-      "NY PM": { pnl: 0, trades: 0 }
+      "NY PM": { pnl: 0, trades: 0 },
+      "Other": { pnl: 0, trades: 0 }
     };
 
     rawTrades.forEach(t => {
-      const hour = new Date(t.tradeDate).getUTCHours();
-      const sessName = getSessionName(hour);
-      if (sessionStats[sessName]) {
-        sessionStats[sessName].pnl += t.actualPnl;
-        sessionStats[sessName].trades++;
+      const sess = t.session || "Other";
+      if (sessionStats[sess]) {
+        sessionStats[sess].pnl += t.actualPnl;
+        sessionStats[sess].trades++;
       }
     });
 
-    const sessionOrder = ['NY AM', 'NY PM'];
+    const sessionOrder = ['Asia', 'London', 'NY AM', 'NY PM'];
     const sessionPerformance = sessionOrder.map(session => ({
       session,
       pnl: sessionStats[session].pnl,
@@ -176,10 +171,12 @@ export const analyticsService = {
       avgTradeDuration = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     }
 
-    // Heatmap data: Day of Week (Mon-Sun) vs Session (NY AM, NY PM) Pip.
+    // Heatmap data: Day of Week (Mon-Sun) vs Session (Asia, London, NY AM, NY PM) Pip.
     const heatmapMatrix = weekdays.map(day => ({
       day,
       sessions: [
+        { name: "Asia", pnl: 0, count: 0 },
+        { name: "London", pnl: 0, count: 0 },
         { name: "NY AM", pnl: 0, count: 0 },
         { name: "NY PM", pnl: 0, count: 0 }
       ]
@@ -188,15 +185,14 @@ export const analyticsService = {
     rawTrades.forEach(t => {
       const date = new Date(t.tradeDate);
       const dayIdx = (date.getDay() + 6) % 7; // Adjust to Mon-Sun (0=Mon, 6=Sun)
-      const hour = date.getUTCHours();
-      const sessName = getSessionName(hour);
+      const sess = t.session || "Other";
 
       const dayData = heatmapMatrix[dayIdx];
       if (dayData) {
-        const sess = dayData.sessions.find(s => s.name === sessName);
-        if (sess) {
-          sess.pnl += t.actualPnl;
-          sess.count++;
+        const sessionCell = dayData.sessions.find(s => s.name === sess);
+        if (sessionCell) {
+          sessionCell.pnl += t.actualPnl;
+          sessionCell.count++;
         }
       }
     });

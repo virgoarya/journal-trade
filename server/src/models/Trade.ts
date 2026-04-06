@@ -20,7 +20,7 @@ export interface ITrade extends Document {
   exitDate?: Date;
   // New fields for playbook matching
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
-  session?: "Asia" | "London" | "NY" | "Sydney" | "Other";
+  session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other";
   riskPercent?: number; // Risk exposure as percentage of account equity
   // Soft delete
   isDeleted?: boolean;
@@ -55,7 +55,7 @@ const TradeSchema = new Schema<ITrade>({
   },
   session: {
     type: String,
-    enum: ["Asia", "London", "NY", "Sydney", "Other"]
+    enum: ["Asia", "London", "NY AM", "NY PM", "Other"]
   },
   riskPercent: { type: Number, min: 0, max: 100 },
   isDeleted: { type: Boolean, default: false },
