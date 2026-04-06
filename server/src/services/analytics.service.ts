@@ -90,10 +90,10 @@ export const analyticsService = {
 
     rawTrades.forEach(t => {
       const sess = t.session || "Other";
-      if (sessionStats[sess]) {
-        sessionStats[sess].pnl += t.actualPnl;
-        sessionStats[sess].trades++;
-      }
+      // Map to known session keys, unknown sessions go to "Other"
+      const sessionKey = (sess === "Asia" || sess === "London" || sess === "NY AM" || sess === "NY PM") ? sess : "Other";
+      sessionStats[sessionKey].pnl += t.actualPnl;
+      sessionStats[sessionKey].trades++;
     });
 
     const sessionOrder = ['Asia', 'London', 'NY AM', 'NY PM'];

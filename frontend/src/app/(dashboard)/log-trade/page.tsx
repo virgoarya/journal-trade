@@ -167,22 +167,27 @@ function LogTradePageInner() {
     }
   };
 
-  // Detect trading session using New York local time with DST
+  // Detect trading session using New York local time with precise time ranges
   const detectSession = (date: Date): "Asia" | "London" | "NY AM" | "NY PM" | "Other" => {
-    // First, determine New York local hour
     const dateObj = new Date(date);
     const isDST = isNewYorkDST(dateObj);
     const offsetHours = isDST ? -4 : -5;
     const nyHour = (dateObj.getUTCHours() + offsetHours + 24) % 24;
+    const nyMinute = dateObj.getUTCMinutes();
 
-    // Check if within New York session (8 AM - 5 PM local)
-    if (nyHour >= 8 && nyHour < 12) return "NY AM";
-    if (nyHour >= 12 && nyHour < 17) return "NY PM";
+    // Convert to total minutes for precise range checking
+    const nyTotalMinutes = nyHour * 60 + nyMinute;
 
-    // Outside NY session, approximate Asia/London using UTC
-    const utcHour = dateObj.getUTCHours();
-    if (utcHour >= 0 && utcHour < 8) return "Asia";
-    if (utcHour >= 8 && utcHour < 13) return "London";
+    // Session ranges based on New York local time:
+    // Asia: 18:30 (1130) - 24:00 (1440)
+    // London: 01:30 (90) - 06:00 (360)
+    // NY AM: 07:30 (450) - 12:00 (720)
+    // NY PM: 13:30 (810) - 18:00 (1080)
+
+    if (nyTotalMinutes >= 1130 && nyTotalMinutes < 1440) return "Asia";          // 18:30 - 24:00
+    if (nyTotalMinutes >= 90 && nyTotalMinutes < 360) return "London";          // 01:30 - 06:00
+    if (nyTotalMinutes >= 450 && nyTotalMinutes < 720) return "NY AM";          // 07:30 - 12:00
+    if (nyTotalMinutes >= 810 && nyTotalMinutes < 1080) return "NY PM";         // 13:30 - 18:00
 
     return "Other";
   };
@@ -1353,10 +1358,10 @@ function LogTradePageInner() {
                         className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
                       >
                         <option value="AUTO">🕐 Auto-Detect</option>
-                        <option value="Asia">🌏 Asia (00:00–08:00 UTC)</option>
-                        <option value="London">🇬🇧 London (08:00–13:00 UTC)</option>
-                        <option value="NY AM">🇺🇸 NY AM (8 AM - 12 PM NY)</option>
-                        <option value="NY PM">🇺🇸 NY PM (12 PM - 5 PM NY)</option>
+                        <option value="Asia">🌏 Asia (6:30 PM - 12:00 AM NY)</option>
+                        <option value="London">🇬🇧 London (1:30 AM - 6:00 AM NY)</option>
+                        <option value="NY AM">🇺🇸 NY AM (7:30 AM - 12:00 PM NY)</option>
+                        <option value="NY PM">🇺🇸 NY PM (1:30 PM - 6:00 PM NY)</option>
                         <option value="Other">🌐 Other / Overlap</option>
                       </select>
                     </div>
