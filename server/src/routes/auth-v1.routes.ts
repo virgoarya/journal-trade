@@ -32,22 +32,45 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     }
 
     // Find the Discord OAuth account for this user
-    // Better Auth stores accounts in 'accounts' collection
-    const accountsCollection = db.collection('accounts');
+    // Better Auth stores accounts in 'account' collection (singular by default in MongoDB adapter)
+    const accountsCollection = db.collection('account');
+    console.log(`[GUILD_VERIFY] Searching account for userId: ${userId}`);
+    
     const account = await accountsCollection.findOne({
       userId: userId,
       provider: 'discord',
     });
 
+    if (!account) {
+      console.error(`[GUILD_VERIFY] Account not found in 'account' collection for userId: ${userId}`);
+      // Try 'accounts' (plural) just in case
+      const accountPlural = await db.collection('accounts').findOne({
+        userId: userId,
+        provider: 'discord',
+      });
+      
+      if (!accountPlural) {
+        return apiResponse.error(res, 'Account Discord tidak ditemukan. Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
+      }
+      
+      console.log(`[GUILD_VERIFY] Found account in 'accounts' (plural) collection.`);
+      // Use the plural one if found
+      Object.assign(account || {}, accountPlural);
+    }
+
     if (!account || !account.accessToken) {
-      return apiResponse.error(res, 'Discord account tidak ditemukan. Silakan login ulang dengan Discord.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
+      console.error(`[GUILD_VERIFY] Access token missing for account:`, account?.id || 'null');
+      return apiResponse.error(res, 'Sesi Discord kedaluwarsa. Silakan login ulang.', 'DISCORD_TOKEN_MISSING', 403);
     }
 
     // Extract Discord user ID from providerAccountId
     const discordUserId = account.providerAccountId;
     if (!discordUserId) {
+      console.error(`[GUILD_VERIFY] providerAccountId missing for account:`, account.id);
       return apiResponse.error(res, 'Discord user ID tidak ditemukan', 'DISCORD_USER_ID_NOT_FOUND', 403);
     }
+
+    console.log(`[GUILD_VERIFY] Verifying Discord user: ${discordUserId}`);
 
     // Verify guild membership using Discord API
     const discordService = DiscordAPIService.getInstance();
