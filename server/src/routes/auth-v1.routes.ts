@@ -32,8 +32,6 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     }
 
     // Find the Discord OAuth account for this user
-    // Better Auth might store userId as a String or an ObjectId
-    // We'll also try both 'account' (default) and 'accounts' collections
     const { ObjectId } = require('mongodb');
     
     let account = null;
@@ -41,8 +39,14 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     
     console.log(`[GUILD_VERIFY] Searching account for userId: ${userId}`);
 
+    // DEBUG: List collections to be absolutely sure
+    const allCols = await db.listCollections().toArray();
+    console.log(`[GUILD_VERIFY] Available collections: ${allCols.map(c => c.name).join(', ')}`);
+
     for (const colName of collections) {
       const collection = db.collection(colName);
+      const totalDocs = await collection.countDocuments();
+      console.log(`[GUILD_VERIFY] Collection '${colName}' has ${totalDocs} documents.`);
       
       // Try 1: Search with userId as string
       account = await collection.findOne({
@@ -52,11 +56,8 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
       
       if (account) {
         console.log(`[GUILD_VERIFY] Found account in '${colName}' using String ID.`);
-        break;
-      }
-      
-      // Try 2: Search with userId as ObjectId (if valid hex)
-      if (typeof userId === 'string' && userId.length === 24) {
+      } else if (typeof userId === 'string' && userId.length === 24) {
+        // Try 2: Search with userId as ObjectId
         try {
           account = await collection.findOne({
             userId: new ObjectId(userId),
@@ -64,23 +65,36 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
           });
           if (account) {
             console.log(`[GUILD_VERIFY] Found account in '${colName}' using ObjectId.`);
-            break;
           }
-        } catch (e) {
-          // Not a valid ObjectId hex string
+        } catch (e) {}
+      }
+      
+      if (account) break;
+    }
+
+    if (!account) {
+      console.error(`[GUILD_VERIFY] SEARCH FAILED. Trying to find ANY account for userId: ${userId}`);
+      for (const colName of collections) {
+        const anyAccount = await db.collection(colName).findOne({
+          $or: [{ userId: userId }, { userId: new ObjectId(userId) }]
+        });
+        if (anyAccount) {
+          console.log(`[GUILD_VERIFY] Found an account in '${colName}' but might not be 'discord' provider. Provider is: ${anyAccount.provider}`);
+          account = anyAccount;
+          break;
         }
       }
     }
 
     if (!account || !account.accessToken) {
-      console.error(`[GUILD_VERIFY] Account or accessToken not found for userId: ${userId}`);
+      console.error(`[GUILD_VERIFY] Final check failed. accountFound: ${!!account}, tokenFound: ${!!account?.accessToken}`);
       return apiResponse.error(res, 'Sesi Discord tidak ditemukan. Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
     }
 
     // Extract Discord user ID from providerAccountId
     const discordUserId = account.providerAccountId;
     if (!discordUserId) {
-      console.error(`[GUILD_VERIFY] providerAccountId missing for account:`, account.id);
+      console.error(`[GUILD_VERIFY] providerAccountId missing for account:`, account._id || account.id);
       return apiResponse.error(res, 'Discord user ID tidak ditemukan', 'DISCORD_USER_ID_NOT_FOUND', 403);
     }
 
