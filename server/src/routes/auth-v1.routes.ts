@@ -48,23 +48,20 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
       const totalDocs = await collection.countDocuments();
       console.log(`[GUILD_VERIFY] Collection '${colName}' has ${totalDocs} documents.`);
       
-      // Try 1: Search with userId as string
-      account = await collection.findOne({
-        userId: userId,
-        provider: 'discord',
-      });
-      
-      if (account) {
-        console.log(`[GUILD_VERIFY] Found account in '${colName}' using String ID.`);
-      } else if (typeof userId === 'string' && userId.length === 24) {
-        // Try 2: Search with userId as ObjectId
+      // Try with different field names: provider/providerId and accountId/providerAccountId
+      const queryVariations = [
+        { userId: userId, provider: 'discord' },
+        { userId: userId, providerId: 'discord' },
+        { userId: new ObjectId(userId), provider: 'discord' },
+        { userId: new ObjectId(userId), providerId: 'discord' }
+      ];
+
+      for (const query of queryVariations) {
         try {
-          account = await collection.findOne({
-            userId: new ObjectId(userId),
-            provider: 'discord',
-          });
+          account = await collection.findOne(query);
           if (account) {
-            console.log(`[GUILD_VERIFY] Found account in '${colName}' using ObjectId.`);
+            console.log(`[GUILD_VERIFY] Found account in '${colName}' using query: ${JSON.stringify(query)}`);
+            break;
           }
         } catch (e) {}
       }
@@ -79,23 +76,30 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
           $or: [{ userId: userId }, { userId: new ObjectId(userId) }]
         });
         if (anyAccount) {
-          console.log(`[GUILD_VERIFY] Found an account in '${colName}' but might not be 'discord' provider. Provider is: ${anyAccount.provider}`);
+          console.log(`[GUILD_VERIFY] DEBUG: Found account structure keys: ${Object.keys(anyAccount).join(', ')}`);
+          console.log(`[GUILD_VERIFY] DEBUG: providerId: ${anyAccount.providerId}, provider: ${anyAccount.provider}`);
           account = anyAccount;
           break;
         }
       }
     }
 
-    if (!account || !account.accessToken) {
-      console.error(`[GUILD_VERIFY] Final check failed. accountFound: ${!!account}, tokenFound: ${!!account?.accessToken}`);
-      return apiResponse.error(res, 'Sesi Discord tidak ditemukan. Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
+    if (!account) {
+      return apiResponse.error(res, 'Sesi Discord tidak ditemukan (Account missing). Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
     }
 
-    // Extract Discord user ID from providerAccountId
-    const discordUserId = account.providerAccountId;
+    // Try multiple field names for token and discord ID
+    const accessToken = account.accessToken || account.access_token;
+    const discordUserId = account.accountId || account.providerAccountId;
+
+    if (!accessToken) {
+      console.error(`[GUILD_VERIFY] Access token missing. Available keys:`, Object.keys(account).join(', '));
+      return apiResponse.error(res, 'Sesi Discord kedaluwarsa. Silakan login ulang.', 'DISCORD_TOKEN_MISSING', 403);
+    }
+
     if (!discordUserId) {
-      console.error(`[GUILD_VERIFY] providerAccountId missing for account:`, account._id || account.id);
-      return apiResponse.error(res, 'Discord user ID tidak ditemukan', 'DISCORD_USER_ID_NOT_FOUND', 403);
+      console.error(`[GUILD_VERIFY] Discord User ID missing. Available keys:`, Object.keys(account).join(', '));
+      return apiResponse.error(res, 'ID Discord tidak ditemukan di akun.', 'DISCORD_USER_ID_NOT_FOUND', 403);
     }
 
     console.log(`[GUILD_VERIFY] Verifying Discord user: ${discordUserId}`);
@@ -104,8 +108,7 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     const discordService = DiscordAPIService.getInstance();
     
     // Strategy: Fetch all user guilds and search for our target guildId
-    // This works even without a bot in the server
-    const userGuilds = await discordService.getUserGuilds(account.accessToken);
+    const userGuilds = await discordService.getUserGuilds(accessToken);
     const isMember = userGuilds.some((guild: any) => guild.id === env.DISCORD_GUILD_ID);
 
     if (!isMember) {
