@@ -51,11 +51,15 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
 
     // Verify guild membership using Discord API
     const discordService = DiscordAPIService.getInstance();
-    const isMember = await discordService.checkGuildMembership(
-      account.accessToken,
-      env.DISCORD_GUILD_ID,
-      discordUserId
-    );
+    
+    // Strategy: Fetch all user guilds and search for our target guildId
+    // This works even without a bot in the server
+    const userGuilds = await discordService.getUserGuilds(account.accessToken);
+    const isMember = userGuilds.some((guild: any) => guild.id === env.DISCORD_GUILD_ID);
+
+    if (!isMember) {
+      console.warn(`[GUILD_VERIFY] User ${discordUserId} not found in guild ${env.DISCORD_GUILD_ID} list.`);
+    }
 
     // Return membership status
     return apiResponse.success(res, {

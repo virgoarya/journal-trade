@@ -24,7 +24,7 @@ export const createAuth = () => {
       discord: {
         clientId: env.DISCORD_CLIENT_ID,
         clientSecret: env.DISCORD_CLIENT_SECRET,
-        scope: ["identify", "email", "guilds.members.read"],
+        scope: ["identify", "email", "guilds.members.read", "guilds"],
       },
     },
     session: {
