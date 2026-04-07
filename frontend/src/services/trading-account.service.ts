@@ -72,7 +72,7 @@ export class TradingAccountService {
   }
 
   async generateApiKey(id: string): Promise<ApiResponse<{ apiKey: string }>> {
-    return apiClient.post<{ apiKey: string }>(`${this.basePath}/id}/generate-api-key`, {});
+    return apiClient.post<{ apiKey: string }>(`${this.basePath}/${id}/generate-api-key`, {});
   }
 
   async delete(id: string): Promise<ApiResponse<{ message: string }>> {
