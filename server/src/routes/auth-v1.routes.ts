@@ -32,35 +32,49 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     }
 
     // Find the Discord OAuth account for this user
-    // Better Auth stores accounts in 'account' collection (singular by default in MongoDB adapter)
-    const accountsCollection = db.collection('account');
-    console.log(`[GUILD_VERIFY] Searching account for userId: ${userId}`);
+    // Better Auth might store userId as a String or an ObjectId
+    // We'll also try both 'account' (default) and 'accounts' collections
+    const { ObjectId } = require('mongodb');
     
-    const account = await accountsCollection.findOne({
-      userId: userId,
-      provider: 'discord',
-    });
+    let account = null;
+    const collections = ['account', 'accounts'];
+    
+    console.log(`[GUILD_VERIFY] Searching account for userId: ${userId}`);
 
-    if (!account) {
-      console.error(`[GUILD_VERIFY] Account not found in 'account' collection for userId: ${userId}`);
-      // Try 'accounts' (plural) just in case
-      const accountPlural = await db.collection('accounts').findOne({
+    for (const colName of collections) {
+      const collection = db.collection(colName);
+      
+      // Try 1: Search with userId as string
+      account = await collection.findOne({
         userId: userId,
         provider: 'discord',
       });
       
-      if (!accountPlural) {
-        return apiResponse.error(res, 'Account Discord tidak ditemukan. Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
+      if (account) {
+        console.log(`[GUILD_VERIFY] Found account in '${colName}' using String ID.`);
+        break;
       }
       
-      console.log(`[GUILD_VERIFY] Found account in 'accounts' (plural) collection.`);
-      // Use the plural one if found
-      Object.assign(account || {}, accountPlural);
+      // Try 2: Search with userId as ObjectId (if valid hex)
+      if (typeof userId === 'string' && userId.length === 24) {
+        try {
+          account = await collection.findOne({
+            userId: new ObjectId(userId),
+            provider: 'discord',
+          });
+          if (account) {
+            console.log(`[GUILD_VERIFY] Found account in '${colName}' using ObjectId.`);
+            break;
+          }
+        } catch (e) {
+          // Not a valid ObjectId hex string
+        }
+      }
     }
 
     if (!account || !account.accessToken) {
-      console.error(`[GUILD_VERIFY] Access token missing for account:`, account?.id || 'null');
-      return apiResponse.error(res, 'Sesi Discord kedaluwarsa. Silakan login ulang.', 'DISCORD_TOKEN_MISSING', 403);
+      console.error(`[GUILD_VERIFY] Account or accessToken not found for userId: ${userId}`);
+      return apiResponse.error(res, 'Sesi Discord tidak ditemukan. Silakan login ulang.', 'DISCORD_ACCOUNT_NOT_FOUND', 403);
     }
 
     // Extract Discord user ID from providerAccountId
