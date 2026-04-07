@@ -1,4 +1,5 @@
 import { TradingAccount } from "../models/TradingAccount";
+import { Trade } from "../models/Trade";
 import { z } from "zod";
 import { createTradingAccountSchema, updateRiskRulesSchema, updateTradingAccountSchema } from "../validators/trading-account.validator";
 
@@ -92,6 +93,34 @@ export const tradingAccountService = {
     );
 
     return updated;
+  },
+
+  async deleteAccount(accountId: string, userId: string) {
+    // 1. Find the account to check if it's active
+    const account = await TradingAccount.findOne({ _id: accountId, userId });
+    if (!account) return null;
+
+    const wasActive = account.isActive;
+
+    // 2. Cascading Delete: Remove all trades associated with this account
+    console.log(`[CLEANUP] Deleting all trades for account ${accountId}`);
+    const tradeDeleteResult = await Trade.deleteMany({ tradingAccountId: accountId, userId });
+    console.log(`[CLEANUP] Deleted ${tradeDeleteResult.deletedCount} trades.`);
+
+    // 3. Delete the account itself
+    await TradingAccount.deleteOne({ _id: accountId, userId });
+
+    // 4. If the deleted account was active, set another account as active
+    if (wasActive) {
+      const nextAccount = await TradingAccount.findOne({ userId });
+      if (nextAccount) {
+        nextAccount.isActive = true;
+        await nextAccount.save();
+        console.log(`[CLEANUP] Set account ${nextAccount._id} as the new active account.`);
+      }
+    }
+
+    return true;
   },
 
   async generateApiKey(accountId: string, userId: string) {

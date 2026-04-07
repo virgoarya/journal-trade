@@ -59,6 +59,14 @@ router.post("/:id/generate-api-key", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const result = await tradingAccountService.deleteAccount(req.params.id as string, req.user.id);
+    if (!result) return apiResponse.notFound(res, "Akun tidak ditemukan");
+    return apiResponse.success(res, { message: "Akun dan data terkait berhasil dihapus" });
+  } catch (error) { next(error); }
+});
+
 // NOTE: Reset data route will be implemented in settings.routes.ts
 
 export default router;

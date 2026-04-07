@@ -203,6 +203,32 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    if (!confirm(`Hapus akun "${accountName}"? Seluruh data trade terkait akun ini akan dihapus permanen.`)) return;
+    
+    setIsLoading(true);
+    setStatusMsg(null);
+    try {
+      const res = await tradingAccountService.delete(accountId);
+      if (res.success) {
+        setStatusMsg({ type: 'success', text: "Akun berhasil dihapus." });
+        setUserAccounts(prev => prev.filter(a => a.id !== accountId));
+        // Jika akun yang dihapus sedang aktif, kita perlu muat ulang halaman untuk update state global
+        const deletedAccount = userAccounts.find(a => a.id === accountId);
+        if (deletedAccount?.isActive) {
+           window.location.reload();
+        }
+      } else {
+        setStatusMsg({ type: 'error', text: res.error || "Gagal menghapus akun." });
+      }
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: "Network error." });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setStatusMsg(null), 3000);
+    }
+  };
+
   const handleCreateAccount = async () => {
     if (!newAccountForm.accountName || newAccountForm.initialBalance <= 0) return;
     setIsLoading(true);
@@ -468,17 +494,26 @@ export default function SettingsPage() {
                            <Briefcase className="w-5 h-5 text-text-muted" />
                         </div>
                         <div className="flex justify-between items-end border-t border-white/5 pt-4">
-                           <div>
-                              <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
-                              <p className="text-sm font-mono font-bold text-accent-gold">{account.currency} {account.initialBalance.toLocaleString()}</p>
+                           <div className="flex gap-4 items-end">
+                              <div>
+                                 <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
+                                 <p className="text-sm font-mono font-bold text-accent-gold">{account.currency} {account.initialBalance.toLocaleString()}</p>
+                              </div>
+                              {!account.isActive && (
+                                 <button onClick={() => {
+                                    tradingAccountService.setActive(account.id).then(() => window.location.reload());
+                                 }} className="text-[10px] uppercase font-bold tracking-wider text-text-secondary hover:text-accent-gold pb-0.5">
+                                    Set Active
+                                 </button>
+                              )}
                            </div>
-                           {!account.isActive && (
-                              <button onClick={() => {
-                                 tradingAccountService.setActive(account.id).then(() => window.location.reload());
-                              }} className="text-[10px] uppercase font-bold tracking-wider text-text-secondary hover:text-accent-gold">
-                                 Set Active
-                              </button>
-                           )}
+                           <button 
+                             onClick={() => handleDeleteAccount(account.id, account.accountName)}
+                             className="p-2 text-text-muted hover:text-data-loss transition-colors rounded-lg hover:bg-data-loss/10"
+                             title="Hapus Akun"
+                           >
+                              <Trash2 className="w-4 h-4" />
+                           </button>
                         </div>
                      </div>
                    ))}
