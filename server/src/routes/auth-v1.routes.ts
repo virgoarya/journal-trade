@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { DiscordAPIService } from "../services/discord-api.service";
-import { authInstance } from "../auth-context";
+import { authMongoClient } from "../db/mongoose";
 import { env } from "../config/env";
 import { apiResponse } from "../utils/api-response";
 
@@ -25,8 +25,8 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
       return apiResponse.unauthorized(res, 'User tidak terautentikasi');
     }
 
-    // Get database connection from authInstance
-    const db = authInstance.api.getDatabase();
+    // Use authMongoClient directly instead of authInstance.api
+    const db = authMongoClient.db(env.DATABASE_NAME);
     if (!db) {
       return apiResponse.error(res, 'Database tidak tersedia', 'DATABASE_ERROR', 500);
     }
