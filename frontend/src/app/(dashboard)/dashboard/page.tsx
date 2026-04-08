@@ -22,6 +22,7 @@ import { useSession } from "@/lib/auth-client";
 import { Heatmap } from "@/components/analytics/Heatmap";
 import { PnLCalendar } from "@/components/analytics/PnLCalendar";
 import { AssetDistributionChart } from "@/components/analytics/AssetDistributionChart";
+import { ForexCalculator } from "@/components/dashboard/ForexCalculator";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
@@ -430,6 +431,14 @@ export default function DashboardPage() {
 
         {/* Right: Side Panels */}
         <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
+
+          {/* Forex Calculator */}
+          <div className="min-h-[300px] sm:min-h-[350px]">
+            <ForexCalculator 
+              initialBalance={currentEquity} 
+              defaultRisk={activeAccount?.defaultRiskPercent}
+            />
+          </div>
 
           {/* Performance Matrix */}
           <div className="glass p-3 sm:p-4 flex flex-col min-h-[180px] sm:min-h-[220px]">
