@@ -288,8 +288,42 @@ CRITICAL RULES:
       }
     }
 
+    // If OpenRouter failed, try Groq as fallback
+    if (!msg && env.GROQ_API_KEY) {
+      console.log("Trying Groq as fallback...");
+
+      try {
+        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: "You are a professional trading coach. Respond ONLY with structured report format." },
+              { role: "user", content: prompt }
+            ],
+            max_tokens: 1500
+          })
+        });
+
+        const groqData: any = await groqResponse.json();
+        
+        if (groqData.choices && groqData.choices[0]?.message?.content) {
+          console.log("Success with Groq");
+          msg = { content: groqData.choices[0].message.content };
+        } else {
+          console.warn("Groq response invalid:", groqData);
+        }
+      } catch (groqError: any) {
+        console.warn("Groq also failed:", groqError.message);
+      }
+    }
+
     if (!msg) {
-      throw lastError || new Error("All AI models failed");
+      throw lastError || new Error("All AI providers failed");
     }
 
     console.log("AI response:", JSON.stringify(msg, null, 2));
@@ -404,7 +438,7 @@ CRITICAL RULES:
       return review;
     } catch (error: any) {
       console.error("AI API Error:", error.message || error);
-      throw new Error("Gagal menghasilkan review AI. Silakan coba lagi nanti.");
+      throw new Error("Gagal menghasilkan review AI. Semua provider free sudah habis.");
     }
   },
 

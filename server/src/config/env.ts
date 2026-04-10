@@ -26,6 +26,10 @@ const envSchema = z.object({
   ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
   ANTHROPIC_BASE_URL: z.string().url().optional().default("https://api.anthropic.com"),
   ANTHROPIC_MODEL: z.string().min(1).optional().default("anthropic/claude-3-5-haiku-latest"),
+
+  // Groq (fallback for free AI)
+  GROQ_API_KEY: z.string().min(1).optional(),
+  GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
 });
 
 const _env = envSchema.safeParse(process.env);
