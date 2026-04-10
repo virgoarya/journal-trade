@@ -29,20 +29,7 @@ function parseFormattedText(text: string): any {
   if (scoreMatch) {
     result.score = Math.max(1, Math.min(10, parseInt(scoreMatch[1], 10)));
   } else {
-    // If no score found, calculate based on trade performance
-    const pnl = trade.actualPnl || 0;
-    const risk = trade.riskPercent || 0;
-    const rMultiple = trade.rMultiple || 0;
-
-    if (pnl > 0) {
-      result.score = 7 + Math.min(3, Math.floor(pnl / 100));
-    } else if (pnl < 0) {
-      result.score = 4 - Math.min(3, Math.floor(Math.abs(pnl) / 100));
-    } else {
-      result.score = 5;
-    }
-
-    result.score = Math.max(1, Math.min(10, result.score));
+    result.score = 5; // Default fallback
   }
 
   // Extract Summary: between "AI Analysis Report" and "Overall Score"
@@ -259,8 +246,7 @@ CRITICAL RULES:
         model: model,
         max_tokens: 1500,
         messages: [
-          { role: "system", content: "You are a professional trading coach. Respond ONLY with the structured report format. No explanations, no markdown, no JSON." },
-          { role: "user", content: prompt }
+          { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with the structured report format below. No explanations, no markdown, no JSON." }
         ]
       });
 
@@ -313,7 +299,7 @@ CRITICAL RULES:
 
       // Third: check for reasoning_content (some models use this)
       if (!text && 'reasoning_content' in msg) {
-        text = msg.reasoning_content;
+        text = msg.reasoning_content as string;
         console.log("Using reasoning_content");
       }
 
