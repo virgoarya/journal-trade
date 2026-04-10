@@ -172,9 +172,14 @@ export const aiReviewService = {
       }
     });
 
-    // Use a reliable model that's available on OpenRouter
-    const model = env.ANTHROPIC_MODEL || "google/gemma-4-31b-it:free";
-    console.log("Using AI model:", model);
+    // Fallback models list
+    const fallbackModels = [
+      env.ANTHROPIC_MODEL || "google/gemma-4-31b-it:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "deepseek/deepseek-r1:free",
+      "openrouter/free"
+    ];
+    const triedModels: string[] = [];
 
     const prompt = `
 You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
@@ -241,16 +246,46 @@ CRITICAL RULES:
 - Always include "Risk Warning:" section
 `;
 
-    try {
-      const msg = await anthropic.messages.create({
-        model: model,
-        max_tokens: 1500,
-        messages: [
-          { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with the structured report format below. No explanations, no markdown, no JSON." }
-        ]
-      });
+    let msg: any;
+    let lastError: Error | undefined;
 
-      console.log("Full AI response:", JSON.stringify(msg, null, 2));
+    // Try each model in sequence until one works
+    for (const model of fallbackModels) {
+      if (triedModels.includes(model)) continue;
+      
+      console.log(`Trying AI model: ${model}`);
+      triedModels.push(model);
+
+      try {
+        msg = await anthropic.messages.create({
+          model: model,
+          max_tokens: 1500,
+          messages: [
+            { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with the structured report format below. No explanations, no markdown, no JSON." }
+          ]
+        });
+        console.log(`Success with model: ${model}`);
+        break;
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`Model ${model} failed:`, error.message || error.code || error.status);
+        
+        // Check if it's a rate limit - if so, try next model immediately
+        if (error.status === 429) {
+          console.log("Rate limit hit, trying next model...");
+          continue;
+        }
+        
+        // For other errors, also try next model
+        continue;
+      }
+    }
+
+    if (!msg) {
+      throw lastError || new Error("All AI models failed");
+    }
+
+    console.log("Full AI response:", JSON.stringify(msg, null, 2));
 
       // Extract text from response - handle OpenAI/Anthropic compatible formats
       let text: string | undefined;
@@ -362,7 +397,7 @@ CRITICAL RULES:
       return review;
     } catch (error) {
       console.error("Anthropic API Error:", error);
-      throw new Error("Gagal menghasilkan review AI. Pastikan quota free tersedia.");
+      throw new Error(`Gagal menghasilkan review AI. Semua model free sudah dicoba: ${triedModels.join(", ")}`);
     }
   },
 
