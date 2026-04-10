@@ -173,7 +173,7 @@ export const aiReviewService = {
     });
 
     // Use a reliable model that's available on OpenRouter
-    const model = env.ANTHROPIC_MODEL || "qwen/qwen3-80b-a3b-instruct:free";
+    const model = env.ANTHROPIC_MODEL || "google/gemma-4-31b-it:free";
     console.log("Using AI model:", model);
 
     const prompt = `
