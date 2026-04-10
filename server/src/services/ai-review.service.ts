@@ -27,7 +27,22 @@ function parseFormattedText(text: string): any {
   // Extract Overall Score - look for "Overall Score: 8" or "Overall Score\n8"
   const scoreMatch = text.match(/Overall Score\s*[:\n\r]+\s*(\d+)/i);
   if (scoreMatch) {
-    result.score = parseInt(scoreMatch[1], 10);
+    result.score = Math.max(1, Math.min(10, parseInt(scoreMatch[1], 10)));
+  } else {
+    // If no score found, calculate based on trade performance
+    const pnl = trade.actualPnl || 0;
+    const risk = trade.riskPercent || 0;
+    const rMultiple = trade.rMultiple || 0;
+
+    if (pnl > 0) {
+      result.score = 7 + Math.min(3, Math.floor(pnl / 100));
+    } else if (pnl < 0) {
+      result.score = 4 - Math.min(3, Math.floor(Math.abs(pnl) / 100));
+    } else {
+      result.score = 5;
+    }
+
+    result.score = Math.max(1, Math.min(10, result.score));
   }
 
   // Extract Summary: between "AI Analysis Report" and "Overall Score"
@@ -170,8 +185,9 @@ export const aiReviewService = {
       }
     });
 
-    const model = env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest";
-    console.log("Using Anthropic model:", model);
+    // Use a reliable model that's available on OpenRouter
+    const model = env.ANTHROPIC_MODEL || "qwen/qwen3-80b-a3b-instruct:free";
+    console.log("Using AI model:", model);
 
     const prompt = `
 You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
@@ -241,51 +257,69 @@ CRITICAL RULES:
     try {
       const msg = await anthropic.messages.create({
         model: model,
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }]
+        max_tokens: 1500,
+        messages: [
+          { role: "system", content: "You are a professional trading coach. Respond ONLY with the structured report format. No explanations, no markdown, no JSON." },
+          { role: "user", content: prompt }
+        ]
       });
 
-      console.log("Full Anthropic response:", JSON.stringify(msg, null, 2));
-      console.log("Content array length:", msg.content.length);
-      console.log("Content types:", msg.content.map(c => c.type));
+      console.log("Full AI response:", JSON.stringify(msg, null, 2));
 
-      // Extract text from response - handle different content block types
+      // Extract text from response - handle OpenAI/Anthropic compatible formats
       let text: string | undefined;
 
-      // First try: find 'text' block
-      const textBlock = msg.content.find(block => block.type === 'text');
-      if (textBlock && 'text' in textBlock) {
-        text = textBlock.text;
+      // First: check for OpenAI format (content as string)
+      if ('content' in msg && typeof msg.content === 'string') {
+        text = msg.content;
+        console.log("Using OpenAI-style content string");
       }
 
-      // Second try: if no text block, find 'redacted_thinking' (may contain partial answer)
-      if (!text) {
-        const redactedBlock = msg.content.find(block => block.type === 'redacted_thinking');
-        if (redactedBlock && 'data' in redactedBlock && typeof redactedBlock.data === 'string') {
-          // Try to extract text from base64 encoded data (if present)
-          try {
-            const decoded = Buffer.from(redactedBlock.data, 'base64').toString('utf-8');
-            if (decoded.includes('AI Analysis Report')) {
-              text = decoded;
-              console.log("Extracted text from redacted_thinking (base64 decoded)");
+      // Second: Anthropic-style content blocks
+      if (!text && Array.isArray(msg.content)) {
+        console.log("Content array length:", msg.content.length);
+        console.log("Content types:", msg.content.map(c => typeof c === 'object' ? (c as any).type : typeof c));
+
+        // Find 'text' block
+        const textBlock = msg.content.find((block: any) => block.type === 'text');
+        if (textBlock && 'text' in textBlock) {
+          text = textBlock.text;
+        }
+
+        // Find 'redacted_thinking' block
+        if (!text) {
+          const redactedBlock = msg.content.find((block: any) => block.type === 'redacted_thinking');
+          if (redactedBlock && 'data' in redactedBlock) {
+            try {
+              const decoded = Buffer.from(redactedBlock.data, 'base64').toString('utf-8');
+              if (decoded.includes('AI Analysis Report')) {
+                text = decoded;
+                console.log("Extracted text from redacted_thinking");
+              }
+            } catch (e) {
+              console.log("Failed to decode redacted_thinking");
             }
-          } catch (e) {
-            console.log("Failed to decode redacted_thinking data");
+          }
+        }
+
+        // Find 'thinking' block as fallback
+        if (!text) {
+          const thinkingBlock = msg.content.find((block: any) => block.type === 'thinking');
+          if (thinkingBlock && 'thinking' in thinkingBlock) {
+            text = thinkingBlock.thinking;
           }
         }
       }
 
-      // Last resort: use thinking block (contains reasoning in English/Chinese)
-      if (!text) {
-        const thinkingBlock = msg.content.find(block => block.type === 'thinking');
-        if (thinkingBlock && 'thinking' in thinkingBlock) {
-          text = thinkingBlock.thinking;
-          console.log("Using thinking block as fallback (may contain reasoning noise)");
-        }
+      // Third: check for reasoning_content (some models use this)
+      if (!text && 'reasoning_content' in msg) {
+        text = msg.reasoning_content;
+        console.log("Using reasoning_content");
       }
 
       if (!text) {
-        throw new Error("Invalid response from Anthropic: no text content found in any block");
+        console.log("Full response structure:", JSON.stringify(msg, null, 2));
+        throw new Error("Invalid response from AI: no text content found");
       }
 
       console.log("Anthropic response text (length:", text.length, "):", text);
@@ -342,7 +376,7 @@ CRITICAL RULES:
       return review;
     } catch (error) {
       console.error("Anthropic API Error:", error);
-      throw new Error("Gagal menghasilkan review AI. Silakan coba lagi nanti.");
+      throw new Error("Gagal menghasilkan review AI. Pastikan quota free tersedia.");
     }
   },
 
