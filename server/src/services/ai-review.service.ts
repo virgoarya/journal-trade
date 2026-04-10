@@ -249,35 +249,42 @@ CRITICAL RULES:
     let msg: any;
     let lastError: Error | undefined;
 
-    // Try each model in sequence until one works
-    for (const model of fallbackModels) {
-      if (triedModels.includes(model)) continue;
-      
-      console.log(`Trying AI model: ${model}`);
-      triedModels.push(model);
+    try {
+    // Try primary model first
+    const primaryModel = fallbackModels[0];
+    console.log("Trying AI model:", primaryModel);
 
-      try {
-        msg = await anthropic.messages.create({
-          model: model,
-          max_tokens: 1500,
-          messages: [
-            { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with the structured report format below. No explanations, no markdown, no JSON." }
-          ]
-        });
-        console.log(`Success with model: ${model}`);
-        break;
-      } catch (error: any) {
-        lastError = error;
-        console.warn(`Model ${model} failed:`, error.message || error.code || error.status);
-        
-        // Check if it's a rate limit - if so, try next model immediately
-        if (error.status === 429) {
-          console.log("Rate limit hit, trying next model...");
-          continue;
+    try {
+      msg = await anthropic.messages.create({
+        model: primaryModel,
+        max_tokens: 1500,
+        messages: [
+          { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with structured report. No markdown." }
+        ]
+      });
+      console.log("Success with model:", primaryModel);
+    } catch (error: any) {
+      lastError = error;
+      console.warn("Primary model failed:", error.status || error.message);
+
+      // If rate limit, try fallback model
+      if (error.status === 429 && fallbackModels.length > 1) {
+        console.log("Rate limit, trying fallback model...");
+        const fallbackModel = fallbackModels[1];
+
+        try {
+          msg = await anthropic.messages.create({
+            model: fallbackModel,
+            max_tokens: 1500,
+            messages: [
+              { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with structured report. No markdown." }
+            ]
+          });
+          console.log("Success with fallback:", fallbackModel);
+        } catch (fallbackError: any) {
+          lastError = fallbackError;
+          console.warn("Fallback model also failed:", fallbackError.status || fallbackError.message);
         }
-        
-        // For other errors, also try next model
-        continue;
       }
     }
 
@@ -285,9 +292,9 @@ CRITICAL RULES:
       throw lastError || new Error("All AI models failed");
     }
 
-    console.log("Full AI response:", JSON.stringify(msg, null, 2));
+    console.log("AI response:", JSON.stringify(msg, null, 2));
 
-      // Extract text from response - handle OpenAI/Anthropic compatible formats
+    // Extract text from response - handle OpenAI/Anthropic compatible formats
       let text: string | undefined;
 
       // First: check for OpenAI format (content as string)
@@ -299,7 +306,7 @@ CRITICAL RULES:
       // Second: Anthropic-style content blocks
       if (!text && Array.isArray(msg.content)) {
         console.log("Content array length:", msg.content.length);
-        console.log("Content types:", msg.content.map(c => typeof c === 'object' ? (c as any).type : typeof c));
+        console.log("Content types:", msg.content.map((c: any) => typeof c === 'object' ? c.type : typeof c));
 
         // Find 'text' block
         const textBlock = msg.content.find((block: any) => block.type === 'text');
@@ -395,9 +402,9 @@ CRITICAL RULES:
       }
 
       return review;
-    } catch (error) {
-      console.error("Anthropic API Error:", error);
-      throw new Error(`Gagal menghasilkan review AI. Semua model free sudah dicoba: ${triedModels.join(", ")}`);
+    } catch (error: any) {
+      console.error("AI API Error:", error.message || error);
+      throw new Error("Gagal menghasilkan review AI. Silakan coba lagi nanti.");
     }
   },
 
