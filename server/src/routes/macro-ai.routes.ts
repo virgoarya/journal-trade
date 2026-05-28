@@ -6,7 +6,7 @@ const router = Router();
 
 router.post("/chat", requireAuth, async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, currentRegime, assets } = req.body;
     
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ success: false, error: "Format pesan tidak valid" });
@@ -14,7 +14,7 @@ router.post("/chat", requireAuth, async (req, res) => {
     }
 
     // Call the streaming service
-    await macroAiService.chatStream(messages, res);
+    await macroAiService.chatStream(messages, res, currentRegime, assets);
   } catch (error: any) {
     console.error("Macro AI Chat Route Error:", error);
     if (!res.headersSent) {
@@ -25,14 +25,14 @@ router.post("/chat", requireAuth, async (req, res) => {
 
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
-    const { assets } = req.body;
-    
+    const { assets, calculatedRegime } = req.body;
+
     if (!assets || !Array.isArray(assets)) {
-      res.status(400).json({ success: false, error: "Format assets tidak valid" });
+      res.status(400).json({ success: false, error: "Data aset tidak valid" });
       return;
     }
 
-    const reasoning = await macroAiService.analyzeRegime(assets);
+    const reasoning = await macroAiService.analyzeRegime(assets, calculatedRegime);
     res.json({ success: true, reasoning });
   } catch (error: any) {
     console.error("Macro AI Analyze Regime Route Error:", error);

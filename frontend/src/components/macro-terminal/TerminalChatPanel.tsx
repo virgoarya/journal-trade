@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Bot, Send, User, ChevronRight, Terminal as TerminalIcon } from "lucide-react";
+import { useMacroTerminal } from "./MacroTerminalContext";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ interface Message {
 }
 
 export function TerminalChatPanel() {
+  const { currentRegime, assets, systemAlert, clearSystemAlert } = useMacroTerminal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +44,18 @@ export function TerminalChatPanel() {
     }
   }, []);
 
+  // Mendengarkan alert pergantian regime
+  useEffect(() => {
+    if (systemAlert) {
+      setMessages((prev) => {
+        const newMsgs = [...prev, { role: "assistant", content: systemAlert } as Message];
+        localStorage.setItem("hunterDeskHistory", JSON.stringify(newMsgs));
+        return newMsgs;
+      });
+      clearSystemAlert();
+    }
+  }, [systemAlert, clearSystemAlert]);
+
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem("hunterDeskHistory", JSON.stringify(messages));
@@ -67,7 +81,11 @@ export function TerminalChatPanel() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ 
+          messages: newMessages,
+          currentRegime,
+          assets
+        }),
       });
 
       if (!response.ok) {

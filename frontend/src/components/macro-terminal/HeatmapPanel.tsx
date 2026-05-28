@@ -1,107 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { ShieldAlert, BrainCircuit, RefreshCw } from "lucide-react";
-
-interface Asset {
-  ticker: string;
-  name: string;
-  change: number;
-  weight: number; 
-}
-
-const initialAssets: Asset[] = [
-  { ticker: "SPY", name: "S&P 500 (Equities)", change: 0, weight: 1.5 },
-  { ticker: "QQQ", name: "Nasdaq (Tech)", change: 0, weight: 1.5 },
-  { ticker: "GLD", name: "Gold (Safe Haven)", change: 0, weight: 2 },
-  { ticker: "VIXY", name: "VIX (Volatility)", change: 0, weight: 2 },
-  { ticker: "IEF", name: "US 10Y (Bonds)", change: 0, weight: 1 },
-  { ticker: "UUP", name: "US Dollar (DXY)", change: 0, weight: 1.5 },
-  { ticker: "FXY", name: "Japanese Yen", change: 0, weight: 1.5 },
-  { ticker: "TIP", name: "TIPS (Real Yield)", change: 0, weight: 1 },
-];
+import { useMacroTerminal } from "./MacroTerminalContext";
 
 export function HeatmapPanel() {
-  const [assets, setAssets] = useState<Asset[]>(initialAssets);
-  const [isFallback, setIsFallback] = useState(false);
-  const [reasoning, setReasoning] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const analyzeRegime = async (currentAssets: Asset[]) => {
-    setIsAnalyzing(true);
-    try {
-      const res = await fetch("/api/v1/macro-ai/analyze-regime", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assets: currentAssets }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setReasoning(data.reasoning);
-      }
-    } catch (error) {
-      console.error("Failed to analyze regime:", error);
-      setReasoning("Gagal mendapatkan analisis regime. Coba lagi nanti.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const fetchQuotes = async () => {
-    try {
-      const symbols = initialAssets.map(a => a.ticker).join(",");
-      const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
-      const data = await res.json();
-      
-      if (data.success && data.data) {
-        const updatedAssets = initialAssets.map(asset => {
-          const apiQuote = data.data.find((q: any) => q.symbol === asset.ticker);
-          let change = asset.change;
-          
-          if (apiQuote && apiQuote.data && apiQuote.data.dp !== undefined && apiQuote.data.dp !== null) {
-            change = apiQuote.data.dp;
-          }
-          
-          return {
-            ...asset,
-            change: parseFloat(change.toFixed(2))
-          };
-        });
-        
-        setAssets(updatedAssets);
-        setIsFallback(false);
-        setLastUpdated(new Date());
-
-        // Otomatis analisa flow tiap kali data update
-        analyzeRegime(updatedAssets);
-      } else {
-        throw new Error("Invalid quote API response");
-      }
-    } catch (error) {
-      console.warn("Finnhub quotes failed, using mock ticker fallback");
-      setIsFallback(true);
-      // Fallback manual jika gagal
-      setAssets((current) =>
-        current.map((asset) => {
-          const jitter = (Math.random() - 0.5) * 0.1;
-          return { ...asset, change: parseFloat((asset.change + jitter).toFixed(2)) };
-        })
-      );
-    }
-  };
-
-  useEffect(() => {
-    let mockInterval: NodeJS.Timeout;
-
-    fetchQuotes();
-    const liveInterval = setInterval(fetchQuotes, 60000);
-
-    return () => {
-      clearInterval(liveInterval);
-      if (mockInterval) clearInterval(mockInterval);
-    };
-  }, []);
+  const { assets, isFallback, aiReasoning, isAnalyzing, lastUpdated, analyzeRegime } = useMacroTerminal();
 
   const getColor = (change: number) => {
     if (change > 2) return "bg-green-600 text-white";
@@ -157,7 +61,7 @@ export function HeatmapPanel() {
             <span>Hunter AI Reasoning</span>
           </div>
           <button 
-            onClick={() => analyzeRegime(assets)} 
+            onClick={analyzeRegime} 
             disabled={isAnalyzing}
             className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
           >
@@ -166,8 +70,8 @@ export function HeatmapPanel() {
           </button>
         </div>
         <div className="text-xs text-text-secondary leading-relaxed font-mono">
-          {reasoning ? (
-            <div className="animate-in fade-in duration-500">{reasoning}</div>
+          {aiReasoning ? (
+            <div className="animate-in fade-in duration-500">{aiReasoning}</div>
           ) : isAnalyzing ? (
             <div className="text-accent-gold animate-pulse">Connecting to Hunter Desk Terminal...</div>
           ) : (

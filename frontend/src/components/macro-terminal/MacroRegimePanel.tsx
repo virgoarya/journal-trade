@@ -1,9 +1,7 @@
 "use client";
 
 import React from "react";
-
-// Mock data for the current regime
-const CURRENT_REGIME = "Stagflation"; // Options: Deflation, Reflation, Stagflation, Goldilocks
+import { useMacroTerminal } from "./MacroTerminalContext";
 
 const regimes = [
   {
@@ -45,11 +43,18 @@ const regimes = [
 ];
 
 export function MacroRegimePanel() {
+  const { currentRegime } = useMacroTerminal();
+
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
       <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center">
-        <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
+        <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
           Macro Regime Matrix
+          {currentRegime === "Unknown" && (
+            <span className="text-[9px] text-text-muted lowercase tracking-normal bg-bg-void/50 px-1.5 py-0.5 rounded border border-border-subtle animate-pulse">
+              analyzing market...
+            </span>
+          )}
         </h2>
         <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-2 py-0.5 rounded animate-pulse">
           LIVE
@@ -67,7 +72,7 @@ export function MacroRegimePanel() {
 
         <div className="grid grid-cols-2 grid-rows-2 gap-2 w-[85%] h-[85%]">
           {regimes.map((regime) => {
-            const isActive = regime.id === CURRENT_REGIME;
+            const isActive = regime.id === currentRegime;
             return (
               <div
                 key={regime.id}

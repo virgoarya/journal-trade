@@ -44,7 +44,12 @@ OUTPUT FORMAT REQUIREMENTS:
 - End your analysis directly with an "INSTITUTIONAL SENTIMENT STATUS: [HAWKISH / DOVISH / RISK-ON / RISK-OFF]" summary block. Do not ask follow-up questions or offer menus at the end.`;
 
 export const macroAiService = {
-  async chatStream(messages: { role: "user" | "assistant", content: string }[], res: any) {
+  async chatStream(
+    messages: { role: "user" | "assistant", content: string }[], 
+    res: any,
+    currentRegime?: string,
+    assets?: any[]
+  ) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
@@ -56,8 +61,15 @@ export const macroAiService = {
     res.setHeader("Connection", "keep-alive");
 
     try {
+      let dynamicSystemPrompt = HUNTER_DESK_SYSTEM_PROMPT;
+      
+      if (currentRegime && assets) {
+        const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join(", ");
+        dynamicSystemPrompt += `\n\n[CRITICAL LIVE CONTEXT]\nSystem Quantitative Algorithm currently classifies the Macro Regime as: ${currentRegime.toUpperCase()}.\nLive Asset Data: ${assetString}\n\nYou MUST align your analysis with this regime and data. Do NOT contradict the terminal's classification.`;
+      }
+
       const groqMessages = [
-        { role: "system" as const, content: HUNTER_DESK_SYSTEM_PROMPT },
+        { role: "system" as const, content: dynamicSystemPrompt },
         ...messages.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
       ];
 
@@ -128,14 +140,19 @@ export const macroAiService = {
     }
   },
 
-  async analyzeRegime(assets: { ticker: string; name: string; change: number }[]) {
+  async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
     const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
     const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join("\n");
-    const prompt = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assetString}\n\nBerikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading, hanya analisis regime.`;
+    
+    let prompt = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assetString}\n\n`;
+    if (calculatedRegime) {
+      prompt += `Algoritma sistem telah mendeteksi regime saat ini sebagai: ${calculatedRegime.toUpperCase()}.\n`;
+    }
+    prompt += `Berikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Selaraskan dengan hasil deteksi algoritma (jika ada). Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading.`;
 
     try {
       const response = await axios.post(
