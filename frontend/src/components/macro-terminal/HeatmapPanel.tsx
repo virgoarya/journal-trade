@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, BrainCircuit, RefreshCw } from "lucide-react";
 
 interface Asset {
   ticker: string;
@@ -11,62 +11,88 @@ interface Asset {
 }
 
 const initialAssets: Asset[] = [
-  { ticker: "BINANCE:BTCUSDT", name: "Bitcoin", change: -3.45, weight: 1.5 },
-  { ticker: "OANDA:EUR_USD", name: "Euro", change: -0.55, weight: 1 },
-  { ticker: "OANDA:XAU_USD", name: "Gold", change: 1.45, weight: 2 },
-  { ticker: "AAPL", name: "Apple", change: 0.82, weight: 1.5 },
-  { ticker: "MSFT", name: "Microsoft", change: 2.15, weight: 1.5 },
-  { ticker: "TSLA", name: "Tesla", change: -1.25, weight: 2 },
-  { ticker: "META", name: "Meta", change: -2.10, weight: 1.5 },
-  { ticker: "GOOGL", name: "Google", change: 0.65, weight: 1 },
+  { ticker: "SPY", name: "S&P 500 (Equities)", change: 0, weight: 1.5 },
+  { ticker: "QQQ", name: "Nasdaq (Tech)", change: 0, weight: 1.5 },
+  { ticker: "GLD", name: "Gold (Safe Haven)", change: 0, weight: 2 },
+  { ticker: "VIXY", name: "VIX (Volatility)", change: 0, weight: 2 },
+  { ticker: "IEF", name: "US 10Y (Bonds)", change: 0, weight: 1 },
+  { ticker: "UUP", name: "US Dollar (DXY)", change: 0, weight: 1.5 },
+  { ticker: "FXY", name: "Japanese Yen", change: 0, weight: 1.5 },
+  { ticker: "TIP", name: "TIPS (Real Yield)", change: 0, weight: 1 },
 ];
 
 export function HeatmapPanel() {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [isFallback, setIsFallback] = useState(false);
+  const [reasoning, setReasoning] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const analyzeRegime = async (currentAssets: Asset[]) => {
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch("/api/v1/macro-ai/analyze-regime", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assets: currentAssets }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReasoning(data.reasoning);
+      }
+    } catch (error) {
+      console.error("Failed to analyze regime:", error);
+      setReasoning("Gagal mendapatkan analisis regime. Coba lagi nanti.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const fetchQuotes = async () => {
+    try {
+      const symbols = initialAssets.map(a => a.ticker).join(",");
+      const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
+      const data = await res.json();
+      
+      if (data.success && data.data) {
+        const updatedAssets = initialAssets.map(asset => {
+          const apiQuote = data.data.find((q: any) => q.symbol === asset.ticker);
+          let change = asset.change;
+          
+          if (apiQuote && apiQuote.data && apiQuote.data.dp !== undefined && apiQuote.data.dp !== null) {
+            change = apiQuote.data.dp;
+          }
+          
+          return {
+            ...asset,
+            change: parseFloat(change.toFixed(2))
+          };
+        });
+        
+        setAssets(updatedAssets);
+        setIsFallback(false);
+        setLastUpdated(new Date());
+
+        // Otomatis analisa flow tiap kali data update
+        analyzeRegime(updatedAssets);
+      } else {
+        throw new Error("Invalid quote API response");
+      }
+    } catch (error) {
+      console.warn("Finnhub quotes failed, using mock ticker fallback");
+      setIsFallback(true);
+      // Fallback manual jika gagal
+      setAssets((current) =>
+        current.map((asset) => {
+          const jitter = (Math.random() - 0.5) * 0.1;
+          return { ...asset, change: parseFloat((asset.change + jitter).toFixed(2)) };
+        })
+      );
+    }
+  };
 
   useEffect(() => {
     let mockInterval: NodeJS.Timeout;
-
-    const fetchQuotes = async () => {
-      try {
-        const symbols = initialAssets.map(a => a.ticker).join(",");
-        const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
-        const data = await res.json();
-        
-        if (data.success && data.data) {
-          const updatedAssets = initialAssets.map(asset => {
-            const apiQuote = data.data.find((q: any) => q.symbol === asset.ticker);
-            let change = asset.change;
-            
-            if (apiQuote && apiQuote.data && apiQuote.data.dp !== undefined && apiQuote.data.dp !== null) {
-              change = apiQuote.data.dp;
-            }
-            
-            return {
-              ...asset,
-              change: parseFloat(change.toFixed(2))
-            };
-          });
-          
-          setAssets(updatedAssets);
-          setIsFallback(false);
-        } else {
-          throw new Error("Invalid quote API response");
-        }
-      } catch (error) {
-        console.warn("Finnhub quotes failed, using mock ticker fallback");
-        setIsFallback(true);
-        mockInterval = setInterval(() => {
-          setAssets((current) =>
-            current.map((asset) => {
-              const jitter = (Math.random() - 0.5) * 0.1;
-              return { ...asset, change: parseFloat((asset.change + jitter).toFixed(2)) };
-            })
-          );
-        }, 3000);
-      }
-    };
 
     fetchQuotes();
     const liveInterval = setInterval(fetchQuotes, 60000);
@@ -87,43 +113,72 @@ export function HeatmapPanel() {
     return "bg-gray-700 text-white";
   };
 
-  const getDisplayTicker = (ticker: string) => {
-    if (ticker.includes(":")) return ticker.split(":")[1].replace("_", "/");
-    return ticker;
-  };
-
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
-      <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center">
+      <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center shrink-0">
         <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
-          Sector Assets Heatmap
+          Macro ETFs Heatmap
         </h2>
-        {isFallback ? (
-          <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
-            <ShieldAlert size={10} /> MOCK FALLBACK
-          </span>
-        ) : (
-          <span className="text-[10px] text-data-profit">LIVE API</span>
-        )}
+        <div className="flex items-center gap-3">
+          {isFallback ? (
+            <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
+              <ShieldAlert size={10} /> MOCK FALLBACK
+            </span>
+          ) : (
+            <span className="text-[10px] text-data-profit font-mono animate-pulse">LIVE API</span>
+          )}
+        </div>
       </div>
-      <div className="flex-1 p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 auto-rows-fr">
+      
+      <div className="p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 shrink-0">
         {assets.map((asset) => {
           const isPositive = asset.change > 0;
           return (
             <div
               key={asset.ticker}
-              className={`flex flex-col items-center justify-center rounded p-1 transition-colors duration-300 ${getColor(asset.change)}`}
+              className={`flex flex-col items-center justify-center rounded p-2 transition-colors duration-300 ${getColor(asset.change)}`}
             >
-              <span className="text-xs font-bold tracking-wide">{getDisplayTicker(asset.ticker)}</span>
-              <span className="text-[10px] opacity-80 truncate w-full text-center hidden sm:block">
+              <span className="text-xs font-bold tracking-wide">{asset.ticker}</span>
+              <span className="text-[9px] opacity-80 truncate w-full text-center mt-0.5">
                 {asset.name}
               </span>
-              <span className="text-xs font-mono font-semibold mt-1">
+              <span className="text-sm font-mono font-bold mt-1">
                 {isPositive ? "+" : ""}{asset.change.toFixed(2)}%
               </span>
             </div>
           );
         })}
+      </div>
+
+      <div className="flex-1 bg-black/40 border-t border-border-subtle p-3 flex flex-col min-h-0 overflow-y-auto">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-accent-gold text-[10px] font-mono tracking-widest uppercase">
+            <BrainCircuit size={12} />
+            <span>Hunter AI Reasoning</span>
+          </div>
+          <button 
+            onClick={() => analyzeRegime(assets)} 
+            disabled={isAnalyzing}
+            className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+          >
+            <RefreshCw size={10} className={isAnalyzing ? "animate-spin" : ""} /> 
+            {isAnalyzing ? "ANALYZING..." : "RE-ANALYZE"}
+          </button>
+        </div>
+        <div className="text-xs text-text-secondary leading-relaxed font-mono">
+          {reasoning ? (
+            <div className="animate-in fade-in duration-500">{reasoning}</div>
+          ) : isAnalyzing ? (
+            <div className="text-accent-gold animate-pulse">Connecting to Hunter Desk Terminal...</div>
+          ) : (
+            <div className="text-text-muted">Menunggu pergerakan pasar untuk dianalisis...</div>
+          )}
+        </div>
+        {lastUpdated && (
+          <div className="mt-auto pt-2 text-[9px] text-text-muted text-right">
+            Last Sync: {lastUpdated.toLocaleTimeString()}
+          </div>
+        )}
       </div>
     </div>
   );

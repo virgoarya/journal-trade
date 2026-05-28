@@ -79,5 +79,28 @@ export const macroAiService = {
       res.write(`data: ${JSON.stringify({ error: "Gagal memproses request AI. Coba lagi nanti." })}\n\n`);
       res.end();
     }
+  },
+
+  async analyzeRegime(assets: { ticker: string; name: string; change: number }[]) {
+    if (!env.GEMINI_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GEMINI_API_KEY tidak ditemukan");
+    }
+
+    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      systemInstruction: HUNTER_DESK_SYSTEM_PROMPT,
+    });
+
+    const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join("\n");
+    const prompt = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assetString}\n\nBerikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading, hanya analisis regime.`;
+
+    try {
+      const result = await model.generateContent(prompt);
+      return result.response.text() || "Gagal mendapatkan analisis regime makro.";
+    } catch (error: any) {
+      console.error("Macro AI Gemini Analyze Error:", error.message || error);
+      throw new Error("Gagal memproses analisis regime AI.");
+    }
   }
 };

@@ -23,4 +23,21 @@ router.post("/chat", requireAuth, async (req, res) => {
   }
 });
 
+router.post("/analyze-regime", requireAuth, async (req, res) => {
+  try {
+    const { assets } = req.body;
+    
+    if (!assets || !Array.isArray(assets)) {
+      res.status(400).json({ success: false, error: "Format assets tidak valid" });
+      return;
+    }
+
+    const reasoning = await macroAiService.analyzeRegime(assets);
+    res.json({ success: true, reasoning });
+  } catch (error: any) {
+    console.error("Macro AI Analyze Regime Route Error:", error);
+    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+  }
+});
+
 export default router;
