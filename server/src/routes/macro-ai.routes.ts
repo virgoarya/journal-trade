@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
-import { requireAuth } from "../middleware/auth.middleware";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
