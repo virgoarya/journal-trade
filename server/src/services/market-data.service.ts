@@ -44,12 +44,6 @@ export const marketDataService = {
       throw new Error("FINNHUB_API_KEY is not configured");
     }
 
-    const results = [];
-    
-    // Finnhub free tier allows 60 calls/minute. We need to be careful with loops.
-    // We will use Promise.all but be mindful of the rate limit. 
-    // Ideally symbols array length < 10.
-    
     try {
       const promises = symbols.map(async (symbol) => {
         const cacheKey = `quote_${symbol}`;
@@ -57,17 +51,24 @@ export const marketDataService = {
           return { symbol, data: cache[cacheKey].data };
         }
 
-        const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
-          timeout: 5000
-        });
-        
-        // Update cache
-        cache[cacheKey] = {
-          data: response.data,
-          timestamp: Date.now(),
-        };
-        
-        return { symbol, data: response.data };
+        try {
+          // Finnhub free tier may reject Forex/Crypto. We catch individual errors.
+          const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
+            timeout: 5000
+          });
+          
+          // Update cache
+          cache[cacheKey] = {
+            data: response.data,
+            timestamp: Date.now(),
+          };
+          
+          return { symbol, data: response.data };
+        } catch (symbolError) {
+          console.warn(`Finnhub Quotes API Error for ${symbol}:`, (symbolError as any).message);
+          // Return a mock/empty data for this symbol so the rest can succeed
+          return { symbol, data: { dp: null, c: null } };
+        }
       });
 
       const quoteData = await Promise.all(promises);

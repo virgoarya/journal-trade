@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../config/env";
 
 const HUNTER_DESK_SYSTEM_PROMPT = `You are the "Hunter Desk Terminal", an elite AI Global Macro & Forex Analyzer operating with the strict persona of an Institutional Desk Trader and Prop Firm Quantitative Strategist. Your analytical framework rejects typical retail trading fallacies (lagging retail indicators, over-simplified chart patterns) and focuses purely on structural liquidity, central bank monetary policy, intermarket correlation, and institutional capital flows.
@@ -43,44 +43,39 @@ OUTPUT FORMAT REQUIREMENTS:
 
 export const macroAiService = {
   async chatStream(messages: { role: "user" | "assistant", content: string }[], res: any) {
-    if (!env.ANTHROPIC_AUTH_TOKEN) {
-      throw new Error("Fitur AI dinonaktifkan: ANTHROPIC_AUTH_TOKEN tidak ditemukan");
+    if (!env.GEMINI_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GEMINI_API_KEY tidak ditemukan");
     }
 
-    const anthropic = new Anthropic({
-      apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      baseURL: env.ANTHROPIC_BASE_URL,
-      defaultHeaders: {
-        'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
-        'X-Title': 'Hunter Desk Terminal AI'
-      }
+    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      systemInstruction: HUNTER_DESK_SYSTEM_PROMPT,
     });
-
-    const model = env.ANTHROPIC_MODEL || "google/gemma-4-31b-it:free";
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
     try {
-      const stream = await anthropic.messages.create({
-        model,
-        max_tokens: 2000,
-        system: HUNTER_DESK_SYSTEM_PROMPT,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-      });
+      const contents = messages.map(m => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }]
+      }));
 
-      for await (const chunk of stream) {
-        if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-          res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
+      const result = await model.generateContentStream({ contents });
+
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
         }
       }
 
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error: any) {
-      console.error("Macro AI Stream Error:", error.message || error);
+      console.error("Macro AI Gemini Stream Error:", error.message || error);
       res.write(`data: ${JSON.stringify({ error: "Gagal memproses request AI. Coba lagi nanti." })}\n\n`);
       res.end();
     }
