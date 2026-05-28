@@ -23,6 +23,7 @@ const envSchema = z.object({
   // AI
   // Support for Claude via OpenRouter (ANTHROPIC_* vars) or Gemini (GEMINI_API_KEY)
   GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).optional().default("gemini-2.5-flash"),
   ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
   ANTHROPIC_BASE_URL: z.string().url().optional().default("https://api.anthropic.com"),
   ANTHROPIC_MODEL: z.string().min(1).optional().default("anthropic/claude-3-5-haiku-latest"),

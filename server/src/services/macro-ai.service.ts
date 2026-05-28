@@ -1,5 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../config/env";
+import axios from "axios";
+
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const HUNTER_DESK_SYSTEM_PROMPT = `You are the "Hunter Desk Terminal", an elite AI Global Macro & Forex Analyzer operating with the strict persona of an Institutional Desk Trader and Prop Firm Quantitative Strategist. Your analytical framework rejects typical retail trading fallacies (lagging retail indicators, over-simplified chart patterns) and focuses purely on structural liquidity, central bank monetary policy, intermarket correlation, and institutional capital flows.
 
@@ -43,63 +45,122 @@ OUTPUT FORMAT REQUIREMENTS:
 
 export const macroAiService = {
   async chatStream(messages: { role: "user" | "assistant", content: string }[], res: any) {
-    if (!env.GEMINI_API_KEY) {
-      throw new Error("Fitur AI dinonaktifkan: GEMINI_API_KEY tidak ditemukan");
+    if (!env.GROQ_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      systemInstruction: HUNTER_DESK_SYSTEM_PROMPT,
-    });
+    const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
     try {
-      const contents = messages.map(m => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }]
-      }));
+      const groqMessages = [
+        { role: "system" as const, content: HUNTER_DESK_SYSTEM_PROMPT },
+        ...messages.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+      ];
 
-      const result = await model.generateContentStream({ contents });
-
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        if (chunkText) {
-          res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+      const response = await axios.post(
+        GROQ_API_URL,
+        {
+          model,
+          messages: groqMessages,
+          max_tokens: 2000,
+          stream: true,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          responseType: "stream",
+          timeout: 60000,
         }
-      }
+      );
 
-      res.write("data: [DONE]\n\n");
-      res.end();
+      let buffer = "";
+
+      response.data.on("data", (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6);
+          if (payload === "[DONE]") {
+            res.write("data: [DONE]\n\n");
+            return;
+          }
+          try {
+            const parsed = JSON.parse(payload);
+            const text = parsed.choices?.[0]?.delta?.content;
+            if (text) {
+              res.write(`data: ${JSON.stringify({ text })}\n\n`);
+            }
+          } catch {
+            // Skip malformed JSON chunks
+          }
+        }
+      });
+
+      response.data.on("end", () => {
+        if (!res.writableEnded) {
+          res.write("data: [DONE]\n\n");
+          res.end();
+        }
+      });
+
+      response.data.on("error", (err: any) => {
+        console.error("Groq Stream Error:", err.message);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ error: "Stream error dari Groq." })}\n\n`);
+          res.end();
+        }
+      });
+
     } catch (error: any) {
-      console.error("Macro AI Gemini Stream Error:", error.message || error);
+      console.error("Macro AI Groq Stream Error:", error.message || error);
       res.write(`data: ${JSON.stringify({ error: "Gagal memproses request AI. Coba lagi nanti." })}\n\n`);
       res.end();
     }
   },
 
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[]) {
-    if (!env.GEMINI_API_KEY) {
-      throw new Error("Fitur AI dinonaktifkan: GEMINI_API_KEY tidak ditemukan");
+    if (!env.GROQ_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      systemInstruction: HUNTER_DESK_SYSTEM_PROMPT,
-    });
-
+    const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
     const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join("\n");
     const prompt = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assetString}\n\nBerikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading, hanya analisis regime.`;
 
     try {
-      const result = await model.generateContent(prompt);
-      return result.response.text() || "Gagal mendapatkan analisis regime makro.";
+      const response = await axios.post(
+        GROQ_API_URL,
+        {
+          model,
+          messages: [
+            { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 500,
+          stream: false,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        }
+      );
+
+      return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis regime makro.";
     } catch (error: any) {
-      console.error("Macro AI Gemini Analyze Error:", error.message || error);
+      console.error("Macro AI Groq Analyze Error:", error.message || error);
       throw new Error("Gagal memproses analisis regime AI.");
     }
   }
