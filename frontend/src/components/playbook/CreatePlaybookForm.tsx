@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Strategy } from "@/services/playbook.service";
 import { playbookService } from "@/services/playbook.service";
+import { EntryChecklistInput } from "./EntryChecklistInput";
 
 interface CreatePlaybookFormProps {
   onSubmit?: (playbook: Strategy) => void;
@@ -274,22 +275,10 @@ export function CreatePlaybookForm({
             className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
           />
         </div>
-        <div>
-          <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Entry Checklist</label>
-          <div className="grid grid-cols-2 gap-3">
-            {["TS", "CISD", "PDA inverse", "SMT div"].map(item => (
-              <label key={item} className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={formData.entryChecklist.includes(item)}
-                  onChange={(e) => handleEntryChecklistChange(item, e.target.checked)}
-                  className="w-4 h-4 rounded border-border-subtle bg-bg-void text-accent-gold focus:ring-accent-gold/50"
-                />
-                <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">{item}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <EntryChecklistInput
+          checklist={formData.entryChecklist}
+          onChange={(items) => setFormData(prev => ({ ...prev, entryChecklist: items }))}
+        />
       </div>
 
       {/* Description */}

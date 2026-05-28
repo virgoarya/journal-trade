@@ -1,7 +1,7 @@
 "use client";
 
 import { Strategy } from "@/services/playbook.service";
-import { Eye, Edit, Trash2, Check, Target, Copy } from "lucide-react";
+import { Eye, Edit, Trash2, Check, Target, Copy, Archive } from "lucide-react";
 
 interface PlaybookCardProps {
   playbook: Strategy;
@@ -9,7 +9,8 @@ interface PlaybookCardProps {
   onView?: (playbook: Strategy) => void;
   onEdit?: (playbook: Strategy) => void;
   onDelete?: (playbook: Strategy) => void;
-  onDuplicate?: (playbook: Strategy) => void;
+  onArchive?: (playbookId: string) => void;
+  onDuplicate?: (playbookId: string) => void;
   isSelectable?: boolean;
   isSelected?: boolean;
   showActions?: boolean;
@@ -21,6 +22,7 @@ export function PlaybookCard({
   onView,
   onEdit,
   onDelete,
+  onArchive,
   onDuplicate,
   isSelectable = false,
   isSelected = false,
@@ -177,25 +179,35 @@ export function PlaybookCard({
                 <Edit className="w-4 h-4" />
               </button>
             )}
-            {onDuplicate && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onDuplicate(playbook); }}
-                className="text-[11px] text-accent-gold hover:underline flex items-center"
-                title="Duplicate"
-              >
-                <Copy className="w-3 h-3 mr-1" />
-                Duplicate
-              </button>
-            )}
-            {onDelete && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(playbook); }}
-                className="p-1.5 text-text-muted hover:text-data-loss hover:bg-white/5 rounded transition-colors"
-                title="Delete"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {onArchive && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onArchive(playbook.id); }}
+                  className="p-1.5 text-text-muted hover:text-data-warning hover:bg-white/5 rounded transition-colors"
+                  title="Archive"
+                >
+                  <Archive className="w-4 h-4" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDuplicate(playbook.id); }}
+                  className="p-1.5 text-text-muted hover:text-accent-gold hover:bg-white/5 rounded transition-colors"
+                  title="Duplicate"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(playbook.id); }}
+                  className="p-1.5 text-text-muted hover:text-data-loss hover:bg-white/5 rounded transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

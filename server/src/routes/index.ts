@@ -7,6 +7,9 @@ import aiReviewRoutes from "./ai-review.routes";
 import notificationRoutes from "./notification.routes";
 import settingsRoutes from "./settings.routes";
 import authV1Routes from "./auth-v1.routes";
+import mt5Routes from "./mt5.routes";
+import macroAiRoutes from "./macro-ai.routes";
+import marketDataRoutes from "./market-data.routes";
 
 const router = Router();
 
@@ -23,5 +26,8 @@ router.use("/v1/analytics", analyticsRoutes);
 router.use("/v1/ai-reviews", aiReviewRoutes);
 router.use("/v1/notifications", notificationRoutes);
 router.use("/v1/settings", settingsRoutes);
+router.use("/v1/mt5", mt5Routes);
+router.use("/v1/macro-ai", macroAiRoutes);
+router.use("/v1/market-data", marketDataRoutes);
 
 export default router;

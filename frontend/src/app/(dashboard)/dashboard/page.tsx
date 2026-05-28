@@ -2,27 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  Activity,
-  ShieldCheck,
-  Zap,
-  Target,
-  Trophy,
-  History,
-  Loader2,
-  AlertCircle
-} from "lucide-react";
 import { tradeService, type Trade } from "@/services/trade.service";
 import { analyticsService, type AnalyticsData } from "@/services/analytics.service";
 import { tradingAccountService, type TradingAccount } from "@/services/trading-account.service";
+import { playbookService, type Strategy } from "@/services/playbook.service";
 import { useSession } from "@/lib/auth-client";
 import { Heatmap } from "@/components/analytics/Heatmap";
 import { PnLCalendar } from "@/components/analytics/PnLCalendar";
 import { AssetDistributionChart } from "@/components/analytics/AssetDistributionChart";
 import { ForexCalculator } from "@/components/dashboard/ForexCalculator";
+import { ChecklistModal } from "@/components/playbook/ChecklistModal";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
@@ -37,6 +26,9 @@ export default function DashboardPage() {
   const [exposure, setExposure] = useState(0);
   const [sessionRisk, setSessionRisk] = useState(0);
   const [allTradesForCalendar, setAllTradesForCalendar] = useState<Trade[]>([]);
+  const [playbooks, setPlaybooks] = useState<Strategy[]>([]);
+  const [checklistModalOpen, setChecklistModalOpen] = useState(false);
+  const [selectedPlaybookId, setSelectedPlaybookId] = useState<string>("");
   // 'idle' = show real value | 'zero' = needle at 0 | 'full' = needle at 100% | 'return' = sweep back to real
   const [gaugePhase, setGaugePhase] = useState<Record<string, 'idle' | 'zero' | 'full' | 'return'>>({});
 
@@ -56,6 +48,11 @@ export default function DashboardPage() {
     setTimeout(() => {
       setGaugePhase(prev => ({ ...prev, [id]: 'idle' }));
     }, 1500);
+  };
+
+  const openChecklistModal = (playbookId: string) => {
+    setSelectedPlaybookId(playbookId);
+    setChecklistModalOpen(true);
   };
 
   const getGaugeOffset = (id: string, realOffset: number) => {
@@ -133,6 +130,12 @@ export default function DashboardPage() {
         const equityResult = await analyticsService.getEquityCurve();
         if (equityResult.success && Array.isArray(equityResult.data?.points)) {
           setEquityCurve(equityResult.data.points);
+        }
+
+        // 5. Fetch Playbooks for quick access
+        const playbooksResult = await playbookService.getAll();
+        if (playbooksResult.success && Array.isArray(playbooksResult.data)) {
+          setPlaybooks(playbooksResult.data);
         }
       } catch (err: any) {
         console.error("Dashboard Fetch Error:", err);
@@ -313,129 +316,137 @@ export default function DashboardPage() {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
       
-      {/* SECTION 1: KPI Strip (Top Metrics) */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          {kpis.map((k, idx) => (
-            <div key={idx} className={`glass p-3 sm:p-4 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
-               <div className="flex justify-center mb-2 sm:mb-3">
-                  <k.icon className={`w-6 h-6 sm:w-[30px] sm:h-[30px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
-               </div>
-               <p className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-[0.15em] mb-1 sm:mb-1.5 font-bold">{k.label}</p>
-               <p className={`font-mono text-lg sm:text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
-            </div>
-          ))}
-      </div>
-      {/* ROW 1: Top Analysis & Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
-        {/* 1. Equity Curve Chart */}
-        <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
-          <div className="flex justify-between items-center mb-0">
-             <h4 className="font-semibold text-text-primary text-xs sm:text-sm uppercase tracking-wider leading-none">Equity Curve</h4>
-             <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
-                <button className="px-2 py-1 text-[10px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
-                <button className="px-2 py-1 text-[10px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
-             </div>
-          </div>
-          
-          <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-end rounded-xl mt-3">
-             <EquityLineChart data={equityCurve} />
-          </div>
-        </div>
 
-        {/* 2. Account Summary, Gauges & Risk Guard */}
-        <div className="lg:col-span-5 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
 
-          {/* Total Equity */}
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] sm:text-xs font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Equity</p>
-              <h3 className="font-mono text-lg sm:text-xl font-bold text-accent-gold leading-none">
-                ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </h3>
-            </div>
-            <Wallet className="text-text-muted w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
 
-          {/* Gauges */}
-          <div className="pt-4 border-t border-white/5 flex justify-around">
-            <div className="text-center w-full cursor-pointer group" title="Total risk of trades today" onMouseEnter={() => startVarioRev('exposure')}>
-              <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
-                    strokeDashoffset={getGaugeOffset('exposure', 106.8 * (1 - Math.min(exposure / 2, 1)))} 
-                    className={`transition-all ${getGaugeTransition('exposure')} ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
-                </svg>
-                <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
-              </div>
-              <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Exposure</p>
-            </div>
 
-            <div className="text-center w-full cursor-pointer group" title="Percentage of daily risk limit used today" onMouseEnter={() => startVarioRev('session')}>
-              <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
-                <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
-                  <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8" 
-                    strokeDashoffset={getGaugeOffset('session', 106.8 * (1 - (sessionRisk / 100)))} 
-                    className={`transition-all ${getGaugeTransition('session')} ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
-                </svg>
-                <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
-              </div>
-              <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Session Risk</p>
-            </div>
-          </div>
-
-          {/* Risk Guard */}
-          <div className="pt-4 border-t border-white/5 space-y-5">
-             <div className="flex items-center space-x-2 -mt-1 mb-1 text-text-muted">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="text-[9px] uppercase tracking-widest font-semibold">Risk Guard</span>
-             </div>
-             <div>
-                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
-                  <span className="text-text-secondary">Daily Drawdown</span>
-                  <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
-                </div>
-                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
-                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
-                </div>
-             </div>
-             <div>
-                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
-                  <span className="text-text-secondary">Total Drawdown</span>
-                  <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
-                </div>
-                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
-                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
-                </div>
-             </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* ROW 2: Performance Tracking */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
-        {/* Left: Monthly Performance Calendar */}
-        <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-6 min-h-[350px] md:min-h-[400px]">
-           <div className="flex justify-between items-center mb-3 sm:mb-6">
-              <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Monthly Performance Calendar</h4>
-              <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
-                Daily Tracker
-              </div>
            </div>
            <PnLCalendar trades={allTradesForCalendar} />
         </div>
 
-        {/* Right: Side Panels */}
+        {/* Right: Quick Playbook Access */}
         <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
+          <div className="glass p-3 sm:p-4 flex flex-col min-h-[300px]">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-semibold text-xs sm:text-sm text-text-primary uppercase tracking-[0.2em]">Quick Access Playbook</h4>
+              <Button 
+                variant="outline" 
+                size="sm"
+                href="/playbooks"
+                startIcon={<Zap className="w-3 h-3" />}
+              >
+                Manage Strategies
+              </Button>
+            </div>
+            
+            {recentTrades.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-xs text-text-secondary uppercase tracking-widest mb-2">Recent Trade Pair</div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-accent-gold" />
+                    <span className="font-bold">{recentTrades[0]?.pair || "No recent trades"}</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      // Here you would open the checklist modal for the relevant playbook
+                      toast.info("Checklist modal would open here");
+                    }}
+                    startIcon={<Checklist className="w-3 h-3" />}
+                  >
+                    Review Plan
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-text-secondary uppercase tracking-widest mt-4 mb-2">Active Strategies</div>
+            {playbooks.slice(0, 2).map((pb) => (
+              <div key={pb.id} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-accent-gold" />
+                  <span className="font-bold text-sm">{pb.name}</span>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Open checklist modal for this playbook
+                    toast.info(`Opening checklist for ${pb.name}`);
+                  }}
+                  startIcon={<Checklist className="w-3 h-3" />}
+                >
+                  Review
+                </Button>
+              </div>
+            ))}
+            {playbooks.length > 2 && (
+              <div className="text-center text-xs text-text-secondary mt-2">
+                +{playbooks.length - 2} more strategies
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Quick Playbook Access & Side Panels */}
+        <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
+          <div className="glass p-3 sm:p-4 flex flex-col min-h-[300px]">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-semibold text-xs sm:text-sm text-text-primary uppercase tracking-[0.2em]">Quick Access Playbook</h4>
+              <button
+                onClick={() => router.push('/playbooks')}
+                className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+              >
+                Manage Strategies
+              </button>
+            </div>
+
+            {recentTrades.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-xs text-text-secondary uppercase tracking-widest mb-2">Recent Trade Pair</div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-accent-gold" />
+                    <span className="font-bold">{recentTrades[0]?.pair || "No recent trades"}</span>
+                  </div>
+                  <button
+                    onClick={() => toast.info("Checklist modal would open here")}
+                    className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+                  >
+                    Review Plan
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-text-secondary uppercase tracking-widest mt-4 mb-2">Active Strategies</div>
+            {playbooks.slice(0, 2).map((pb) => (
+              <div key={pb.id} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-accent-gold" />
+                  <span className="font-bold text-sm">{pb.name}</span>
+                </div>
+                <button
+                  onClick={() => openChecklistModal(pb.id)}
+                  className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+                >
+                  Review
+                </button>
+              </div>
+            ))}
+            {playbooks.length > 2 && (
+              <div className="text-center text-xs text-text-secondary mt-2">
+                +{playbooks.length - 2} more strategies
+              </div>
+            )}
+          </div>
 
           {/* Forex Calculator */}
           <div className="min-h-[300px] sm:min-h-[350px]">
-            <ForexCalculator 
-              initialBalance={currentEquity} 
+            <ForexCalculator
+              initialBalance={currentEquity}
               defaultRisk={activeAccount?.defaultRiskPercent}
             />
           </div>
@@ -495,5 +506,185 @@ export default function DashboardPage() {
 
 
     </div>
+  );
+
+  return (
+    <>
+      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
+        {/* SECTION 1: KPI Strip (Top Metrics) */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {kpis.map((k, idx) => (
+            <div key={idx} className={`glass p-3 sm:p-4 text-center border-b-2 ${k.isGold ? "border-accent-gold shadow-[0_4px_20px_-4px_rgba(212,175,55,0.15)]" : "border-transparent"} hover:-translate-y-1 transition-transform duration-300`}>
+              <div className="flex justify-center mb-2 sm:mb-3">
+                <k.icon className={`w-6 h-6 sm:w-[30px] sm:h-[30px] ${k.isGold ? "text-accent-gold filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)]" : "text-text-secondary opacity-70"}`} />
+              </div>
+              <p className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-[0.15em] mb-1 sm:mb-1.5 font-bold">{k.label}</p>
+              <p className={`font-mono text-lg sm:text-2xl font-black tracking-tight ${k.color ? k.color : "text-text-primary"} ${k.isGold ? "text-accent-gold" : ""}`}>{k.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ROW 1: Top Analysis & Summary */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* 1. Equity Curve Chart */}
+          <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
+            <div className="flex justify-between items-center mb-0">
+              <h4 className="font-semibold text-text-primary text-xs sm:text-sm uppercase tracking-wider leading-none">Equity Curve</h4>
+              <div className="flex bg-bg-void/50 p-1 rounded-lg border border-white/5">
+                <button className="px-2 py-1 text-[10px] font-mono text-text-secondary hover:text-accent-gold uppercase tracking-tighter">1M</button>
+                <button className="px-2 py-1 text-[10px] font-mono bg-accent-gold text-bg-void font-bold rounded shadow-sm transition-all uppercase tracking-tighter">PRIMARY</button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-gradient-to-t from-accent-gold/5 to-transparent border-b border-white/5 relative overflow-hidden flex items-end rounded-xl mt-3">
+              <EquityLineChart data={equityCurve} />
+            </div>
+          </div>
+
+          {/* 2. Account Summary, Gauges & Risk Guard */}
+          <div className="lg:col-span-5 glass p-3 sm:p-4 md:p-5 flex flex-col min-h-[350px] md:h-[450px]">
+            {/* Total Equity */}
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] sm:text-xs font-medium text-text-secondary uppercase tracking-[0.2em] mb-1">Total Equity</p>
+                <h3 className="font-mono text-lg sm:text-xl font-bold text-accent-gold leading-none">
+                  ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </h3>
+              </div>
+              <Wallet className="text-text-muted w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+
+            {/* Gauges */}
+            <div className="pt-4 border-t border-white/5 flex justify-around">
+              <div className="text-center w-full cursor-pointer group" title="Total risk of trades today" onMouseEnter={() => startVarioRev('exposure')}>
+                <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+                  <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
+                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
+                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8"
+                      strokeDashoffset={getGaugeOffset('exposure', 106.8 * (1 - Math.min(exposure / 2, 1)))}
+                      className={`transition-all ${getGaugeTransition('exposure')} ${exposure >= 2 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute font-mono text-[14px] text-text-primary font-bold">{exposure.toFixed(1)}%</span>
+                </div>
+                <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Exposure</p>
+              </div>
+
+              <div className="text-center w-full cursor-pointer group" title="Percentage of daily risk limit used today" onMouseEnter={() => startVarioRev('session')}>
+                <div className="relative w-24 h-24 flex items-center justify-center mx-auto transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+                  <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-300">
+                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/5" />
+                    <circle cx="20" cy="20" r="17" stroke="currentColor" strokeWidth="2" fill="transparent" strokeDasharray="106.8"
+                      strokeDashoffset={getGaugeOffset('session', 106.8 * (1 - (sessionRisk / 100)))}
+                      className={`transition-all ${getGaugeTransition('session')} ${sessionRisk > 60 ? 'text-data-loss' : 'text-accent-gold'}`} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute font-mono text-[14px] text-text-primary font-bold">{Math.round(sessionRisk)}%</span>
+                </div>
+                <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-4">Session Risk</p>
+              </div>
+            </div>
+
+            {/* Risk Guard */}
+            <div className="pt-4 border-t border-white/5 space-y-5">
+              <div className="flex items-center space-x-2 -mt-1 mb-1 text-text-muted">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="text-[9px] uppercase tracking-widest font-semibold">Risk Guard</span>
+              </div>
+              <div>
+                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
+                  <span className="text-text-secondary">Daily Drawdown</span>
+                  <span className="font-mono text-text-primary">{activeAccount?.maxDailyDrawdownPct || "---"}% Limit</span>
+                </div>
+                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
+                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[9px] mb-2 uppercase tracking-wider">
+                  <span className="text-text-secondary">Total Drawdown</span>
+                  <span className="font-mono text-text-primary">{activeAccount?.maxTotalDrawdownPct || "---"}% Limit</span>
+                </div>
+                <div className="w-full h-2.5 bg-bg-void rounded-full overflow-hidden border border-white/5 shadow-inner p-[1.5px]">
+                  <div className="h-full bg-gradient-to-r from-accent-gold/40 to-accent-gold rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000" style={{ width: "2%" }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 2: Performance Tracking */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Left: Monthly Performance Calendar */}
+          <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-6 min-h-[350px] md:min-h-[400px]">
+            <div className="flex justify-between items-center mb-3 sm:mb-6">
+              <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Monthly Performance Calendar</h4>
+              <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
+                Daily Tracker
+              </div>
+            </div>
+            <PnLCalendar trades={allTradesForCalendar} />
+          </div>
+
+          {/* Right: Quick Playbook Access */}
+          <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
+            <div className="glass p-3 sm:p-4 flex flex-col min-h-[300px]">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-semibold text-xs sm:text-sm text-text-primary uppercase tracking-[0.2em]">Quick Access Playbook</h4>
+                <button
+                  onClick={() => router.push('/playbooks')}
+                  className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+                >
+                  Manage Strategies
+                </button>
+              </div>
+
+              {recentTrades.length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs text-text-secondary uppercase tracking-widest mb-2">Recent Trade Pair</div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-accent-gold" />
+                      <span className="font-bold">{recentTrades[0]?.pair || "No recent trades"}</span>
+                    </div>
+                    <button
+                      onClick={() => toast.info("Checklist modal would open here")}
+                      className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+                    >
+                      Review Plan
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-text-secondary uppercase tracking-widest mt-4 mb-2">Active Strategies</div>
+              {playbooks.slice(0, 2).map((pb) => (
+                <div key={pb.id} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-accent-gold/20 transition-all">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3 h-3 text-accent-gold" />
+                    <span className="font-bold text-sm">{pb.name}</span>
+                  </div>
+                  <button
+                    onClick={() => openChecklistModal(pb.id)}
+                    className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10 hover:bg-accent-gold/10 transition-colors"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+              {playbooks.length > 2 && (
+                <div className="text-center text-xs text-text-secondary mt-2">
+                  +{playbooks.length - 2} more strategies
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ChecklistModal
+        playbookId={selectedPlaybookId}
+        isOpen={checklistModalOpen}
+        onClose={() => setChecklistModalOpen(false)}
+      />
+    </>
   );
 }

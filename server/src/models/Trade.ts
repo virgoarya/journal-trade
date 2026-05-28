@@ -21,8 +21,10 @@ export interface ITrade extends Document {
   // New fields for playbook matching
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other";
-  riskPercent?: number; // Risk exposure as percentage of account equity
-  // Soft delete
+  riskPercent?: number;
+  source: "manual" | "mt5";
+  mt5TicketId?: string;
+  mt5OrderId?: number;
   isDeleted?: boolean;
   deletedAt?: Date;
   deletionReason?: string;
@@ -58,6 +60,13 @@ const TradeSchema = new Schema<ITrade>({
     enum: ["Asia", "London", "NY AM", "NY PM", "Other", "NY"]
   },
   riskPercent: { type: Number, min: 0, max: 100 },
+  source: {
+    type: String,
+    enum: ["manual", "mt5"],
+    default: "manual"
+  },
+  mt5TicketId: { type: String },
+  mt5OrderId: { type: Number },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },
   deletionReason: { type: String }

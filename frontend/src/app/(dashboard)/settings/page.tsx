@@ -3,12 +3,13 @@
 import { 
   Settings as SettingsIcon, 
   User, Bell, Palette, Shield, Database, Globe, Key, Save, Moon, Sun, 
-  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus 
+  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus, Terminal
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
 import { tradingAccountService, TradingAccount } from "@/services/trading-account.service";
 import { settingsService, UserSettingsData } from "@/services/settings.service";
+import { mt5Service, MT5Status } from "@/services/mt5.service";
 import { apiClient } from "@/lib/api-client";
 
 interface SettingsSection {
@@ -64,6 +65,15 @@ export default function SettingsPage() {
     googleSheetsSync: false,
   });
 
+  const [mt5Form, setMt5Form] = useState({
+    server: "",
+    login: "",
+    password: "",
+  });
+  const [mt5Status, setMt5Status] = useState<MT5Status | null>(null);
+  const [mt5AutoSync, setMt5AutoSync] = useState(false);
+  const [mt5SyncInterval, setMt5SyncInterval] = useState(5);
+
   // Load everything
   useEffect(() => {
     const fetchData = async () => {
@@ -98,6 +108,18 @@ export default function SettingsPage() {
       // 3. Fetch All Accounts
       const allRes = await tradingAccountService.getAll();
       if (allRes.success && allRes.data) setUserAccounts(allRes.data);
+
+      // 4. Fetch MT5 Status
+      const mt5Res = await mt5Service.getStatus();
+      setMt5Status(mt5Res);
+      if (mt5Res) {
+        setMt5AutoSync(mt5Res.autoSyncEnabled);
+        setMt5SyncInterval(mt5Res.syncIntervalMinutes);
+        if (mt5Res.config) {
+          setMt5Form(prev => ({ ...prev, server: mt5Res.config?.server || "", login: mt5Res.config?.login || "" }));
+          setIntegrationSettings(prev => ({ ...prev, metatraderConnect: true }));
+        }
+      }
     };
 
     fetchData();
@@ -312,6 +334,69 @@ export default function SettingsPage() {
       alert("Network error occurred.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleMt5Connect = async () => {
+    if (!mt5Form.server || !mt5Form.login || !mt5Form.password) {
+      setStatusMsg({ type: 'error', text: "Mohon isi semua field MT5" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await mt5Service.connect(mt5Form);
+      if (result.success) {
+        setStatusMsg({ type: 'success', text: "Berhasil terhubung ke MT5!" });
+        const status = await mt5Service.getStatus();
+        setMt5Status(status);
+        setIntegrationSettings(prev => ({ ...prev, metatraderConnect: true }));
+      } else {
+        setStatusMsg({ type: 'error', text: "Gagal connect ke MT5" });
+      }
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: "Network error" });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setStatusMsg(null), 3000);
+    }
+  };
+
+  const handleMt5Disconnect = async () => {
+    setIsLoading(true);
+    try {
+      await mt5Service.disconnect();
+      setStatusMsg({ type: 'success', text: "MT5 disconnect berhasil" });
+      setMt5Status(prev => prev ? { ...prev, connected: false, config: null } : null);
+      setIntegrationSettings(prev => ({ ...prev, metatraderConnect: false }));
+      setMt5Form(prev => ({ ...prev, server: "", login: "", password: "" }));
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: "Gagal disconnect MT5" });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setStatusMsg(null), 3000);
+    }
+  };
+
+  const handleMt5Sync = async () => {
+    setIsLoading(true);
+    try {
+      const result = await mt5Service.sync();
+      setStatusMsg({ type: 'success', text: `Sync selesai: ${result.synced} trades` });
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: "Gagal sync MT5" });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setStatusMsg(null), 3000);
+    }
+  };
+
+  const handleMt5AutoSyncToggle = async () => {
+    const newValue = !mt5AutoSync;
+    setMt5AutoSync(newValue);
+    try {
+      await mt5Service.updateSettings({ mt5AutoSyncEnabled: newValue });
+    } catch (e) {
+      setMt5AutoSync(!newValue);
     }
   };
 
@@ -845,25 +930,131 @@ export default function SettingsPage() {
                       </div>
                       {integrationSettings[item.key as keyof typeof integrationSettings] && (
                         <div className="mt-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
-                          <input 
-                            type="text" 
-                            value={item.key === 'discordNotifications' ? discordWebhook : ''}
-                            onChange={(e) => item.key === 'discordNotifications' && setDiscordWebhook(e.target.value)}
-                            placeholder="Enter Webhook URL or API Key..."
-                            className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none" 
-                          />
-                          <div className="flex justify-between items-center mt-2">
-                             <p className="text-[9px] text-text-muted">Save this data to start auto-sync.</p>
-                             {item.key === 'discordNotifications' && (
-                                <button
-                                  onClick={handleSaveIntegration}
-                                  disabled={isLoading}
-                                  className="text-[10px] font-bold text-accent-gold hover:underline"
-                                >
-                                   Save
-                                </button>
-                             )}
-                          </div>
+                          {item.key === 'metatraderConnect' ? (
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">MT5 Server</label>
+                                <input 
+                                  type="text" 
+                                  value={mt5Form.server}
+                                  onChange={(e) => setMt5Form({...mt5Form, server: e.target.value})}
+                                  placeholder="Contoh: MetaQuotes-Demo"
+                                  disabled={mt5Status?.connected}
+                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">Login</label>
+                                <input 
+                                  type="text" 
+                                  value={mt5Form.login}
+                                  onChange={(e) => setMt5Form({...mt5Form, login: e.target.value})}
+                                  placeholder="Account number"
+                                  disabled={mt5Status?.connected}
+                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">Password</label>
+                                <input 
+                                  type="password" 
+                                  value={mt5Form.password}
+                                  onChange={(e) => setMt5Form({...mt5Form, password: e.target.value})}
+                                  placeholder="Master password"
+                                  disabled={mt5Status?.connected}
+                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
+                                />
+                              </div>
+                              <div className="flex items-center justify-between pt-2">
+                                {mt5Status?.connected ? (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 rounded-full bg-data-profit animate-pulse" />
+                                      <span className="text-[10px] text-data-profit font-bold">Connected</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={handleMt5Sync}
+                                        disabled={isLoading}
+                                        className="px-3 py-2 bg-accent-gold/10 border border-accent-gold/30 text-accent-gold text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-accent-gold hover:text-bg-void transition-all"
+                                      >
+                                        Sync Now
+                                      </button>
+                                      <button
+                                        onClick={handleMt5Disconnect}
+                                        disabled={isLoading}
+                                        className="px-3 py-2 bg-data-loss/10 border border-data-loss/30 text-data-loss text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-data-loss hover:text-white transition-all"
+                                      >
+                                        Disconnect
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={handleMt5Connect}
+                                    disabled={isLoading}
+                                    className="w-full py-3 bg-accent-gold text-bg-void text-[11px] font-bold uppercase tracking-wider rounded-lg hover:brightness-110 transition-all"
+                                  >
+                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Connect MT5"}
+                                  </button>
+                                )}
+                              </div>
+                              {mt5Status?.connected && (
+                                <div className="pt-3 border-t border-white/5">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] text-text-muted uppercase tracking-wider">Auto Sync</span>
+                                    <button 
+                                      onClick={handleMt5AutoSyncToggle}
+                                      className={`relative w-12 h-6 rounded-full transition-colors ${mt5AutoSync ? 'bg-accent-gold' : 'bg-bg-void border border-white/10'}`}
+                                    >
+                                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${mt5AutoSync ? 'left-7' : 'left-1'}`} />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] text-text-muted">Interval:</span>
+                                    <select 
+                                      value={mt5SyncInterval}
+                                      onChange={(e) => setMt5SyncInterval(Number(e.target.value))}
+                                      className="bg-bg-void/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-text-primary"
+                                    >
+                                      <option value={1}>1 menit</option>
+                                      <option value={5}>5 menit</option>
+                                      <option value={10}>10 menit</option>
+                                      <option value={15}>15 menit</option>
+                                      <option value={30}>30 menit</option>
+                                    </select>
+                                  </div>
+                                  {mt5Status.lastSyncAt && (
+                                    <p className="text-[9px] text-text-muted mt-2">
+                                      Last sync: {new Date(mt5Status.lastSyncAt).toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <input 
+                                type="text" 
+                                value={item.key === 'discordNotifications' ? discordWebhook : ''}
+                                onChange={(e) => item.key === 'discordNotifications' && setDiscordWebhook(e.target.value)}
+                                placeholder="Enter Webhook URL or API Key..."
+                                className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none" 
+                              />
+                              <div className="flex justify-between items-center mt-2">
+                                <p className="text-[9px] text-text-muted">Save this data to start auto-sync.</p>
+                                {item.key === 'discordNotifications' && (
+                                  <button
+                                    onClick={handleSaveIntegration}
+                                    disabled={isLoading}
+                                    className="text-[10px] font-bold text-accent-gold hover:underline"
+                                  >
+                                    Save
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

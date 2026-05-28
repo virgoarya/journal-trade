@@ -13,6 +13,7 @@ import { connectDB } from "./db/mongoose";
 import { createAuth } from "./auth";
 import { toNodeHandler } from "better-auth/node";
 import { setAuthInstance } from "./auth-context";
+import { startMt5AutoSync } from "./services/mt5-scheduler.service";
 import path from "node:path";
 
 // Next.js app setup
@@ -51,6 +52,9 @@ connectDB()
       const auth = createAuth();
       setAuthInstance(auth);
       const authHandler = toNodeHandler(auth);
+
+      // Start MT5 auto sync service
+      await startMt5AutoSync();
 
       // ─── Better Auth Middleware ───
       // CRITICAL: Do NOT use app.use("/api/auth", handler).

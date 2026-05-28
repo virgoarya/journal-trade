@@ -10,7 +10,8 @@ import {
   BarChart3,
   Bot,
   Settings,
-  LogOut
+  LogOut,
+  Globe
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -29,6 +30,7 @@ const mainNav = [
   { name: "Playbook", href: "/playbook", icon: BookOpen },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "AI Review", href: "/ai-review", icon: Bot },
+  { name: "Macro Terminal", href: "/macro-terminal", icon: Globe },
 ];
 
 const utilityNav = [

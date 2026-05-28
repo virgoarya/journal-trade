@@ -19,6 +19,15 @@ export interface ITradingAccount extends Document {
   riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
   defaultRiskPercent?: number;
   riskNotificationEnabled?: boolean;
+  mt5Config?: {
+    server: string;
+    login: string;
+    password: string;
+  };
+  sourcePreference: "manual" | "mt5";
+  lastMt5SyncAt?: Date;
+  mt5AutoSyncEnabled?: boolean;
+  mt5SyncIntervalMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,6 +62,27 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
   riskNotificationEnabled: {
     type: Boolean,
     default: true
+  },
+  mt5Config: {
+    server: { type: String },
+    login: { type: String },
+    password: { type: String }
+  },
+  sourcePreference: {
+    type: String,
+    enum: ["manual", "mt5"],
+    default: "manual"
+  },
+  lastMt5SyncAt: { type: Date },
+  mt5AutoSyncEnabled: {
+    type: Boolean,
+    default: false
+  },
+  mt5SyncIntervalMinutes: {
+    type: Number,
+    min: 1,
+    max: 60,
+    default: 5
   }
 }, {
   timestamps: true,
