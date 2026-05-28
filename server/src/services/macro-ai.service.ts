@@ -73,15 +73,15 @@ export const macroAiService = {
 
       for await (const chunk of stream) {
         if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-          res.write(\`data: \${JSON.stringify({ text: chunk.delta.text })}\\n\\n\`);
+          res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
         }
       }
 
-      res.write("data: [DONE]\\n\\n");
+      res.write("data: [DONE]\n\n");
       res.end();
     } catch (error: any) {
       console.error("Macro AI Stream Error:", error.message || error);
-      res.write(\`data: \${JSON.stringify({ error: "Gagal memproses request AI. Coba lagi nanti." })}\\n\\n\`);
+      res.write(`data: ${JSON.stringify({ error: "Gagal memproses request AI. Coba lagi nanti." })}\n\n`);
       res.end();
     }
   }

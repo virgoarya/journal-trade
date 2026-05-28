@@ -19,7 +19,7 @@ export const marketDataService = {
 
     try {
       // Fetch general market news
-      const response = await axios.get(\`https://finnhub.io/api/v1/news?category=general&token=\${key}\`, {
+      const response = await axios.get(`https://finnhub.io/api/v1/news?category=general&token=${key}`, {
         timeout: 5000
       });
       
@@ -52,12 +52,12 @@ export const marketDataService = {
     
     try {
       const promises = symbols.map(async (symbol) => {
-        const cacheKey = \`quote_\${symbol}\`;
+        const cacheKey = `quote_${symbol}`;
         if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL_MS) {
           return { symbol, data: cache[cacheKey].data };
         }
 
-        const response = await axios.get(\`https://finnhub.io/api/v1/quote?symbol=\${symbol}&token=\${key}\`, {
+        const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
           timeout: 5000
         });
         

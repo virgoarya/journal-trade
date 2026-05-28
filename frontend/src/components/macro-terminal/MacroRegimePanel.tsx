@@ -71,9 +71,9 @@ export function MacroRegimePanel() {
             return (
               <div
                 key={regime.id}
-                className={\`flex flex-col items-center justify-center p-2 rounded-lg border transition-all duration-500 \${
-                  isActive ? regime.activeColorClass : \`\${regime.colorClass} opacity-40 grayscale-[50%]\`
-                }\`}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all duration-500 ${
+                  isActive ? regime.activeColorClass : `${regime.colorClass} opacity-40 grayscale-[50%]`
+                }`}
               >
                 <span className="text-xs font-bold uppercase tracking-wider mb-1">
                   {regime.title}

@@ -67,11 +67,9 @@ export function NewsFeedPanel() {
         const data = await res.json();
         
         if (data.success && data.data && data.data.length > 0) {
-          // Map Finnhub news to our format
           const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
             const date = new Date(item.datetime * 1000);
             
-            // Simple heuristic to mock AI analysis for free
             let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
             let asset = "MKT";
             const headline = item.headline.toLowerCase();
@@ -92,7 +90,7 @@ export function NewsFeedPanel() {
 
             return {
               id: String(item.id || index),
-              time: \`\${date.getHours().toString().padStart(2, '0')}:\${date.getMinutes().toString().padStart(2, '0')}\`,
+              time: `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`,
               headline: item.headline,
               impact,
               targetAsset: asset,
@@ -108,7 +106,6 @@ export function NewsFeedPanel() {
       } catch (error) {
         console.warn("API Error, falling back to mock news");
         setIsFallback(true);
-        // Simulate stream of mock news
         let i = 0;
         setFeed([]);
         const interval = setInterval(() => {
@@ -179,7 +176,7 @@ export function NewsFeedPanel() {
                 
                 <div className="pl-10">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className={\`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border \${getImpactColor(item.impact)}\`}>
+                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}>
                       {getImpactIcon(item.impact)}
                       {item.impact} {item.targetAsset}
                     </div>

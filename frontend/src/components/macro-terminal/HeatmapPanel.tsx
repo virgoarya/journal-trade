@@ -31,7 +31,7 @@ export function HeatmapPanel() {
     const fetchQuotes = async () => {
       try {
         const symbols = initialAssets.map(a => a.ticker).join(",");
-        const res = await fetch(\`/api/v1/market-data/quotes?symbols=\${symbols}\`);
+        const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
         const data = await res.json();
         
         if (data.success && data.data) {
@@ -69,7 +69,7 @@ export function HeatmapPanel() {
     };
 
     fetchQuotes();
-    const liveInterval = setInterval(fetchQuotes, 60000); // refresh every minute
+    const liveInterval = setInterval(fetchQuotes, 60000);
 
     return () => {
       clearInterval(liveInterval);
@@ -112,7 +112,7 @@ export function HeatmapPanel() {
           return (
             <div
               key={asset.ticker}
-              className={\`flex flex-col items-center justify-center rounded p-1 transition-colors duration-300 \${getColor(asset.change)}\`}
+              className={`flex flex-col items-center justify-center rounded p-1 transition-colors duration-300 ${getColor(asset.change)}`}
             >
               <span className="text-xs font-bold tracking-wide">{getDisplayTicker(asset.ticker)}</span>
               <span className="text-[10px] opacity-80 truncate w-full text-center hidden sm:block">

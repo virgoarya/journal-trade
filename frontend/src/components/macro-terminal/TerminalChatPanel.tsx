@@ -36,7 +36,7 @@ export function TerminalChatPanel() {
       setMessages([
         {
           role: "assistant",
-          content: "HUNTER DESK TERMINAL INITIALIZED.\\n\\nAwaiting macro data, central bank statements, or geopolitical inputs. Provide your inquiry for institutional analysis."
+          content: "HUNTER DESK TERMINAL INITIALIZED.\n\nAwaiting macro data, central bank statements, or geopolitical inputs. Provide your inquiry for institutional analysis."
         }
       ]);
     }
@@ -85,7 +85,7 @@ export function TerminalChatPanel() {
         done = readerDone;
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\\n");
+          const lines = chunk.split("\n");
 
           for (const line of lines) {
             if (line.startsWith("data: ") && line !== "data: [DONE]") {
@@ -107,7 +107,7 @@ export function TerminalChatPanel() {
                     const lastIndex = updated.length - 1;
                     updated[lastIndex] = {
                       ...updated[lastIndex],
-                      content: updated[lastIndex].content + "\\n\\n[SYSTEM ERROR]: " + data.error,
+                      content: updated[lastIndex].content + "\n\n[SYSTEM ERROR]: " + data.error,
                     };
                     return updated;
                   });
@@ -126,7 +126,7 @@ export function TerminalChatPanel() {
         const lastIndex = updated.length - 1;
         updated[lastIndex] = {
           ...updated[lastIndex],
-          content: updated[lastIndex].content + "\\n\\n[CONNECTION FAILED]: " + error.message,
+          content: updated[lastIndex].content + "\n\n[CONNECTION FAILED]: " + error.message,
         };
         return updated;
       });
@@ -140,7 +140,7 @@ export function TerminalChatPanel() {
       const initial = [
         {
           role: "assistant",
-          content: "HUNTER DESK TERMINAL RESTARTED.\\n\\nAwaiting macro data..."
+          content: "HUNTER DESK TERMINAL RESTARTED.\n\nAwaiting macro data..."
         }
       ] as Message[];
       setMessages(initial);
@@ -169,26 +169,26 @@ export function TerminalChatPanel() {
         {messages.map((msg, idx) => (
           <div
             key={idx}
-            className={\`flex gap-3 \${
+            className={`flex gap-3 ${
               msg.role === "assistant" ? "flex-row" : "flex-row-reverse"
-            }\`}
+            }`}
           >
             <div
-              className={\`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center \${
+              className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center ${
                 msg.role === "assistant"
                   ? "bg-accent-gold/10 border border-accent-gold/30 text-accent-gold"
                   : "bg-bg-surface border border-border-subtle text-text-secondary"
-              }\`}
+              }`}
             >
               {msg.role === "assistant" ? <Bot size={14} /> : <User size={14} />}
             </div>
 
             <div
-              className={\`max-w-[85%] rounded-lg p-3 \${
+              className={`max-w-[85%] rounded-lg p-3 ${
                 msg.role === "assistant"
                   ? "bg-bg-surface/80 border border-accent-gold/10 text-text-primary"
                   : "bg-accent-gold/5 border border-accent-gold/20 text-text-primary"
-              }\`}
+              }`}
             >
               <div className="flex items-center gap-2 mb-1.5 opacity-60">
                 <span className="text-[9px] uppercase tracking-widest">
