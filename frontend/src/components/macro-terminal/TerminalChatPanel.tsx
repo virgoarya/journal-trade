@@ -12,7 +12,7 @@ interface Message {
 }
 
 export function TerminalChatPanel() {
-  const { currentRegime, assets, systemAlert, clearSystemAlert } = useMacroTerminal();
+  const { currentRegime, assets, liquidity, systemAlert, clearSystemAlert } = useMacroTerminal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +84,8 @@ export function TerminalChatPanel() {
         body: JSON.stringify({ 
           messages: newMessages,
           currentRegime,
-          assets
+          assets,
+          liquidityStatus: liquidity?.status
         }),
       });
 

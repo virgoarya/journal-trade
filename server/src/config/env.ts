@@ -31,6 +31,9 @@ const envSchema = z.object({
   // Groq (fallback for free AI)
   GROQ_API_KEY: z.string().min(1).optional(),
   GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
+
+  // FRED API for Liquidity Flow (ON RRP)
+  FRED_API_KEY: z.string().min(1).optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

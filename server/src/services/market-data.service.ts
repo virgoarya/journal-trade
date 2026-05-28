@@ -77,5 +77,53 @@ export const marketDataService = {
       console.error("Finnhub Quotes API Error:", error.message);
       throw new Error("Failed to fetch live quotes");
     }
+  },
+
+  async getLiquidity() {
+    const key = env.FRED_API_KEY;
+    if (!key) {
+      throw new Error("FRED_API_KEY is not configured");
+    }
+
+    const cacheKey = "liquidity_onrrp";
+    // Cache for 1 hour since FRED updates daily
+    if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
+      return cache[cacheKey].data;
+    }
+
+    try {
+      // Get the last 2 observations to calculate the change
+      const response = await axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=2`, {
+        timeout: 5000
+      });
+      
+      const observations = response.data.observations;
+      if (!observations || observations.length < 2) {
+        throw new Error("Insufficient data from FRED");
+      }
+
+      const current = parseFloat(observations[0].value);
+      const previous = parseFloat(observations[1].value);
+      const change = current - previous;
+      const status = change > 0 ? "DRAINING" : "INJECTING";
+      
+      const data = {
+        value: current,
+        change: change,
+        status: status,
+        date: observations[0].date
+      };
+
+      // Update cache
+      cache[cacheKey] = {
+        data: data,
+        timestamp: Date.now(),
+      };
+      
+      return data;
+    } catch (error: any) {
+      console.error("FRED API Error:", error.message);
+      throw new Error("Failed to fetch ON RRP liquidity data");
+    }
   }
 };

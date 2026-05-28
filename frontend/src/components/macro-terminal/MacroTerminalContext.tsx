@@ -20,10 +20,18 @@ const initialAssets: Asset[] = [
   { ticker: "TIP", name: "TIPS (Real Yield)", change: 0, weight: 1 },
 ];
 
+export interface LiquidityData {
+  value: number;
+  change: number;
+  status: "INJECTING" | "DRAINING" | "UNKNOWN";
+  date: string;
+}
+
 export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Unknown";
 
 interface MacroTerminalContextProps {
   assets: Asset[];
+  liquidity: LiquidityData | null;
   isFallback: boolean;
   currentRegime: RegimeType;
   lastRegime: RegimeType;
@@ -39,6 +47,7 @@ const MacroTerminalContext = createContext<MacroTerminalContextProps | undefined
 
 export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
+  const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
   const [isFallback, setIsFallback] = useState(false);
   const [currentRegime, setCurrentRegime] = useState<RegimeType>("Unknown");
   const [lastRegime, setLastRegime] = useState<RegimeType>("Unknown");
@@ -76,7 +85,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     return "Unknown";
   };
 
-  const analyzeRegime = async (currentAssetsToAnalyze: Asset[] = assets) => {
+  const analyzeRegime = async (currentAssetsToAnalyze: Asset[] = assets, currentLiquidity: LiquidityData | null = liquidity) => {
     setIsAnalyzing(true);
     try {
       const res = await fetch("/api/v1/macro-ai/analyze-regime", {
@@ -84,7 +93,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           assets: currentAssetsToAnalyze,
-          calculatedRegime: calculateRegime(currentAssetsToAnalyze)
+          calculatedRegime: calculateRegime(currentAssetsToAnalyze),
+          liquidityStatus: currentLiquidity?.status
         }),
       });
       const data = await res.json();
@@ -99,11 +109,27 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const fetchLiquidity = async () => {
+    try {
+      const res = await fetch("/api/v1/market-data/liquidity");
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLiquidity(data.data);
+        return data.data;
+      }
+    } catch (error) {
+      console.error("Failed to fetch liquidity data:", error);
+    }
+    return null;
+  };
+
   const fetchQuotes = async () => {
     try {
       const symbols = initialAssets.map(a => a.ticker).join(",");
       const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
       const data = await res.json();
+      
+      const newLiquidity = await fetchLiquidity();
       
       if (data.success && data.data) {
         const updatedAssets = initialAssets.map(asset => {
@@ -139,7 +165,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         });
 
         // Trigger AI Analysis
-        analyzeRegime(updatedAssets);
+        analyzeRegime(updatedAssets, newLiquidity);
       } else {
         throw new Error("Invalid quote API response");
       }
@@ -174,6 +200,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     <MacroTerminalContext.Provider
       value={{
         assets,
+        liquidity,
         isFallback,
         currentRegime,
         lastRegime,
@@ -182,7 +209,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         lastUpdated,
         systemAlert,
         clearSystemAlert,
-        analyzeRegime: () => analyzeRegime(assets),
+        analyzeRegime: () => analyzeRegime(assets, liquidity),
       }}
     >
       {children}

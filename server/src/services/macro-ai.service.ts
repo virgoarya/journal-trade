@@ -48,7 +48,8 @@ export const macroAiService = {
     messages: { role: "user" | "assistant", content: string }[], 
     res: any,
     currentRegime?: string,
-    assets?: any[]
+    assets?: any[],
+    liquidityStatus?: string
   ) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
@@ -65,7 +66,11 @@ export const macroAiService = {
       
       if (currentRegime && assets) {
         const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join(", ");
-        dynamicSystemPrompt += `\n\n[CRITICAL LIVE CONTEXT]\nSystem Quantitative Algorithm currently classifies the Macro Regime as: ${currentRegime.toUpperCase()}.\nLive Asset Data: ${assetString}\n\nYou MUST align your analysis with this regime and data. Do NOT contradict the terminal's classification.`;
+        dynamicSystemPrompt += `\n\n[CRITICAL LIVE CONTEXT]\nSystem Quantitative Algorithm currently classifies the Macro Regime as: ${currentRegime.toUpperCase()}.\nLive Asset Data: ${assetString}\n`;
+        if (liquidityStatus) {
+           dynamicSystemPrompt += `ON RRP Liquidity Flow Status: ${liquidityStatus.toUpperCase()} (Injecting = Bullish/Risk-On, Draining = Bearish/Risk-Off).\n`;
+        }
+        dynamicSystemPrompt += `You MUST align your analysis with this regime, liquidity flow, and data. Do NOT contradict the terminal's classification.`;
       }
 
       const groqMessages = [
@@ -140,7 +145,7 @@ export const macroAiService = {
     }
   },
 
-  async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string) {
+  async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
@@ -152,7 +157,10 @@ export const macroAiService = {
     if (calculatedRegime) {
       prompt += `Algoritma sistem telah mendeteksi regime saat ini sebagai: ${calculatedRegime.toUpperCase()}.\n`;
     }
-    prompt += `Berikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Selaraskan dengan hasil deteksi algoritma (jika ada). Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading.`;
+    if (liquidityStatus) {
+      prompt += `ON RRP Liquidity Flow Status terdeteksi sebagai: ${liquidityStatus.toUpperCase()} (Injecting = Bullish/Risk-On, Draining = Bearish/Risk-Off).\n`;
+    }
+    prompt += `Berikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Selaraskan dengan hasil deteksi algoritma dan status likuiditas (jika ada). Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading.`;
 
     try {
       const response = await axios.post(

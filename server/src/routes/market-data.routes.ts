@@ -29,4 +29,13 @@ router.get("/quotes", async (req, res) => {
   }
 });
 
+router.get("/liquidity", async (req, res) => {
+  try {
+    const data = await marketDataService.getLiquidity();
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(503).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
