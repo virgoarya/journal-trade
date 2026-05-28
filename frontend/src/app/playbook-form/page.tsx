@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { playbookService, type Strategy } from "@/services/playbook.service";
 import { CreatePlaybookForm } from "@/components/playbook/CreatePlaybookForm";
 import { ChevronLeft, AlertCircle } from "lucide-react";
 
-export default function PlaybookFormPage() {
+function PlaybookFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
@@ -93,5 +93,20 @@ export default function PlaybookFormPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function PlaybookFormPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-10 w-10 border-4 border-accent-gold border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-accent-gold font-mono text-sm tracking-widest animate-pulse">LOADING...</p>
+        </div>
+      </div>
+    }>
+      <PlaybookFormContent />
+    </Suspense>
   );
 }
