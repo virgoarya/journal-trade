@@ -237,7 +237,19 @@ export const macroAiService = {
     // Try Gemini first as fallback if available
     if (env.GEMINI_API_KEY) {
       try {
-        const prompt = context || `${headline}\n\nTarget Aset: ${targetAsset}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`;
+        const prompt = context || `Headline: ${headline}\nTarget Aset: ${targetAsset}`;
+        const strictPrompt = `Analisis dampak secara objektif dan berdasarkan data murni. DILARANG halusinasi. Kembalikan HANYA format JSON murni tanpa markdown \`\`\` dengan struktur berikut:
+{
+  "fakta": "...",
+  "dampak": "...",
+  "logika": "...",
+  "contrarian": "...",
+  "confidence": "Rendah/Sedang/Tinggi - Penjelasan...",
+  "risk": "..."
+}
+
+Data untuk dianalisis:
+${prompt}`;
         
         const geminiRes = await axios.post(
           GEMINI_API_URL,
@@ -245,7 +257,7 @@ export const macroAiService = {
             system_instruction: { text: HUNTER_DESK_SYSTEM_PROMPT },
             contents: [{ 
               role: "user", 
-              parts: [{ text: prompt }] 
+              parts: [{ text: strictPrompt }] 
             }],
             generationConfig: { maxOutputTokens: 800 }
           },
@@ -265,9 +277,22 @@ export const macroAiService = {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const prompt = context 
-      ? `Analisis dampak berikut sebagai Institutional Desk Trader:\n${context}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`
-      : `Analisis dampak berikut sebagai Institutional Desk Trader:\n${headline}\n\nTarget Aset: ${targetAsset}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`;
+    const baseContext = context 
+      ? `${context}`
+      : `Headline: ${headline}\nTarget Aset: ${targetAsset}`;
+
+    const strictPrompt = `Analisis dampak secara objektif dan berdasarkan data murni. DILARANG halusinasi. Kembalikan HANYA format JSON murni tanpa markdown \`\`\` dengan struktur berikut:
+{
+  "fakta": "...",
+  "dampak": "...",
+  "logika": "...",
+  "contrarian": "...",
+  "confidence": "Rendah/Sedang/Tinggi - Penjelasan...",
+  "risk": "..."
+}
+
+Data untuk dianalisis:
+${baseContext}`;
 
     // Try different Groq models if rate limited
     for (let attempt = 0; attempt < GROQ_MODELS.length; attempt++) {
@@ -279,7 +304,7 @@ export const macroAiService = {
             model,
             messages: [
               { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
-              { role: "user", content: prompt },
+              { role: "user", content: strictPrompt },
             ],
             max_tokens: 800,
             stream: false,
