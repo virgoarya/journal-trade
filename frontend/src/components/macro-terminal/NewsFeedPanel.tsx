@@ -258,6 +258,7 @@ export function NewsFeedPanel() {
           </div>
         )}
       </div>
+    </div>
 
       {/* Premium Elite AI Coach Analysis Modal */}
       {modalData && (
