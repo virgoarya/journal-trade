@@ -162,31 +162,99 @@ export const macroAiService = {
     }
     prompt += `Berikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Selaraskan dengan hasil deteksi algoritma dan status likuiditas (jika ada). Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading.`;
 
-    try {
-      const response = await axios.post(
-        GROQ_API_URL,
-        {
-          model,
-          messages: [
-            { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 500,
-          stream: false,
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-            "Content-Type": "application/json",
+    const makeRequest = async (retries = 3): Promise<string> => {
+      try {
+        const response = await axios.post(
+          GROQ_API_URL,
+          {
+            model,
+            messages: [
+              { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 500,
+            stream: false,
           },
-          timeout: 30000,
-        }
-      );
+          {
+            headers: {
+              "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 30000,
+          }
+        );
 
-      return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis regime makro.";
+        return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis regime makro.";
+      } catch (error: any) {
+        if (error.response?.status === 429 && retries > 0) {
+          const delay = (4 - retries) * 2000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return makeRequest(retries - 1);
+        }
+        throw error;
+      }
+    };
+
+    try {
+      return await makeRequest();
     } catch (error: any) {
       console.error("Macro AI Groq Analyze Error:", error.message || error);
       throw new Error("Gagal memproses analisis regime AI.");
+    }
+  },
+
+  async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+    if (!env.GROQ_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
+    }
+
+    const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    
+    const prompt = context 
+      ? `Analisis dampak berikut sebagai Institutional Desk Trader:\n${context}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`
+      : `Analisis dampak berikut sebagai Institutional Desk Trader:\n${headline}\n\nTarget Aset: ${targetAsset}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`;
+
+    const makeRequest = async (retries = 3): Promise<string> => {
+      try {
+        const response = await axios.post(
+          GROQ_API_URL,
+          {
+            model,
+            messages: [
+              { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 800,
+            stream: false,
+          },
+          {
+            headers: {
+              "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 30000,
+          }
+        );
+
+        return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis macro feed.";
+      } catch (error: any) {
+        if (error.response?.status === 429 && retries > 0) {
+          const delay = (4 - retries) * 2000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return makeRequest(retries - 1);
+        }
+        throw error;
+      }
+    };
+
+    try {
+      return await makeRequest();
+    } catch (error: any) {
+      if (error.response?.status === 429) {
+        throw new Error("Rate limit tercapai. Tunggu 30 detik sebelum mencoba lagi.");
+      }
+      console.error("Macro AI Feed Analyze Error:", error.message || error);
+      throw new Error("Gagal menganalisa dampak macro feed.");
     }
   }
 };

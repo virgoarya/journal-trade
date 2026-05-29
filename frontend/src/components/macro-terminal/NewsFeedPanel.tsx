@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain } from "lucide-react";
 
 interface NewsItem {
   id: string;
@@ -10,6 +10,16 @@ interface NewsItem {
   impact: "BULLISH" | "BEARISH" | "NEUTRAL";
   targetAsset: string;
   aiSummary: string;
+}
+
+interface MacroAnalysis {
+  Fakta: string;
+  DampakMarket: string;
+  Logika: string;
+  Contrarian: string;
+  Trigger: string;
+  Confidence: string;
+  Risk: string;
 }
 
 const mockNews: NewsItem[] = [
@@ -59,6 +69,30 @@ export function NewsFeedPanel() {
   const [feed, setFeed] = useState<NewsItem[]>([]);
   const [isFallback, setIsFallback] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<Record<string, string>>({});
+
+  const analyzeFeedItem = async (item: NewsItem) => {
+    setAnalyzingId(item.id);
+    try {
+      const res = await fetch("/api/v1/macro-ai/analyze-macro-feed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          headline: item.headline,
+          targetAsset: item.targetAsset,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAnalysis((prev) => ({ ...prev, [item.id]: data.analysis }));
+      }
+    } catch (error) {
+      console.error("Analyze error:", error);
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -154,7 +188,7 @@ export function NewsFeedPanel() {
         )}
       </div>
       
-      <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-accent-gold/20">
+<div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-accent-gold/20">
         {loading || feed.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <span className="text-xs text-text-muted font-mono animate-pulse">
@@ -165,13 +199,23 @@ export function NewsFeedPanel() {
           <div className="flex flex-col divide-y divide-border-subtle">
             {feed.map((item) => (
               <div key={item.id} className="p-3 hover:bg-bg-surface/50 transition-colors">
-                <div className="flex items-start gap-2 mb-1.5">
-                  <span className="text-[10px] font-mono text-text-muted mt-0.5 whitespace-nowrap">
-                    [{item.time}]
-                  </span>
-                  <p className="text-sm font-semibold text-text-primary leading-snug">
-                    {item.headline}
-                  </p>
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[10px] font-mono text-text-muted mt-0.5 whitespace-nowrap">
+                      [{item.time}]
+                    </span>
+                    <p className="text-sm font-semibold text-text-primary leading-snug">
+                      {item.headline}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => analyzeFeedItem(item)}
+                    disabled={analyzingId === item.id}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-accent-gold border border-accent-gold/30 rounded hover:bg-accent-gold/10 transition-colors disabled:opacity-50"
+                  >
+                    <Brain size={12} />
+                    {analyzingId === item.id ? "ANALYZING..." : "ANALYZER"}
+                  </button>
                 </div>
                 
                 <div className="pl-10">
@@ -186,12 +230,19 @@ export function NewsFeedPanel() {
                       {item.aiSummary}
                     </p>
                   </div>
+                  {analysis[item.id] && (
+                    <div className="mt-2 p-2 bg-bg-surface/50 border border-border-subtle rounded">
+                      <pre className="text-[10px] text-text-secondary font-mono whitespace-pre-wrap leading-relaxed">
+                        {analysis[item.id]}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
-  );
-}
+      </div>
+      );
+    }
