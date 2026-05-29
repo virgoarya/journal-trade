@@ -79,51 +79,71 @@ export const marketDataService = {
     }
   },
 
-  async getLiquidity() {
-    const key = env.FRED_API_KEY;
-    if (!key) {
-      throw new Error("FRED_API_KEY is not configured");
-    }
+   async getLiquidity() {
+     const key = env.FRED_API_KEY;
+     if (!key) {
+       // If no FRED API key is configured, return dummy data for development
+       const cacheKey = "liquidity_onrrp";
+       // Cache for 1 hour to avoid generating dummy data too frequently
+       if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
+         return cache[cacheKey].data;
+       }
 
-    const cacheKey = "liquidity_onrrp";
-    // Cache for 1 hour since FRED updates daily
-    if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
-      return cache[cacheKey].data;
-    }
+       const dummyData = {
+         value: 2000, // Represents $2.0 trillion (since panel divides by 1000 to show trillions)
+         change: 0,
+         status: "UNKNOWN" as const,
+         date: new Date().toISOString().split('T')[0]
+       };
 
-    try {
-      // Get the last 2 observations to calculate the change
-      const response = await axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=2`, {
-        timeout: 5000
-      });
-      
-      const observations = response.data.observations;
-      if (!observations || observations.length < 2) {
-        throw new Error("Insufficient data from FRED");
-      }
+       // Update cache
+       cache[cacheKey] = {
+         data: dummyData,
+         timestamp: Date.now(),
+       };
+       
+       return dummyData;
+     }
 
-      const current = parseFloat(observations[0].value);
-      const previous = parseFloat(observations[1].value);
-      const change = current - previous;
-      const status = change > 0 ? "DRAINING" : "INJECTING";
-      
-      const data = {
-        value: current,
-        change: change,
-        status: status,
-        date: observations[0].date
-      };
+     const cacheKey = "liquidity_onrrp";
+     // Cache for 1 hour since FRED updates daily
+     if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
+       return cache[cacheKey].data;
+     }
 
-      // Update cache
-      cache[cacheKey] = {
-        data: data,
-        timestamp: Date.now(),
-      };
-      
-      return data;
-    } catch (error: any) {
-      console.error("FRED API Error:", error.message);
-      throw new Error("Failed to fetch ON RRP liquidity data");
-    }
-  }
+     try {
+       // Get the last 2 observations to calculate the change
+       const response = await axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=2`, {
+         timeout: 5000
+       });
+       
+       const observations = response.data.observations;
+       if (!observations || observations.length < 2) {
+         throw new Error("Insufficient data from FRED");
+       }
+
+       const current = parseFloat(observations[0].value);
+       const previous = parseFloat(observations[1].value);
+       const change = current - previous;
+       const status = change > 0 ? "DRAINING" : "INJECTING";
+       
+       const data = {
+         value: current,
+         change: change,
+         status: status,
+         date: observations[0].date
+       };
+
+       // Update cache
+       cache[cacheKey] = {
+         data: data,
+         timestamp: Date.now(),
+       };
+       
+       return data;
+     } catch (error: any) {
+       console.error("FRED API Error:", error.message);
+       throw new Error("Failed to fetch ON RRP liquidity data");
+     }
+   }
 };
