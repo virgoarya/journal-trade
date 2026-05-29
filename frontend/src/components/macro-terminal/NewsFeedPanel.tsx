@@ -192,7 +192,8 @@ export function NewsFeedPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
+    <>
+      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
       <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
         <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
           <AlertCircle size={14} />
@@ -390,6 +391,6 @@ export function NewsFeedPanel() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
