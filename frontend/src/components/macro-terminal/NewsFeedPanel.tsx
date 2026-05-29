@@ -182,10 +182,12 @@ export function NewsFeedPanel() {
   let parsedAnalysis: any = null;
   if (modalData?.analysis) {
     try {
-      const cleanedStr = modalData.analysis.replace(/```json/gi, "").replace(/```/g, "").trim();
-      parsedAnalysis = JSON.parse(cleanedStr);
+      const match = modalData.analysis.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsedAnalysis = JSON.parse(match[0]);
+      }
     } catch (e) {
-      // Fallback ke markdown biasa jika gagal parse
+      console.error("Gagal parse JSON:", e);
     }
   }
 
@@ -258,8 +260,8 @@ export function NewsFeedPanel() {
 
       {/* Premium Elite AI Coach Analysis Modal */}
       {modalData && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-3xl bg-[#0a0a0c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90">
+          <div className="w-full max-w-3xl bg-[#0a0a0c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             {/* Header */}
             <div className="p-6 border-b border-white/5 flex justify-between items-start bg-gradient-to-b from-white/[0.02] to-transparent">
               <div className="flex items-center gap-4">
