@@ -484,13 +484,79 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </div>
+       </div>
 
-      <ChecklistModal
-        playbookId={selectedPlaybookId}
-        isOpen={checklistModalOpen}
-        onClose={() => setChecklistModalOpen(false)}
-      />
-    </>
-  );
-}
+       {/* ROW 3: Recent Trades & Asset Distribution */}
+       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+         {/* Recent Trades */}
+         <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-5 min-h-[350px]">
+           <div className="flex justify-between items-center mb-4">
+             <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Recent Trades</h4>
+             <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
+               Last 5 Trades
+             </div>
+           </div>
+           {recentTrades.length > 0 ? (
+             <div className="overflow-hidden">
+               <table className="min-w-full divide-y divide-white/5">
+                 <thead>
+                   <tr className="bg-bg-void/50">
+                     <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Pair</th>
+                     <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Dir</th>
+                     <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">PnL</th>
+                     <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Result</th>
+                     <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Date</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-white/5">
+                    {recentTrades.map((trade) => (
+                     <tr key={trade.id} className="hover:bg-white/5 transition-colors">
+                       <td className="px-4 py-3 text-sm font-mono">{trade.pair}</td>
+                       <td className="px-4 py-3 text-sm font-mono">{trade.direction === 'Long' ? 'L' : 'S'}</td>
+                       <td className={`px-4 py-3 text-sm font-mono ${trade.pnl >= 0 ? 'text-data-profit' : 'text-data-loss'}`}>
+                         {trade.pnl.toFixed(2)}
+                       </td>
+                       <td className={`px-4 py-3 text-sm font-mono ${trade.result === 'win' ? 'text-data-profit' : trade.result === 'loss' ? 'text-data-loss' : 'text-accent-gold'}`}>
+                         {trade.result === 'win' ? 'W' : trade.result === 'loss' ? 'L' : 'B'}
+                       </td>
+                       <td className="px-4 py-3 text-sm font-mono text-text-muted">
+                         {new Date(trade.tradeDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
+                       </td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+           ) : (
+             <div className="flex flex-col items-center justify-center h-[200px]">
+               <p className="text-[10px] text-text-muted uppercase tracking-widest italic font-mono">No recent trades available</p>
+             </div>
+           )}
+         </div>
+
+         {/* Asset Distribution */}
+         <div className="lg:col-span-5 glass p-3 sm:p-4 md:p-5 min-h-[350px]">
+           <div className="flex justify-between items-center mb-4">
+             <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Asset Distribution</h4>
+             <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
+               From Total Trades
+             </div>
+           </div>
+           {analytics && analytics.assetDistribution && analytics.assetDistribution.length > 0 ? (
+             <AssetDistributionChart data={analytics.assetDistribution} />
+           ) : (
+             <div className="flex flex-col items-center justify-center h-[200px]">
+               <p className="text-[10px] text-text-muted uppercase tracking-widest italic font-mono">No asset data available</p>
+             </div>
+           )}
+         </div>
+       </div>
+
+       <ChecklistModal
+         playbookId={selectedPlaybookId}
+         isOpen={checklistModalOpen}
+         onClose={() => setChecklistModalOpen(false)}
+       />
+     </>
+   );
+ }
