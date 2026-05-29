@@ -234,6 +234,11 @@ export const macroAiService = {
   },
 
   async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+    const feedSystemPrompt = HUNTER_DESK_SYSTEM_PROMPT.replace(
+      'End your analysis directly with an "INSTITUTIONAL SENTIMENT STATUS: [HAWKISH / DOVISH / RISK-ON / RISK-OFF]" summary block.', 
+      'DO NOT output any "INSTITUTIONAL SENTIMENT STATUS" block. You must output ONLY a valid JSON object without any other text or markdown formatting.'
+    );
+
     // Try Gemini first as fallback if available
     if (env.GEMINI_API_KEY) {
       try {
@@ -254,12 +259,15 @@ ${prompt}`;
         const geminiRes = await axios.post(
           GEMINI_API_URL,
           {
-            system_instruction: { text: HUNTER_DESK_SYSTEM_PROMPT },
+            system_instruction: { text: feedSystemPrompt },
             contents: [{ 
               role: "user", 
               parts: [{ text: strictPrompt }] 
             }],
-            generationConfig: { maxOutputTokens: 800 }
+            generationConfig: { 
+              maxOutputTokens: 800,
+              responseMimeType: "application/json"
+            }
           },
           {
             headers: { "Content-Type": "application/json" },
@@ -303,11 +311,12 @@ ${baseContext}`;
           {
             model,
             messages: [
-              { role: "system", content: HUNTER_DESK_SYSTEM_PROMPT },
+              { role: "system", content: feedSystemPrompt },
               { role: "user", content: strictPrompt },
             ],
             max_tokens: 800,
             stream: false,
+            response_format: { type: "json_object" },
           },
           {
             headers: {
