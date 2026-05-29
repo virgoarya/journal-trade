@@ -2,6 +2,13 @@ import { env } from "../config/env";
 import axios from "axios";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || "gemini-2.5-flash"}:generateContent?key=${env.GEMINI_API_KEY}`;
+
+const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "gemma2-9b-it",
+];
 
 const HUNTER_DESK_SYSTEM_PROMPT = `You are the "Hunter Desk Terminal", an elite AI Global Macro & Forex Analyzer operating with the strict persona of an Institutional Desk Trader and Prop Firm Quantitative Strategist. Your analytical framework rejects typical retail trading fallacies (lagging retail indicators, over-simplified chart patterns) and focuses purely on structural liquidity, central bank monetary policy, intermarket correlation, and institutional capital flows.
 
@@ -146,11 +153,37 @@ export const macroAiService = {
   },
 
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
+    // Try Gemini first as fallback if available
+    if (env.GEMINI_API_KEY) {
+      try {
+        const geminiText = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join("\n")}\n\n${calculatedRegime ? `Algoritma sistem telah mendeteksi regime saat ini sebagai: ${calculatedRegime.toUpperCase()}.` : ""}\n${liquidityStatus ? `ON RRP Liquidity Flow Status terdeteksi sebagai: ${liquidityStatus.toUpperCase()}.` : ""}\n\nBerikan simpulan 1-2 kalimat tegas tentang kondisi regime makro dan flow institusi.`;
+        
+        const geminiRes = await axios.post(
+          GEMINI_API_URL,
+          {
+            system_instruction: { text: HUNTER_DESK_SYSTEM_PROMPT },
+            contents: [{ 
+              role: "user", 
+              parts: [{ text: geminiText }] 
+            }],
+            generationConfig: { maxOutputTokens: 500 }
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 30000,
+          }
+        );
+        const text = geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } catch (e) {
+        // Fall through to Groq
+      }
+    }
+
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
     const assetString = assets.map(a => `${a.name} (${a.ticker}): ${a.change > 0 ? "+" : ""}${a.change}%`).join("\n");
     
     let prompt = `Berdasarkan pergerakan aset makro secara realtime saat ini:\n${assetString}\n\n`;
@@ -162,7 +195,9 @@ export const macroAiService = {
     }
     prompt += `Berikan simpulan 1-2 kalimat tegas dan singkat mengenai kondisi regime makro dan flow institusi saat ini. Selaraskan dengan hasil deteksi algoritma dan status likuiditas (jika ada). Gunakan bahasa trader profesional (campur bahasa Indonesia dan istilah finansial). Jangan memberikan rekomendasi trading.`;
 
-    const makeRequest = async (retries = 3): Promise<string> => {
+    // Try different Groq models if rate limited
+    for (let attempt = 0; attempt < GROQ_MODELS.length; attempt++) {
+      const model = GROQ_MODELS[attempt];
       try {
         const response = await axios.post(
           GROQ_API_URL,
@@ -186,35 +221,57 @@ export const macroAiService = {
 
         return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis regime makro.";
       } catch (error: any) {
-        if (error.response?.status === 429 && retries > 0) {
-          const delay = (4 - retries) * 2000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return makeRequest(retries - 1);
+        if (error.response?.status === 429) {
+          // Try next model after delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
         }
         throw error;
       }
-    };
-
-    try {
-      return await makeRequest();
-    } catch (error: any) {
-      console.error("Macro AI Groq Analyze Error:", error.message || error);
-      throw new Error("Gagal memproses analisis regime AI.");
     }
+
+    throw new Error("Rate limit tercapai di semua model Groq. Tunggu beberapa menit sebelum mencoba lagi.");
   },
 
   async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+    // Try Gemini first as fallback if available
+    if (env.GEMINI_API_KEY) {
+      try {
+        const prompt = context || `${headline}\n\nTarget Aset: ${targetAsset}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`;
+        
+        const geminiRes = await axios.post(
+          GEMINI_API_URL,
+          {
+            system_instruction: { text: HUNTER_DESK_SYSTEM_PROMPT },
+            contents: [{ 
+              role: "user", 
+              parts: [{ text: prompt }] 
+            }],
+            generationConfig: { maxOutputTokens: 800 }
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 30000,
+          }
+        );
+        const text = geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } catch (e) {
+        // Fall through to Groq
+      }
+    }
+
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const model = env.GROQ_MODEL || "llama-3.3-70b-versatile";
-    
     const prompt = context 
       ? `Analisis dampak berikut sebagai Institutional Desk Trader:\n${context}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`
       : `Analisis dampak berikut sebagai Institutional Desk Trader:\n${headline}\n\nTarget Aset: ${targetAsset}\n\nGunakan format:\nFakta:\nDampak Market:\nLogika:\nContrarian:\nTrigger:\nConfidence:\nRisk:`;
 
-    const makeRequest = async (retries = 3): Promise<string> => {
+    // Try different Groq models if rate limited
+    for (let attempt = 0; attempt < GROQ_MODELS.length; attempt++) {
+      const model = GROQ_MODELS[attempt];
       try {
         const response = await axios.post(
           GROQ_API_URL,
@@ -238,23 +295,14 @@ export const macroAiService = {
 
         return response.data.choices?.[0]?.message?.content || "Gagal mendapatkan analisis macro feed.";
       } catch (error: any) {
-        if (error.response?.status === 429 && retries > 0) {
-          const delay = (4 - retries) * 2000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return makeRequest(retries - 1);
+        if (error.response?.status === 429) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
         }
         throw error;
       }
-    };
-
-    try {
-      return await makeRequest();
-    } catch (error: any) {
-      if (error.response?.status === 429) {
-        throw new Error("Rate limit tercapai. Tunggu 30 detik sebelum mencoba lagi.");
-      }
-      console.error("Macro AI Feed Analyze Error:", error.message || error);
-      throw new Error("Gagal menganalisa dampak macro feed.");
     }
+
+    throw new Error("Rate limit tercapai di semua model Groq. Tunggu beberapa menit sebelum mencoba lagi.");
   }
 };
