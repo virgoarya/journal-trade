@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface NewsItem {
   id: string;
@@ -71,8 +73,14 @@ export function NewsFeedPanel() {
   const [loading, setLoading] = useState(true);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Record<string, string>>({});
+  const [modalData, setModalData] = useState<{ item: NewsItem; analysis: string } | null>(null);
 
   const analyzeFeedItem = async (item: NewsItem) => {
+    if (analysis[item.id]) {
+      setModalData({ item, analysis: analysis[item.id] });
+      return;
+    }
+
     setAnalyzingId(item.id);
     try {
       const res = await fetch("/api/v1/macro-ai/analyze-macro-feed", {
@@ -86,6 +94,7 @@ export function NewsFeedPanel() {
       const data = await res.json();
       if (data.success) {
         setAnalysis((prev) => ({ ...prev, [item.id]: data.analysis }));
+        setModalData({ item, analysis: data.analysis });
       }
     } catch (error) {
       console.error("Analyze error:", error);
@@ -230,19 +239,51 @@ export function NewsFeedPanel() {
                       {item.aiSummary}
                     </p>
                   </div>
-                  {analysis[item.id] && (
-                    <div className="mt-2 p-2 bg-bg-surface/50 border border-border-subtle rounded">
-                      <pre className="text-[10px] text-text-secondary font-mono whitespace-pre-wrap leading-relaxed">
-                        {analysis[item.id]}
-                      </pre>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-      </div>
-      );
-    }
+
+      {/* Modal */}
+      {modalData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-bg-surface border border-border-subtle rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in duration-300">
+            <div className="p-4 border-b border-border-subtle flex justify-between items-center bg-bg-surface/80">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-accent-gold" />
+                <h3 className="font-mono font-bold text-text-primary uppercase tracking-widest text-sm">
+                  Macro Feed Analysis
+                </h3>
+              </div>
+              <button 
+                onClick={() => setModalData(null)}
+                className="text-text-muted hover:text-accent-gold transition-colors font-mono text-xs flex items-center gap-1"
+              >
+                [ CLOSE ]
+              </button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-accent-gold/20 text-text-secondary">
+              <div className="mb-4 pb-4 border-b border-border-subtle/50">
+                <p className="text-text-primary font-semibold mb-2">{modalData.item.headline}</p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded font-bold border ${getImpactColor(modalData.item.impact)}`}>
+                    {getImpactIcon(modalData.item.impact)}
+                    {modalData.item.impact} {modalData.item.targetAsset}
+                  </span>
+                </div>
+              </div>
+              <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-bg-void prose-pre:border prose-pre:border-border-subtle prose-a:text-accent-gold hover:prose-a:text-accent-gold-dim text-xs">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {modalData.analysis}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

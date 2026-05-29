@@ -57,6 +57,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   const [systemAlert, setSystemAlert] = useState<string | null>(null);
+  const hasAnalyzedInitially = useRef(false);
+  const currentRegimeRef = useRef<RegimeType>("Unknown");
 
   // Helper untuk mendapatkan persentase ubahan berdasarkan ticker
   const getChange = (currentAssets: Asset[], ticker: string) => {
@@ -152,20 +154,24 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
         // Hitung Regime
         const newlyCalculatedRegime = calculateRegime(updatedAssets);
+        const isInitialAnalysis = !hasAnalyzedInitially.current;
+        const isRegimeShift = currentRegimeRef.current !== "Unknown" && currentRegimeRef.current !== newlyCalculatedRegime;
         
-        setCurrentRegime((prev) => {
-          if (prev !== "Unknown" && prev !== newlyCalculatedRegime) {
-            // Regime Shift Terdeteksi!
-            setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${prev.toUpperCase()} TO ${newlyCalculatedRegime.toUpperCase()}.`);
-            setLastRegime(prev);
-          } else if (prev === "Unknown") {
-            setLastRegime(newlyCalculatedRegime);
-          }
-          return newlyCalculatedRegime;
-        });
+        if (isRegimeShift) {
+          setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${currentRegimeRef.current.toUpperCase()} TO ${newlyCalculatedRegime.toUpperCase()}.`);
+          setLastRegime(currentRegimeRef.current);
+        } else if (currentRegimeRef.current === "Unknown") {
+          setLastRegime(newlyCalculatedRegime);
+        }
+        
+        setCurrentRegime(newlyCalculatedRegime);
+        currentRegimeRef.current = newlyCalculatedRegime;
 
-        // Trigger AI Analysis
-        analyzeRegime(updatedAssets, newLiquidity);
+        // Trigger AI Analysis only initially or on regime shift
+        if (isInitialAnalysis || isRegimeShift) {
+          analyzeRegime(updatedAssets, newLiquidity);
+          hasAnalyzedInitially.current = true;
+        }
       } else {
         throw new Error("Invalid quote API response");
       }

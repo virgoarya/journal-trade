@@ -67,13 +67,13 @@ export default function MacroTerminalPage() {
 
           {/* Right Column (Heatmap + Chat) */}
           <div className="flex flex-col gap-4 lg:col-span-2 xl:col-span-3 h-full overflow-hidden">
-            {/* Top Right: Heatmap (fixed height) */}
-            <div className="h-64 shrink-0">
+            {/* Top Right: Heatmap (takes remaining height to show AI reasoning) */}
+            <div className="flex-1 min-h-0">
               <HeatmapPanel />
             </div>
 
-            {/* Bottom Right: Terminal Chat (takes remaining height) */}
-            <div className="flex-1 min-h-0">
+            {/* Bottom Right: Terminal Chat (fixed smaller height) */}
+            <div className="h-80 shrink-0">
               <TerminalChatPanel />
             </div>
           </div>
