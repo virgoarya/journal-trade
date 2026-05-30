@@ -7,7 +7,6 @@ const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
 export const macroAiService = {
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
-    // Compute growth and inflation proxies from assets
     const spy = assets.find(a => a.ticker === "SPY")?.change ?? 0;
     const ief = assets.find(a => a.ticker === "IEF")?.change ?? 0;
     const tip = assets.find(a => a.ticker === "TIP")?.change ?? 0;
@@ -22,7 +21,6 @@ export const macroAiService = {
     const growthStatus = growth > 0 ? "high" : "low";
     const inflationStatus = inflation > 0 ? "high" : "low";
 
-    // Determine sentiment based on regime and liquidity (simple mapping)
     let sentiment: "RISK-ON" | "RISK-OFF" | "NEUTRAL" = "NEUTRAL";
     if (calculatedRegime === "Reflation" || calculatedRegime === "Goldilocks") {
       sentiment = liquidityStatus === "Draining" ? "NEUTRAL" : "RISK-ON";
@@ -30,7 +28,6 @@ export const macroAiService = {
       sentiment = liquidityStatus === "Refilling" ? "NEUTRAL" : "RISK-OFF";
     }
 
-    // Key assets performance map
     const keyAssets = {
       SPY: spy,
       QQQ: assets.find(a => a.ticker === "QQQ")?.change ?? 0,
@@ -42,7 +39,6 @@ export const macroAiService = {
       TIP: tip,
     };
 
-    // Build JSON-like state string for the prompt
     const stateJson = {
       regime: calculatedRegime ?? "unknown",
       growthStatus,
@@ -52,18 +48,21 @@ export const macroAiService = {
       keyAssets,
     };
 
-let prompt = `Anda adalah Institutional Macro Analyst untuk Hunter Trades. 
-Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini FIX berada di kuadran: ${calculatedRegime || "unknown"}. 
-JANGAN memunculkan nama rezim di luar 6 kuadran tersebut (Stagflation, Goldilocks, Deflation, Reflation, Slowdown, Netral). 
-Tugasmu adalah menjelaskan MENGAPA rezim ${calculatedRegime || "saat ini"} ini terjadi dan bagaimana dampaknya terhadap Macro ETFs Heatmap dan Liquidity Flow saat ini.
+    let prompt = `ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.
+
+RULES:
+1. JANGAN PERNAH gunakan kalimat meta-language seperti 'karena saya dapat menjelaskan', 'berdasarkan analisis saya', atau sejenisnya. Langsung berikan kesimpulan objektif.
+2. Hindari pengulangan kata (redundancy) dalam satu paragraf.
+3. Gunakan struktur pembuka yang lugas: 'Kondisi makro saat ini terkonfirmasi berada dalam fase [REGIME]. Rezim ini didorong oleh...'
+
+Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini FIX berada di kuadran: ${calculatedRegime || "unknown"}.
 
 Data state:
 ${JSON.stringify(stateJson, null, 2)}
 
-KETERBATASAN:
-- JANGAN memunculkan atau mengubah label rezim di luar 6 opsi yang ditentukan.
-- JANGAN menyebutkan transisi regime.
-- Jawaban maksimal 2-3 kalimat singkat dalam Bahasa Indonesia.`;
+Jelaskan secara ringkas (2-3 kalimat) mengapa rezim ${calculatedRegime || "saat ini"} terjadi, dampaknya terhadap Macro ETFs Heatmap, dan implikasi likuiditas ON RRP status ${liquidityStatus || "unknown"}.
+
+Kembalikan teks biasa, tanpa markdown.`;
 
     // Try Gemini first
     if (env.GEMINI_API_KEY) {
@@ -97,7 +96,7 @@ KETERBATASAN:
           {
             model,
             messages: [
-              { role: "system", content: "Anda adalah seorang analyst macro yang ahli dalam memberikan penjelasan singkat dan akurat dalam Bahasa Indonesia, mengikuti ketat instruksi yang diberikan." },
+              { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. JANGAN PERNAH gunakan kalimat meta-language. 2. Hindari pengulangan kata. 3. Gunakan struktur pembuka lugas: 'Kondisi makro saat ini terkonfirmasi berada dalam fase [REGIME]. Rezim ini didorong oleh...' Balas dalam Bahasa Indonesia." },
               { role: "user", content: prompt },
             ],
             max_tokens: 150,
@@ -118,7 +117,6 @@ KETERBATASAN:
         }
       } catch (err: any) {
         if (err.response?.status === 429) {
-          // rate limit, try next model
           await new Promise(resolve => setTimeout(resolve, 1500));
           continue;
         }
@@ -130,7 +128,6 @@ KETERBATASAN:
   },
 
   async chatStream(messages: any[], res: any, currentRegime?: string, assets?: any[], liquidityStatus?: string) {
-    // Simple placeholder implementation for streaming chat
     if (!env.GROQ_API_KEY) {
       res.status(500).json({ success: false, error: "Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan" });
       return;
@@ -154,7 +151,6 @@ KETERBATASAN:
           timeout: 20000,
         }
       );
-      
       const text = response.data.choices?.[0]?.message?.content || "Tidak ada respons dari AI";
       res.json({ success: true, text });
     } catch (error: any) {
@@ -163,7 +159,6 @@ KETERBATASAN:
   },
 
   async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
-    // Placeholder implementation for macro feed analysis
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
@@ -181,10 +176,10 @@ Berikan analisis singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak ber
         {
           model: GROQ_MODELS[0],
           messages: [
-            { role: "system", content: "Anda adalah seorang analyst macro yang ahli dalam memberikan analisis singkat untuk berita ekonomi dalam Bahasa Indonesia." },
+            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. JANGAN PERNAH gunakan kalimat meta-language. 2. Hindari pengulangan kata. Balas dalam Bahasa Indonesia." },
             { role: "user", content: prompt },
           ],
-          max_tokens: 100,
+          max_tokens: 150,
           temperature: 0.2,
           stream: false,
         },
@@ -196,7 +191,6 @@ Berikan analisis singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak ber
           timeout: 20000,
         }
       );
-      
       return response.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
     } catch (error: any) {
       throw new Error(error.message || "Gagal menganalisis feed makro");
