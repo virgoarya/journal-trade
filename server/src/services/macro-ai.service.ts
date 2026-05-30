@@ -48,31 +48,14 @@ export const macroAiService = {
       keyAssets,
     };
 
-    let prompt = `ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.
+    let prompt = `Anda adalah analis makro institusional. 
 
-DEFINISI REZIM (WAJIB DIPAHAMI):
-- Stagflasi: Pertumbuhan ekonomi RENDAH/STAGIS + Inflasi TINGGI. JANGAN pernah menyebut pertumbuhan tinggi sebagai ciri stagflasi.
-- Goldilocks: Pertumbuhan tinggi + Inflasi rendah/terkendali
-- Reflation: Pertumbuhan tinggi + Inflasi tinggi (peningkatan)
-- Deflation: Pertumbuhan rendah + Inflasi rendah/negatif
-- Slowdown: Pertumbuhan rendah + Inflasi rendah
-- Neutral Transition: Kedua indikator berada di zona netral
+Diberikan data:
+- Regime: ${calculatedRegime || "unknown"}
+- Liquidity Status: ${liquidityStatus || "unknown"}  
+- Sentiment: ${sentiment}
 
-RULES OUTPUT:
-1. JANGAN PERNAH gunakan meta-language seperti 'karena saya dapat menjelaskan', 'menurut analisis', dll
-2. JANGAN ada pengulangan kata dalam satu kalimat
-3. Setiap kalimat HARUS diakhiri dengan titik yang utuh
-4. Fokus pada fakta objektif dari data JSON di bawah
-5. Gunakan tone analis institusional yang ringkas dan akurat
-
-Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini terkonfirmasi berada dalam fase: ${calculatedRegime || "unknown"}.
-
-Data state:
-${JSON.stringify(stateJson, null, 2)}
-
-Jelaskan secara ringkas (2-3 kalimat) mengapa rezim ${calculatedRegime || "tersebut"} terjadi, keterkaitannya dengan status ON RRP (${liquidityStatus || "unknown"}), dan implikasinya.
-
-Kembalikan teks biasa, tanpa markdown.`;
+Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja. JANGAN mengulang penjelasan yang sudah tersirat dalam data (misal tidak perlu menyebut regime lagi jika sudah diketahui). Setiap kalimat diakhiri titik. Tanpa meta-language.`;
 
     // Try Gemini first
     if (env.GEMINI_API_KEY) {

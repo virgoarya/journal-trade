@@ -378,17 +378,19 @@ export function deriveSentimentAndImpact(
 
 /**
  * Narrative template that will be given to the LLM.
- * The LLM only needs to fill in {{shortReason}} (1‑2 sentences) based on the structured inputs.
- * All other variables will be replaced by this code.
+ * Returns a data object for the AI to generate its own narrative.
  */
 export function buildNarrativeTemplate(
   regime: MacroRegime,
   shortReason: string,
   liquidityStatus: OnRrpStatus,
   sentimentImpact: ReturnType<typeof deriveSentimentAndImpact>
-): string {
-  const { sentiment, impactOnRisk } = sentimentImpact;
-  return `Kondisi regime makro saat ini terdeteksi sebagai ${regime}. ${shortReason}.
-Likuiditas ON RRP saat ini berstatus ${liquidityStatus}, ${impactOnRisk}.
-INSTITUTIONAL SENTIMENT STATUS: ${sentiment}.`;
+): { regime: MacroRegime; reason: string; liquidity: OnRrpStatus; sentiment: MarketSentiment } {
+  const { sentiment } = sentimentImpact;
+  return {
+    regime,
+    reason: shortReason,
+    liquidity: liquidityStatus,
+    sentiment
+  };
 }

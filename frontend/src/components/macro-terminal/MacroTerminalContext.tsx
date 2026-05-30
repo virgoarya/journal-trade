@@ -128,20 +128,21 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
            assets: assetsForService,
            calculatedRegime: macroResult.regime,
            liquidityStatus: liquidityStatus,
+           sentiment: sentiment,
          }),
        });
       const aiData = await aiResponse.json();
-      const aiShortReason = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : "";
       
-      // If AI failed to return a reason, fallback to the rule-based shortReason from macroResult
-      const finalShortReason = aiShortReason || macroResult.shortReason;
-
-const narrative = buildNarrativeTemplate(
-         macroResult.regime,
-         finalShortReason,
-         liquidityStatus,
-         { sentiment, impactOnRisk }
-       );
+      // AI now generates full narrative, pass template data for context
+      const narrativeContext = buildNarrativeTemplate(
+        macroResult.regime,
+        macroResult.shortReason,
+        liquidityStatus,
+        { sentiment, impactOnRisk }
+      );
+      
+      // Use AI output directly, fallback is just the raw data context
+      const aiReasoning = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
 
       // Determine regime shift using currentRegimeRef
       const isInitialAnalysis = !hasAnalyzedInitially.current;
@@ -155,7 +156,7 @@ const narrative = buildNarrativeTemplate(
       setCurrentRegime(macroResult.regime);
       currentRegimeRef.current = macroResult.regime;
 
-      setAiReasoning(narrative);
+      setAiReasoning(aiReasoning);
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to analyze regime:", error);
