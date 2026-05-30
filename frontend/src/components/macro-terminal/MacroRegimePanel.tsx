@@ -2,10 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useMacroTerminal } from "./MacroTerminalContext";
-import {
-  classifyMacroRegime,
-  MacroRegime,
-} from "@/lib/macro/classifiers";
 import { calculateInflationMomentum, aggregateMacroScores } from "@/lib/macro/calculations";
 import type { MacroRawInputs } from "@/lib/macro/types";
 
@@ -19,22 +15,9 @@ type RegimeCardData = {
 
 export function MacroRegimePanel() {
   const { currentRegime } = useMacroTerminal();
-  const [activeRegime, setActiveRegime] = useState<string>("");
   const [inflationMomentum, setInflationMomentum] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Normalize regime string for matching
-  const normalizeRegime = (regime?: string): string => {
-    if (!regime) return "";
-    const normalized = regime.toLowerCase().trim();
-    // Map generic "inflation" to "reflation" as safe fallback
-    if (normalized === "inflation" || normalized === "inflationary") {
-      return "reflation";
-    }
-    return normalized;
-  };
-
+  // Regime cards for 2x3 grid
   const regimeCards: RegimeCardData[] = [
     { id: "stagflation", title: "Stagflation", growth: "Low", inflation: "High", assets: "Gold, Cmdty, CHF" },
     { id: "goldilocks", title: "Goldilocks", growth: "High", inflation: "Optimal", assets: "Tech, Crypto, HY" },
@@ -44,71 +27,8 @@ export function MacroRegimePanel() {
     { id: "neutral transition", title: "Netral", growth: "Netral", inflation: "Netral", assets: "Campuran" },
   ];
 
-  useEffect(() => {
-    const fetchMacroData = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch("/api/macro");
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success && result.data && result.cpiMoM) {
-          const macroInputs: MacroRawInputs = result.data;
-          const momentum = calculateInflationMomentum(result.cpiMoM);
-          setInflationMomentum(momentum);
-          
-          const { growthScore, inflationScore } = aggregateMacroScores(macroInputs);
-          
-          const macroResult = classifyMacroRegime({
-            growth: growthScore,
-            inflation: inflationScore,
-            assetSignals: {},
-          });
-          
-          setActiveRegime(normalizeRegime(macroResult.regime));
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchMacroData();
-    const interval = setInterval(fetchMacroData, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="h-full max-h-[260px] flex flex-col glass border border-border-subtle rounded-xl bg-[#020202]">
-        <div className="bg-bg-surface/80 border-b border-border-subtle p-2 shrink-0">
-          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-2">
-          <span className="text-text-muted text-xs">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="h-full max-h-[260px] flex flex-col glass border border-border-subtle rounded-xl bg-[#020202]">
-        <div className="bg-bg-surface/80 border-b border-border-subtle p-2 shrink-0">
-          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-2">
-          <span className="text-data-warning text-xs">Error: {error}</span>
-        </div>
-      </div>
-    );
-  }
+  // Get current regime from context for matching
+  const normalizedRegime = (currentRegime || "").toLowerCase().trim();
 
   return (
     <div className="h-full max-h-[260px] flex flex-col glass border border-border-subtle rounded-xl bg-[#020202]">
@@ -119,7 +39,7 @@ export function MacroRegimePanel() {
       
       <div className="grid grid-cols-2 grid-rows-3 gap-1.5 p-2 flex-1">
         {regimeCards.map((card) => {
-          const isActive = card.id.toLowerCase() === activeRegime.toLowerCase();
+          const isActive = card.id.toLowerCase() === normalizedRegime;
           return (
             <div
               key={card.id}
@@ -135,8 +55,6 @@ export function MacroRegimePanel() {
               <div className="flex items-center gap-1 mt-0.5">
                 <span className={`text-[10px] ${isActive ? 'text-neutral-100' : 'text-neutral-400'}`}>G:{card.growth}</span>
                 <span className={`text-[10px] ${isActive ? 'text-neutral-100' : 'text-neutral-400'}`}>I:{card.inflation}</span>
-                {inflationMomentum < 0 && <span className="text-emerald-500 text-[9px]">▼</span>}
-                {inflationMomentum > 0 && <span className="text-rose-500 text-[9px]">▲</span>}
               </div>
               <span className={`text-[9px] font-medium mt-0.5 truncate max-w-full ${isActive ? 'text-neutral-300' : 'text-neutral-500'}`}>
                 {card.assets}

@@ -52,24 +52,18 @@ export const macroAiService = {
       keyAssets,
     };
 
-    let prompt = `Anda adalah analyst macro yang memberikan komentar singkat untuk dashboard trading.
-HANYA gunakan data dari JSON state berikut, jangan menambah atau mengubah apa pun:
+let prompt = `Anda adalah Institutional Macro Analyst untuk Hunter Trades. 
+Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini FIX berada di kuadran: ${calculatedRegime || "unknown"}. 
+JANGAN memunculkan nama rezim di luar 6 kuadran tersebut (Stagflation, Goldilocks, Deflation, Reflation, Slowdown, Netral). 
+Tugasmu adalah menjelaskan MENGAPA rezim ${calculatedRegime || "saat ini"} ini terjadi dan bagaimana dampaknya terhadap Macro ETFs Heatmap dan Liquidity Flow saat ini.
 
+Data state:
 ${JSON.stringify(stateJson, null, 2)}
 
-KETERBATASAN
-- Tidak boleh mengubah label regime atau status sentiment.
-- Tidak boleh menyebutkan transisi regime (hal tersebut ditangani di tempat lain).
-- Jawaban harus dalam Bahasa Indonesia, maksimal 3 kalimat.
-- JANGAN mengarang angka atau indikator yang tidak ada dalam JSON.
-
-TUGAS
-Berdasarkan state JSON di atas, tulis sebuah paragraf singkat yang menjelaskan:
-1. Mengapa regime saat ini masuk akal.
-2. Apa implikasi status likuiditas ON RRP terhadap sentimen risiko.
-3. Satu implikasi konkret untuk instrumen ekuitas atau mata uang asing (FX).
-
-Kembalikan teks biasa, tanpa markdown.`;
+KETERBATASAN:
+- JANGAN memunculkan atau mengubah label rezim di luar 6 opsi yang ditentukan.
+- JANGAN menyebutkan transisi regime.
+- Jawaban maksimal 2-3 kalimat singkat dalam Bahasa Indonesia.`;
 
     // Try Gemini first
     if (env.GEMINI_API_KEY) {
