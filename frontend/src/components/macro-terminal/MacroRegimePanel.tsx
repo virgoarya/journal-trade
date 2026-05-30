@@ -27,31 +27,26 @@ const RegimeCard = ({
   inflationMomentum,
 }: RegimeCardProps) => {
   const getActiveStyles = () => {
-    if (!isActive) return "bg-[#0a0a0a] border border-neutral-800 opacity-40";
-    
-    const styles: Record<string, string> = {
-      Stagflation: "bg-amber-500/15 border-emerald-500/40 shadow-[0_0_8px_rgba(255,167,38,0.2)]",
-      Goldilocks: "bg-emerald-500/15 border-emerald-500/40 shadow-[0_0_8px_rgba(0,230,118,0.2)]",
-      Deflation: "bg-blue-500/15 border-emerald-500/40 shadow-[0_0_8px_rgba(59,130,246,0.2)]",
-      Reflation: "bg-purple-500/15 border-emerald-500/40 shadow-[0_0_8px_rgba(168,85,247,0.2)]",
-      Slowdown: "bg-gray-500/15 border-emerald-500/40 shadow-[0_0_8px_rgba(107,114,128,0.2)]",
-      "Neutral Transition": "bg-gray-600/15 border-emerald-500/40 shadow-[0_0_8px_rgba(75,85,99,0.2)]",
-    };
-    return styles[title] || "bg-neutral-900 border border-neutral-800";
+    if (isActive) {
+      return "opacity-100 border-emerald-500/80 bg-[#161616] shadow-[0_0_10px_rgba(52,211,153,0.25)]";
+    }
+    return "opacity-30 border border-neutral-800/60 bg-[#0d0d0d]";
   };
+
+  const getTextColor = () => isActive ? "text-neutral-100" : "text-neutral-400";
 
   return (
     <div
       className={`flex flex-col items-center justify-center p-1.5 rounded border transition-all duration-300 ${getActiveStyles()}`}
     >
-      <span className="text-[11px] font-bold uppercase tracking-wider leading-tight">{title}</span>
+      <span className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${getTextColor()}`}>{title}</span>
       <div className="flex items-center gap-1 mt-0.5">
-        <span className="text-[10px] text-neutral-400">G:{growth}</span>
-        <span className="text-[10px] text-neutral-400">I:{inflation}</span>
+        <span className={`text-[10px] ${getTextColor()}`}>G:{growth}</span>
+        <span className={`text-[10px] ${getTextColor()}`}>I:{inflation}</span>
         {inflationMomentum < 0 && <span className="text-emerald-500 text-[9px]">▼</span>}
         {inflationMomentum > 0 && <span className="text-rose-500 text-[9px]">▲</span>}
       </div>
-      <span className="text-[9px] text-neutral-500 font-medium mt-0.5 truncate max-w-full">{assets}</span>
+      <span className={`text-[9px] font-medium mt-0.5 truncate max-w-full ${isActive ? "text-neutral-300" : "text-neutral-500"}`}>{assets}</span>
     </div>
   );
 };
@@ -150,7 +145,7 @@ export function MacroRegimePanel() {
           <RegimeCard
             key={regime.id}
             {...regime}
-            isActive={activeId === regime.id}
+            isActive={activeId?.toLowerCase() === regime.id.toLowerCase()}
             inflationMomentum={inflationMomentum}
           />
         ))}
