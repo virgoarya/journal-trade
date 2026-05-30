@@ -319,16 +319,37 @@ export function deriveSentimentAndImpact(
     sentiment = liquidityStatus === 'Draining' ? 'NEUTRAL' : 'RISK-ON';
     impactOnRisk =
       sentiment === 'RISK-ON'
-        ? 'cenderung mendukung risiko‑on (pertambahan likuiditas dan pertumbuhan)'
-        : 'netral karena likuiditas draining menekan optimisme';
+        ? 'dengan pertambahan likuiditas dan pertumbuhan'
+        : 'dengan likuiditas draining menekan optimisme';
   }
-  // Stagflation & Deflation generally risk‑off
-  else if (regime === 'Stagflation' || regime === 'Deflation') {
+// Stagflation & Deflation generally risk‑off
+  else if (regime === 'Stagflation' || regime === 'Deflation' || regime === 'Inflation') {
     sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
     impactOnRisk =
       sentiment === 'RISK-OFF'
-        ? 'cenderung risiko‑off karena stagflasi/deflasi menambah aversi risiko'
-        : 'netral karena likuiditas refill mengimbangi tekanan';
+        ? 'dengan stagflasi/deflasi yang menambah aversi risiko'
+        : 'dengan likuiditas refill mengimbangi tekanan';
+  }
+  // Inflation‑only (low growth, high inflation) tends risk‑off
+  else if (regime === 'Inflation') {
+    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
+    impactOnRisk =
+      sentiment === 'RISK-OFF'
+        ? 'tekanan inflasi tinggi mendorong aversi risiko, kecuali likuiditas refill cukup besar'
+        : 'likuiditas refill mengimbangi tekanan inflasi';
+  }
+  // Slowdown: low growth, low inflation -> risk‑off? 
+  else if (regime === 'Slowdown') {
+    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
+    impactOnRisk =
+      sentiment === 'RISK-OFF'
+        ? 'pertumbuhan rendah dan inflasi rendah mengindikasikan lemahnya ekonomi'
+        : 'likuiditas refill mengimbangi tekanan';
+  }
+  // Neutral Transition: indeterminate
+  else if (regime === 'Neutral Transition') {
+    sentiment = 'NEUTRAL';
+    impactOnRisk = 'berada dalam transisi regime tanpa arah jelas';
   }
   // Inflation‑only (low growth, high inflation) tends risk‑off
   else if (regime === 'Inflation') {
@@ -367,7 +388,7 @@ export function buildNarrativeTemplate(
   sentimentImpact: ReturnType<typeof deriveSentimentAndImpact>
 ): string {
   const { sentiment, impactOnRisk } = sentimentImpact;
-  return `Kondisi regime makro saat ini terdeteksi sebagai ${regime} karena ${shortReason}.
- Likuiditas ON RRP saat ini berstatus ${liquidityStatus}, yang cenderung ${impactOnRisk}.
- INSTITUTIONAL SENTIMENT STATUS: ${sentiment}.`;
+  return `Kondisi regime makro saat ini terdeteksi sebagai ${regime}. ${shortReason}.
+Likuiditas ON RRP saat ini berstatus ${liquidityStatus}, ${impactOnRisk}.
+INSTITUTIONAL SENTIMENT STATUS: ${sentiment}.`;
 }
