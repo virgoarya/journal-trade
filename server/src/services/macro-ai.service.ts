@@ -55,7 +55,7 @@ Diberikan data:
 - Liquidity Status: ${liquidityStatus || "unknown"}  
 - Sentiment: ${sentiment}
 
-Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja. JANGAN mengulang penjelasan yang sudah tersirat dalam data (misal tidak perlu menyebut regime lagi jika sudah diketahui). Setiap kalimat diakhiri titik. Tanpa meta-language.`;
+Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja. KALIMAT PERTAMA WAJIB menyebut fase makro yang sedang terjadi (${calculatedRegime || "Stagflasi/Reflasi/dsb"}) agar user langsung tahu posisi regime kita. JANGAN mengulang penjelasan yang sudah tersirat dalam data. Setiap kalimat diakhiri titik. Tanpa meta-language.`;
 
     // Try Gemini first
     if (env.GEMINI_API_KEY) {
