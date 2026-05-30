@@ -19,10 +19,10 @@ const SERIES_IDS = {
   T10YIE: 'T10YIE', // 10-Year Breakeven
 };
 
-// Helper to fetch FRED data
+// Helper to fetch FRED data - returns empty array if API key not configured
 async function fetchFredSeries(seriesId: string, startDate?: string): Promise<{ date: string; value: number }[]> {
   if (!FRED_API_KEY) {
-    throw new Error('FRED_API_KEY is not configured');
+    return []; // Return empty array to trigger fallback
   }
 
   const params = new URLSearchParams({
@@ -115,6 +115,40 @@ export async function GET(request: NextRequest) {
       fetchFredSeries(SERIES_IDS.T10YIE),
     ]);
 
+    // Helper to generate dummy data when FRED data is not available
+    const generateDummyData = (length: number = 48) => ({
+      ismPmi: Array(length).fill(50),
+      joblessClaims: Array(length).fill(200),
+      unemployment: Array(length).fill(-4.0), // Inverted
+      nfp: Array(length).fill(200),
+      realGdp: Array(length).fill(2.0),
+      corePce: Array(length).fill(2.5),
+      supercore: Array(length).fill(2.5),
+      cpiYoY: Array(length).fill(3.0),
+      breakeven5y: Array(length).fill(2.0),
+      breakeven10y: Array(length).fill(2.2),
+    });
+
+    // Check if any real data was fetched
+    const hasRealData = unrateData.length > 0 && cpiData.length > 0;
+    
+    if (!hasRealData) {
+      // Return dummy data when FRED API key is not configured
+      const dummyInputs = generateDummyData();
+      // Dummy CPI MoM data designed to show negative momentum (cooling)
+      const dummyCpiMoM: number[] = [
+        ...Array(34).fill(0.3),
+        0.4, 0.4, 0.4, 0.3, 0.3, 0.3
+      ];
+      
+      return NextResponse.json({
+        success: true,
+        data: dummyInputs,
+        cpiMoM: dummyCpiMoM,
+        isDummy: true,
+      });
+    }
+
     // Extract values (most recent 48 months)
     let unemployment = getLastNMonths(unrateData, 48);
     let nfp = getLastNMonths(payemsData, 48);
@@ -176,12 +210,34 @@ export async function GET(request: NextRequest) {
       success: true,
       data: macroInputs,
       cpiMoM,
+      isDummy: false,
     });
   } catch (error) {
     console.error('Error fetching FRED data:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    // Return dummy data on error instead of failing
+    const dummyInputs = {
+      ismPmi: Array(48).fill(50),
+      joblessClaims: Array(48).fill(200),
+      unemployment: Array(48).fill(-4.0),
+      nfp: Array(48).fill(200),
+      realGdp: Array(48).fill(2.0),
+      corePce: Array(48).fill(2.5),
+      supercore: Array(48).fill(2.5),
+      cpiYoY: Array(48).fill(3.0),
+      breakeven5y: Array(48).fill(2.0),
+      breakeven10y: Array(48).fill(2.2),
+    };
+    const dummyCpiMoM: number[] = [
+      ...Array(34).fill(0.3),
+      0.4, 0.4, 0.4, 0.3, 0.3, 0.3
+    ];
+    
+    return NextResponse.json({
+      success: true,
+      data: dummyInputs,
+      cpiMoM: dummyCpiMoM,
+      isDummy: true,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
