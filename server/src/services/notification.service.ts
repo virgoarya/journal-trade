@@ -3,7 +3,7 @@ import { Notification } from "../models/Notification";
 export const notificationService = {
 
   async getRecent(userId: string, limit = 10, unreadOnly = false) {
-    const query: any = { userId };
+    const query: any = { userId: { $in: [userId, "system"] } };
     if (unreadOnly) {
       query.read = false;
     }
@@ -18,6 +18,12 @@ export const notificationService = {
   },
 
   async markAsRead(notificationId: string, userId: string) {
+    // Don't allow marking system notifications as read on server
+    // System notifications use client-side localStorage for read state
+    const notification = await Notification.findOne({ _id: notificationId });
+    if (notification && notification.userId === "system") {
+      return notification; // Return unchanged
+    }
     return await Notification.findOneAndUpdate(
       { _id: notificationId, userId },
       { $set: { read: true } },
