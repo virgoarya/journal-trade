@@ -1,4 +1,22 @@
 // src/lib/macro/types.ts
+
+// Raw inputs for macro score aggregation (exported for API use)
+export interface MacroRawInputs {
+  // Growth indicators (higher = better for growth)
+  ismPmi: number[];
+  joblessClaims: number[];
+  nfp: number[];
+  unemployment: number[];
+  realGdp: number[];
+
+  // Inflation indicators (higher = higher inflation)
+  corePce: number[];
+  supercore: number[];
+  cpiYoY: number[];
+  breakeven5y: number[];
+  breakeven10y: number[];
+}
+
 export interface MacroInputs {
   /** Growth proxy (e.g., combined equity trend + PMI). Raw value can be adjusted. */
   growth: number; // >0 = expansion, <0 = contraction (e.g., monthly percent change)
@@ -17,7 +35,7 @@ export interface MacroInputs {
   };
 }
 
-export type MacroRegime = 'Reflation' | 'Stagflation' | 'Inflation' | 'Deflation' | 'Goldilocks';
+export type MacroRegime = 'Reflation' | 'Stagflation' | 'Inflation' | 'Deflation' | 'Goldilocks' | 'Slowdown' | 'Neutral Transition';
 
 export interface MacroRegimeResult {
   regime: MacroRegime;
@@ -27,9 +45,11 @@ export interface MacroRegimeResult {
   details: {
     growth: number;
     inflation: number;
-    growthCategory: 'low' | 'high';
-    inflationCategory: 'low' | 'high';
+    growthCategory: 'low' | 'high' | 'medium';
+    inflationCategory: 'low' | 'high' | 'medium';
     assetSignals: NonNullable<MacroInputs['assetSignals']> | undefined;
+    /** Confidence score between 0 and 1 */
+    confidence: number;
   };
 }
 

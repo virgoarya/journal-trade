@@ -1,7 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useMacroTerminal } from "./MacroTerminalContext";
+import {
+  classifyMacroRegime,
+  MacroRegime,
+} from "@/lib/macro/classifiers";
+import { calculateInflationMomentum, aggregateMacroScores } from "@/lib/macro/calculations";
+import type { MacroRawInputs } from "@/lib/macro/calculations";
 
 const regimes = [
   {
@@ -40,10 +46,108 @@ const regimes = [
     colorClass: "bg-purple-500/20 border-purple-500/50 text-purple-400",
     activeColorClass: "bg-purple-500/30 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]",
   },
+  {
+    id: "Slowdown",
+    title: "Slowdown",
+    growth: "Low",
+    inflation: "Low",
+    assets: "Bonds, Defensive, USD",
+    colorClass: "bg-gray-500/20 border-gray-500/50 text-gray-400",
+    activeColorClass: "bg-gray-500/30 border-gray-500 shadow-[0_0_15px_rgba(107,114,128,0.3)]",
+  },
+  {
+    id: "Neutral Transition",
+    title: "Netral",
+    growth: "Netral",
+    inflation: "Netral",
+    assets: "Campuran",
+    colorClass: "bg-gray-600/20 border-gray-600/50 text-gray-300",
+    activeColorClass: "bg-gray-600/30 border-gray-600 shadow-[0_0_15px_rgba(75,85,99,0.3)]",
+  },
 ];
 
 export function MacroRegimePanel() {
   const { currentRegime } = useMacroTerminal();
+  const [activeId, setActiveId] = useState<MacroRegime | null>(null);
+  const [inflationMomentum, setInflationMomentum] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMacroData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch("/api/macro");
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data && result.cpiMoM) {
+          const macroInputs: MacroRawInputs = result.data;
+          const cpiMoM: number[] = result.cpiMoM;
+          
+          // Calculate inflation momentum
+          const momentum = calculateInflationMomentum(cpiMoM);
+          setInflationMomentum(momentum);
+          
+          // Aggregate macro scores
+          const { growthScore, inflationScore } = aggregateMacroScores(macroInputs);
+          
+          // Classify regime using the calculated scores
+          const macroResult = classifyMacroRegime({
+            growth: growthScore,
+            inflation: inflationScore,
+            assetSignals: {}, // will be populated from asset context
+          });
+          
+          setActiveId(macroResult.regime);
+        }
+      } catch (err) {
+        console.error("Failed to fetch macro data:", err);
+        setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMacroData();
+    const interval = setInterval(fetchMacroData, 60000); // Refresh every 60 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
+        <div className="bg-bg-surface/80 border-b border-border-subtle p-3">
+          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
+            Macro Regime Matrix
+          </h2>
+        </div>
+        <div className="flex-1 p-4 flex items-center justify-center">
+          <span className="text-text-muted text-xs">Memuat data makro...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
+        <div className="bg-bg-surface/80 border-b border-border-subtle p-3">
+          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
+            Macro Regime Matrix
+          </h2>
+        </div>
+        <div className="flex-1 p-4 flex items-center justify-center">
+          <span className="text-data-warning text-xs">Error: {error}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
@@ -72,7 +176,7 @@ export function MacroRegimePanel() {
 
         <div className="grid grid-cols-2 grid-rows-2 gap-2 w-[85%] h-[85%]">
           {regimes.map((regime) => {
-            const isActive = regime.id === currentRegime;
+            const isActive = activeId === regime.id;
             return (
               <div
                 key={regime.id}
@@ -83,9 +187,28 @@ export function MacroRegimePanel() {
                 <span className="text-xs font-bold uppercase tracking-wider mb-1">
                   {regime.title}
                 </span>
-                <span className="text-[9px] text-text-primary/70 mb-2">
-                  G: {regime.growth} | I: {regime.inflation}
-                </span>
+                {/* Growth and Inflation labels with momentum arrow on inflation */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold uppercase tracking-wider">G: {regime.growth}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] text-text-primary/70">I: {regime.inflation}</span>
+                    {inflationMomentum !== 0 && (
+                      <>
+                        {inflationMomentum < 0 ? (
+                          <>
+                            <span role="img" aria-label="down" className="text-emerald-500">▼</span>
+                            <span className="text-[8px] text-emerald-500">Cooling</span>
+                          </>
+                        ) : (
+                          <>
+                            <span role="img" aria-label="up" className="text-rose-500">▲</span>
+                            <span className="text-[8px] text-rose-500">Heating</span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
                 <div className="text-[9px] bg-bg-void/50 px-2 py-1 rounded w-full text-center truncate">
                   {regime.assets}
                 </div>
@@ -93,7 +216,7 @@ export function MacroRegimePanel() {
             );
           })}
         </div>
-        
+
         {/* Center Crosshair */}
         <div className="absolute top-1/2 left-[calc(50%+6px)] w-[85%] h-px bg-border-subtle -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
         <div className="absolute top-[calc(50%-6px)] left-1/2 w-px h-[85%] bg-border-subtle -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
