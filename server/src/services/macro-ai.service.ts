@@ -50,17 +50,27 @@ export const macroAiService = {
 
     let prompt = `ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.
 
-RULES:
-1. JANGAN PERNAH gunakan kalimat meta-language seperti 'karena saya dapat menjelaskan', 'berdasarkan analisis saya', atau sejenisnya. Langsung berikan kesimpulan objektif.
-2. Hindari pengulangan kata (redundancy) dalam satu paragraf.
-3. Gunakan struktur pembuka yang lugas: 'Kondisi makro saat ini terkonfirmasi berada dalam fase [REGIME]. Rezim ini didorong oleh...'
+DEFINISI REZIM (WAJIB DIPAHAMI):
+- Stagflasi: Pertumbuhan ekonomi RENDAH/STAGIS + Inflasi TINGGI. JANGAN pernah menyebut pertumbuhan tinggi sebagai ciri stagflasi.
+- Goldilocks: Pertumbuhan tinggi + Inflasi rendah/terkendali
+- Reflation: Pertumbuhan tinggi + Inflasi tinggi (peningkatan)
+- Deflation: Pertumbuhan rendah + Inflasi rendah/negatif
+- Slowdown: Pertumbuhan rendah + Inflasi rendah
+- Neutral Transition: Kedua indikator berada di zona netral
 
-Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini FIX berada di kuadran: ${calculatedRegime || "unknown"}.
+RULES OUTPUT:
+1. JANGAN PERNAH gunakan meta-language seperti 'karena saya dapat menjelaskan', 'menurut analisis', dll
+2. JANGAN ada pengulangan kata dalam satu kalimat
+3. Setiap kalimat HARUS diakhiri dengan titik yang utuh
+4. Fokus pada fakta objektif dari data JSON di bawah
+5. Gunakan tone analis institusional yang ringkas dan akurat
+
+Berdasarkan kalkulasi data FRED, rezim ekonomi saat ini terkonfirmasi berada dalam fase: ${calculatedRegime || "unknown"}.
 
 Data state:
 ${JSON.stringify(stateJson, null, 2)}
 
-Jelaskan secara ringkas (2-3 kalimat) mengapa rezim ${calculatedRegime || "saat ini"} terjadi, dampaknya terhadap Macro ETFs Heatmap, dan implikasi likuiditas ON RRP status ${liquidityStatus || "unknown"}.
+Jelaskan secara ringkas (2-3 kalimat) mengapa rezim ${calculatedRegime || "tersebut"} terjadi, keterkaitannya dengan status ON RRP (${liquidityStatus || "unknown"}), dan implikasinya.
 
 Kembalikan teks biasa, tanpa markdown.`;
 
@@ -95,10 +105,10 @@ Kembalikan teks biasa, tanpa markdown.`;
           GROQ_API_URL,
           {
             model,
-            messages: [
-              { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. JANGAN PERNAH gunakan kalimat meta-language. 2. Hindari pengulangan kata. 3. Gunakan struktur pembuka lugas: 'Kondisi makro saat ini terkonfirmasi berada dalam fase [REGIME]. Rezim ini didorong oleh...' Balas dalam Bahasa Indonesia." },
-              { role: "user", content: prompt },
-            ],
+messages: [
+               { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+               { role: "user", content: prompt },
+             ],
             max_tokens: 150,
             temperature: 0.2,
             stream: false,
@@ -163,12 +173,11 @@ Kembalikan teks biasa, tanpa markdown.`;
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    const prompt = `Anda adalah analyst macro yang memberikan analisis singkat tentang berita ekonomi.
-Berita: ${headline}
+    const prompt = `Berita ekonomi: ${headline}
 Aset target: ${targetAsset}
 ${context ? `Konteks: ${context}` : ''}
 
-Berikan analisis singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak berita ini terhadap aset yang ditargetkan.`;
+Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak berita ini terhadap aset. Tanpa meta-language, tanpa redundansi, setiap kalimat diakhiri titik utuh.`;
 
     try {
       const response = await axios.post(
@@ -176,7 +185,7 @@ Berikan analisis singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak ber
         {
           model: GROQ_MODELS[0],
           messages: [
-            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. JANGAN PERNAH gunakan kalimat meta-language. 2. Hindari pengulangan kata. Balas dalam Bahasa Indonesia." },
+            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
             { role: "user", content: prompt },
           ],
           max_tokens: 150,
