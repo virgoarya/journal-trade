@@ -15,43 +15,52 @@ type RegimeCardProps = {
   growth: string;
   inflation: string;
   assets: string;
-  activeColorClass: string;
-  inactiveColorClass: string;
   isActive: boolean;
   inflationMomentum: number;
 };
 
-const RegimeCard = ({ 
-  title, 
-  growth, 
-  inflation, 
-  assets, 
-  activeColorClass, 
-  inactiveColorClass, 
+const RegimeCard = ({
+  title,
+  growth,
+  inflation,
+  assets,
   isActive,
-  inflationMomentum 
+  inflationMomentum,
 }: RegimeCardProps) => {
+  const getActiveStyles = () => {
+    if (!isActive) return "bg-[#0a0a0a] border border-neutral-800 opacity-40";
+    
+    const styles: Record<string, string> = {
+      Stagflation: "bg-amber-500/15 border-emerald-500/40 shadow-[0_0_12px_rgba(255,167,38,0.3)]",
+      Goldilocks: "bg-emerald-500/15 border-emerald-500/40 shadow-[0_0_12px_rgba(0,230,118,0.3)]",
+      Deflation: "bg-blue-500/15 border-neutral-400 shadow-[0_0_12px_rgba(59,130,246,0.3)]",
+      Reflation: "bg-purple-500/15 border-neutral-400 shadow-[0_0_12px_rgba(168,85,247,0.3)]",
+      Slowdown: "bg-gray-500/15 border-neutral-400 shadow-[0_0_12px_rgba(107,114,128,0.3)]",
+      "Neutral Transition": "bg-gray-600/15 border-neutral-400 shadow-[0_0_12px_rgba(75,85,99,0.3)]",
+    };
+    return styles[title] || "bg-neutral-900 border border-neutral-800";
+  };
+
+  const getAssetColor = () => isActive ? "text-neutral-300" : "text-neutral-500";
+
   return (
     <div
-      className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-500 ${
-        isActive 
-          ? `${activeColorClass} shadow-lg` 
-          : `${inactiveColorClass} opacity-40 grayscale-[50%]`
-      }`}
+      className={`flex flex-col items-center justify-center p-3 rounded-lg transition-all duration-300 ${getActiveStyles()}`}
     >
-      <span className="text-xs font-bold uppercase tracking-wider mb-1.5">{title}</span>
-      <div className="flex flex-col items-center gap-1 mb-1.5">
-        <span className="text-[9px] text-text-primary/70">G: {growth}</span>
+      <span className="text-xs font-bold uppercase tracking-wider mb-1">{title}</span>
+      <div className="flex flex-col items-center space-y-1 mb-1">
+        <span className="text-[11px] text-neutral-400">G: {growth}</span>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-text-primary/70">I: {inflation}</span>
-          {inflationMomentum < 0 ? (
-            <span className="text-emerald-500 text-[8px] font-mono">▼ Cooling</span>
-          ) : inflationMomentum > 0 ? (
-            <span className="text-rose-500 text-[8px] font-mono">▲ Heating</span>
-          ) : null}
+          <span className="text-[11px] text-neutral-400">I: {inflation}</span>
+          {inflationMomentum < 0 && (
+            <span className="text-emerald-500 text-[9px] font-mono">▼</span>
+          )}
+          {inflationMomentum > 0 && (
+            <span className="text-rose-500 text-[9px] font-mono">▲</span>
+          )}
         </div>
       </div>
-      <div className="text-[8px] bg-bg-void/50 px-2 py-0.5 rounded w-full text-center truncate">
+      <div className={`text-[10px] font-medium px-2 py-0.5 rounded w-full text-center truncate ${getAssetColor()}`}>
         {assets}
       </div>
     </div>
@@ -108,76 +117,27 @@ export function MacroRegimePanel() {
     return () => clearInterval(interval);
   }, []);
 
-  // Regime configurations based on 2x2 matrix (top-left to bottom-right)
   const quadrantRegimes = [
-    {
-      id: "Stagflation",
-      title: "Stagflation",
-      growth: "Low",
-      inflation: "High",
-      assets: "Gold, Cmdty, CHF",
-      inactiveColorClass: "bg-data-warning/20 border-data-warning/50 text-data-warning",
-      activeColorClass: "bg-data-warning/40 border-data-warning shadow-[0_0_15px_rgba(255,167,38,0.4)]",
-    },
-    {
-      id: "Goldilocks",
-      title: "Goldilocks",
-      growth: "High",
-      inflation: "Optimal",
-      assets: "Tech, Crypto, HY",
-      inactiveColorClass: "bg-data-profit/20 border-data-profit/50 text-data-profit",
-      activeColorClass: "bg-data-profit/40 border-data-profit shadow-[0_0_15px_rgba(0,230,118,0.4)]",
-    },
-    {
-      id: "Deflation",
-      title: "Deflation",
-      growth: "Low",
-      inflation: "Low",
-      assets: "Bonds, USD, JPY",
-      inactiveColorClass: "bg-blue-500/20 border-blue-500/50 text-blue-400",
-      activeColorClass: "bg-blue-500/40 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]",
-    },
-    {
-      id: "Reflation",
-      title: "Reflation",
-      growth: "High",
-      inflation: "Rising",
-      assets: "Value, Ind, EM",
-      inactiveColorClass: "bg-purple-500/20 border-purple-500/50 text-purple-400",
-      activeColorClass: "bg-purple-500/40 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]",
-    },
+    { id: "Stagflation", title: "Stagflation", growth: "Low", inflation: "High", assets: "Gold, Cmdty, CHF" },
+    { id: "Goldilocks", title: "Goldilocks", growth: "High", inflation: "Optimal", assets: "Tech, Crypto, HY" },
+    { id: "Deflation", title: "Deflation", growth: "Low", inflation: "Low", assets: "Bonds, USD, JPY" },
+    { id: "Reflation", title: "Reflation", growth: "High", inflation: "Rising", assets: "Value, Ind, EM" },
   ];
 
   const extraRegimes = [
-    {
-      id: "Slowdown",
-      title: "Slowdown",
-      growth: "Low",
-      inflation: "Low",
-      assets: "Bonds, Defensive, USD",
-      inactiveColorClass: "bg-gray-500/20 border-gray-500/50 text-gray-400",
-      activeColorClass: "bg-gray-500/40 border-gray-500 shadow-[0_0_15px_rgba(107,114,128,0.4)]",
-    },
-    {
-      id: "Neutral Transition",
-      title: "Netral",
-      growth: "Netral",
-      inflation: "Netral",
-      assets: "Campuran",
-      inactiveColorClass: "bg-gray-600/20 border-gray-600/50 text-gray-300",
-      activeColorClass: "bg-gray-600/40 border-gray-600 shadow-[0_0_15px_rgba(75,85,99,0.4)]",
-    },
+    { id: "Slowdown", title: "Slowdown", growth: "Low", inflation: "Low", assets: "Bonds, Defensive, USD" },
+    { id: "Neutral Transition", title: "Netral", growth: "Netral", inflation: "Netral", assets: "Campuran" },
   ];
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden bg-[#020202]">
-        <div className="bg-bg-surface/80 border-b border-border-subtle p-3">
+      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-[#020202]">
+        <div className="bg-bg-surface/80 border-b border-border-subtle p-3 shrink-0">
           <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
             Macro Regime Matrix
           </h2>
         </div>
-        <div className="flex-1 p-4 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center p-4">
           <span className="text-text-muted text-xs">Memuat data makro...</span>
         </div>
       </div>
@@ -186,13 +146,13 @@ export function MacroRegimePanel() {
 
   if (error) {
     return (
-      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden bg-[#020202]">
-        <div className="bg-bg-surface/80 border-b border-border-subtle p-3">
+      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-[#020202]">
+        <div className="bg-bg-surface/80 border-b border-border-subtle p-3 shrink-0">
           <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">
             Macro Regime Matrix
           </h2>
         </div>
-        <div className="flex-1 p-4 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center p-4">
           <span className="text-data-warning text-xs">Error: {error}</span>
         </div>
       </div>
@@ -200,7 +160,7 @@ export function MacroRegimePanel() {
   }
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden bg-[#020202]">
+    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-[#020202]">
       <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center shrink-0">
         <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
           Macro Regime Matrix
@@ -215,39 +175,39 @@ export function MacroRegimePanel() {
         </span>
       </div>
       
-      <div className="flex-1 p-4 flex flex-col min-h-0">
-        {/* Y-Axis Label */}
-        <div className="pl-8 text-[9px] text-text-muted font-mono tracking-widest uppercase mb-2 shrink-0">
-          Inflation ↑
+      <div className="flex-1 p-4 flex flex-col">
+        <div className="flex items-start gap-3">
+          <div className="text-[10px] text-neutral-500 font-mono tracking-widest uppercase -rotate-180 [writing-mode:vertical-lr] pt-2 shrink-0">
+            Inflation
+          </div>
+          
+          <div className="flex-1 flex flex-col">
+            <div className="grid grid-cols-2 gap-2 mb-2 w-full">
+              {quadrantRegimes.map((regime) => (
+                <RegimeCard
+                  key={regime.id}
+                  {...regime}
+                  isActive={activeId === regime.id}
+                  inflationMomentum={inflationMomentum}
+                />
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 w-full">
+              {extraRegimes.map((regime) => (
+                <RegimeCard
+                  key={regime.id}
+                  {...regime}
+                  isActive={activeId === regime.id}
+                  inflationMomentum={inflationMomentum}
+                />
+              ))}
+            </div>
+          </div>
         </div>
         
-        {/* Main 2x2 Grid */}
-        <div className="grid grid-cols-2 gap-2 pl-8 shrink-0">
-          {quadrantRegimes.map((regime) => (
-            <RegimeCard
-              key={regime.id}
-              {...regime}
-              isActive={activeId === regime.id}
-              inflationMomentum={inflationMomentum}
-            />
-          ))}
-        </div>
-
-        {/* Extra Regimes Row */}
-        <div className="grid grid-cols-2 gap-2 pl-8 mt-2 shrink-0">
-          {extraRegimes.map((regime) => (
-            <RegimeCard
-              key={regime.id}
-              {...regime}
-              isActive={activeId === regime.id}
-              inflationMomentum={inflationMomentum}
-            />
-          ))}
-        </div>
-
-        {/* X-Axis Label */}
-        <div className="pl-8 text-[9px] text-text-muted font-mono tracking-widest uppercase mt-2 shrink-0">
-          Growth →
+        <div className="text-[10px] text-neutral-500 font-mono tracking-widest uppercase mt-2 pl-11 shrink-0">
+          Growth
         </div>
       </div>
     </div>
