@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { marketDataService } from "../services/market-data.service";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -14,7 +15,6 @@ router.get("/news", async (req, res) => {
 
 router.get("/quotes", async (req, res) => {
   try {
-    // Expecting symbols as a comma-separated query param, e.g., ?symbols=AAPL,BINANCE:BTCUSDT,OANDA:EUR_USD
     const symbolsParam = req.query.symbols as string;
     if (!symbolsParam) {
       res.status(400).json({ success: false, error: "Missing symbols parameter" });
@@ -35,6 +35,48 @@ router.get("/liquidity", async (req, res) => {
     res.json({ success: true, data });
   } catch (error: any) {
     res.status(503).json({ success: false, error: error.message });
+  }
+});
+
+// Temporary mock endpoint for testing - inject mock liquidity change to trigger notification
+router.post("/liquidity/mock-trigger", requireAuth, async (req, res) => {
+  try {
+    const { value, change } = req.body;
+    const data = await marketDataService.getLiquidity(); // Get current cached
+    const mockValue = value || 12000; // 12000B = $12T as test
+    const mockChange = change || 5.5; // +5.5B increase to trigger DRAINING
+    
+    // Manually trigger notification by updating cache and calling the logic
+    const cacheKey = "liquidity_onrrp";
+    const cache = (marketDataService as any).cache || {};
+    
+    // Simulate a change for notification
+    if (cache[cacheKey]) {
+      const prevValue = cache[cacheKey].data?.value || 11500;
+      const absChange = Math.abs(mockValue - prevValue);
+      
+      if (absChange > 0.1) {
+        const isDraining = mockChange > 0;
+        const { notificationService } = await import("../services/notification.service");
+        await notificationService.create({
+          userId: "system",
+          type: "RISK_WARNING",
+          title: "⚠️ Institutional Liquidity Draining",
+          message: `Dana ON RRP meningkat sebesar $${absChange.toFixed(2)}B. Institusi memarkir uang ke Fed, likuiditas pasar berpotensi mengetat.`,
+          metadata: {
+            currentValue: mockValue,
+            previousValue: prevValue,
+            change: mockChange,
+            status: isDraining ? "DRAINING" : "INJECTING",
+            source: "FRED_ON_RRP_MOCK"
+          }
+        });
+      }
+    }
+    
+    res.json({ success: true, message: "Mock notification triggered" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
