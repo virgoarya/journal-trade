@@ -194,16 +194,16 @@ export function classifyMacroRegime(
       // Handle the remaining cases where at least one is medium
       // We will try to assign based on the non-medium one if available, otherwise default to Neutral Transition (but we already handled both medium)
       if (growthCatForRegime === 'medium' && inflationCatForRegime === 'low') {
-        regime = 'Deflation'; // Assuming low inflation and medium growth -> deflation? Not sure.
+        regime = 'Deflation'; // Assuming low inflation and medium growth -> deflation
         reason = 'Inflasi rendah dengan pertumbuhan netral, berisiko deflasi.';
       } else if (growthCatForRegime === 'medium' && inflationCatForRegime === 'high') {
-        regime = 'Inflation'; // High inflation and medium growth
-        reason = 'Inflasi tinggi dengan pertumbuhan netral, menunjukkan tekanan inflasi.';
+        regime = 'Stagflation'; // Fallback to Stagflation for high inflation with medium growth
+        reason = 'Inflasi tinggi dengan pertumbuhan netral, tekanan inflasi tinggi.';
       } else if (growthCatForRegime === 'high' && inflationCatForRegime === 'medium') {
-        regime = 'Reflation'; // High growth and medium inflation -> reflation? 
-        reason = 'Pertumbuhan tinggi dengan inflasi netral, cenderung reflasi.';
+        regime = 'Goldilocks'; // High growth with medium inflation
+        reason = 'Pertumbuhan tinggi dengan inflasi netral, kondisi ideal.';
       } else if (growthCatForRegime === 'low' && inflationCatForRegime === 'medium') {
-        regime = 'Slowdown'; // Low growth and medium inflation -> slowdown
+        regime = 'Slowdown'; // Low growth with medium inflation
         reason = 'Pertumbuhan rendah dengan inflasi netral, menunjukkan pelambatan.';
       } else {
         // This should not happen because we already handled both medium.

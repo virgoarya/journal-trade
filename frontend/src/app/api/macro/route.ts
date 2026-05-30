@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { MacroRawInputs } from '@/lib/macro/types';
+import { aggregateMacroScores } from '@/lib/macro/calculations';
+import { classifyMacroRegime } from '@/lib/macro/classifiers';
 
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
@@ -98,10 +100,23 @@ function interpolateQuarterlyToMonthly(quarterlyData: { date: string; value: num
 }
 
 function syncArrayLengths(...arrays: number[][]): number[] {
-  // Find minimum length
   const minLen = Math.min(...arrays.map(a => a.length));
-  // Slice all arrays to minimum length
   return arrays.map(a => a.slice(-minLen));
+}
+
+function generateDummyData(length: number = 48): MacroRawInputs {
+  return {
+    ismPmi: Array(length).fill(50),
+    joblessClaims: Array(length).fill(200),
+    unemployment: Array(length).fill(-4.0),
+    nfp: Array(length).fill(200),
+    realGdp: Array(length).fill(2.0),
+    corePce: Array(length).fill(2.5),
+    supercore: Array(length).fill(2.5),
+    cpiYoY: Array(length).fill(3.0),
+    breakeven5y: Array(length).fill(2.0),
+    breakeven10y: Array(length).fill(2.2),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -150,12 +165,21 @@ export async function GET(request: NextRequest) {
         ...Array(34).fill(0.3),
         0.4, 0.4, 0.4, 0.3, 0.3, 0.3
       ];
+
+      // Calculate regime for dummy data
+      const { growthScore, inflationScore } = aggregateMacroScores(dummyInputs);
+      const regimeResult = classifyMacroRegime({
+        growth: growthScore,
+        inflation: inflationScore,
+        assetSignals: {},
+      });
       
       return NextResponse.json({
         success: true,
         data: dummyInputs,
         cpiMoM: dummyCpiMoM,
         isDummy: true,
+        regime: regimeResult.regime,
       });
     }
 
@@ -210,11 +234,21 @@ export async function GET(request: NextRequest) {
       breakeven10y: padToLength(breakeven10y, 2.2),
     };
 
+    // Calculate regime from the aggregated scores
+    const { growthScore, inflationScore } = aggregateMacroScores(macroInputs);
+    const regimeResult = classifyMacroRegime({
+      growth: growthScore,
+      inflation: inflationScore,
+      assetSignals: {},
+    });
+    const detectedRegime = regimeResult.regime;
+
     return NextResponse.json({
       success: true,
       data: macroInputs,
       cpiMoM,
       isDummy: false,
+      regime: detectedRegime,
     });
   } catch (error: any) {
     console.error('[FRED] Unexpected error in macro API route:', {
@@ -223,17 +257,39 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
 
+    const generateDummyData = (length: number = 48): MacroRawInputs => ({
+      ismPmi: Array(length).fill(50),
+      joblessClaims: Array(length).fill(200),
+      unemployment: Array(length).fill(-4.0),
+      nfp: Array(length).fill(200),
+      realGdp: Array(length).fill(2.0),
+      corePce: Array(length).fill(2.5),
+      supercore: Array(length).fill(2.5),
+      cpiYoY: Array(length).fill(3.0),
+      breakeven5y: Array(length).fill(2.0),
+      breakeven10y: Array(length).fill(2.2),
+    });
+
     const dummyInputs = generateDummyData();
     const dummyCpiMoM: number[] = [
       ...Array(34).fill(0.3),
       0.4, 0.4, 0.4, 0.3, 0.3, 0.3
     ];
 
+    // Calculate regime for dummy data
+    const { growthScore, inflationScore } = aggregateMacroScores(dummyInputs);
+    const regimeResult = classifyMacroRegime({
+      growth: growthScore,
+      inflation: inflationScore,
+      assetSignals: {},
+    });
+
     return NextResponse.json({
       success: true,
       data: dummyInputs,
       cpiMoM: dummyCpiMoM,
       isDummy: true,
+      regime: regimeResult.regime,
       error: error.message || 'Unknown error',
     });
   }
