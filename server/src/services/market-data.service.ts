@@ -122,10 +122,12 @@ export const marketDataService = {
          throw new Error("Insufficient data from FRED");
        }
 
-       const current = parseFloat(observations[0].value);
-       const previous = parseFloat(observations[1].value);
-       const change = current - previous;
-       const status = change > 0 ? "DRAINING" : "INJECTING";
+const current = parseFloat(observations[0].value);
+        const previous = parseFloat(observations[1].value);
+        const change = current - previous;
+        // If value is decreasing (change < 0), it's draining (money leaving ON RRP)
+        // If value is increasing (change > 0), it's injecting (money entering ON RRP)
+        const status = change < 0 ? "DRAINING" : "INJECTING";
        
        const data = {
          value: current,

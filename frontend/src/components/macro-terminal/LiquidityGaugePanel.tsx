@@ -26,9 +26,15 @@ export function LiquidityGaugePanel() {
   const isInjecting = liquidity.status === "INJECTING";
   const isDraining = liquidity.status === "DRAINING";
 
-  // Format value to billions/trillions for readability. (FRED data is in billions)
-  const formattedValue = `$${(liquidity.value / 1000).toFixed(2)}T`;
-  const formattedChange = `${liquidity.change > 0 ? "+" : ""}${liquidity.change.toFixed(2)}B`;
+  // Format value dynamically - show in Billions if < 1000, else Trillions
+  const formattedValue = liquidity.value >= 1000
+    ? `$${(liquidity.value / 1000).toFixed(2)}T`
+    : `$${liquidity.value.toFixed(2)}B`;
+  // Format change dynamically - show in Billions if < 1000, else Trillions  
+  const absChange = Math.abs(liquidity.change);
+  const changeFormatted = absChange >= 1000 
+    ? `${(liquidity.change / 1000).toFixed(2)}T`
+    : `${liquidity.change > 0 ? "+" : ""}${liquidity.change.toFixed(2)}B`;
 
   return (
     <div className="flex flex-col h-full bg-surface-primary border border-surface-border rounded-xl p-4 relative overflow-hidden">
@@ -61,7 +67,7 @@ export function LiquidityGaugePanel() {
               isInjecting ? "text-data-profit" : "text-data-loss"
             }`}>
               {isInjecting ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-              {formattedChange}
+              {changeFormatted}
             </div>
             <div className="text-xs font-mono text-text-secondary mt-1">
               Daily Change
