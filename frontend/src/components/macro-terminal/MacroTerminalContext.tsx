@@ -150,6 +150,22 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
       if (isRegimeShift) {
         setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${currentRegimeRef.current!.toUpperCase()} TO ${macroResult.regime.toUpperCase()}.`);
         setLastRegime(currentRegimeRef.current);
+        
+        // Create system notification for regime shift
+        try {
+          await fetch("/api/v1/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: "system",
+              type: "SYSTEM",
+              title: "⚠️ MACRO REGIME SHIFT",
+              message: `Market telah memasuki fase ${macroResult.regime}.`,
+            }),
+          });
+        } catch (notifyError) {
+          console.error("Failed to create regime shift notification:", notifyError);
+        }
       } else if (currentRegimeRef.current === null) {
         setLastRegime(macroResult.regime);
       }
