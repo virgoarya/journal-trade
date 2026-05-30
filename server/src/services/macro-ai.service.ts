@@ -1,15 +1,23 @@
+import axios from "axios";
+import { env } from "../config/env";
+
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+export const macroAiService = {
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
     // Compute growth and inflation proxies from assets
     const spy = assets.find(a => a.ticker === "SPY")?.change ?? 0;
-    const iief = assets.find(a => a.ticker === "IEF")?.change ?? 0;
+    const ief = assets.find(a => a.ticker === "IEF")?.change ?? 0;
     const tip = assets.find(a => a.ticker === "TIP")?.change ?? 0;
     const gld = assets.find(a => a.ticker === "GLD")?.change ?? 0;
     const vix = assets.find(a => a.ticker === "VIXY")?.change ?? 0;
     const uup = assets.find(a => a.ticker === "UUP")?.change ?? 0;
     const fxy = assets.find(a => a.ticker === "FXY")?.change ?? 0;
 
-    const growth = spy - iief;
-    const inflation = (tip + gld) / 2 - iief;
+    const growth = spy - ief;
+    const inflation = (tip + gld) / 2 - ief;
 
     const growthStatus = growth > 0 ? "high" : "low";
     const inflationStatus = inflation > 0 ? "high" : "low";
@@ -29,7 +37,7 @@
       GLD: gld,
       UUP: uup,
       VIX: vix,
-      IEF: iief,
+      IEF: ief,
       FXY: fxy,
       TIP: tip,
     };
@@ -126,3 +134,4 @@ Kembalikan teks biasa, tanpa markdown.`;
 
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
   }
+};
