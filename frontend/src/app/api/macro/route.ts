@@ -4,32 +4,36 @@ import type { MacroRawInputs } from '@/lib/macro/types';
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
-// FRED series IDs
 const SERIES_IDS = {
   // Growth
-  UNRATE: 'UNRATE', // Unemployment Rate
-  PAYEMS: 'PAYEMS', // Non-Farm Payrolls
-  GDPC1: 'GDPC1', // Real GDP
-  INDPRO: 'INDPRO', // Industrial Production
-
+  UNRATE: 'UNRATE',
+  PAYEMS: 'PAYEMS',
+  GDPC1: 'GDPC1',
+  INDPRO: 'INDPRO',
   // Inflation
-  CPIAUCSL: 'CPIAUCSL', // CPI Headline
-  PCEPILFE: 'PCEPILFE', // Core PCE
-  T5YIE: 'T5YIE', // 5-Year Breakeven
-  T10YIE: 'T10YIE', // 10-Year Breakeven
+  CPIAUCSL: 'CPIAUCSL',
+  PCEPILFE: 'PCEPILFE',
+  T5YIE: 'T5YIE',
+  T10YIE: 'T10YIE',
 };
 
-// Helper to fetch FRED data - returns empty array if API key not configured
+function getStartDate(monthsBack: number): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() - monthsBack);
+  return date.toISOString().split('T')[0].replace(/-/g, '');
+}
+
 async function fetchFredSeries(seriesId: string, startDate?: string): Promise<{ date: string; value: number }[]> {
   if (!FRED_API_KEY) {
-    return []; // Return empty array to trigger fallback
+    console.error(`[FRED] API key not configured for series ${seriesId}`);
+    return [];
   }
 
   const params = new URLSearchParams({
     series_id: seriesId,
     api_key: FRED_API_KEY,
     file_type: 'json',
-    frequency: 'm', // Monthly data
+    frequency: 'm',
     sort_order: 'asc',
     observation_start_date: startDate || getStartDate(48),
   });
@@ -37,64 +41,71 @@ async function fetchFredSeries(seriesId: string, startDate?: string): Promise<{ 
   const response = await fetch(`${FRED_BASE_URL}?${params}`);
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${seriesId}: ${response.statusText}`);
+    console.error(`[FRED] Failed to fetch ${seriesId}: ${response.status} ${response.statusText}`);
+    return [];
   }
 
   const data = await response.json();
   
   if (!data.observations) {
+    console.error(`[FRED] No observations returned for ${seriesId}`);
     return [];
   }
 
-  // Filter out missing values ('.') and convert to number
-  return data.observations
-    .filter((obs: { date: string; value: string }) => obs.value !== '.')
+  // Filter out missing values and do forward-fill for gaps
+  const rawValues = data.observations
     .map((obs: { date: string; value: string }) => ({
       date: obs.date,
-      value: parseFloat(obs.value),
+      value: obs.value,
     }))
     .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
+
+  // Forward-fill: replace '.' with previous valid value
+  const filledValues: { date: string; value: number }[] = [];
+  let lastValidValue: number | null = null;
+  
+  for (const obs of rawValues) {
+    if (obs.value !== '.') {
+      lastValidValue = parseFloat(obs.value);
+    }
+    // Only include if we have a valid value (either current or forward-filled)
+    if (lastValidValue !== null) {
+      filledValues.push({
+        date: obs.date,
+        value: lastValidValue,
+      });
+    }
+  }
+
+  return filledValues;
 }
 
-// Helper to get date 48 months ago in YYYY-MM-DD format
-function getStartDate(monthsBack: number): string {
-  const date = new Date();
-  date.setMonth(date.getMonth() - monthsBack);
-  return date.toISOString().split('T')[0].replace(/-/g, '');
-}
-
-// Helper to calculate MoM percent change
 function calculateMoM(values: number[]): number[] {
-  const mom: number[] = [];
+  const mom: number[] = [0]; // First month has no previous
   for (let i = 1; i < values.length; i++) {
     const change = ((values[i] - values[i - 1]) / values[i - 1]) * 100;
-    mom.push(change);
+    mom.push(Math.round(change * 100) / 100); // Round to 2 decimal places
   }
-  // Pad first month with 0 (no previous month to compare)
-  return [0, ...mom];
+  return mom;
 }
 
-// Helper to interpolate quarterly data to monthly
 function interpolateQuarterlyToMonthly(quarterlyData: { date: string; value: number }[]): number[] {
   const result: number[] = [];
-  for (let i = 0; i < quarterlyData.length; i++) {
-    // Each quarterly value is repeated for 3 months
-    const value = quarterlyData[i].value;
-    result.push(value, value, value);
+  for (const item of quarterlyData) {
+    result.push(item.value, item.value, item.value); // Repeat each quarter 3 times
   }
   return result;
 }
 
-// Helper to get last N months of data (to ensure we have 36-48 months)
-function getLastNMonths(data: { date: string; value: number }[], n: number): number[] {
-  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
-  const recent = sorted.slice(-n);
-  return recent.map(d => d.value);
+function syncArrayLengths(...arrays: number[][]): number[] {
+  // Find minimum length
+  const minLen = Math.min(...arrays.map(a => a.length));
+  // Slice all arrays to minimum length
+  return arrays.map(a => a.slice(-minLen));
 }
 
 export async function GET(request: NextRequest) {
   try {
-    // Fetch all series in parallel
     const [
       unrateData,
       payemsData,
@@ -115,11 +126,11 @@ export async function GET(request: NextRequest) {
       fetchFredSeries(SERIES_IDS.T10YIE),
     ]);
 
-    // Helper to generate dummy data when FRED data is not available
-    const generateDummyData = (length: number = 48) => ({
+    // Generate dummy fallback data
+    const generateDummyData = (length: number = 48): MacroRawInputs => ({
       ismPmi: Array(length).fill(50),
       joblessClaims: Array(length).fill(200),
-      unemployment: Array(length).fill(-4.0), // Inverted
+      unemployment: Array(length).fill(-4.0),
       nfp: Array(length).fill(200),
       realGdp: Array(length).fill(2.0),
       corePce: Array(length).fill(2.5),
@@ -129,13 +140,12 @@ export async function GET(request: NextRequest) {
       breakeven10y: Array(length).fill(2.2),
     });
 
-    // Check if any real data was fetched
-    const hasRealData = unrateData.length > 0 && cpiData.length > 0;
+    // Check if we have meaningful real data
+    const hasRealData = unrateData.length >= 36 && cpiData.length >= 36;
     
     if (!hasRealData) {
-      // Return dummy data when FRED API key is not configured
+      console.log(`[FRED] Insufficient data, using dummy fallback. unrate:${unrateData.length}, cpi:${cpiData.length}`);
       const dummyInputs = generateDummyData();
-      // Dummy CPI MoM data designed to show negative momentum (cooling)
       const dummyCpiMoM: number[] = [
         ...Array(34).fill(0.3),
         0.4, 0.4, 0.4, 0.3, 0.3, 0.3
@@ -149,61 +159,55 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Extract values (most recent 48 months)
-    let unemployment = getLastNMonths(unrateData, 48);
-    let nfp = getLastNMonths(payemsData, 48);
-    let gdp = getLastNMonths(gdpData, 48);
-    let industri = getLastNMonths(industriData, 48);
-    let cpi = getLastNMonths(cpiData, 48);
-    let corePce = getLastNMonths(corePceData, 48);
-    let breakeven5y = getLastNMonths(breakeven5yData, 48);
-    let breakeven10y = getLastNMonths(breakeven10yData, 48);
+    // Extract values
+    let unemployment = unrateData.map(d => -d.value); // Inverted
+    let nfp = payemsData.map(d => d.value);
+    let cpi = cpiData.map(d => d.value);
+    let corePce = corePceData.map(d => d.value);
+    let industri = industriData.map(d => d.value);
+    let breakeven5y = breakeven5yData.map(d => d.value);
+    let breakeven10y = breakeven10yData.map(d => d.value);
 
     // Handle GDP quarterly interpolation
-    // If we have less than 48 months of GDP, it's because it's quarterly; interpolate
-    const gdpQuarterly = gdpData.sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
-    const interpolatedGdp = interpolateQuarterlyToMonthly(gdpQuarterly.slice(-16)); // ~4 years of quarterly = ~48 months
-    gdp = interpolatedGdp.slice(-48); // Take last 48 months
-
-    // Handle Breakeven data (might have gaps) - pad with 0s or recent values
-    while (breakeven5y.length < 48) {
-      breakeven5y.unshift(breakeven5y[0] || 2.0);
-    }
-    while (breakeven10y.length < 48) {
-      breakeven10y.unshift(breakeven10y[0] || 2.0);
-    }
-
-    // Invert unemployment (higher unemployment = worse growth)
-    unemployment = unemployment.map(v => -v);
+    const interpolatedGdp = interpolateQuarterlyToMonthly(gdpData.slice(-16));
+    
+    // Sync all array lengths to minimum
+    const synced = syncArrayLengths(
+      unemployment,
+      nfp,
+      interpolatedGdp,
+      industri,
+      cpi,
+      corePce,
+      breakeven5y,
+      breakeven10y
+    );
+    
+    [unemployment, nfp, corePce, industri, cpi, breakeven5y, breakeven10y] = synced;
 
     // Calculate MoM for CPI
     const cpiMoM = calculateMoM(cpi);
 
-    // Pad arrays to ensure they all have same length
+    // Pad to target length if needed
     const targetLength = 48;
-    const padToLength = (arr: number[]): number[] => {
+    const padToLength = (arr: number[], fillValue: number): number[] => {
       while (arr.length < targetLength) {
-        arr.unshift(arr[0] || 0);
+        arr.unshift(fillValue);
       }
-      return arr;
+      return arr.slice(-targetLength);
     };
 
     const macroInputs: MacroRawInputs = {
-      ismPmi: padToLength(Array(48).fill(50)), // FRED doesn't have ISM PMI, use placeholder
-      joblessClaims: padToLength(Array(48).fill(200)), // FRED doesn't have Jobless Claims easily, use placeholder
-
-      // Growth indicators
+      ismPmi: padToLength(Array(48).fill(50), 50),
+      joblessClaims: padToLength(Array(48).fill(200), 200),
       unemployment,
       nfp,
-      realGdp: gdp,
-      industri, // Using INDPRO as a proxy
-
-      // Inflation indicators
+      realGdp: padToLength(interpolatedGdp, 2.0),
       corePce,
-      supercore: corePce, // FRED doesn't have Supercore, use Core PCE as proxy
-      cpiYoY: cpi, // Using CPI headline as proxy for YoY (should ideally calculate YoY)
-      breakeven5y,
-      breakeven10y,
+      supercore: corePce,
+      cpiYoY: padToLength(cpi, 3.0),
+      breakeven5y: padToLength(breakeven5y, 2.0),
+      breakeven10y: padToLength(breakeven10y, 2.2),
     };
 
     return NextResponse.json({
@@ -212,32 +216,25 @@ export async function GET(request: NextRequest) {
       cpiMoM,
       isDummy: false,
     });
-  } catch (error) {
-    console.error('Error fetching FRED data:', error);
-    // Return dummy data on error instead of failing
-    const dummyInputs = {
-      ismPmi: Array(48).fill(50),
-      joblessClaims: Array(48).fill(200),
-      unemployment: Array(48).fill(-4.0),
-      nfp: Array(48).fill(200),
-      realGdp: Array(48).fill(2.0),
-      corePce: Array(48).fill(2.5),
-      supercore: Array(48).fill(2.5),
-      cpiYoY: Array(48).fill(3.0),
-      breakeven5y: Array(48).fill(2.0),
-      breakeven10y: Array(48).fill(2.2),
-    };
+  } catch (error: any) {
+    console.error('[FRED] Unexpected error in macro API route:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+
+    const dummyInputs = generateDummyData();
     const dummyCpiMoM: number[] = [
       ...Array(34).fill(0.3),
       0.4, 0.4, 0.4, 0.3, 0.3, 0.3
     ];
-    
+
     return NextResponse.json({
       success: true,
       data: dummyInputs,
       cpiMoM: dummyCpiMoM,
       isDummy: true,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error.message || 'Unknown error',
     });
   }
 }
