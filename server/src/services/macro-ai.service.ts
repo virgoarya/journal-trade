@@ -133,5 +133,79 @@ Kembalikan teks biasa, tanpa markdown.`;
     }
 
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
+  },
+
+  async chatStream(messages: any[], res: any, currentRegime?: string, assets?: any[], liquidityStatus?: string) {
+    // Simple placeholder implementation for streaming chat
+    if (!env.GROQ_API_KEY) {
+      res.status(500).json({ success: false, error: "Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan" });
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        GROQ_API_URL,
+        {
+          model: GROQ_MODELS[0],
+          messages,
+          max_tokens: 150,
+          temperature: 0.2,
+          stream: false,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 20000,
+        }
+      );
+      
+      const text = response.data.choices?.[0]?.message?.content || "Tidak ada respons dari AI";
+      res.json({ success: true, text });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message || "Kesalahan pada layanan AI" });
+    }
+  },
+
+  async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+    // Placeholder implementation for macro feed analysis
+    if (!env.GROQ_API_KEY) {
+      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
+    }
+
+    const prompt = `Anda adalah analyst macro yang memberikan analisis singkat tentang berita ekonomi.
+Berita: ${headline}
+Aset target: ${targetAsset}
+${context ? `Konteks: ${context}` : ''}
+
+Berikan analisis singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak berita ini terhadap aset yang ditargetkan.`;
+
+    try {
+      const response = await axios.post(
+        GROQ_API_URL,
+        {
+          model: GROQ_MODELS[0],
+          messages: [
+            { role: "system", content: "Anda adalah seorang analyst macro yang ahli dalam memberikan analisis singkat untuk berita ekonomi dalam Bahasa Indonesia." },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 100,
+          temperature: 0.2,
+          stream: false,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 20000,
+        }
+      );
+      
+      return response.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
+    } catch (error: any) {
+      throw new Error(error.message || "Gagal menganalisis feed makro");
+    }
   }
 };
