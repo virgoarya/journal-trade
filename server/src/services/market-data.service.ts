@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import axios from "axios";
+import { notificationService } from "./notification.service";
 
 // In-memory cache to prevent hitting rate limits
 const cache: Record<string, { data: any; timestamp: number }> = {};
@@ -129,23 +130,57 @@ const current = parseFloat(observations[0].value);
         // If ON RRP value decreases, money is flowing FROM Fed overnight (INJECTING market liquidity)
         const status = change > 0 ? "DRAINING" : "INJECTING";
        
-       const data = {
-         value: current,
-         change: change,
-         status: status,
-         date: observations[0].date
-       };
+const data = {
+          value: current,
+          change: change,
+          status: status,
+          date: observations[0].date
+        };
 
-       // Update cache
-       cache[cacheKey] = {
-         data: data,
-         timestamp: Date.now(),
-       };
-       
-       return data;
-     } catch (error: any) {
-       console.error("FRED API Error:", error.message);
-       throw new Error("Failed to fetch ON RRP liquidity data");
-     }
-   }
+        // Check if this is a significant change and create notification
+        try {
+          const previousCached = cache[cacheKey];
+          const prevValue = previousCached ? parseFloat(previousCached.data?.value) : null;
+          
+          // Only create notification if there's a change (first time or new change)
+          if (prevValue !== null && prevValue !== current) {
+            const absChange = Math.abs(current - prevValue);
+            // Only notify if change is significant (> $0.1B)
+            if (absChange > 0.1) {
+              const isDraining = change > 0;
+              await notificationService.create({
+                userId: "system",
+                type: isDraining ? "RISK_WARNING" : "SYSTEM",
+                title: isDraining 
+                  ? "⚠️ Institutional Liquidity Draining" 
+                  : "🚀 Institutional Liquidity Injecting",
+                message: isDraining
+                  ? `Dana ON RRP meningkat sebesar $${absChange.toFixed(2)}B. Institusi memarkir uang ke Fed, likuiditas pasar berpotensi mengetat.`
+                  : `Dana ON RRP menurun sebesar $${absChange.toFixed(2)}B. Likuiditas kembali disuntikkan ke pasar bursa!`,
+                metadata: {
+                  currentValue: current,
+                  previousValue: prevValue,
+                  change: change,
+                  status: status,
+                  source: "FRED_ON_RRP"
+                }
+              });
+            }
+          }
+        } catch (notifyError) {
+          console.error("Failed to create liquidity notification:", (notifyError as any)?.message);
+        }
+
+        // Update cache
+        cache[cacheKey] = {
+          data: data,
+          timestamp: Date.now(),
+        };
+        
+        return data;
+      } catch (error: any) {
+        console.error("FRED API Error:", error.message);
+        throw new Error("Failed to fetch ON RRP liquidity data");
+      }
+    }
 };
