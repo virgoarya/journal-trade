@@ -9,54 +9,40 @@ import {
 import { calculateInflationMomentum, aggregateMacroScores } from "@/lib/macro/calculations";
 import type { MacroRawInputs } from "@/lib/macro/types";
 
-type RegimeCardProps = {
+type RegimeCardData = {
+  id: string;
   title: string;
   growth: string;
   inflation: string;
   assets: string;
-  isActive: boolean;
-  inflationMomentum: number;
-};
-
-const RegimeCard = ({
-  title,
-  growth,
-  inflation,
-  assets,
-  isActive,
-  inflationMomentum,
-}: RegimeCardProps) => {
-  const getActiveStyles = () => {
-    if (isActive) {
-      return "opacity-100 border-emerald-500/80 bg-[#161616] shadow-[0_0_10px_rgba(52,211,153,0.25)]";
-    }
-    return "opacity-30 border border-neutral-800/60 bg-[#0d0d0d]";
-  };
-
-  const getTextColor = () => isActive ? "text-neutral-100" : "text-neutral-400";
-
-  return (
-    <div
-      className={`flex flex-col items-center justify-center p-1.5 rounded border transition-all duration-300 ${getActiveStyles()}`}
-    >
-      <span className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${getTextColor()}`}>{title}</span>
-      <div className="flex items-center gap-1 mt-0.5">
-        <span className={`text-[10px] ${getTextColor()}`}>G:{growth}</span>
-        <span className={`text-[10px] ${getTextColor()}`}>I:{inflation}</span>
-        {inflationMomentum < 0 && <span className="text-emerald-500 text-[9px]">▼</span>}
-        {inflationMomentum > 0 && <span className="text-rose-500 text-[9px]">▲</span>}
-      </div>
-      <span className={`text-[9px] font-medium mt-0.5 truncate max-w-full ${isActive ? "text-neutral-300" : "text-neutral-500"}`}>{assets}</span>
-    </div>
-  );
 };
 
 export function MacroRegimePanel() {
   const { currentRegime } = useMacroTerminal();
-  const [activeId, setActiveId] = useState<MacroRegime | null>(null);
+  const [activeRegime, setActiveRegime] = useState<string>("");
   const [inflationMomentum, setInflationMomentum] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Normalize regime string for matching
+  const normalizeRegime = (regime?: string): string => {
+    if (!regime) return "";
+    const normalized = regime.toLowerCase().trim();
+    // Map generic "inflation" to "reflation" as safe fallback
+    if (normalized === "inflation" || normalized === "inflationary") {
+      return "reflation";
+    }
+    return normalized;
+  };
+
+  const regimeCards: RegimeCardData[] = [
+    { id: "stagflation", title: "Stagflation", growth: "Low", inflation: "High", assets: "Gold, Cmdty, CHF" },
+    { id: "goldilocks", title: "Goldilocks", growth: "High", inflation: "Optimal", assets: "Tech, Crypto, HY" },
+    { id: "deflation", title: "Deflation", growth: "Low", inflation: "Low", assets: "Bonds, USD, JPY" },
+    { id: "reflation", title: "Reflation", growth: "High", inflation: "Rising", assets: "Value, Ind, EM" },
+    { id: "slowdown", title: "Slowdown", growth: "Low", inflation: "Low", assets: "Bonds, Defensive, USD" },
+    { id: "neutral transition", title: "Netral", growth: "Netral", inflation: "Netral", assets: "Campuran" },
+  ];
 
   useEffect(() => {
     const fetchMacroData = async () => {
@@ -83,7 +69,7 @@ export function MacroRegimePanel() {
             assetSignals: {},
           });
           
-          setActiveId(macroResult.regime);
+          setActiveRegime(normalizeRegime(macroResult.regime));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -97,15 +83,6 @@ export function MacroRegimePanel() {
     
     return () => clearInterval(interval);
   }, []);
-
-  const allRegimes = [
-    { id: "Stagflation", title: "Stagflation", growth: "Low", inflation: "High", assets: "Gold, Cmdty, CHF" },
-    { id: "Goldilocks", title: "Goldilocks", growth: "High", inflation: "Optimal", assets: "Tech, Crypto, HY" },
-    { id: "Deflation", title: "Deflation", growth: "Low", inflation: "Low", assets: "Bonds, USD, JPY" },
-    { id: "Reflation", title: "Reflation", growth: "High", inflation: "Rising", assets: "Value, Ind, EM" },
-    { id: "Slowdown", title: "Slowdown", growth: "Low", inflation: "Low", assets: "Bonds, Defensive, USD" },
-    { id: "Neutral Transition", title: "Netral", growth: "Netral", inflation: "Netral", assets: "Campuran" },
-  ];
 
   if (isLoading) {
     return (
@@ -141,14 +118,32 @@ export function MacroRegimePanel() {
       </div>
       
       <div className="grid grid-cols-2 grid-rows-3 gap-1.5 p-2 flex-1">
-        {allRegimes.map((regime) => (
-          <RegimeCard
-            key={regime.id}
-            {...regime}
-            isActive={activeId?.toLowerCase() === regime.id.toLowerCase()}
-            inflationMomentum={inflationMomentum}
-          />
-        ))}
+        {regimeCards.map((card) => {
+          const isActive = card.id.toLowerCase() === activeRegime.toLowerCase();
+          return (
+            <div
+              key={card.id}
+              className={`flex flex-col items-center justify-center p-1.5 rounded border transition-all duration-300 ${
+                isActive 
+                  ? 'opacity-100 border-emerald-500 bg-neutral-800/60 ring-1 ring-emerald-500/30' 
+                  : 'opacity-30 border border-neutral-800/60 bg-[#0d0d0d]'
+              }`}
+            >
+              <span className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${isActive ? 'text-neutral-100' : 'text-neutral-400'}`}>
+                {card.title}
+              </span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className={`text-[10px] ${isActive ? 'text-neutral-100' : 'text-neutral-400'}`}>G:{card.growth}</span>
+                <span className={`text-[10px] ${isActive ? 'text-neutral-100' : 'text-neutral-400'}`}>I:{card.inflation}</span>
+                {inflationMomentum < 0 && <span className="text-emerald-500 text-[9px]">▼</span>}
+                {inflationMomentum > 0 && <span className="text-rose-500 text-[9px]">▲</span>}
+              </div>
+              <span className={`text-[9px] font-medium mt-0.5 truncate max-w-full ${isActive ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                {card.assets}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
