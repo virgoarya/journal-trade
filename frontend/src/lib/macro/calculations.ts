@@ -4,6 +4,35 @@
  */
 
 import type { MacroRawInputs } from './types';
+
+/**
+ * Calculate rolling z-score using a specified window size
+ * @param data - Array of numerical values (oldest to newest)
+ * @param windowSize - Window size in periods (default: 36 for 3 years)
+ * @returns Array of z-scores (same length as input, with NaN for insufficient data)
+ */
+export function calculateRollingZScore(data: number[], windowSize: number = 36): number[] {
+  if (data.length === 0) return [];
+  
+  const result: number[] = new Array(data.length).fill(NaN);
+  
+  // Need at least windowSize points to calculate
+  if (data.length < windowSize) return result;
+  
+  for (let i = windowSize - 1; i < data.length; i++) {
+    const window = data.slice(i - windowSize + 1, i + 1);
+    const mean = window.reduce((sum, val) => sum + val, 0) / window.length;
+    
+    // Calculate variance
+    const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / window.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Avoid division by zero
+    if (stdDev === 0) {
+      result[i] = 0;
+    } else {
+      result[i] = (data[i] - mean) / stdDev;
+    }
   }
   
   return result;
@@ -37,25 +66,6 @@ export function calculateInflationMomentum(dataMoM: number[]): number {
   
   // Return momentum adjustment (3m AR - 6m AR)
   return ar3 - ar6;
-}
-
-/**
- * Raw inputs for macro score aggregation
- */
-export interface MacroRawInputs {
-  // Growth indicators (higher = better for growth)
-  ismPmi: number[];           // ISM PMI (leading)
-  joblessClaims: number[];    // Jobless Claims (leading) - NOTE: should be inverted if raw data
-  nfp: number[];              // Non-Farm Payrolls change (coincident)
-  unemployment: number[];     // Unemployment rate (coincident) - NOTE: should be inverted if raw data
-  realGdp: number[];          // Real GDP growth (lagging)
-  
-  // Inflation indicators (higher = higher inflation)
-  corePce: number[];          // Core PCE (sticky/core)
-  supercore: number[];        // Supercore (sticky/core)
-  cpiYoY: number[];           // CPI YoY (headline)
-  breakeven5y: number[];      // 5yr Breakeven Inflation (expectations)
-  breakeven10y: number[];     // 10yr Breakeven Inflation (expectations)
 }
 
 /**
