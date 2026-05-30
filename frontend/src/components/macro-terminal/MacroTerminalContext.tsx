@@ -1,6 +1,15 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
+import {
+  classifyMacroRegime,
+  MacroRegime,
+  MacroRegimeResult,
+  classifyOnRrpLiquidity,
+  OnRrpResult,
+  deriveSentimentAndImpact,
+  buildNarrativeTemplate,
+} from '@/lib/macro/classifiers';
 
 export interface Asset {
   ticker: string;
@@ -27,20 +36,20 @@ export interface LiquidityData {
   date: string;
 }
 
-export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Unknown";
+export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Inflation" | "Deflation" | "Unknown";
 
 interface MacroTerminalContextProps {
   assets: Asset[];
   liquidity: LiquidityData | null;
   isFallback: boolean;
-  currentRegime: RegimeType;
-  lastRegime: RegimeType;
+  currentRegime: RegimeType | null;
+  lastRegime: RegimeType | null;
   aiReasoning: string | null;
   isAnalyzing: boolean;
   lastUpdated: Date | null;
   systemAlert: string | null;
   clearSystemAlert: () => void;
-  analyzeRegime: () => Promise<void>;
+  analyzeRegime: (currentAssets: Asset[], currentLiquidity: LiquidityData | null) => Promise<void>;
 }
 
 const MacroTerminalContext = createContext<MacroTerminalContextProps | undefined>(undefined);
@@ -49,8 +58,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
   const [isFallback, setIsFallback] = useState(false);
-  const [currentRegime, setCurrentRegime] = useState<RegimeType>("Unknown");
-  const [lastRegime, setLastRegime] = useState<RegimeType>("Unknown");
+  const [currentRegime, setCurrentRegime] = useState<RegimeType | null>(null);
+  const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
   
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -58,51 +67,85 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   
   const [systemAlert, setSystemAlert] = useState<string | null>(null);
   const hasAnalyzedInitially = useRef(false);
-  const currentRegimeRef = useRef<RegimeType>("Unknown");
+  const currentRegimeRef = useRef<RegimeType | null>(null);
 
   // Helper untuk mendapatkan persentase ubahan berdasarkan ticker
   const getChange = (currentAssets: Asset[], ticker: string) => {
     return currentAssets.find(a => a.ticker === ticker)?.change || 0;
   };
 
-  // Rumus Kuantitatif (Bridgewater / Hedgeye 4-Quads logic)
-  const calculateRegime = (currentAssets: Asset[]): RegimeType => {
-    const spy = getChange(currentAssets, "SPY");
-    const ief = getChange(currentAssets, "IEF");
-    const tip = getChange(currentAssets, "TIP");
-    const gld = getChange(currentAssets, "GLD");
-
-    // Sumbu Growth
-    const isGrowthHigh = spy > ief;
-    
-    // Sumbu Inflasi
-    const avgInflationProxies = (tip + gld) / 2;
-    const isInflationHigh = avgInflationProxies > ief;
-
-    if (isGrowthHigh && !isInflationHigh) return "Goldilocks";
-    if (isGrowthHigh && isInflationHigh) return "Reflation";
-    if (!isGrowthHigh && !isInflationHigh) return "Deflation";
-    if (!isGrowthHigh && isInflationHigh) return "Stagflation";
-    
-    return "Unknown";
-  };
-
-  const analyzeRegime = async (currentAssetsToAnalyze: Asset[] = assets, currentLiquidity: LiquidityData | null = liquidity) => {
+  const analyzeRegime = async (currentAssetsToAnalyze: Asset[], currentLiquidity: LiquidityData | null) => {
     setIsAnalyzing(true);
     try {
-      const res = await fetch("/api/v1/macro-ai/analyze-regime", {
+      // Compute growth, inflation, assetSignals
+      const spy = getChange(currentAssetsToAnalyze, "SPY");
+      const ief = getChange(currentAssetsToAnalyze, "IEF");
+      const tip = getChange(currentAssetsToAnalyze, "TIP");
+      const gld = getChange(currentAssetsToAnalyze, "GLD");
+      const vix = getChange(currentAssetsToAnalyze, "VIXY");
+      const uup = getChange(currentAssetsToAnalyze, "UUP");
+      const fxy = getChange(currentAssetsToAnalyze, "FXY");
+
+      const growth = spy - ief;
+      const inflation = (tip + gld) / 2 - ief;
+
+      const assetSignals = {
+        gldUp: gld > 0,
+        vixUp: vix > 0,
+        iefDown: ief < 0,
+        fxyUp: fxy > 0,
+      };
+
+      const macroResult = classifyMacroRegime({ growth, inflation, assetSignals });
+      const liquidityResult = classifyOnRrpLiquidity({
+        currentBalance: currentLiquidity ? currentLiquidity.value / 1000 : 0,
+        deltaDaily: currentLiquidity ? currentLiquidity.change : 0,
+      });
+
+      const { sentiment, impactOnRisk } = deriveSentimentAndImpact(macroResult.regime, liquidityResult.status);
+      
+      // Call the macro-ai endpoint to get shortReason (1-2 sentences) in Indonesian
+      const assetsForService = currentAssetsToAnalyze.map(a => ({
+        ticker: a.ticker,
+        name: a.name,
+        change: a.change,
+      }));
+      const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          assets: currentAssetsToAnalyze,
-          calculatedRegime: calculateRegime(currentAssetsToAnalyze),
-          liquidityStatus: currentLiquidity?.status
+        body: JSON.stringify({
+          assets: assetsForService,
+          calculatedRegime: macroResult.regime,
+          liquidityStatus: liquidityResult.status,
         }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setAiReasoning(data.reasoning);
+      const aiData = await aiResponse.json();
+      const aiShortReason = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : "";
+      
+      // If AI failed to return a reason, fallback to the rule-based shortReason from macroResult
+      const finalShortReason = aiShortReason || macroResult.shortReason;
+
+      const narrative = buildNarrativeTemplate(
+        macroResult.regime,
+        finalShortReason,
+        liquidityResult.status,
+        { sentiment, impactOnRisk }
+      );
+
+      // Determine regime shift using currentRegimeRef
+      const isInitialAnalysis = !hasAnalyzedInitially.current;
+      const isRegimeShift = currentRegimeRef.current !== null && currentRegimeRef.current !== macroResult.regime;
+      if (isRegimeShift) {
+        setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${currentRegimeRef.current!.toUpperCase()} TO ${macroResult.regime.toUpperCase()}.`);
+        setLastRegime(currentRegimeRef.current);
+      } else if (currentRegimeRef.current === null) {
+        setLastRegime(macroResult.regime);
       }
+      setCurrentRegime(macroResult.regime);
+      currentRegimeRef.current = macroResult.regime;
+
+      setAiReasoning(narrative);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to analyze regime:", error);
       setAiReasoning("Gagal mendapatkan analisis regime. Coba lagi nanti.");
@@ -151,27 +194,9 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         setAssets(updatedAssets);
         setIsFallback(false);
         setLastUpdated(new Date());
-
-        // Hitung Regime
-        const newlyCalculatedRegime = calculateRegime(updatedAssets);
-        const isInitialAnalysis = !hasAnalyzedInitially.current;
-        const isRegimeShift = currentRegimeRef.current !== "Unknown" && currentRegimeRef.current !== newlyCalculatedRegime;
         
-        if (isRegimeShift) {
-          setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${currentRegimeRef.current.toUpperCase()} TO ${newlyCalculatedRegime.toUpperCase()}.`);
-          setLastRegime(currentRegimeRef.current);
-        } else if (currentRegimeRef.current === "Unknown") {
-          setLastRegime(newlyCalculatedRegime);
-        }
-        
-        setCurrentRegime(newlyCalculatedRegime);
-        currentRegimeRef.current = newlyCalculatedRegime;
-
-        // Trigger AI Analysis only initially or on regime shift
-        if (isInitialAnalysis || isRegimeShift) {
-          analyzeRegime(updatedAssets, newLiquidity);
-          hasAnalyzedInitially.current = true;
-        }
+        // Analisis regime dan likuiditas (memanggil fungsi analisis yang sudah mencakup deteksi shift dan narrative)
+        await analyzeRegime(updatedAssets, newLiquidity);
       } else {
         throw new Error("Invalid quote API response");
       }
@@ -189,10 +214,10 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let mockInterval: NodeJS.Timeout;
+    let mockInterval: NodeJS.Timeout | null = null;
     fetchQuotes();
     const liveInterval = setInterval(fetchQuotes, 60000);
-
+    
     return () => {
       clearInterval(liveInterval);
       if (mockInterval) clearInterval(mockInterval);
@@ -215,7 +240,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         lastUpdated,
         systemAlert,
         clearSystemAlert,
-        analyzeRegime: () => analyzeRegime(assets, liquidity),
+        analyzeRegime,
       }}
     >
       {children}
