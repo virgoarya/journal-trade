@@ -2,13 +2,17 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import {
-  classifyMacroRegime,
-  MacroRegime,
-  MacroRegimeResult,
-  classifyOnRrpLiquidity,
-  OnRrpResult,
-  deriveSentimentAndImpact,
-  buildNarrativeTemplate,
+   classifyMacroRegime,
+   MacroRegime,
+   MacroRegimeResult,
+   classifyOnRrpLiquidity,
+   OnRrpInputs,
+   OnRrpStatus,
+   OnRrpResult,
+   RegimeTransitionAlert,
+   MarketSentiment,
+   deriveSentimentAndImpact,
+   buildNarrativeTemplate,
 } from '@/lib/macro/classifiers';
 
 export interface Asset {
@@ -97,12 +101,19 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       };
 
       const macroResult = classifyMacroRegime({ growth, inflation, assetSignals });
-      const liquidityResult = classifyOnRrpLiquidity({
-        currentBalance: currentLiquidity ? currentLiquidity.value / 1000 : 0,
-        deltaDaily: currentLiquidity ? currentLiquidity.change : 0,
-      });
-
-      const { sentiment, impactOnRisk } = deriveSentimentAndImpact(macroResult.regime, liquidityResult.status);
+      const rawLiquidity = currentLiquidity;
+      
+      // Normalize liquidity status to match OnRrpStatus type
+      let liquidityStatus: OnRrpStatus = 'Neutral';
+      if (rawLiquidity) {
+        if (rawLiquidity.status === 'DRAINING') {
+          liquidityStatus = 'Draining';
+        } else if (rawLiquidity.status === 'INJECTING') {
+          liquidityStatus = 'Refilling';
+        }
+      }
+      
+      const { sentiment, impactOnRisk } = deriveSentimentAndImpact(macroResult.regime, liquidityStatus);
       
       // Call the macro-ai endpoint to get shortReason (1-2 sentences) in Indonesian
       const assetsForService = currentAssetsToAnalyze.map(a => ({
@@ -110,27 +121,27 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         name: a.name,
         change: a.change,
       }));
-      const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          assets: assetsForService,
-          calculatedRegime: macroResult.regime,
-          liquidityStatus: liquidityResult.status,
-        }),
-      });
+const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           assets: assetsForService,
+           calculatedRegime: macroResult.regime,
+           liquidityStatus: liquidityStatus,
+         }),
+       });
       const aiData = await aiResponse.json();
       const aiShortReason = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : "";
       
       // If AI failed to return a reason, fallback to the rule-based shortReason from macroResult
       const finalShortReason = aiShortReason || macroResult.shortReason;
 
-      const narrative = buildNarrativeTemplate(
-        macroResult.regime,
-        finalShortReason,
-        liquidityResult.status,
-        { sentiment, impactOnRisk }
-      );
+const narrative = buildNarrativeTemplate(
+         macroResult.regime,
+         finalShortReason,
+         liquidityStatus,
+         { sentiment, impactOnRisk }
+       );
 
       // Determine regime shift using currentRegimeRef
       const isInitialAnalysis = !hasAnalyzedInitially.current;
