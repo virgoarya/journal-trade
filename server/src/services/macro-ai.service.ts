@@ -98,17 +98,17 @@ Kembalikan teks biasa, tanpa markdown.`;
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-    // Try Groq models
+// Try Groq models
     for (const model of GROQ_MODELS) {
       try {
         const response = await axios.post(
           GROQ_API_URL,
           {
             model,
-messages: [
-               { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-               { role: "user", content: prompt },
-             ],
+            messages: [
+              { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+              { role: "user", content: prompt },
+            ],
             max_tokens: 150,
             temperature: 0.2,
             stream: false,
