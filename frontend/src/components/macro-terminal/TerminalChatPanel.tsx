@@ -11,30 +11,84 @@ interface Message {
   content: string;
 }
 
+type ThinkingState = "idle" | "thinking" | "responding" | "done";
+
+const THINKING_MESSAGES = [
+  "Hunter sedang membaca pasar...",
+  "Menganalisis sentimen makro...",
+  "Menghubungkan data likuiditas...",
+];
+
 export function TerminalChatPanel() {
   const { currentRegime, assets, liquidity, systemAlert, clearSystemAlert } = useMacroTerminal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [debouncedInput, setDebouncedInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [thinkingState, setThinkingState] = useState<ThinkingState>("idle");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const lastSentAtRef = useRef<number>(0);
   const RATE_LIMIT_MS = 2000;
+  const thinkingIndexRef = useRef<number>(0);
+  const thinkingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const clearThinking = () => {
+    if (thinkingIntervalRef.current) {
+      clearInterval(thinkingIntervalRef.current);
+      thinkingIntervalRef.current = null;
+    }
+    thinkingIndexRef.current = 0;
+  };
+
+  const startThinking = () => {
+    clearThinking();
+    thinkingIndexRef.current = 0;
+    setThinkingState("thinking");
+
+    const initial = THINKING_MESSAGES[0];
+    setMessages((prev) => [...prev, { role: "assistant", content: initial }]);
+
+    thinkingIntervalRef.current = setInterval(() => {
+      thinkingIndexRef.current = (thinkingIndexRef.current + 1) % THINKING_MESSAGES.length;
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIndex = updated.length - 1;
+        if (lastIndex >= 0 && updated[lastIndex].role === "assistant") {
+          updated[lastIndex] = {
+            ...updated[lastIndex],
+            content: THINKING_MESSAGES[thinkingIndexRef.current],
+          };
+        }
+        return updated;
+      });
+    }, 700);
+  };
+
+  const stopThinking = () => {
+    clearThinking();
+    setThinkingState("idle");
+  };
+
+  useEffect(() => {
+    return () => {
+      clearThinking();
+    };
+  }, []);
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, thinkingState]);
 
   useEffect(() => {
     const saved = localStorage.getItem("hunterDeskHistory");
     if (saved) {
       try {
-        setMessages(JSON.parse(saved));
+        const parsed = JSON.parse(saved) as Message[];
+        setMessages(parsed);
       } catch (e) {
         console.error("Failed to load chat history", e);
       }
@@ -42,8 +96,9 @@ export function TerminalChatPanel() {
       setMessages([
         {
           role: "assistant",
-          content: "HUNTER DESK TERMINAL INITIALIZED.\n\nAwaiting macro data, central bank statements, or geopolitical inputs. Provide your inquiry for institutional analysis."
-        }
+          content:
+            "HUNTER DESK TERMINAL INITIALIZED.\n\nAwaiting macro data, central bank statements, or geopolitical inputs. Provide your inquiry for institutional analysis.",
+        },
       ]);
     }
   }, []);
@@ -92,7 +147,7 @@ export function TerminalChatPanel() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = debouncedInput.trim();
-    if (!query || isLoading) return;
+    if (!query || thinkingState === "thinking" || thinkingState === "responding") return;
 
     const now = Date.now();
     if (now - lastSentAtRef.current < RATE_LIMIT_MS) {
@@ -104,12 +159,9 @@ export function TerminalChatPanel() {
     const newMessages = [...messages, userMessage];
 
     setMessages(newMessages);
-    // Clear input and debounced input after sending
     setInput("");
     setDebouncedInput("");
-    setIsLoading(true);
-
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+    startThinking();
 
     try {
       const response = await fetch("/api/v1/macro-ai/chat", {
@@ -117,11 +169,11 @@ export function TerminalChatPanel() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: newMessages,
           currentRegime,
           assets,
-          liquidityStatus: liquidity?.status
+          liquidityStatus: liquidity?.status,
         }),
       });
 
@@ -129,68 +181,43 @@ export function TerminalChatPanel() {
         throw new Error("Failed to connect to Terminal");
       }
 
-      if (!response.body) throw new Error("No response body");
+      const data = (await response.json()) as {
+        success?: boolean;
+        reply?: string;
+        error?: string;
+      };
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let done = false;
-      let buffer = "";
+      stopThinking();
+      setThinkingState("responding");
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ") && line.trim() !== "data: [DONE]") {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const textChunk = data.choices?.[0]?.delta?.content || data.text;
-                if (textChunk) {
-                  setMessages((prev) => {
-                    const updated = [...prev];
-                    const lastIndex = updated.length - 1;
-                    updated[lastIndex] = {
-                      ...updated[lastIndex],
-                      content: updated[lastIndex].content + textChunk,
-                    };
-                    return updated;
-                  });
-                } else if (data.error) {
-                  const errorMsg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
-                  setMessages((prev) => {
-                    const updated = [...prev];
-                    const lastIndex = updated.length - 1;
-                    updated[lastIndex] = {
-                      ...updated[lastIndex],
-                      content: updated[lastIndex].content + "\n\n[SYSTEM ERROR]: " + errorMsg,
-                    };
-                    return updated;
-                  });
-                }
-              } catch (e) {
-                // Ignore parse errors for incomplete chunks
-              }
-            }
-          }
-        }
+      if (data.success && data.reply) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: data.reply as string },
+        ]);
+      } else if (data.error) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            role: "assistant",
+            content: `[SYSTEM ERROR]: ${data.error}`,
+          },
+        ]);
+      } else {
+        throw new Error("Empty AI response");
       }
     } catch (error: any) {
       console.error("Chat error:", error);
-      setMessages((prev) => {
-        const updated = [...prev];
-        const lastIndex = updated.length - 1;
-        updated[lastIndex] = {
-          ...updated[lastIndex],
-          content: updated[lastIndex].content + "\n\n[CONNECTION FAILED]: " + error.message,
-        };
-        return updated;
-      });
+      setMessages((prev) => [
+        ...prev.slice(0, -1),
+        {
+          role: "assistant",
+          content: `[CONNECTION FAILED]: ${error.message}`,
+        },
+      ]);
     } finally {
-      setIsLoading(false);
+      stopThinking();
+      setThinkingState("idle");
     }
   };
 
@@ -199,8 +226,8 @@ export function TerminalChatPanel() {
       const initial = [
         {
           role: "assistant",
-          content: "HUNTER DESK TERMINAL RESTARTED.\n\nAwaiting macro data..."
-        }
+          content: "HUNTER DESK TERMINAL RESTARTED.\n\nAwaiting macro data...",
+        },
       ] as Message[];
       setMessages(initial);
       localStorage.setItem("hunterDeskHistory", JSON.stringify(initial));
@@ -231,50 +258,64 @@ export function TerminalChatPanel() {
         {systemAlert}
       </div>
 
-      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20 mix-blend-overlay"></div>
+      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20 mix-blend-overlay" />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono z-10 scrollbar-thin scrollbar-thumb-accent-gold/20 scrollbar-track-transparent">
-        {messages.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`flex gap-3 ${
-              msg.role === "assistant" ? "flex-row" : "flex-row-reverse"
-            }`}
-          >
-            <div
-              className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center ${
-                msg.role === "assistant"
-                  ? "bg-accent-gold/10 border border-accent-gold/30 text-accent-gold"
-                  : "bg-bg-surface border border-border-subtle text-text-secondary"
-              }`}
-            >
-              {msg.role === "assistant" ? <Bot size={14} /> : <User size={14} />}
-            </div>
+        {messages.map((msg, idx) => {
+          const isLastAssistantThinking =
+            msg.role === "assistant" &&
+            idx === messages.length - 1 &&
+            (thinkingState === "thinking" || thinkingState === "responding");
 
+          return (
             <div
-              className={`max-w-[85%] rounded-lg p-3 ${
-                msg.role === "assistant"
-                  ? "bg-bg-surface/80 border border-accent-gold/10 text-text-primary"
-                  : "bg-accent-gold/5 border border-accent-gold/20 text-text-primary"
+              key={idx}
+              className={`flex gap-3 ${
+                msg.role === "assistant" ? "flex-row" : "flex-row-reverse"
               }`}
             >
-              <div className="flex items-center gap-2 mb-1.5 opacity-60">
-                <span className="text-[9px] uppercase tracking-widest">
-                  {msg.role === "assistant" ? "SYSTEM.AI" : "USER.OP"}
-                </span>
-                <span className="text-[9px]">—</span>
-                <span className="text-[9px]">
-                  {new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
-                </span>
+              <div
+                className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center ${
+                  msg.role === "assistant"
+                    ? "bg-accent-gold/10 border border-accent-gold/30 text-accent-gold"
+                    : "bg-bg-surface border border-border-subtle text-text-secondary"
+                }`}
+              >
+                {msg.role === "assistant" ? <Bot size={14} /> : <User size={14} />}
               </div>
-              <div className="prose prose-invert prose-xs max-w-none prose-p:leading-relaxed prose-pre:bg-bg-void prose-pre:border prose-pre:border-border-subtle prose-a:text-accent-gold hover:prose-a:text-accent-gold-dim text-xs">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
+
+              <div
+                className={`max-w-[85%] rounded-lg p-3 ${
+                  msg.role === "assistant"
+                    ? "bg-bg-surface/80 border border-accent-gold/10 text-text-primary"
+                    : "bg-accent-gold/5 border border-accent-gold/20 text-text-primary"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1.5 opacity-60">
+                  <span className="text-[9px] uppercase tracking-widest">
+                    {msg.role === "assistant" ? "SYSTEM.AI" : "USER.OP"}
+                  </span>
+                  <span className="text-[9px]">—</span>
+                  <span className="text-[9px]">
+                    {new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+
+                {isLastAssistantThinking ? (
+                  <div className="text-[10px] font-mono text-accent-gold animate-pulse">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div className="prose prose-invert prose-xs max-w-none prose-p:leading-relaxed prose-pre:bg-bg-void prose-pre:border prose-pre:border-border-subtle prose-a:text-accent-gold hover:prose-a:text-accent-gold-dim text-xs">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -296,15 +337,15 @@ export function TerminalChatPanel() {
               placeholder="Query analysis..."
               className="w-full bg-bg-void border border-border-subtle rounded py-2 pl-8 pr-3 text-text-primary font-mono text-xs focus:outline-none focus:border-accent-gold/50 focus:ring-1 focus:ring-accent-gold/50 resize-none min-h-[38px] max-h-[120px] scrollbar-thin transition-all"
               rows={1}
-              disabled={isLoading}
+              disabled={thinkingState === "thinking" || thinkingState === "responding"}
             />
           </div>
           <button
             type="submit"
-            disabled={!debouncedInput.trim() || isLoading}
+            disabled={!debouncedInput.trim() || thinkingState === "thinking" || thinkingState === "responding"}
             className="h-[38px] px-4 bg-accent-gold text-bg-void rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all flex items-center justify-center min-w-[50px]"
           >
-            {isLoading ? (
+            {(thinkingState === "thinking" || thinkingState === "responding") ? (
               <div className="w-4 h-4 border-2 border-bg-void/30 border-t-bg-void rounded-full animate-spin" />
             ) : (
               <Send size={14} />

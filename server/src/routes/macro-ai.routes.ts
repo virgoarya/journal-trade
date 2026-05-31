@@ -4,6 +4,27 @@ import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
+function extractAssistantText(combined: string): string {
+  const lines = combined.split(/\r?\n/);
+  const parts: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === "data: [DONE]") continue;
+    if (!trimmed.startsWith("data:")) continue;
+    const payload = trimmed.slice(5).trim();
+    try {
+      const parsed = JSON.parse(payload);
+      const text = parsed.choices?.[0]?.delta?.content || parsed.text;
+      if (typeof text === "string" && text.length > 0) {
+        parts.push(text);
+      }
+    } catch {
+      // ignore incomplete SSE chunks
+    }
+  }
+  return parts.join("").trim();
+}
+
 router.post("/chat", requireAuth, async (req, res) => {
   try {
     const { messages, currentRegime, assets, liquidityStatus } = req.body;
@@ -13,23 +34,33 @@ router.post("/chat", requireAuth, async (req, res) => {
       return;
     }
 
-    // Set headers for Server-Sent Events
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    res.setHeader("Content-Type", "application/json");
 
-    // Get the Groq stream from service (already throttled and with retry logic)
     const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus);
 
-    // Pipe the Groq stream to the HTTP response manually to ensure immediate flush
-    groqResponse.data.on("data", (chunk: Buffer) => {
-      res.write(chunk);
-      // If the response object has a flush method (e.g., from compression middleware), call it
-      if (typeof (res as any).flush === "function") {
-        (res as any).flush();
-      }
+    const chunks: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      groqResponse.data.on("data", (chunk: Buffer) => {
+        chunks.push(chunk.toString("utf-8"));
+      });
+      groqResponse.data.on("end", () => resolve());
+      groqResponse.data.on("error", (err: any) => reject(err));
     });
+
+    const combined = chunks.join("");
+    const text = extractAssistantText(combined);
+
+    if (!text) {
+      res.status(502).json({ success: false, error: "Respons AI kosong" });
+      return;
+    }
+
+    res.json({ success: true, reply: text });
+  } catch (error: any) {
+    console.error("Macro AI Chat Route Error:", error);
+    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+  }
+});
 
     groqResponse.data.on("end", () => {
       res.end();
