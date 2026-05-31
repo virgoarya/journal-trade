@@ -108,6 +108,18 @@ function getConfidenceLabel(conf: string): string {
   return "SEDANG";
 }
 
+function getImpactColor(impact: string) {
+  if (impact === "BULLISH") return "text-data-profit border-data-profit bg-data-profit/10";
+  if (impact === "BEARISH") return "text-data-loss border-data-loss bg-data-loss/10";
+  return "text-text-muted border-border-subtle bg-bg-void";
+}
+
+function getImpactIcon(impact: string) {
+  if (impact === "BULLISH") return <ArrowUpRight size={14} className="text-data-profit" />;
+  if (impact === "BEARISH") return <ArrowDownRight size={14} className="text-data-loss" />;
+  return <AlertCircle size={14} className="text-text-muted" />;
+}
+
 // ==================== MODAL COMPONENT (rendered via Portal) ====================
 function AnalysisModal({
   item,
@@ -120,18 +132,6 @@ function AnalysisModal({
   rawAnalysis: string;
   onClose: () => void;
 }) {
-  const getImpactColor = (impact: string) => {
-    if (impact === "BULLISH") return "text-data-profit border-data-profit bg-data-profit/10";
-    if (impact === "BEARISH") return "text-data-loss border-data-loss bg-data-loss/10";
-    return "text-text-muted border-border-subtle bg-bg-void";
-  };
-
-  const getImpactIcon = (impact: string) => {
-    if (impact === "BULLISH") return <ArrowUpRight size={14} className="text-data-profit" />;
-    if (impact === "BEARISH") return <ArrowDownRight size={14} className="text-data-loss" />;
-    return <AlertCircle size={14} className="text-text-muted" />;
-  };
-
   const modal = (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -462,18 +462,6 @@ export function NewsFeedPanel() {
 
     fetchNews();
   }, []);
-
-  const getImpactColor = (impact: string) => {
-    if (impact === "BULLISH") return "text-data-profit border-data-profit bg-data-profit/10";
-    if (impact === "BEARISH") return "text-data-loss border-data-loss bg-data-loss/10";
-    return "text-text-muted border-border-subtle bg-bg-void";
-  };
-
-  const getImpactIcon = (impact: string) => {
-    if (impact === "BULLISH") return <ArrowUpRight size={14} className="text-data-profit" />;
-    if (impact === "BEARISH") return <ArrowDownRight size={14} className="text-data-loss" />;
-    return <AlertCircle size={14} className="text-text-muted" />;
-  };
 
   // Parse JSON only when modal is open
   const parsedAnalysis = modalData ? extractFirstJSON(modalData.rawAnalysis) : null;
