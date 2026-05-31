@@ -1,28 +1,85 @@
 import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
+import axios from "axios";
 
 const router = Router();
 
 router.post("/chat", requireAuth, async (req, res) => {
   try {
     const { messages, currentRegime, assets, liquidityStatus } = req.body;
-    
+
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ success: false, error: "Format pesan tidak valid" });
       return;
     }
 
-    // Call the streaming service
-    await macroAiService.chatStream(messages, res, currentRegime, assets, liquidityStatus);
+    // Set headers for SSE
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    // Forward request to Groq with streaming
+    const groqResponse = await axios.post(
+      `${process.env.GROQ_API_URL}`,
+      {
+        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+          ...messages,
+        ],
+        max_tokens: 150,
+        temperature: 0.2,
+        stream: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        responseType: "stream",
+        timeout: 20000,
+      }
+    );
+
+    // Pipe the stream to the client
+    groqResponse.data.on("data", (chunk: Buffer) => {
+      const chunkString = chunk.toString();
+      const lines = chunkString.split("\n");
+      for (const line of lines) {
+        if (line.trim() === "") continue;
+        // Groq sends lines like: data: { ... }
+        // We'll forward as-is (they already start with "data: ")
+        res.write(`${line}\n`);
+      }
+    });
+
+    groqResponse.data.on("end", () => {
+      res.write("data: [DONE]\n\n");
+      res.end();
+    });
+
+    groqResponse.data.on("error", (err: any) => {
+      console.error("Groq stream error:", err);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      }
+    });
   } catch (error: any) {
     console.error("Macro AI Chat Route Error:", error);
     if (!res.headersSent) {
       res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+    } else {
+      // If headers already sent, we can't send JSON, so we send SSE error
+      res.write(`data: ${JSON.stringify({ error: error.message || "Terjadi kesalahan pada server" })}\n\n`);
+      res.end();
     }
   }
 });
 
+// Keep other routes unchanged
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
     const { assets, calculatedRegime, liquidityStatus } = req.body;
