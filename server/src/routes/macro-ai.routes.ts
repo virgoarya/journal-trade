@@ -23,21 +23,7 @@ router.post("/chat", requireAuth, async (req, res) => {
     const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus);
 
     // Pipe the Groq stream to the HTTP response
-    groqResponse.data.on("data", (chunk: Buffer) => {
-      const chunkString = chunk.toString();
-      const lines = chunkString.split("\n");
-      for (const line of lines) {
-        if (line.trim() === "") continue;
-        // Groq sends lines like: data: { ... }
-        // Forward as-is (they already start with "data: ")
-        res.write(`${line}\n`);
-      }
-    });
-
-    groqResponse.data.on("end", () => {
-      res.write("data: [DONE]\n\n");
-      res.end();
-    });
+    groqResponse.data.pipe(res);
 
     groqResponse.data.on("error", (err: any) => {
       console.error("Groq stream error:", err);
