@@ -44,8 +44,7 @@ export function calculateRollingZScore(data: number[], windowSize: number = 36):
  * @returns Momentum multiplier (negative when 3m AR < 6m AR indicating disinflationary momentum)
  */
 export function calculateInflationMomentum(dataMoM: number[]): number {
-  // Need at least 6 months of data
-  if (dataMoM.length < 6) return 0;
+  if (!Array.isArray(dataMoM) || dataMoM.length < 6) return 0;
   
   // Get last 3 and 6 months
   const recent3 = dataMoM.slice(-3);
