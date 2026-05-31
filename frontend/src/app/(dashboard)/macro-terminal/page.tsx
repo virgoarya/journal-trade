@@ -8,10 +8,12 @@ import { HeatmapPanel } from "@/components/macro-terminal/HeatmapPanel";
 import { NewsFeedPanel } from "@/components/macro-terminal/NewsFeedPanel";
 import { TerminalChatPanel } from "@/components/macro-terminal/TerminalChatPanel";
 import { MacroTerminalProvider } from "@/components/macro-terminal/MacroTerminalContext";
+import { ErrorBoundary } from "@/components/macro-terminal/ErrorBoundary";
 
 export default function MacroTerminalPage() {
   return (
-    <MacroTerminalProvider>
+    <ErrorBoundary>
+      <MacroTerminalProvider>
       <div className="flex flex-col h-[calc(100vh-8rem)] w-full max-w-[1600px] mx-auto gap-4">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
@@ -80,6 +82,7 @@ export default function MacroTerminalPage() {
 
         </div>
       </div>
-    </MacroTerminalProvider>
+      </MacroTerminalProvider>
+    </ErrorBoundary>
   );
 }
