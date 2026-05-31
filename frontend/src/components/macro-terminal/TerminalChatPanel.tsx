@@ -19,6 +19,8 @@ export function TerminalChatPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastSentAtRef = useRef<number>(0);
+  const RATE_LIMIT_MS = 2000;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -91,6 +93,12 @@ export function TerminalChatPanel() {
     e.preventDefault();
     const query = debouncedInput.trim();
     if (!query || isLoading) return;
+
+    const now = Date.now();
+    if (now - lastSentAtRef.current < RATE_LIMIT_MS) {
+      return;
+    }
+    lastSentAtRef.current = now;
 
     const userMessage: Message = { role: "user", content: query };
     const newMessages = [...messages, userMessage];

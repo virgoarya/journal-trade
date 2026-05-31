@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { calculateInflationMomentum } from "@/lib/macro/calculations";
 
@@ -20,14 +20,24 @@ const regimeCards: RegimeCardData[] = [
 ];
 
 type State = "idle" | "loading" | "ready" | "error";
+const RATE_LIMIT_MS = 5 * 60 * 1000;
+const MAX_BACKOFF_MS = 30 * 60 * 1000;
 
 export function MacroRegimePanel() {
   const [activeRegime, setActiveRegime] = useState<string>("");
   const [inflationMomentum, setInflationMomentum] = useState<number>(0);
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [nextAllowedAt, setNextAllowedAt] = useState<number>(0);
+  const [backoffMs, setBackoffMs] = useState<number>(0);
+  const lastSuccessRef = useRef<number>(0);
 
   const fetchMacroData = useCallback(async () => {
+    const now = Date.now();
+    if (now < nextAllowedAt) {
+      return;
+    }
+
     setState("loading");
     setErrorMessage("");
 
@@ -59,18 +69,39 @@ export function MacroRegimePanel() {
         setInflationMomentum(calculateInflationMomentum(result.cpiMoM));
       }
 
+      lastSuccessRef.current = now;
+      setNextAllowedAt(0);
+      setBackoffMs(0);
       setState("ready");
     } catch (err) {
       setState("error");
       setErrorMessage(err instanceof Error ? err.message : "Terjadi kesalahan tak terduga");
+      const nextDelay = Math.min(RATE_LIMIT_MS + backoffMs, MAX_BACKOFF_MS);
+      setNextAllowedAt(now + nextDelay);
+      setBackoffMs((prev) => Math.min(prev + RATE_LIMIT_MS, MAX_BACKOFF_MS));
     }
-  }, []);
+  }, [nextAllowedAt, backoffMs]);
 
   useEffect(() => {
     fetchMacroData();
-    const interval = setInterval(fetchMacroData, 60000);
-    return () => clearInterval(interval);
-  }, [fetchMacroData]);
+    const scheduleNext = () => {
+      const now = Date.now();
+      const waitMs = Math.max(0, nextAllowedAt - now, RATE_LIMIT_MS);
+      return setTimeout(() => {
+        fetchMacroData();
+      }, waitMs);
+    };
+
+    let timer: number | NodeJS.Timeout = scheduleNext();
+    const id = setInterval(() => {
+      timer = scheduleNext();
+    }, RATE_LIMIT_MS);
+
+    return () => {
+      clearInterval(id);
+      clearTimeout(timer);
+    };
+  }, [fetchMacroData, nextAllowedAt]);
 
   const activeRegimeCard = useMemo(() => regimeCards.find((card) => card.id.toLowerCase() === activeRegime.toLowerCase()), [activeRegime]);
 
