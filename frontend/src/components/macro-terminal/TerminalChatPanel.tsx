@@ -119,25 +119,28 @@ export function TerminalChatPanel() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let done = false;
+      let buffer = "";
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ") && line !== "data: [DONE]") {
+            if (line.startsWith("data: ") && line.trim() !== "data: [DONE]") {
               try {
                 const data = JSON.parse(line.slice(6));
-                if (data.text) {
+                const textChunk = data.choices?.[0]?.delta?.content || data.text;
+                if (textChunk) {
                   setMessages((prev) => {
                     const updated = [...prev];
                     const lastIndex = updated.length - 1;
                     updated[lastIndex] = {
                       ...updated[lastIndex],
-                      content: updated[lastIndex].content + data.text,
+                      content: updated[lastIndex].content + textChunk,
                     };
                     return updated;
                   });
