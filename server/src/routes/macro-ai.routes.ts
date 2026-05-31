@@ -2,6 +2,7 @@ import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
 import axios from "axios";
+import { env } from "../config/env";
 
 const router = Router();
 
@@ -22,9 +23,9 @@ router.post("/chat", requireAuth, async (req, res) => {
 
     // Forward request to Groq with streaming
     const groqResponse = await axios.post(
-      `${process.env.GROQ_API_URL}`,
+      env.GROQ_API_URL,
       {
-        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
           ...messages,
@@ -35,7 +36,7 @@ router.post("/chat", requireAuth, async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: `Bearer ${env.GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         responseType: "stream",

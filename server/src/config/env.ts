@@ -28,9 +28,10 @@ const envSchema = z.object({
   ANTHROPIC_BASE_URL: z.string().url().optional().default("https://api.anthropic.com"),
   ANTHROPIC_MODEL: z.string().min(1).optional().default("anthropic/claude-3-5-haiku-latest"),
 
-  // Groq (fallback for free AI)
-  GROQ_API_KEY: z.string().min(1).optional(),
-  GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
+   // Groq (fallback for free AI)
+   GROQ_API_KEY: z.string().min(1).optional(),
+   GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
+   GROQ_API_URL: z.string().url().default("https://api.groq.com/openai/v1/chat/completions"),
 
   // FRED API for Liquidity Flow (ON RRP)
   FRED_API_KEY: z.string().min(1).optional(),
