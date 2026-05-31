@@ -62,29 +62,6 @@ router.post("/chat", requireAuth, async (req, res) => {
   }
 });
 
-    groqResponse.data.on("end", () => {
-      res.end();
-    });
-
-    groqResponse.data.on("error", (err: any) => {
-      console.error("Groq stream error:", err);
-      if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-        res.end();
-      }
-    });
-  } catch (error: any) {
-    console.error("Macro AI Chat Route Error:", error);
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
-    } else {
-      // If headers already sent, we can't send JSON, so we send SSE error
-      res.write(`data: ${JSON.stringify({ error: error.message || "Terjadi kesalahan pada server" })}\n\n`);
-      res.end();
-    }
-  }
-});
-
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
     const { assets, calculatedRegime, liquidityStatus } = req.body;
