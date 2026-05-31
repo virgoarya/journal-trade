@@ -44,11 +44,15 @@ async function fetchFredSeries(seriesId: string, startDate?: string, retryCount:
     return cached.data;
   }
 
+  // Determine frequency based on series ID
+  // GDPC1 is quarterly, others are monthly
+  const frequency = seriesId === 'GDPC1' ? 'q' : 'm';
+
   const params = new URLSearchParams({
     series_id: seriesId,
     api_key: FRED_API_KEY,
     file_type: 'json',
-    frequency: 'm',
+    frequency: frequency,
     sort_order: 'asc',
     observation_start_date: startDate || getStartDate(48),
   });
@@ -64,6 +68,7 @@ async function fetchFredSeries(seriesId: string, startDate?: string, retryCount:
         return fetchFredSeries(seriesId, startDate, retryCount + 1);
       }
       console.error(`[FRED] Failed to fetch ${seriesId}: ${response.status} ${response.statusText}`);
+      console.error(`[FRED] URL: ${FRED_BASE_URL}?${params.toString()}`);
       return [];
     }
 

@@ -120,6 +120,10 @@ export const marketDataService = {
         });
         return response;
       } catch (error: any) {
+        console.error(`[FRED Liquidity] Error fetching: ${error.message}`);
+        if (error.config) {
+          console.error(`[FRED Liquidity] URL: ${error.config.url}`);
+        }
         if (error.response?.status === 429 && retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
           console.log(`[FRED Liquidity] Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
