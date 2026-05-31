@@ -5,6 +5,27 @@ const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
+// Groq API response interface
+interface GroqResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 // Simple in-memory cache for non-streaming AI responses
 interface CacheEntry<T> {
   data: T;
@@ -16,11 +37,16 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // Request throttler to enforce minimum interval between Groq requests
 const MIN_INTERVAL_MS = 2000; // 2 seconds between requests
 let lastRequestTime = 0;
-const requestQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: any) => void }> = {};
+interface QueueItem<T> {
+  fn: () => Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: any) => void;
+}
+const requestQueue: QueueItem<any>[] = [];
 
 function enqueueRequest<T>(fn: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    requestQueue.push({ resolve, reject });
+    requestQueue.push({ fn, resolve, reject });
     processQueue();
   });
 }
@@ -32,7 +58,7 @@ async function processQueue() {
   if (elapsed < MIN_INTERVAL_MS) {
     await new Promise(resolve => setTimeout(resolve, MIN_INTERVAL_MS - elapsed));
   }
-  const { resolve, reject } = requestQueue.shift()!;
+  const { fn, resolve, reject } = requestQueue.shift()!;
   try {
     const result = await fn(); // actual request
     lastRequestTime = Date.now();
@@ -61,7 +87,7 @@ async function groqRequest<T>(url: string, data: any, options: { useCache?: bool
     let attempts = 0;
     while (true) {
       try {
-        const response = await axios.post(url, data, {
+        const response = await axios.post<GroqResponse>(url, data, {
           headers: {
             Authorization: `Bearer ${env.GROQ_API_KEY}`,
             "Content-Type": "application/json",
@@ -73,7 +99,7 @@ async function groqRequest<T>(url: string, data: any, options: { useCache?: bool
         if (useCache && cacheKey) {
           cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         }
-        return resultData;
+        return resultData as unknown as T;
       } catch (err: any) {
         if (err.response?.status === 429) {
           const retryAfter = err.response.headers['retry-after'];
@@ -171,7 +197,7 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
     const cacheKey = `regime-${JSON.stringify({ assets, calculatedRegime, liquidityStatus })}`;
     for (const model of GROQ_MODELS) {
       try {
-        const response = await groqRequest(GROQ_API_URL, {
+        const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
           model,
           messages: [
             { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
@@ -208,7 +234,7 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
       let attempts = 0;
       while (true) {
         try {
-          const response = await axios.post(
+          const response = await axios.post<GroqResponse>(
             GROQ_API_URL,
             {
               model: GROQ_MODELS[0],
@@ -258,7 +284,7 @@ Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tent
 
     const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
     try {
-      const response = await groqRequest(GROQ_API_URL, {
+      const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
         model: GROQ_MODELS[0],
         messages: [
           { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
