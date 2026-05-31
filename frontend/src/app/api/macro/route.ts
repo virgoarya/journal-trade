@@ -6,6 +6,10 @@ import { classifyMacroRegime } from '@/lib/macro/classifiers';
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
+// Cache for FRED series data to prevent hitting rate limits
+const fredCache: Record<string, { data: { date: string; value: number }[]; timestamp: number }> = {};
+const FRED_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 const SERIES_IDS = {
   // Growth
   UNRATE: 'UNRATE',
@@ -25,10 +29,19 @@ function getStartDate(monthsBack: number): string {
   return date.toISOString().split('T')[0].replace(/-/g, '');
 }
 
-async function fetchFredSeries(seriesId: string, startDate?: string): Promise<{ date: string; value: number }[]> {
+async function fetchFredSeries(seriesId: string, startDate?: string, retryCount: number = 0): Promise<{ date: string; value: number }[]> {
   if (!FRED_API_KEY) {
     console.error(`[FRED] API key not configured for series ${seriesId}`);
     return [];
+  }
+
+  // Create a cache key that includes the seriesId and startDate (if provided)
+  const cacheKey = `${seriesId}-${startDate || 'default'}`;
+
+  // Check if we have cached data that is still fresh
+  const cached = fredCache[cacheKey];
+  if (cached && Date.now() - cached.timestamp < FRED_CACHE_TTL_MS) {
+    return cached.data;
   }
 
   const params = new URLSearchParams({
@@ -40,46 +53,66 @@ async function fetchFredSeries(seriesId: string, startDate?: string): Promise<{ 
     observation_start_date: startDate || getStartDate(48),
   });
 
-  const response = await fetch(`${FRED_BASE_URL}?${params}`);
-  
-  if (!response.ok) {
-    console.error(`[FRED] Failed to fetch ${seriesId}: ${response.status} ${response.statusText}`);
-    return [];
-  }
-
-  const data = await response.json();
-  
-  if (!data.observations) {
-    console.error(`[FRED] No observations returned for ${seriesId}`);
-    return [];
-  }
-
-  // Filter out missing values and do forward-fill for gaps
-  const rawValues = data.observations
-    .map((obs: { date: string; value: string }) => ({
-      date: obs.date,
-      value: obs.value,
-    }))
-    .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
-
-  // Forward-fill: replace '.' with previous valid value
-  const filledValues: { date: string; value: number }[] = [];
-  let lastValidValue: number | null = null;
-  
-  for (const obs of rawValues) {
-    if (obs.value !== '.') {
-      lastValidValue = parseFloat(obs.value);
+  try {
+    const response = await fetch(`${FRED_BASE_URL}?${params}`);
+    
+    if (!response.ok) {
+      if (response.status === 429 && retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
+        console.log(`[FRED] Rate limited for ${seriesId}, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchFredSeries(seriesId, startDate, retryCount + 1);
+      }
+      console.error(`[FRED] Failed to fetch ${seriesId}: ${response.status} ${response.statusText}`);
+      return [];
     }
-    // Only include if we have a valid value (either current or forward-filled)
-    if (lastValidValue !== null) {
-      filledValues.push({
+
+    const data = await response.json();
+    
+    if (!data.observations) {
+      console.error(`[FRED] No observations returned for ${seriesId}`);
+      return [];
+    }
+
+    const rawValues = data.observations
+      .map((obs: { date: string; value: string }) => ({
         date: obs.date,
-        value: lastValidValue,
-      });
-    }
-  }
+        value: obs.value,
+      }))
+      .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
 
-  return filledValues;
+    const filledValues: { date: string; value: number }[] = [];
+    let lastValidValue: number | null = null;
+    
+    for (const obs of rawValues) {
+      if (obs.value !== '.') {
+        lastValidValue = parseFloat(obs.value);
+      }
+      if (lastValidValue !== null) {
+        filledValues.push({
+          date: obs.date,
+          value: lastValidValue,
+        });
+      }
+    }
+
+    // Store in cache
+    fredCache[cacheKey] = {
+      data: filledValues,
+      timestamp: Date.now()
+    };
+
+    return filledValues;
+  } catch (error: any) {
+    if (retryCount < 3) {
+      const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
+      console.log(`[FRED] Fetch failed for ${seriesId}, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchFredSeries(seriesId, startDate, retryCount + 1);
+    }
+    console.error(`[FRED] Error fetching ${seriesId} after retries:`, error.message);
+    return [];
+  }
 }
 
 function calculateMoM(values: number[]): number[] {
@@ -99,7 +132,7 @@ function interpolateQuarterlyToMonthly(quarterlyData: { date: string; value: num
   return result;
 }
 
-function syncArrayLengths(...arrays: number[][]): number[] {
+function syncArrayLengths(...arrays: number[][]): number[][] {
   const minLen = Math.min(...arrays.map(a => a.length));
   return arrays.map(a => a.slice(-minLen));
 }
@@ -121,25 +154,24 @@ function generateDummyData(length: number = 48): MacroRawInputs {
 
 export async function GET(request: NextRequest) {
   try {
-    const [
-      unrateData,
-      payemsData,
-      gdpData,
-      industriData,
-      cpiData,
-      corePceData,
-      breakeven5yData,
-      breakeven10yData,
-    ] = await Promise.all([
-      fetchFredSeries(SERIES_IDS.UNRATE),
-      fetchFredSeries(SERIES_IDS.PAYEMS),
-      fetchFredSeries(SERIES_IDS.GDPC1),
-      fetchFredSeries(SERIES_IDS.INDPRO),
-      fetchFredSeries(SERIES_IDS.CPIAUCSL),
-      fetchFredSeries(SERIES_IDS.PCEPILFE),
-      fetchFredSeries(SERIES_IDS.T5YIE),
-      fetchFredSeries(SERIES_IDS.T10YIE),
-    ]);
+    // Staggered fetch to prevent rate limiting - add small delays between requests
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    const unrateData = await fetchFredSeries(SERIES_IDS.UNRATE);
+    await sleep(200);
+    const payemsData = await fetchFredSeries(SERIES_IDS.PAYEMS);
+    await sleep(200);
+    const gdpData = await fetchFredSeries(SERIES_IDS.GDPC1);
+    await sleep(200);
+    const industriData = await fetchFredSeries(SERIES_IDS.INDPRO);
+    await sleep(200);
+    const cpiData = await fetchFredSeries(SERIES_IDS.CPIAUCSL);
+    await sleep(200);
+    const corePceData = await fetchFredSeries(SERIES_IDS.PCEPILFE);
+    await sleep(200);
+    const breakeven5yData = await fetchFredSeries(SERIES_IDS.T5YIE);
+    await sleep(200);
+    const breakeven10yData = await fetchFredSeries(SERIES_IDS.T10YIE);
 
     // Generate dummy fallback data
     const generateDummyData = (length: number = 48): MacroRawInputs => ({
@@ -191,23 +223,21 @@ export async function GET(request: NextRequest) {
     let industri = industriData.map(d => d.value);
     let breakeven5y = breakeven5yData.map(d => d.value);
     let breakeven10y = breakeven10yData.map(d => d.value);
-
-    // Handle GDP quarterly interpolation
-    const interpolatedGdp = interpolateQuarterlyToMonthly(gdpData.slice(-16));
+    let interpolatedGdp = interpolateQuarterlyToMonthly(gdpData.slice(-16));
     
     // Sync all array lengths to minimum
     const synced = syncArrayLengths(
       unemployment,
       nfp,
       interpolatedGdp,
+      corePce,
       industri,
       cpi,
-      corePce,
       breakeven5y,
       breakeven10y
     );
     
-    [unemployment, nfp, corePce, industri, cpi, breakeven5y, breakeven10y] = synced;
+    [unemployment, nfp, interpolatedGdp, corePce, industri, cpi, breakeven5y, breakeven10y] = synced;
 
     // Calculate MoM for CPI
     const cpiMoM = calculateMoM(cpi);

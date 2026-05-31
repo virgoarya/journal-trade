@@ -151,7 +151,7 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
     }
   },
 
-  async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
@@ -185,6 +185,35 @@ Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tent
       );
       return response.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
     } catch (error: any) {
+      // Handle rate limit retry
+      if (error.response?.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          const retryResponse = await axios.post(
+            GROQ_API_URL,
+            {
+              model: GROQ_MODELS[1], // Try alternative model
+              messages: [
+                { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+                { role: "user", content: prompt },
+              ],
+              max_tokens: 150,
+              temperature: 0.2,
+              stream: false,
+            },
+            {
+              headers: {
+                "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              timeout: 20000,
+            }
+          );
+          return retryResponse.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
+        } catch (retryError: any) {
+          throw new Error(retryError.message || "Gagal menganalisis feed makro setelah retry");
+        }
+      }
       throw new Error(error.message || "Gagal menganalisis feed makro");
     }
   }
