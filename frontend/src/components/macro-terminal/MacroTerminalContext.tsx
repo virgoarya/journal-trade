@@ -14,6 +14,7 @@ import {
    deriveSentimentAndImpact,
    buildNarrativeTemplate,
 } from '@/lib/macro/classifiers';
+import type { QuoteApiResponse } from '@/lib/macro/types';
 
 export interface Asset {
   ticker: string;
@@ -200,30 +201,29 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
     try {
       const symbols = initialAssets.map(a => a.ticker).join(",");
       const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
-      const data = await res.json();
-      
+      const data = (await res.json()) as QuoteApiResponse;
+
       const newLiquidity = await fetchLiquidity();
-      
+
       if (data.success && data.data) {
         const updatedAssets = initialAssets.map(asset => {
-          const apiQuote = data.data.find((q: any) => q.symbol === asset.ticker);
+          const apiQuote = data.data.find((q) => q.symbol === asset.ticker);
           let change = asset.change;
-          
-          if (apiQuote && apiQuote.data && apiQuote.data.dp !== undefined && apiQuote.data.dp !== null) {
+
+          if (apiQuote?.data?.dp !== undefined && apiQuote.data.dp !== null) {
             change = apiQuote.data.dp;
           }
-          
+
           return {
             ...asset,
             change: parseFloat(change.toFixed(2))
           };
         });
-        
+
         setAssets(updatedAssets);
         setIsFallback(false);
         setLastUpdated(new Date());
-        
-        // Analisis regime dan likuiditas (memanggil fungsi analisis yang sudah mencakup deteksi shift dan narrative)
+
         await analyzeRegime(updatedAssets, newLiquidity);
       } else {
         throw new Error("Invalid quote API response");
@@ -231,7 +231,6 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
     } catch (error) {
       console.warn("Finnhub quotes failed, using mock ticker fallback");
       setIsFallback(true);
-      // Fallback dummy
       setAssets((current) =>
         current.map((asset) => {
           const jitter = (Math.random() - 0.5) * 0.1;

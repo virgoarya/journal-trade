@@ -73,9 +73,23 @@ export function TerminalChatPanel() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
+  useEffect(() => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    debounceTimeout.current = setTimeout(() => {
+      setDebouncedInput(input);
+    }, 300);
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+  }, [input]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const query = input.trim();
+    const query = debouncedInput.trim();
     if (!query || isLoading) return;
 
     const userMessage: Message = { role: "user", content: query };
@@ -189,15 +203,24 @@ export function TerminalChatPanel() {
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
       <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
         <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
-          <TerminalIcon size={14} />
+          <TerminalIcon size={14} aria-hidden />
           Hunter Desk AI
         </h2>
         <button
           onClick={handleClearHistory}
+          aria-label="Clear terminal history"
           className="text-[10px] font-mono text-text-muted hover:text-accent-gold transition-colors"
         >
           [ CLEAR LOG ]
         </button>
+      </div>
+
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {systemAlert}
       </div>
 
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20 mix-blend-overlay"></div>
