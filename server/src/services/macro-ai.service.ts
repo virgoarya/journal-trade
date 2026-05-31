@@ -87,7 +87,7 @@ async function groqRequest<T>(url: string, data: any, options: { useCache?: bool
     let attempts = 0;
     while (true) {
       try {
-        const response = await axios.post<GroqResponse>(url, data, {
+        const response = await axios.post(url, data, {
           headers: {
             Authorization: `Bearer ${env.GROQ_API_KEY}`,
             "Content-Type": "application/json",
@@ -115,6 +115,37 @@ async function groqRequest<T>(url: string, data: any, options: { useCache?: bool
   });
 
   return result;
+}
+
+// Wrapper for Groq streaming requests with throttling and exponential backoff retry
+async function groqRequestStream(url: string, data: any): Promise<any> {
+  // Perform request with throttling and retry logic
+  return await enqueueRequest(async () => {
+    let attempts = 0;
+    while (true) {
+      try {
+        const response = await axios.post(url, data, {
+          headers: {
+            Authorization: `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          responseType: "stream",
+          timeout: 20000,
+        });
+        return response;
+      } catch (err: any) {
+        if (err.response?.status === 429) {
+          const retryAfter = err.response.headers['retry-after'];
+          const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempts) * 1000 + Math.random() * 1000;
+          attempts++;
+          if (attempts > 3) throw err;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw err;
+      }
+    }
+  });
 }
 
 export const macroAiService = {
@@ -229,46 +260,20 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
-    // Use throttler and retry with exponential backoff for 429
-    return await enqueueRequest(async () => {
-      let attempts = 0;
-      while (true) {
-        try {
-          const response = await axios.post<GroqResponse>(
-            GROQ_API_URL,
-            {
-              model: GROQ_MODELS[0],
-              messages: [
-                { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-                ...messages,
-              ],
-              max_tokens: 150,
-              temperature: 0.2,
-              stream: true,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${env.GROQ_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              responseType: "stream",
-              timeout: 20000,
-            }
-          );
-          return response;
-        } catch (err: any) {
-          if (err.response?.status === 429) {
-            const retryAfter = err.response.headers['retry-after'];
-            const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempts) * 1000 + Math.random() * 1000;
-            attempts++;
-            if (attempts > 3) throw err;
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-          throw err;
-        }
+    // Use throttler and retry with exponential backoff for 429 - return raw response for streaming
+    return await groqRequestStream(
+      GROQ_API_URL,
+      {
+        model: GROQ_MODELS[0],
+        messages: [
+          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+          ...messages,
+        ],
+        max_tokens: 150,
+        temperature: 0.2,
+        stream: true,
       }
-    });
+    );
   },
 
   async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
@@ -295,7 +300,7 @@ Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tent
         stream: false,
       }, { useCache: true, cacheKey });
 
-      return response.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
+      return response.choices?.[0]?.message?.content || "Analisis tidak tersedia";
     } catch (error: any) {
       // If all models fail, throw error
       throw new Error(error.message || "Gagal menganalisis feed makro");
