@@ -15,8 +15,10 @@ export function TerminalChatPanel() {
   const { currentRegime, assets, liquidity, systemAlert, clearSystemAlert } = useMacroTerminal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [debouncedInput, setDebouncedInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,15 +64,34 @@ export function TerminalChatPanel() {
     }
   }, [messages]);
 
+  // Debounce input: update debouncedInput after 300ms of no change
+  useEffect(() => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    debounceTimeout.current = setTimeout(() => {
+      setDebouncedInput(input);
+    }, 300);
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+  }, [input]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    // Use debounced input to avoid sending too frequent requests
+    const query = debouncedInput.trim();
+    if (!query || isLoading) return;
 
-    const userMessage: Message = { role: "user", content: input.trim() };
+    const userMessage: Message = { role: "user", content: query };
     const newMessages = [...messages, userMessage];
-    
+
     setMessages(newMessages);
+    // Clear input and debounced input after sending
     setInput("");
+    setDebouncedInput("");
     setIsLoading(true);
 
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
@@ -183,7 +204,7 @@ export function TerminalChatPanel() {
       </div>
 
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20 mix-blend-overlay"></div>
-      
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono z-10 scrollbar-thin scrollbar-thumb-accent-gold/20 scrollbar-track-transparent">
         {messages.map((msg, idx) => (
           <div
@@ -252,7 +273,7 @@ export function TerminalChatPanel() {
           </div>
           <button
             type="submit"
-            disabled={!input.trim() || isLoading}
+            disabled={!debouncedInput.trim() || isLoading}
             className="h-[38px] px-4 bg-accent-gold text-bg-void rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all flex items-center justify-center min-w-[50px]"
           >
             {isLoading ? (

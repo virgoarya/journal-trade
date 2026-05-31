@@ -1,8 +1,6 @@
 import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
-import axios from "axios";
-import { env } from "../config/env";
 
 const router = Router();
 
@@ -15,43 +13,23 @@ router.post("/chat", requireAuth, async (req, res) => {
       return;
     }
 
-    // Set headers for SSE
+    // Set headers for Server-Sent Events
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Forward request to Groq with streaming
-    const groqResponse = await axios.post(
-      env.GROQ_API_URL,
-      {
-        model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-          ...messages,
-        ],
-        max_tokens: 150,
-        temperature: 0.2,
-        stream: true,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        responseType: "stream",
-        timeout: 20000,
-      }
-    );
+    // Get the Groq stream from service (already throttled and with retry logic)
+    const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus);
 
-    // Pipe the stream to the client
+    // Pipe the Groq stream to the HTTP response
     groqResponse.data.on("data", (chunk: Buffer) => {
       const chunkString = chunk.toString();
       const lines = chunkString.split("\n");
       for (const line of lines) {
         if (line.trim() === "") continue;
         // Groq sends lines like: data: { ... }
-        // We'll forward as-is (they already start with "data: ")
+        // Forward as-is (they already start with "data: ")
         res.write(`${line}\n`);
       }
     });
@@ -80,7 +58,6 @@ router.post("/chat", requireAuth, async (req, res) => {
   }
 });
 
-// Keep other routes unchanged
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
     const { assets, calculatedRegime, liquidityStatus } = req.body;

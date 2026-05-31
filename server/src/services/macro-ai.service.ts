@@ -5,6 +5,92 @@ const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
+// Simple in-memory cache for non-streaming AI responses
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+const cache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Request throttler to enforce minimum interval between Groq requests
+const MIN_INTERVAL_MS = 2000; // 2 seconds between requests
+let lastRequestTime = 0;
+const requestQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: any) => void }> = {};
+
+function enqueueRequest<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    requestQueue.push({ resolve, reject });
+    processQueue();
+  });
+}
+
+async function processQueue() {
+  if (requestQueue.length === 0) return;
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  if (elapsed < MIN_INTERVAL_MS) {
+    await new Promise(resolve => setTimeout(resolve, MIN_INTERVAL_MS - elapsed));
+  }
+  const { resolve, reject } = requestQueue.shift()!;
+  try {
+    const result = await fn(); // actual request
+    lastRequestTime = Date.now();
+    resolve(result);
+    // Process next after a short delay to avoid burst
+    setTimeout(processQueue, MIN_INTERVAL_MS);
+  } catch (err) {
+    reject(err);
+    setTimeout(processQueue, MIN_INTERVAL_MS);
+  }
+}
+
+// Wrapper for Groq requests with caching, throttling, and exponential backoff retry
+async function groqRequest<T>(url: string, data: any, options: { useCache?: boolean; cacheKey?: string } = {}): Promise<T> {
+  const { useCache = false, cacheKey = '' } = options;
+  // Check cache
+  if (useCache && cacheKey) {
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
+  // Perform request with throttling and retry logic
+  const result = await enqueueRequest(async () => {
+    let attempts = 0;
+    while (true) {
+      try {
+        const response = await axios.post(url, data, {
+          headers: {
+            Authorization: `Bearer ${env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 20000,
+        });
+        const resultData = response.data;
+        // Store in cache if needed
+        if (useCache && cacheKey) {
+          cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+        }
+        return resultData;
+      } catch (err: any) {
+        if (err.response?.status === 429) {
+          const retryAfter = err.response.headers['retry-after'];
+          const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempts) * 1000 + Math.random() * 1000;
+          attempts++;
+          if (attempts > 3) throw err;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw err;
+      }
+    }
+  });
+
+  return result;
+}
+
 export const macroAiService = {
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
     const spy = assets.find(a => a.ticker === "SPY")?.change ?? 0;
@@ -81,77 +167,85 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
 
-// Try Groq models
+    // Try Groq models with caching and throttling
+    const cacheKey = `regime-${JSON.stringify({ assets, calculatedRegime, liquidityStatus })}`;
     for (const model of GROQ_MODELS) {
       try {
-        const response = await axios.post(
-          GROQ_API_URL,
-          {
-            model,
-            messages: [
-              { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 150,
-            temperature: 0.2,
-            stream: false,
-          },
-          {
-            headers: {
-              "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            timeout: 20000,
-          }
-        );
-        const text = response.data.choices?.[0]?.message?.content;
+        const response = await groqRequest(GROQ_API_URL, {
+          model,
+          messages: [
+            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 150,
+          temperature: 0.2,
+          stream: false,
+        }, { useCache: true, cacheKey });
+
+        const text = response.choices?.[0]?.message?.content;
         if (text) {
           return text.trim();
         }
       } catch (err: any) {
         if (err.response?.status === 429) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          continue;
+          // groqRequest already handles retry and backoff, so if we get here it means max retries exceeded
+          continue; // try next model
         }
-        throw err;
+        // For other errors, try next model
+        continue;
       }
     }
 
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
   },
 
-  async chatStream(messages: any[], res: any, currentRegime?: string, assets?: any[], liquidityStatus?: string) {
+  async chatStream(messages: any[], currentRegime?: string, assets?: any[], liquidityStatus?: string) {
     if (!env.GROQ_API_KEY) {
-      res.status(500).json({ success: false, error: "Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan" });
-      return;
+      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
-
-    try {
-      const response = await axios.post(
-        GROQ_API_URL,
-        {
-          model: GROQ_MODELS[0],
-          messages,
-          max_tokens: 150,
-          temperature: 0.2,
-          stream: false,
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 20000,
+    // Use throttler and retry with exponential backoff for 429
+    return await enqueueRequest(async () => {
+      let attempts = 0;
+      while (true) {
+        try {
+          const response = await axios.post(
+            GROQ_API_URL,
+            {
+              model: GROQ_MODELS[0],
+              messages: [
+                { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+                ...messages,
+              ],
+              max_tokens: 150,
+              temperature: 0.2,
+              stream: true,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${env.GROQ_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              responseType: "stream",
+              timeout: 20000,
+            }
+          );
+          return response;
+        } catch (err: any) {
+          if (err.response?.status === 429) {
+            const retryAfter = err.response.headers['retry-after'];
+            const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempts) * 1000 + Math.random() * 1000;
+            attempts++;
+            if (attempts > 3) throw err;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          throw err;
         }
-      );
-      const text = response.data.choices?.[0]?.message?.content || "Tidak ada respons dari AI";
-      res.json({ success: true, text });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message || "Kesalahan pada layanan AI" });
-    }
+      }
+    });
   },
 
-async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
+  async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
     if (!env.GROQ_API_KEY) {
       throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
     }
@@ -162,58 +256,22 @@ ${context ? `Konteks: ${context}` : ''}
 
 Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak berita ini terhadap aset. Tanpa meta-language, tanpa redundansi, setiap kalimat diakhiri titik utuh.`;
 
+    const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
     try {
-      const response = await axios.post(
-        GROQ_API_URL,
-        {
-          model: GROQ_MODELS[0],
-          messages: [
-            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 150,
-          temperature: 0.2,
-          stream: false,
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 20000,
-        }
-      );
+      const response = await groqRequest(GROQ_API_URL, {
+        model: GROQ_MODELS[0],
+        messages: [
+          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 150,
+        temperature: 0.2,
+        stream: false,
+      }, { useCache: true, cacheKey });
+
       return response.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
     } catch (error: any) {
-      // Handle rate limit retry
-      if (error.response?.status === 429) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        try {
-          const retryResponse = await axios.post(
-            GROQ_API_URL,
-            {
-              model: GROQ_MODELS[1], // Try alternative model
-              messages: [
-                { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-                { role: "user", content: prompt },
-              ],
-              max_tokens: 150,
-              temperature: 0.2,
-              stream: false,
-            },
-            {
-              headers: {
-                "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              timeout: 20000,
-            }
-          );
-          return retryResponse.data.choices?.[0]?.message?.content || "Analisis tidak tersedia";
-        } catch (retryError: any) {
-          throw new Error(retryError.message || "Gagal menganalisis feed makro setelah retry");
-        }
-      }
+      // If all models fail, throw error
       throw new Error(error.message || "Gagal menganalisis feed makro");
     }
   }
