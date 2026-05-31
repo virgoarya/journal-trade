@@ -22,8 +22,18 @@ router.post("/chat", requireAuth, async (req, res) => {
     // Get the Groq stream from service (already throttled and with retry logic)
     const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus);
 
-    // Pipe the Groq stream to the HTTP response
-    groqResponse.data.pipe(res);
+    // Pipe the Groq stream to the HTTP response manually to ensure immediate flush
+    groqResponse.data.on("data", (chunk: Buffer) => {
+      res.write(chunk);
+      // If the response object has a flush method (e.g., from compression middleware), call it
+      if (typeof (res as any).flush === "function") {
+        (res as any).flush();
+      }
+    });
+
+    groqResponse.data.on("end", () => {
+      res.end();
+    });
 
     groqResponse.data.on("error", (err: any) => {
       console.error("Groq stream error:", err);

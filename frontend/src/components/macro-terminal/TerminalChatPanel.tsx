@@ -145,12 +145,13 @@ export function TerminalChatPanel() {
                     return updated;
                   });
                 } else if (data.error) {
+                  const errorMsg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
                   setMessages((prev) => {
                     const updated = [...prev];
                     const lastIndex = updated.length - 1;
                     updated[lastIndex] = {
                       ...updated[lastIndex],
-                      content: updated[lastIndex].content + "\n\n[SYSTEM ERROR]: " + data.error,
+                      content: updated[lastIndex].content + "\n\n[SYSTEM ERROR]: " + errorMsg,
                     };
                     return updated;
                   });
