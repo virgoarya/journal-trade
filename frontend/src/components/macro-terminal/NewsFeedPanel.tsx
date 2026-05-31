@@ -1,7 +1,5 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import ReactDOM from "react-dom";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain, X, Zap, TrendingUp, Activity, ShieldCheck } from "lucide-react";
 
 interface NewsItem {

@@ -330,36 +330,6 @@ export function deriveSentimentAndImpact(
         ? 'dengan stagflasi/deflasi yang menambah aversi risiko'
         : 'dengan likuiditas refill mengimbangi tekanan';
   }
-  // Inflation‑only (low growth, high inflation) tends risk‑off
-  else if (regime === 'Inflation') {
-    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
-    impactOnRisk =
-      sentiment === 'RISK-OFF'
-        ? 'tekanan inflasi tinggi mendorong aversi risiko, kecuali likuiditas refill cukup besar'
-        : 'likuiditas refill mengimbangi tekanan inflasi';
-  }
-  // Slowdown: low growth, low inflation -> risk‑off? 
-  else if (regime === 'Slowdown') {
-    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
-    impactOnRisk =
-      sentiment === 'RISK-OFF'
-        ? 'pertumbuhan rendah dan inflasi rendah mengindikasikan lemahnya ekonomi'
-        : 'likuiditas refill mengimbangi tekanan';
-  }
-  // Neutral Transition: indeterminate
-  else if (regime === 'Neutral Transition') {
-    sentiment = 'NEUTRAL';
-    impactOnRisk = 'berada dalam transisi regime tanpa arah jelas';
-  }
-  // Inflation‑only (low growth, high inflation) tends risk‑off
-  else if (regime === 'Inflation') {
-    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
-    impactOnRisk =
-      sentiment === 'RISK-OFF'
-        ? 'tekanan inflasi tinggi mendorong aversi risiko, kecuali likuiditas refill cukup besar'
-        : 'netral karena likuiditas refill mengimbangi tekanan inflasi';
-  }
-  // Slowdown: low growth, low inflation -> risk‑off? 
   else if (regime === 'Slowdown') {
     sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
     impactOnRisk =
@@ -367,7 +337,6 @@ export function deriveSentimentAndImpact(
         ? 'pertumbuhan rendah dan inflasi rendah mengindikasikan lemahnya ekonomi, cenderung risiko‑off'
         : 'netral karena likuiditas refill mengimbangi tekanan';
   }
-  // Neutral Transition: indeterminate
   else if (regime === 'Neutral Transition') {
     sentiment = 'NEUTRAL';
     impactOnRisk = 'netral karena berada dalam transisi regime tanpa arah jelas';

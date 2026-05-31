@@ -46,7 +46,6 @@ export function TerminalChatPanel() {
     }
   }, []);
 
-  // Mendengarkan alert pergantian regime
   useEffect(() => {
     if (systemAlert) {
       setMessages((prev) => {
@@ -64,25 +63,19 @@ export function TerminalChatPanel() {
     }
   }, [messages]);
 
-  // Debounce input: update debouncedInput after 300ms of no change
   useEffect(() => {
-    if (debounceTimeout.current) {
-      clearTimeout(debounceTimeout.current);
-    }
-    debounceTimeout.current = setTimeout(() => {
-      setDebouncedInput(input);
-    }, 300);
-    return () => {
-      if (debounceTimeout.current) {
-        clearTimeout(debounceTimeout.current);
-      }
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
     };
-  }, [input]);
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Use debounced input to avoid sending too frequent requests
-    const query = debouncedInput.trim();
+    const query = input.trim();
     if (!query || isLoading) return;
 
     const userMessage: Message = { role: "user", content: query };
