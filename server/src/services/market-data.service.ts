@@ -48,30 +48,33 @@ export const marketDataService = {
     }
 
     try {
-      const results = await Promise.all(
-        symbols.map(async (symbol) => {
-          const cacheKey = `quote_${symbol}`;
-          if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL_MS) {
-            return { symbol, data: cache[cacheKey].data };
-          }
+      const results: { symbol: string; data: any }[] = [];
+      for (const symbol of symbols) {
+        const cacheKey = `quote_${symbol}`;
+        const cached = cache[cacheKey];
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+          results.push({ symbol, data: cached.data });
+          continue;
+        }
 
-          try {
-            const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
-              timeout: 5000,
-            });
+        try {
+          const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
+            timeout: 10000,
+          });
 
-            cache[cacheKey] = {
-              data: response.data,
-              timestamp: Date.now(),
-            };
+          cache[cacheKey] = {
+            data: response.data,
+            timestamp: Date.now(),
+          };
 
-            return { symbol, data: response.data };
-          } catch (symbolError) {
-            console.warn(`Finnhub Quotes API Error for ${symbol}:`, (symbolError as any)?.message);
-            return { symbol, data: { dp: null } };
-          }
-        })
-      );
+          results.push({ symbol, data: response.data });
+        } catch (symbolError: any) {
+          console.warn(`Finnhub Quotes API Error for ${symbol}:`, symbolError?.message);
+          results.push({ symbol, data: { dp: null } });
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
 
       return results;
     } catch (error: any) {

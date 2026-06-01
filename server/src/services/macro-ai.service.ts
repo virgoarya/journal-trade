@@ -52,18 +52,20 @@ function enqueueRequest<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function processQueue() {
-  if (requestQueue.length === 0) return;
+  const item = requestQueue.shift();
+  if (!item) {
+    return;
+  }
+  const { fn, resolve, reject } = item;
   const now = Date.now();
   const elapsed = now - lastRequestTime;
   if (elapsed < MIN_INTERVAL_MS) {
-    await new Promise(resolve => setTimeout(resolve, MIN_INTERVAL_MS - elapsed));
+    await new Promise((res) => setTimeout(res, MIN_INTERVAL_MS - elapsed));
   }
-  const { fn, resolve, reject } = requestQueue.shift()!;
   try {
-    const result = await fn(); // actual request
+    const result = await fn();
     lastRequestTime = Date.now();
     resolve(result);
-    // Process next after a short delay to avoid burst
     setTimeout(processQueue, MIN_INTERVAL_MS);
   } catch (err) {
     reject(err);
