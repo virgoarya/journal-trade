@@ -285,25 +285,79 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
 Aset target: ${targetAsset}
 ${context ? `Konteks: ${context}` : ''}
 
-Berikan analisis institusional singkat (1-2 kalimat) dalam Bahasa Indonesia tentang dampak berita ini terhadap aset. Tanpa meta-language, tanpa redundansi, setiap kalimat diakhiri titik utuh.`;
+Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) dengan format:
+{
+  "fakta": "...",
+  "dampakMarket": "...",
+  "logika": "...",
+  "contrarian": "...",
+  "triggerFundamentalNonTeknikal": "...",
+  "confidenceScore": "..."
+}`;
 
     const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
     try {
       const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
         model: GROQ_MODELS[0],
         messages: [
-          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Output HANYA JSON valid yang diminta, tanpa penjelasan tambahan. Balas dalam Bahasa Indonesia." },
           { role: "user", content: prompt },
         ],
-        max_tokens: 150,
+        max_tokens: 300,
         temperature: 0.2,
         stream: false,
       }, { useCache: true, cacheKey });
 
-      return response.choices?.[0]?.message?.content || "Analisis tidak tersedia";
+      const text = response.choices?.[0]?.message?.content || "";
+      const parsed = parseMacroFeedText(text);
+      return {
+        fakta: parsed.fakta || "Tidak ada data",
+        dampakMarket: parsed.dampakMarket || "Tidak ada data",
+        logika: parsed.logika || "Tidak ada data",
+        contrarian: parsed.contrarian || "Tidak ada data",
+        triggerFundamentalNonTeknikal: parsed.triggerFundamentalNonTeknikal || "Tidak ada data",
+        confidenceScore: parsed.confidenceScore || "Sedang",
+      };
     } catch (error: any) {
-      // If all models fail, throw error
-      throw new Error(error.message || "Gagal menganalisis feed makro");
+      return {
+        fakta: headline || "Tidak ada data",
+        dampakMarket: "Analisis tidak tersedia",
+        logika: "Analisis tidak tersedia",
+        contrarian: "Analisis tidak tersedia",
+        triggerFundamentalNonTeknikal: "Analisis tidak tersedia",
+        confidenceScore: "Sedang",
+      };
     }
   }
 };
+
+function parseMacroFeedText(text: string) {
+  try {
+    const cleaned = text
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error("No JSON object found");
+    }
+
+    const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
+    const parsed = JSON.parse(jsonText);
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Parsed value is not an object");
+    }
+
+    const result: Record<string, string> = {};
+    const fields = ["fakta", "dampakMarket", "logika", "contrarian", "triggerFundamentalNonTeknikal", "confidenceScore"];
+    for (const field of fields) {
+      result[field] = typeof parsed[field] === "string" ? parsed[field].trim() : "";
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}

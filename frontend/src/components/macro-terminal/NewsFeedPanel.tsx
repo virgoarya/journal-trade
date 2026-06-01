@@ -15,11 +15,54 @@ interface NewsItem {
 
 interface ParsedAnalysis {
   fakta: string;
-  dampak: string;
+  dampakMarket: string;
   logika: string;
   contrarian: string;
-  confidence: string;
-  risk: string;
+  triggerFundamentalNonTeknikal: string;
+  confidenceScore: string;
+}
+
+// Robust JSON extractor: finds first balanced { } block and normalizes legacy keys
+function extractFirstJSON(raw: string): ParsedAnalysis | null {
+  let start = raw.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < raw.length; i++) {
+    if (raw[i] === "{") depth++;
+    else if (raw[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) return null;
+
+  try {
+    const obj = JSON.parse(raw.substring(start, end + 1));
+    if (!obj || typeof obj !== "object") return null;
+
+    const normalized: ParsedAnalysis = {
+      fakta: typeof obj.fakta === "string" ? obj.fakta : "",
+      dampakMarket: typeof obj.dampakMarket === "string" ? obj.dampakMarket : typeof obj.dampak === "string" ? obj.dampak : "",
+      logika: typeof obj.logika === "string" ? obj.logika : "",
+      contrarian: typeof obj.contrarian === "string" ? obj.contrarian : "",
+      triggerFundamentalNonTeknikal: typeof obj.triggerFundamentalNonTeknikal === "string" ? obj.triggerFundamentalNonTeknikal : "",
+      confidenceScore: typeof obj.confidenceScore === "string" ? obj.confidenceScore : "",
+    };
+
+    if (!normalized.fakta && !normalized.dampakMarket) {
+      return null;
+    }
+
+    return normalized;
+  } catch {
+    return null;
+  }
 }
 
 const mockNews: NewsItem[] = [
@@ -64,35 +107,6 @@ const mockNews: NewsItem[] = [
     aiSummary: "Alarm likuiditas menyala! Risiko Carry Trade Unwind tinggi. Ekuitas berpotensi mengalami collateral damage.",
   },
 ];
-
-// Robust JSON extractor: finds first balanced { } block
-function extractFirstJSON(raw: string): ParsedAnalysis | null {
-  let start = raw.indexOf("{");
-  if (start === -1) return null;
-
-  let depth = 0;
-  let end = -1;
-  for (let i = start; i < raw.length; i++) {
-    if (raw[i] === "{") depth++;
-    else if (raw[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
-    }
-  }
-
-  if (end === -1) return null;
-
-  try {
-    const obj = JSON.parse(raw.substring(start, end + 1));
-    if (obj.fakta && obj.dampak) return obj as ParsedAnalysis;
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 // Confidence level color helper
 function getConfidenceColor(conf: string): string {
@@ -147,7 +161,6 @@ function AnalysisModal({
           boxShadow: "0 25px 50px -12px rgba(0,0,0,0.8), 0 0 60px rgba(180,152,255,0.05)",
         }}
       >
-        {/* Header */}
         <div
           className="px-6 py-5 flex justify-between items-start shrink-0"
           style={{
@@ -185,9 +198,7 @@ function AnalysisModal({
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5" style={{ scrollbarWidth: "thin" }}>
-          {/* Source Headline */}
           <div className="mb-6 pb-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <p className="text-sm font-medium italic leading-relaxed" style={{ color: "rgba(255,255,255,0.9)" }}>
               &ldquo;{item.headline}&rdquo;
@@ -201,123 +212,25 @@ function AnalysisModal({
           </div>
 
           {parsed ? (
-            <div className="flex flex-col gap-5">
-              {/* Fakta + Confidence */}
-              <div className="flex flex-col sm:flex-row gap-4 items-stretch">
-                <div className="flex-1">
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2.5" style={{ color: "#b498ff" }}>
-                    EXECUTIVE SUMMARY
-                  </h4>
-                  <div
-                    className="p-4 rounded-xl"
-                    style={{
-                      background: "linear-gradient(135deg, rgba(180,152,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
-                      borderLeft: "3px solid #b498ff",
-                    }}
-                  >
-                    <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.85)" }}>
-                      {parsed.fakta}
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className="flex flex-col items-center justify-center p-4 rounded-xl shrink-0 sm:min-w-[130px]"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <span className="text-[9px] uppercase tracking-[0.15em] font-bold mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    CONFIDENCE
-                  </span>
-                  <span className={`text-2xl font-black ${getConfidenceColor(parsed.confidence)}`}>
-                    {getConfidenceLabel(parsed.confidence)}
-                  </span>
-                </div>
+            <div className="flex flex-col gap-4">
+              <Section title="Fakta" content={parsed.fakta} accent />
+              <Section title="Dampak Market" content={parsed.dampakMarket} />
+              <Section title="Logika" content={parsed.logika} />
+              <Section title="Contrarian" content={parsed.contrarian} accent="contrarian" />
+              <Section title="Trigger Fundamental Non-Teknikal" content={parsed.triggerFundamentalNonTeknikal} />
+              <div
+                className="p-4 rounded-xl flex items-center justify-between"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+              >
+                <span className="text-[10px] uppercase tracking-[0.15em] font-bold" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Confidence Score
+                </span>
+                <span className={`text-lg font-black ${getConfidenceColor(parsed.confidenceScore)}`}>
+                  {getConfidenceLabel(parsed.confidenceScore)}
+                </span>
               </div>
-
-              {/* Dampak & Logika | Contrarian */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div
-                  className="p-4 rounded-xl"
-                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}
-                >
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3 flex items-center gap-2 text-data-profit">
-                    <TrendingUp size={13} /> MARKET IMPACT
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="flex gap-2.5 items-start text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
-                      <span className="text-data-profit mt-0.5 shrink-0">✦</span>
-                      <span className="leading-relaxed">
-                        <strong style={{ color: "rgba(255,255,255,0.9)" }}>Dampak: </strong>
-                        {parsed.dampak}
-                      </span>
-                    </div>
-                    <div className="flex gap-2.5 items-start text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
-                      <span className="text-data-profit mt-0.5 shrink-0">✦</span>
-                      <span className="leading-relaxed">
-                        <strong style={{ color: "rgba(255,255,255,0.9)" }}>Logika: </strong>
-                        {parsed.logika}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className="p-4 rounded-xl"
-                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}
-                >
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3 flex items-center gap-2 text-data-loss">
-                    <Activity size={13} /> CONTRARIAN VIEW
-                  </h4>
-                  <div className="flex gap-2.5 items-start text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
-                    <span className="text-data-loss mt-0.5 shrink-0">⚡</span>
-                    <span className="leading-relaxed">{parsed.contrarian}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Risk Alert */}
-              {parsed.risk && (
-                <div
-                  className="p-4 rounded-xl flex items-start gap-4"
-                  style={{
-                    background: "rgba(239,68,68,0.04)",
-                    border: "1px solid rgba(239,68,68,0.15)",
-                  }}
-                >
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: "rgba(239,68,68,0.1)" }}
-                  >
-                    <ShieldCheck size={18} className="text-data-loss" />
-                  </div>
-                  <div>
-                    <h4 className="text-[10px] font-bold text-data-loss uppercase tracking-[0.15em] mb-1">RISK ALERT</h4>
-                    <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-                      {parsed.risk}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Full Confidence Detail */}
-              {parsed.confidence && parsed.confidence.length > 15 && (
-                <div
-                  className="p-4 rounded-xl"
-                  style={{ background: "rgba(180,152,255,0.03)", border: "1px solid rgba(180,152,255,0.1)" }}
-                >
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-1.5" style={{ color: "#b498ff" }}>
-                    PROFESSIONAL ASSESSMENT
-                  </h4>
-                  <p className="text-sm italic leading-relaxed" style={{ color: "rgba(255,255,255,0.6)" }}>
-                    &ldquo;{parsed.confidence}&rdquo;
-                  </p>
-                </div>
-              )}
             </div>
           ) : (
-            /* Fallback: show raw text in clean card */
             <div
               className="p-4 rounded-xl"
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
@@ -329,7 +242,6 @@ function AnalysisModal({
           )}
         </div>
 
-        {/* Footer */}
         <div
           className="px-6 py-4 flex justify-end shrink-0"
           style={{
@@ -358,8 +270,39 @@ function AnalysisModal({
     </div>
   );
 
-  // Render via Portal to document.body — completely bypasses all parent stacking contexts
   return ReactDOM.createPortal(modal, document.body);
+}
+
+function Section({
+  title,
+  content,
+  accent,
+}: {
+  title: string;
+  content: string;
+  accent?: "contrarian" | "default";
+}) {
+  const isAccent = accent === "contrarian";
+
+  return (
+    <div
+      className="p-4 rounded-xl"
+      style={{
+        background: isAccent ? "rgba(248,113,113,0.04)" : "rgba(255,255,255,0.02)",
+        border: `1px solid ${isAccent ? "rgba(248,113,113,0.15)" : "rgba(255,255,255,0.04)"}`,
+      }}
+    >
+      <h4
+        className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2"
+        style={{ color: isAccent ? "#f87171" : "#b498ff" }}
+      >
+        {title}
+      </h4>
+      <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.8)" }}>
+        {content || "Tidak ada data"}
+      </p>
+    </div>
+  );
 }
 
 // ==================== MAIN COMPONENT ====================
