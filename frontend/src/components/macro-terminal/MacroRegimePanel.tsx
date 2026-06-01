@@ -23,8 +23,7 @@ const RATE_LIMIT_MS = 5 * 60 * 1000;
 const MAX_BACKOFF_MS = 30 * 60 * 1000;
 
 export function MacroRegimePanel() {
-  const { lastRegime, systemAlert } = useMacroTerminal();
-  const [activeRegime, setActiveRegime] = useState<string>("");
+  const { currentRegime, lastRegime, systemAlert } = useMacroTerminal();
   const [inflationMomentum, setInflationMomentum] = useState<number>(0);
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -32,6 +31,12 @@ export function MacroRegimePanel() {
   const [backoffMs, setBackoffMs] = useState<number>(0);
   const lastSuccessRef = useRef<number>(0);
   const lastRegimeRef = useRef<string | null>(null);
+
+  const activeRegime = useMemo(() => {
+    const fromContext = (currentRegime || lastRegime || "").toLowerCase();
+    if (fromContext) return fromContext;
+    return "";
+  }, [currentRegime, lastRegime]);
 
   const fetchMacroData = useCallback(async () => {
     const now = Date.now();
@@ -63,7 +68,8 @@ export function MacroRegimePanel() {
       }
 
       if (result.regime) {
-        setActiveRegime(result.regime.toLowerCase());
+        // Let context drive the regime; we just mirror here for local consistency
+        lastRegimeRef.current = result.regime.toLowerCase();
       }
 
       if (Array.isArray(result.cpiMoM) && result.cpiMoM.length > 0) {
@@ -84,27 +90,36 @@ export function MacroRegimePanel() {
   }, [nextAllowedAt, backoffMs]);
 
   useEffect(() => {
-    if (!lastRegime) return;
-    const next = lastRegime.toLowerCase();
-    if (next && next !== lastRegimeRef.current) {
+    if (!currentRegime) return;
+    const next = currentRegime.toLowerCase();
+    if (next !== lastRegimeRef.current) {
       lastRegimeRef.current = next;
       setActiveRegime(next);
-      setState("ready");
     }
-  }, [lastRegime]);
-
+  }, [currentRegime]);
   useEffect(() => {
     if (!systemAlert) return;
-    const match = systemAlert.match(/regime shift\s+[^\s]+\s+->\s+([A-Za-z\s]+)/i);
-    if (!match) return;
-    const next = match[1].trim().toLowerCase();
-    if (next && next !== lastRegimeRef.current) {
-      lastRegimeRef.current = next;
-      setActiveRegime(next);
-      setState("ready");
+    const normalized = systemAlert.toLowerCase();
+    const match = normalized.match(/transitioned from\s+[a-z]+\s+to\s+([a-z]+)/);
+    if (match && match[1]) {
+      const next = match[1].trim();
+      if (next !== lastRegimeRef.current) {
+        lastRegimeRef.current = next;
+        setActiveRegime(next);
+      }
     }
   }, [systemAlert]);
 
+  useEffect(() => {
+    if (!systemAlert) return;
+    const normalized = systemAlert.toLowerCase();
+    const match = normalized.match(/regime shift detected[\s\S]*?([a-z]+)\s+>>>\s+([a-z]+)/);
+    if (!match) return;
+    const next = match[2].trim();
+    if (next && next !== lastRegimeRef.current) {
+      lastRegimeRef.current = next;
+    }
+  }, [systemAlert]);
   useEffect(() => {
     fetchMacroData();
     const scheduleNext = () => {
