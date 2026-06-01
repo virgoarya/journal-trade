@@ -208,7 +208,7 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
       if (data.success && data.data) {
         const updatedAssets = initialAssets.map(asset => {
           const apiQuote = data.data.find((q) => q.symbol === asset.ticker);
-          let change = asset.change;
+          let change: number | null = null;
 
           if (apiQuote?.data?.dp !== undefined && apiQuote.data.dp !== null) {
             change = apiQuote.data.dp;
@@ -216,7 +216,7 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
 
           return {
             ...asset,
-            change: parseFloat(change.toFixed(2))
+            change: change !== null ? parseFloat(change.toFixed(2)) : null
           };
         });
 
@@ -226,7 +226,7 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
 
         await analyzeRegime(updatedAssets, newLiquidity);
       } else {
-        console.warn("Stooq quotes returned empty or invalid data");
+        console.warn("Yahoo Finance quotes returned empty or invalid data");
       }
     } catch (error) {
       console.warn("Stooq quotes failed, using mock ticker fallback");
