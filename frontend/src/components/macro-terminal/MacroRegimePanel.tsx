@@ -94,7 +94,6 @@ export function MacroRegimePanel() {
     const next = currentRegime.toLowerCase();
     if (next !== lastRegimeRef.current) {
       lastRegimeRef.current = next;
-      setActiveRegime(next);
     }
   }, [currentRegime]);
   useEffect(() => {
@@ -105,7 +104,6 @@ export function MacroRegimePanel() {
       const next = match[1].trim();
       if (next !== lastRegimeRef.current) {
         lastRegimeRef.current = next;
-        setActiveRegime(next);
       }
     }
   }, [systemAlert]);
