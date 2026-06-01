@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import axios from "axios";
 import { notificationService } from "./notification.service";
+import yahooFinance from "yahoo-finance2";
 
 // In-memory cache to prevent hitting rate limits
 const cache: Record<string, { data: any; timestamp: number }> = {};
@@ -8,6 +9,7 @@ const CACHE_TTL_MS = 60000; // 60 seconds
 const lastClose: Record<string, number> = {};
 const lastCloseTimestamp: Record<string, number> = {};
 const LAST_CLOSE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const INVALID_PRICE_THRESHOLD = 0.01; // Reject prices below this as invalid
 
 export const marketDataService = {
   async getNews() {
@@ -47,70 +49,32 @@ export const marketDataService = {
       return [];
     }
 
-    const stooqSymbols = symbols.join(",");
-    const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSymbols)}&f=sd2t2ohlcv&h&e=csv`;
-
     try {
-      const response = await axios.get(url, { timeout: 10000 });
-      const text = typeof response.data === "string" ? response.data : "";
+      const quoteData: { symbol: string; data: { dp: number | null } }[] = [];
 
-      console.log("[Stooq] Raw response:", text.slice(0, 200));
+      for (const symbol of symbols) {
+        try {
+          const yahooSymbol = symbol === "VIXY" ? "^VIX" : symbol;
+          const quote: any = await yahooFinance.quote(yahooSymbol);
 
-      if (!text) {
-        return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
-      }
+          const current = quote.regularMarketPrice;
+          const previous = quote.regularMarketPreviousClose;
+          let dp: number | null = null;
 
-      const rows = text
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !/^(symbol|no data|error)/i.test(line));
-
-      if (!rows.length) {
-        return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
-      }
-
-      const delimiter = text.includes(";") ? ";" : ",";
-      const header = rows[0].split(delimiter).map((item) => item.trim().toLowerCase());
-      const closeIndex = header.findIndex((item) => item === "close");
-      const nameIndex = header.findIndex((item) => ["symbol", "ticker"].includes(item));
-
-      const result: { symbol: string; data: { dp: number | null } }[] = [];
-      const seen = new Set<string>();
-
-      for (let i = 1; i < rows.length; i++) {
-        const cols = rows[i].split(delimiter).map((item) => item.trim());
-        const rawSymbol = cols[nameIndex] || "";
-        const symbolUpper = rawSymbol.toUpperCase();
-        if (!rawSymbol || seen.has(symbolUpper)) continue;
-        seen.add(symbolUpper);
-
-        const closeValue = parseFloat(cols[closeIndex]);
-        let dp: number | null = null;
-
-        if (!Number.isNaN(closeValue)) {
-          const cached = lastClose[symbolUpper];
-          const cachedTimestamp = lastCloseTimestamp[symbolUpper] || 0;
-
-          if (
-            cached !== undefined &&
-            !Number.isNaN(cached) &&
-            cached !== 0 &&
-            Date.now() - cachedTimestamp < LAST_CLOSE_TTL_MS
-          ) {
-            dp = ((closeValue - cached) / cached) * 100;
+          if (typeof current === "number" && typeof previous === "number" && previous !== 0) {
+            dp = parseFloat((((current - previous) / previous) * 100).toFixed(2));
           }
 
-          lastClose[symbolUpper] = closeValue;
-          lastCloseTimestamp[symbolUpper] = Date.now();
+          quoteData.push({ symbol, data: { dp } });
+        } catch (symbolError) {
+          console.warn(`Yahoo Finance Quotes API Error for ${symbol}:`, (symbolError as any)?.message);
+          quoteData.push({ symbol, data: { dp: null } });
         }
-
-        const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
-        result.push({ symbol: mapped || rawSymbol, data: { dp: dp === null ? null : parseFloat(dp.toFixed(2)) } });
       }
 
-      return symbols.map((symbol) => result.find((item) => item.symbol.toUpperCase() === symbol.toUpperCase()) || { symbol, data: { dp: null } });
+      return quoteData;
     } catch (error: any) {
-      console.warn("Stooq Quotes API Error:", error.message);
+      console.error("Yahoo Finance Quotes API Error:", error.message);
       return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
     }
   },
