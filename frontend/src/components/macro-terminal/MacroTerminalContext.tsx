@@ -233,7 +233,7 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
       setIsFallback(true);
       setAssets((current) =>
         current.map((asset) => {
-          const jitter = (Math.random() - 0.5) * 0.1;
+          const jitter = (Math.random() - 0.5) * 0.8;
           return { ...asset, change: parseFloat((asset.change + jitter).toFixed(2)) };
         })
       );
