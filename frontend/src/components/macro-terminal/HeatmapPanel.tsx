@@ -7,7 +7,23 @@ import { useMacroTerminal } from "./MacroTerminalContext";
 export function HeatmapPanel() {
   const { assets, isFallback, aiReasoning, isAnalyzing, lastUpdated, analyzeRegime } = useMacroTerminal();
 
-  const getColor = (change: number) => {
+  console.log("[HeatmapPanel] assets:", JSON.stringify(assets, null, 2));
+
+  const renderChange = (change: number | null | undefined) => {
+    if (change === null || change === undefined || Number.isNaN(change)) {
+      return "DATA UNAVAILABLE";
+    }
+
+    const isPositive = change > 0;
+    const prefix = isPositive ? "+" : "";
+    return `${prefix}${change.toFixed(2)}%`;
+  };
+
+  const getColor = (change: number | null | undefined) => {
+    if (change === null || change === undefined || Number.isNaN(change)) {
+      return "bg-surface-elevated text-text-secondary";
+    }
+
     if (change > 2) return "bg-data-profit text-white";
     if (change > 1) return "bg-data-profit/80 text-white";
     if (change > 0) return "bg-data-profit/40 text-data-profit";
@@ -37,28 +53,14 @@ export function HeatmapPanel() {
       <div className="p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 shrink-0">
         {assets.map((asset) => {
           const change = asset.change ?? null;
-          const isPositive = change !== null && change > 0;
-          const isNegative = change !== null && change < 0;
-          const isFlat = change !== null && change === 0;
-
           return (
             <div
               key={asset.ticker}
-              className={`flex flex-col items-center justify-center rounded p-2 transition-colors duration-300 ${
-                isPositive
-                  ? "bg-data-profit text-white"
-                  : isNegative
-                    ? "bg-data-loss text-white"
-                    : isFlat
-                      ? "bg-text-muted/20 text-white"
-                      : "bg-surface-elevated text-text-secondary"
-              }`}
+              className={`flex flex-col items-center justify-center rounded p-2 transition-colors duration-300 ${getColor(change)}`}
             >
               <span className="text-xs font-bold tracking-wide">{asset.ticker}</span>
               <span className="text-[9px] opacity-80 truncate w-full text-center mt-0.5">{asset.name}</span>
-              <span className="text-sm font-mono font-bold mt-1">
-                {change === null ? "DATA UNAVAILABLE" : `${isPositive ? "+" : ""}${change.toFixed(2)}%`}
-              </span>
+              <span className="text-sm font-mono font-bold mt-1">{renderChange(change)}</span>
             </div>
           );
         })}

@@ -57,12 +57,11 @@ export const marketDataService = {
           const yahooSymbol = symbol === "VIXY" ? "^VIX" : symbol;
           const quote: any = await yahooFinance.quote(yahooSymbol);
 
-          const current = quote.regularMarketPrice;
-          const previous = quote.regularMarketPreviousClose;
+          const rawChangePercent = quote.regularMarketChangePercent;
           let dp: number | null = null;
 
-          if (typeof current === "number" && typeof previous === "number" && previous !== 0) {
-            dp = parseFloat((((current - previous) / previous) * 100).toFixed(2));
+          if (typeof rawChangePercent === "number" && Number.isFinite(rawChangePercent)) {
+            dp = parseFloat(rawChangePercent.toFixed(2));
           }
 
           quoteData.push({ symbol, data: { dp } });
