@@ -1,17 +1,13 @@
 import { env } from "../config/env";
 import axios from "axios";
 import { notificationService } from "./notification.service";
-import YahooFinance from "yahoo-finance2";
-
-const yahooFinance = new YahooFinance();
 
 // In-memory cache to prevent hitting rate limits
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 60000; // 60 seconds
-const lastClose: Record<string, number> = {};
-const lastCloseTimestamp: Record<string, number> = {};
-const LAST_CLOSE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const INVALID_PRICE_THRESHOLD = 0.01; // Reject prices below this as invalid
+
+const CHART_CACHE_TTL_MS = 60_000; // 1 minute
+const chartCache: Record<string, { data: any; timestamp: number }> = {};
 
 export const marketDataService = {
   async getNews() {
@@ -51,29 +47,60 @@ export const marketDataService = {
       return [];
     }
 
+    const symbolMap = new Map<string, string>();
+    const normalized = symbols.map((s) => {
+      const yahooSymbol = s === "VIXY" ? "^VIX" : s;
+      symbolMap.set(yahooSymbol, s);
+      return yahooSymbol;
+    });
+
     try {
-      const quoteData: { symbol: string; data: { dp: number | null } }[] = [];
-
-      for (const symbol of symbols) {
-        try {
-          const yahooSymbol = symbol === "VIXY" ? "^VIX" : symbol;
-          const quote: any = await yahooFinance.quote(yahooSymbol);
-
-          const rawChangePercent = quote.regularMarketChangePercent;
-          let dp: number | null = null;
-
-          if (typeof rawChangePercent === "number" && Number.isFinite(rawChangePercent)) {
-            dp = parseFloat(rawChangePercent.toFixed(2));
+      const results = await Promise.all(
+        normalized.map(async (yahooSymbol) => {
+          const original = symbolMap.get(yahooSymbol)!;
+          const cacheKey = `ychart_${yahooSymbol}`;
+          const cached = chartCache[cacheKey];
+          if (cached && Date.now() - cached.timestamp < CHART_CACHE_TTL_MS) {
+            return { symbol: original, data: cached.data };
           }
 
-          quoteData.push({ symbol, data: { dp } });
-        } catch (symbolError) {
-          console.warn(`Yahoo Finance Quotes API Error for ${symbol}:`, (symbolError as any)?.message);
-          quoteData.push({ symbol, data: { dp: null } });
-        }
-      }
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d`;
 
-      return quoteData;
+          try {
+            const response = await axios.get(url, {
+              timeout: 10000,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+              },
+            });
+
+            const result = response.data?.chart?.result?.[0];
+            if (!result) {
+              throw new Error("Empty chart result");
+            }
+
+            const meta = result.meta;
+            const previousClose = typeof meta?.previousClose === "number" ? meta.previousClose : null;
+            const currentPrice = typeof meta?.regularMarketPrice === "number" ? meta.regularMarketPrice : null;
+            const dp =
+              typeof currentPrice === "number" && typeof previousClose === "number" && previousClose !== 0
+                ? parseFloat((((currentPrice - previousClose) / previousClose) * 100).toFixed(2))
+                : null;
+
+            const payload = { dp };
+
+            chartCache[cacheKey] = { data: payload, timestamp: Date.now() };
+
+            return { symbol: original, data: payload };
+          } catch (symbolError) {
+            console.warn(`Yahoo Finance Quotes API Error for ${original}:`, (symbolError as any)?.message);
+            return { symbol: original, data: { dp: null } };
+          }
+        })
+      );
+
+      return results;
     } catch (error: any) {
       console.error("Yahoo Finance Quotes API Error:", error.message);
       return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
