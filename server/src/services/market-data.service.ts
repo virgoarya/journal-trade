@@ -1,7 +1,9 @@
 import { env } from "../config/env";
 import axios from "axios";
 import { notificationService } from "./notification.service";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance();
 
 // In-memory cache to prevent hitting rate limits
 const cache: Record<string, { data: any; timestamp: number }> = {};
