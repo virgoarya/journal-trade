@@ -331,7 +331,11 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
   }
 };
 
-function parseMacroFeedText(text: string) {
+function parseMacroFeedText(text: string | null | undefined) {
+  if (typeof text !== 'string' || !text.trim()) {
+    return {};
+  }
+
   try {
     const cleaned = text
       .replace(/^```json\s*/i, "")
