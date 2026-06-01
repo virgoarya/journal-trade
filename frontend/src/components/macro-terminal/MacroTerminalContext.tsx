@@ -226,10 +226,10 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
 
         await analyzeRegime(updatedAssets, newLiquidity);
       } else {
-        throw new Error("Invalid quote API response");
+        console.warn("Stooq quotes returned empty or invalid data");
       }
     } catch (error) {
-      console.warn("Finnhub quotes failed, using mock ticker fallback");
+      console.warn("Stooq quotes failed, using mock ticker fallback");
       setIsFallback(true);
       setAssets((current) =>
         current.map((asset) => {

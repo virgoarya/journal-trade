@@ -48,57 +48,62 @@ export const marketDataService = {
     const stooqSymbols = symbols.join(",");
     const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSymbols)}&f=sd2t2ohlcv&h&e=csv`;
 
-    const response = await axios.get(url, { timeout: 10000 });
-    const text = typeof response.data === "string" ? response.data : "";
+    try {
+      const response = await axios.get(url, { timeout: 10000 });
+      const text = typeof response.data === "string" ? response.data : "";
 
-    if (!text) {
-      return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
-    }
-
-    const rows = text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !/^(symbol|no data|error)/i.test(line));
-
-    if (!rows.length) {
-      return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
-    }
-
-    const delimiter = text.includes(";") ? ";" : ",";
-    const header = rows[0].split(delimiter).map((item) => item.trim().toLowerCase());
-    const closeIndex = header.findIndex((item) => item === "close");
-    const nameIndex = header.findIndex((item) => ["symbol", "ticker"].includes(item));
-    const previousCloseIndex = header.findIndex((item) => ["previous close", "prev close", "close prev"].includes(item));
-
-    const result: { symbol: string; data: { dp: number | null } }[] = [];
-    const seen = new Set<string>();
-
-    for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i].split(delimiter).map((item) => item.trim());
-      const rawSymbol = cols[nameIndex] || "";
-      const symbolUpper = rawSymbol.toUpperCase();
-      if (!rawSymbol || seen.has(symbolUpper)) continue;
-      seen.add(symbolUpper);
-
-      const closeValue = parseFloat(cols[closeIndex]);
-      let dp: number | null = null;
-      const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
-
-      if (!Number.isNaN(closeValue) && previousCloseIndex > -1 && previousCloseIndex < cols.length) {
-        const previousCloseValue = parseFloat(cols[previousCloseIndex]);
-        if (!Number.isNaN(previousCloseValue) && previousCloseValue !== 0) {
-          dp = ((closeValue - previousCloseValue) / previousCloseValue) * 100;
-        }
-      } else {
-        if (!mapped && previousCloseIndex === -1) {
-          dp = 0;
-        }
+      if (!text) {
+        return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
       }
 
-      result.push({ symbol: mapped || rawSymbol, data: { dp: dp === null ? null : parseFloat(dp.toFixed(2)) } });
-    }
+      const rows = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !/^(symbol|no data|error)/i.test(line));
 
-    return symbols.map((symbol) => result.find((item) => item.symbol.toUpperCase() === symbol.toUpperCase()) || { symbol, data: { dp: null } });
+      if (!rows.length) {
+        return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
+      }
+
+      const delimiter = text.includes(";") ? ";" : ",";
+      const header = rows[0].split(delimiter).map((item) => item.trim().toLowerCase());
+      const closeIndex = header.findIndex((item) => item === "close");
+      const nameIndex = header.findIndex((item) => ["symbol", "ticker"].includes(item));
+      const previousCloseIndex = header.findIndex((item) => ["previous close", "prev close", "close prev"].includes(item));
+
+      const result: { symbol: string; data: { dp: number | null } }[] = [];
+      const seen = new Set<string>();
+
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(delimiter).map((item) => item.trim());
+        const rawSymbol = cols[nameIndex] || "";
+        const symbolUpper = rawSymbol.toUpperCase();
+        if (!rawSymbol || seen.has(symbolUpper)) continue;
+        seen.add(symbolUpper);
+
+        const closeValue = parseFloat(cols[closeIndex]);
+        let dp: number | null = null;
+        const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
+
+        if (!Number.isNaN(closeValue) && previousCloseIndex > -1 && previousCloseIndex < cols.length) {
+          const previousCloseValue = parseFloat(cols[previousCloseIndex]);
+          if (!Number.isNaN(previousCloseValue) && previousCloseValue !== 0) {
+            dp = ((closeValue - previousCloseValue) / previousCloseValue) * 100;
+          }
+        } else {
+          if (!mapped && previousCloseIndex === -1) {
+            dp = 0;
+          }
+        }
+
+        result.push({ symbol: mapped || rawSymbol, data: { dp: dp === null ? null : parseFloat(dp.toFixed(2)) } });
+      }
+
+      return symbols.map((symbol) => result.find((item) => item.symbol.toUpperCase() === symbol.toUpperCase()) || { symbol, data: { dp: null } });
+    } catch (error: any) {
+      console.warn("Stooq Quotes API Error:", error.message);
+      return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
+    }
   },
 
   async getLiquidity() {
