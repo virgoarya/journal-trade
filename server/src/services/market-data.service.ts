@@ -6,9 +6,6 @@ import { notificationService } from "./notification.service";
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 60000; // 60 seconds
 
-const CHART_CACHE_TTL_MS = 60_000; // 1 minute
-const chartCache: Record<string, { data: any; timestamp: number }> = {};
-
 export const marketDataService = {
   async getNews() {
     const key = process.env.FINNHUB_API_KEY;
@@ -22,19 +19,17 @@ export const marketDataService = {
     }
 
     try {
-      // Fetch general market news
       const response = await axios.get(`https://finnhub.io/api/v1/news?category=general&token=${key}`, {
-        timeout: 5000
+        timeout: 5000,
       });
-      
-      const data = response.data.slice(0, 10); // Take top 10 news
-      
-      // Update cache
+
+      const data = response.data.slice(0, 10);
+
       cache[cacheKey] = {
-        data: data,
+        data,
         timestamp: Date.now(),
       };
-      
+
       return data;
     } catch (error: any) {
       console.error("Finnhub News API Error:", error.message);
@@ -43,67 +38,44 @@ export const marketDataService = {
   },
 
   async getQuotes(symbols: string[]) {
-    if (!symbols || symbols.length === 0) {
+    const key = process.env.FINNHUB_API_KEY;
+    if (!key) {
+      return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
+    }
+
+    if (!symbols.length) {
       return [];
     }
 
-    const symbolMap = new Map<string, string>();
-    const normalized = symbols.map((s) => {
-      const yahooSymbol = s === "VIXY" ? "^VIX" : s;
-      symbolMap.set(yahooSymbol, s);
-      return yahooSymbol;
-    });
-
     try {
       const results = await Promise.all(
-        normalized.map(async (yahooSymbol) => {
-          const original = symbolMap.get(yahooSymbol)!;
-          const cacheKey = `ychart_${yahooSymbol}`;
-          const cached = chartCache[cacheKey];
-          if (cached && Date.now() - cached.timestamp < CHART_CACHE_TTL_MS) {
-            return { symbol: original, data: cached.data };
+        symbols.map(async (symbol) => {
+          const cacheKey = `quote_${symbol}`;
+          if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL_MS) {
+            return { symbol, data: cache[cacheKey].data };
           }
 
-          const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}`;
-
           try {
-            const response = await axios.get(url, {
-              timeout: 10000,
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-              },
+            const response = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`, {
+              timeout: 5000,
             });
 
-            const quote = response.data?.quoteResponse?.result?.[0];
-            if (!quote) {
-              throw new Error("Empty quote result");
-            }
+            cache[cacheKey] = {
+              data: response.data,
+              timestamp: Date.now(),
+            };
 
-            const previousClose = typeof quote.regularMarketPreviousClose === "number" ? quote.regularMarketPreviousClose : null;
-            const currentPrice = typeof quote.regularMarketPrice === "number" ? quote.regularMarketPrice : null;
-            const dp =
-              typeof currentPrice === "number" && typeof previousClose === "number" && previousClose !== 0
-                ? parseFloat((((currentPrice - previousClose) / previousClose) * 100).toFixed(2))
-                : null;
-
-            const payload = { dp };
-
-            chartCache[cacheKey] = { data: payload, timestamp: Date.now() };
-
-            console.log(`[Yahoo REST][${yahooSymbol}] price=${currentPrice} prev=${previousClose} dp=${dp}`);
-
-            return { symbol: original, data: payload };
+            return { symbol, data: response.data };
           } catch (symbolError) {
-            console.error(`[Yahoo REST][${yahooSymbol}] failed:`, (symbolError as any)?.message);
-            return { symbol: original, data: { dp: null } };
+            console.warn(`Finnhub Quotes API Error for ${symbol}:`, (symbolError as any)?.message);
+            return { symbol, data: { dp: null } };
           }
         })
       );
 
       return results;
     } catch (error: any) {
-      console.error("[Yahoo REST] top-level quote fetch failed:", error.message);
+      console.error("Finnhub Quotes API Error:", error.message);
       return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
     }
   },
