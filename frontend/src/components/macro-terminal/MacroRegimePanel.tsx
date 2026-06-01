@@ -12,11 +12,9 @@ type RegimeCardData = {
 
 const regimeCards: RegimeCardData[] = [
   { id: "stagflation", title: "Stagflation", growth: "Low", inflation: "High", assets: "Gold, Cmdty, CHF" },
-  { id: "goldilocks", title: "Goldilocks", growth: "High", inflation: "Optimal", assets: "Tech, Crypto, HY" },
+  { id: "goldilocks", title: "Goldilocks", growth: "High", inflation: "Low", assets: "Tech, Crypto, HY" },
   { id: "deflation", title: "Deflation", growth: "Low", inflation: "Low", assets: "Bonds, USD, JPY" },
   { id: "reflation", title: "Reflation", growth: "High", inflation: "Rising", assets: "Value, Ind, EM" },
-  { id: "slowdown", title: "Slowdown", growth: "Low", inflation: "Low", assets: "Bonds, Defensive, USD" },
-  { id: "neutral transition", title: "Netral", growth: "Netral", inflation: "Netral", assets: "Campuran" },
 ];
 
 type State = "idle" | "loading" | "ready" | "error";
