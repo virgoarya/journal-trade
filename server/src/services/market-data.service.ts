@@ -6,6 +6,8 @@ import { notificationService } from "./notification.service";
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 60000; // 60 seconds
 const lastClose: Record<string, number> = {};
+const lastCloseTimestamp: Record<string, number> = {};
+const LAST_CLOSE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export const marketDataService = {
   async getNews() {
@@ -69,7 +71,6 @@ export const marketDataService = {
       const header = rows[0].split(delimiter).map((item) => item.trim().toLowerCase());
       const closeIndex = header.findIndex((item) => item === "close");
       const nameIndex = header.findIndex((item) => ["symbol", "ticker"].includes(item));
-      const previousCloseIndex = header.findIndex((item) => ["previous close", "prev close", "close prev"].includes(item));
 
       const result: { symbol: string; data: { dp: number | null } }[] = [];
       const seen = new Set<string>();
@@ -83,19 +84,25 @@ export const marketDataService = {
 
         const closeValue = parseFloat(cols[closeIndex]);
         let dp: number | null = null;
-        const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
 
-        if (!Number.isNaN(closeValue) && previousCloseIndex > -1 && previousCloseIndex < cols.length) {
-          const previousCloseValue = parseFloat(cols[previousCloseIndex]);
-          if (!Number.isNaN(previousCloseValue) && previousCloseValue !== 0) {
-            dp = ((closeValue - previousCloseValue) / previousCloseValue) * 100;
+        if (!Number.isNaN(closeValue)) {
+          const cached = lastClose[symbolUpper];
+          const cachedTimestamp = lastCloseTimestamp[symbolUpper] || 0;
+
+          if (
+            cached !== undefined &&
+            !Number.isNaN(cached) &&
+            cached !== 0 &&
+            Date.now() - cachedTimestamp < LAST_CLOSE_TTL_MS
+          ) {
+            dp = ((closeValue - cached) / cached) * 100;
           }
-        } else {
-          if (!mapped && previousCloseIndex === -1) {
-            dp = 0;
-          }
+
+          lastClose[symbolUpper] = closeValue;
+          lastCloseTimestamp[symbolUpper] = Date.now();
         }
 
+        const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
         result.push({ symbol: mapped || rawSymbol, data: { dp: dp === null ? null : parseFloat(dp.toFixed(2)) } });
       }
 
