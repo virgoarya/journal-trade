@@ -64,7 +64,7 @@ export const marketDataService = {
             return { symbol: original, data: cached.data };
           }
 
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d`;
+          const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}`;
 
           try {
             const response = await axios.get(url, {
@@ -75,14 +75,13 @@ export const marketDataService = {
               },
             });
 
-            const result = response.data?.chart?.result?.[0];
-            if (!result) {
-              throw new Error("Empty chart result");
+            const quote = response.data?.quoteResponse?.result?.[0];
+            if (!quote) {
+              throw new Error("Empty quote result");
             }
 
-            const meta = result.meta;
-            const previousClose = typeof meta?.previousClose === "number" ? meta.previousClose : null;
-            const currentPrice = typeof meta?.regularMarketPrice === "number" ? meta.regularMarketPrice : null;
+            const previousClose = typeof quote.regularMarketPreviousClose === "number" ? quote.regularMarketPreviousClose : null;
+            const currentPrice = typeof quote.regularMarketPrice === "number" ? quote.regularMarketPrice : null;
             const dp =
               typeof currentPrice === "number" && typeof previousClose === "number" && previousClose !== 0
                 ? parseFloat((((currentPrice - previousClose) / previousClose) * 100).toFixed(2))
@@ -92,9 +91,11 @@ export const marketDataService = {
 
             chartCache[cacheKey] = { data: payload, timestamp: Date.now() };
 
+            console.log(`[Yahoo REST][${yahooSymbol}] price=${currentPrice} prev=${previousClose} dp=${dp}`);
+
             return { symbol: original, data: payload };
           } catch (symbolError) {
-            console.warn(`Yahoo Finance Quotes API Error for ${original}:`, (symbolError as any)?.message);
+            console.error(`[Yahoo REST][${yahooSymbol}] failed:`, (symbolError as any)?.message);
             return { symbol: original, data: { dp: null } };
           }
         })
@@ -102,7 +103,7 @@ export const marketDataService = {
 
       return results;
     } catch (error: any) {
-      console.error("Yahoo Finance Quotes API Error:", error.message);
+      console.error("[Yahoo REST] top-level quote fetch failed:", error.message);
       return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
     }
   },
