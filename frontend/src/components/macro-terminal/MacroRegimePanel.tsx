@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { calculateInflationMomentum } from "@/lib/macro/calculations";
+import { useMacroTerminal } from "./MacroTerminalContext";
 
 type RegimeCardData = {
   id: string;
@@ -22,6 +23,7 @@ const RATE_LIMIT_MS = 5 * 60 * 1000;
 const MAX_BACKOFF_MS = 30 * 60 * 1000;
 
 export function MacroRegimePanel() {
+  const { lastRegime, systemAlert } = useMacroTerminal();
   const [activeRegime, setActiveRegime] = useState<string>("");
   const [inflationMomentum, setInflationMomentum] = useState<number>(0);
   const [state, setState] = useState<State>("loading");
@@ -29,6 +31,7 @@ export function MacroRegimePanel() {
   const [nextAllowedAt, setNextAllowedAt] = useState<number>(0);
   const [backoffMs, setBackoffMs] = useState<number>(0);
   const lastSuccessRef = useRef<number>(0);
+  const lastRegimeRef = useRef<string | null>(null);
 
   const fetchMacroData = useCallback(async () => {
     const now = Date.now();
@@ -79,6 +82,28 @@ export function MacroRegimePanel() {
       setBackoffMs((prev) => Math.min(prev + RATE_LIMIT_MS, MAX_BACKOFF_MS));
     }
   }, [nextAllowedAt, backoffMs]);
+
+  useEffect(() => {
+    if (!lastRegime) return;
+    const next = lastRegime.toLowerCase();
+    if (next && next !== lastRegimeRef.current) {
+      lastRegimeRef.current = next;
+      setActiveRegime(next);
+      setState("ready");
+    }
+  }, [lastRegime]);
+
+  useEffect(() => {
+    if (!systemAlert) return;
+    const match = systemAlert.match(/regime shift\s+[^\s]+\s+->\s+([A-Za-z\s]+)/i);
+    if (!match) return;
+    const next = match[1].trim().toLowerCase();
+    if (next && next !== lastRegimeRef.current) {
+      lastRegimeRef.current = next;
+      setActiveRegime(next);
+      setState("ready");
+    }
+  }, [systemAlert]);
 
   useEffect(() => {
     fetchMacroData();
