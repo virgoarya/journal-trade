@@ -82,6 +82,7 @@ export const marketDataService = {
 
       const closeValue = parseFloat(cols[closeIndex]);
       let dp: number | null = null;
+      const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
 
       if (!Number.isNaN(closeValue) && previousCloseIndex > -1 && previousCloseIndex < cols.length) {
         const previousCloseValue = parseFloat(cols[previousCloseIndex]);
@@ -89,7 +90,6 @@ export const marketDataService = {
           dp = ((closeValue - previousCloseValue) / previousCloseValue) * 100;
         }
       } else {
-        const mapped = symbols.find((s) => s.toUpperCase() === symbolUpper);
         if (!mapped && previousCloseIndex === -1) {
           dp = 0;
         }
