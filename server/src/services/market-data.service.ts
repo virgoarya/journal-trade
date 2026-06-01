@@ -54,6 +54,8 @@ export const marketDataService = {
       const response = await axios.get(url, { timeout: 10000 });
       const text = typeof response.data === "string" ? response.data : "";
 
+      console.log("[Stooq] Raw response:", text.slice(0, 200));
+
       if (!text) {
         return symbols.map((symbol) => ({ symbol, data: { dp: null } }));
       }

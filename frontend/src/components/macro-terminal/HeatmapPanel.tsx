@@ -36,16 +36,28 @@ export function HeatmapPanel() {
 
       <div className="p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 shrink-0">
         {assets.map((asset) => {
-          const isPositive = asset.change > 0;
+          const change = asset.change ?? null;
+          const isPositive = change !== null && change > 0;
+          const isNegative = change !== null && change < 0;
+          const isFlat = change !== null && change === 0;
+
           return (
             <div
               key={asset.ticker}
-              className={`flex flex-col items-center justify-center rounded p-2 transition-colors duration-300 ${getColor(asset.change)}`}
+              className={`flex flex-col items-center justify-center rounded p-2 transition-colors duration-300 ${
+                isPositive
+                  ? "bg-data-profit text-white"
+                  : isNegative
+                    ? "bg-data-loss text-white"
+                    : isFlat
+                      ? "bg-text-muted/20 text-white"
+                      : "bg-surface-elevated text-text-secondary"
+              }`}
             >
               <span className="text-xs font-bold tracking-wide">{asset.ticker}</span>
               <span className="text-[9px] opacity-80 truncate w-full text-center mt-0.5">{asset.name}</span>
               <span className="text-sm font-mono font-bold mt-1">
-                {isPositive ? "+" : ""}{asset.change.toFixed(2)}%
+                {change === null ? "DATA UNAVAILABLE" : `${isPositive ? "+" : ""}${change.toFixed(2)}%`}
               </span>
             </div>
           );
