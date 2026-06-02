@@ -16,32 +16,28 @@ const regimeCards: RegimeCardData[] = [
   { id: "goldilocks", title: "Goldilocks", growth: "High", inflation: "Low" },
 ];
 
-const REGIME_PLAYBOOKS: Record<string, { assets: string[]; reasoning: string }> = {
-  stagflation: {
-    assets: ["GLD (Gold)", "VIXY (Volatility)", "UUP (US Dollar)"],
-    reasoning:
-      "Inflasi tinggi disertai perlambatan ekonomi membuat safe-haven seperti Emas diuntungkan. Ekuitas cenderung tertekan karena margin terpangkas, sementara volatilitas (VIX) berpotensi melonjak.",
-  },
-  goldilocks: {
-    assets: ["SPY (S&P 500)", "QQQ (Nasdaq)", "BTCUSD (Bitcoin)"],
-    reasoning:
-      "Kombinasi pertumbuhan ekonomi kuat dan inflasi terkendali adalah surga bagi aset berisiko (Risk-On). Aliran likuiditas akan deras masuk ke sektor teknologi, saham pertumbuhan, dan kripto.",
-  },
-  deflation: {
-    assets: ["IEF (US 10Y Bonds)", "UUP (US Dollar)"],
-    reasoning:
-      "Saat pertumbuhan ekonomi dan inflasi anjlok, instrumen obligasi pemerintah (bonds) menjadi instrumen terbaik karena penurunan suku bunga. Uang tunai (USD) juga menguat karena pelarian modal dari pasar ekuitas.",
-  },
-  reflation: {
-    assets: ["SPY (S&P 500)", "BTCUSD (Bitcoin)", "TIP (TIPS Real Yield)"],
-    reasoning:
-      "Pertumbuhan ekonomi naik diikuti naiknya inflasi mendorong rotasi modal ke aset komoditas dan ekuitas. Kripto dan saham siklikal biasanya memimpin reli pada fase ini.",
-  },
-  transition: {
-    assets: ["UUP (US Dollar)", "Cash / Wait & See"],
-    reasoning:
-      "Pasar sedang beralih fase makro. Likuiditas cenderung tidak menentu dan arah market belum terkonfirmasi jelas. Memegang tunai atau memperhatikan pergerakan DXY adalah langkah paling aman.",
-  },
+const REGIME_PLAYBOOKS = {
+  GOLDILOCKS: [
+    { asset: "SPY / QQQ", desc: "Korporasi menikmati ekspansi margin maksimal karena daya beli kuat sementara biaya input stabil. Sektor teknologi memimpin reli." },
+    { asset: "BTCUSD", desc: "Likuiditas melimpah beralih agresif ke high-beta risk-on assets untuk memburu alpha return tertinggi." }
+  ],
+  STAGFLATION: [
+    { asset: "GLD (Gold)", desc: "Berfungsi sebagai lindung nilai murni (hard asset) saat mata uang fiat terdevaluasi oleh inflasi di tengah ekonomi yang mandek." },
+    { asset: "VIXY (Volatility)", desc: "Ketakutan pasar ekuitas terhadap macetnya roda ekonomi memicu lonjakan volatilitas pasar secara mendadak." },
+    { asset: "UUP (US Dollar)", desc: "Suku bunga yang dipaksa tetap tinggi demi melawan inflasi membuat modal asing masuk mengamankan yield mata uang Dollar." }
+  ],
+  DEFLATION: [
+    { asset: "IEF (US 10Y Bonds)", desc: "Saat bank sentral memotong suku bunga, harga obligasi lama berkupon tinggi langsung meroket (capital gain naik tajam)." },
+    { asset: "UUP (US Dollar)", desc: "Cash is king. Semua institusi berebut mencairkan asetnya menjadi likuiditas US Dollar murni untuk mengamankan modal." }
+  ],
+  REFLATION: [
+    { asset: "SPY (Equities)", desc: "Saham-saham sektor siklikal, industri, dan energi diuntungkan langsung dari roda ekonomi yang kembali berputar kencang." },
+    { asset: "TIP (TIPS)", desc: "Melindungi nilai pokok modal dari gerusan inflasi karena nilai prinsipal obligasi ini naik mengikuti indeks CPI." },
+    { asset: "BTCUSD", desc: "Berfungsi sebagai instrumen spekulasi awal karena sensitivitasnya yang tinggi terhadap ekspansi moneter baru." }
+  ],
+  TRANSITION: [
+    { asset: "UUP / Cash", desc: "Likuiditas dijaga sekering mungkin tanpa arah bias pasar yang jelas sampai data makro (NFP, CPI) mengonfirmasi pergeseran tren selanjutnya." }
+  ]
 };
 
 const GRID_LAYOUT: Record<string, { row: number; col: number }> = {
@@ -120,22 +116,20 @@ export function MacroRegimePanel() {
         )}
       </div>
 
-      {selectedRegime && REGIME_PLAYBOOKS[selectedRegime] && (
+      {selectedRegime && REGIME_PLAYBOOKS[selectedRegime.toUpperCase() as keyof typeof REGIME_PLAYBOOKS] && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setSelectedRegime(null)}>
-          <div className="glass border border-border-subtle rounded-xl bg-bg-void max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-accent-gold text-xs font-mono uppercase">PLAYBOOK • {regimeCards.find(c => c.id === selectedRegime)?.title}</span>
+          <div className="glass border border-border-subtle rounded-xl bg-bg-void max-w-2xl w-full p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-accent-gold text-sm font-mono uppercase">PLAYBOOK • {regimeCards.find(c => c.id === selectedRegime)?.title}</span>
               <button onClick={() => setSelectedRegime(null)} className="text-text-muted hover:text-text-primary text-xs">✕</button>
             </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-1">
-                {REGIME_PLAYBOOKS[selectedRegime].assets.map((asset) => (
-                  <span key={asset} className="text-[10px] bg-accent-gold/10 text-accent-gold px-1.5 py-0.5 rounded font-mono">
-                    {asset}
-                  </span>
-                ))}
-              </div>
-              <p className="text-[10px] text-text-secondary leading-tight">{REGIME_PLAYBOOKS[selectedRegime].reasoning}</p>
+            <div className="space-y-3">
+              {REGIME_PLAYBOOKS[selectedRegime.toUpperCase() as keyof typeof REGIME_PLAYBOOKS].map((entry, idx) => (
+                <div key={idx} className="flex flex-col gap-1.5 pb-3 border-b border-border-subtle/50 last:border-0">
+                  <span className="text-[11px] bg-accent-gold/15 text-accent-gold px-2 py-1 rounded font-mono inline-block w-fit">{entry.asset}</span>
+                  <p className="text-[10px] text-text-secondary leading-tight">{entry.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

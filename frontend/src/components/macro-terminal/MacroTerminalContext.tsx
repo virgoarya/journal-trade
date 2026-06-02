@@ -62,7 +62,13 @@ const MacroTerminalContext = createContext<MacroTerminalContextProps | undefined
 
 export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
-  const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
+  const [liquidity, setLiquidity] = useState<LiquidityData | null>({
+    value: 1.30,
+    change: -10.38,
+    status: "DRAINING",
+    date: new Date().toISOString(),
+    trend: ["draining", "draining", "injecting", "injecting", "injecting"]
+  });
   const [isFallback, setIsFallback] = useState(false);
   const [currentRegime, setCurrentRegime] = useState<RegimeType | null>("Goldilocks");
   const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
