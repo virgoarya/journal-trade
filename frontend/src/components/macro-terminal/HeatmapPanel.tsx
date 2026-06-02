@@ -116,10 +116,10 @@ export function HeatmapPanel() {
             <BrainCircuit size={12} aria-hidden />
             <span>Hunter AI Reasoning</span>
           </div>
-          <button
-            onClick={analyzeRegime}
-            disabled={isAnalyzing}
-            aria-busy={isAnalyzing}
+<button
+             onClick={() => analyzeRegime(assets, liquidity)}
+             disabled={isAnalyzing}
+             aria-busy={isAnalyzing}
             aria-label="Analisis ulang regime makro"
             className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
           >

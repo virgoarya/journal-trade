@@ -2,17 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import {
-   classifyMacroRegime,
-   MacroRegime,
-   MacroRegimeResult,
-   classifyOnRrpLiquidity,
-   OnRrpInputs,
-   OnRrpStatus,
-   OnRrpResult,
-   RegimeTransitionAlert,
-   MarketSentiment,
-   deriveSentimentAndImpact,
-   buildNarrativeTemplate,
+  classifyMacroRegime,
+  OnRrpStatus,
+  deriveSentimentAndImpact,
 } from '@/lib/macro/classifiers';
 import type { QuoteApiResponse } from '@/lib/macro/types';
 
@@ -20,18 +12,18 @@ export interface Asset {
   ticker: string;
   name: string;
   change: number | null;
-  weight: number; 
+  weight: number;
 }
 
 const initialAssets: Asset[] = [
-  { ticker: "SPY", name: "S&P 500 (Equities)", change: 0, weight: 1.5 },
-  { ticker: "QQQ", name: "Nasdaq (Tech)", change: 0, weight: 1.5 },
-  { ticker: "GLD", name: "Gold (Safe Haven)", change: 0, weight: 2 },
-  { ticker: "VIXY", name: "VIX (Volatility)", change: 0, weight: 2 },
-  { ticker: "IEF", name: "US 10Y (Bonds)", change: 0, weight: 1 },
-  { ticker: "UUP", name: "US Dollar (DXY)", change: 0, weight: 1.5 },
-  { ticker: "FXY", name: "Japanese Yen", change: 0, weight: 1.5 },
-  { ticker: "TIP", name: "TIPS (Real Yield)", change: 0, weight: 1 },
+  { ticker: "SPY", name: "S&P 500 (Equities)", change: null, weight: 1.5 },
+  { ticker: "QQQ", name: "Nasdaq (Tech)", change: null, weight: 1.5 },
+  { ticker: "GLD", name: "Gold (Safe Haven)", change: null, weight: 2 },
+  { ticker: "VIXY", name: "VIX (Volatility)", change: null, weight: 2 },
+  { ticker: "IEF", name: "US 10Y (Bonds)", change: null, weight: 1 },
+  { ticker: "UUP", name: "US Dollar (DXY)", change: null, weight: 1.5 },
+  { ticker: "FXY", name: "Japanese Yen", change: null, weight: 1.5 },
+  { ticker: "TIP", name: "TIPS (Real Yield)", change: null, weight: 1 },
 ];
 
 export interface LiquidityData {
@@ -66,19 +58,17 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [isFallback, setIsFallback] = useState(false);
   const [currentRegime, setCurrentRegime] = useState<RegimeType | null>(null);
   const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
-
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  
   const [systemAlert, setSystemAlert] = useState<string | null>(null);
   const hasAnalyzedInitially = useRef(false);
   const currentRegimeRef = useRef<RegimeType | null>(null);
   const aiReasoningRef = useRef<string | null>(null);
 
-  // Helper untuk mendapatkan persentase ubahan berdasarkan ticker
   const getChange = (currentAssets: Asset[], ticker: string) => {
-    return currentAssets.find(a => a.ticker === ticker)?.change || 0;
+    const asset = currentAssets.find(a => a.ticker === ticker);
+    return asset?.change ?? 0;
   };
 
   const analyzeRegime = async (currentAssetsToAnalyze: Asset[], currentLiquidity: LiquidityData | null) => {
@@ -119,14 +109,14 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       const isRegimeChanged = previousRegime !== null && previousRegime !== macroResult.regime;
       const shouldFetchAI = isInitialAnalysis || isRegimeChanged;
 
-      let aiReasoning: string;
+      let aiReasoningText: string;
       if (shouldFetchAI) {
         const assetsForService = currentAssetsToAnalyze.map(a => ({
           ticker: a.ticker,
           name: a.name,
           change: a.change,
         }));
-        const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
+        const aiResponse = await fetch("/api/v1/macro-ai/analyze-regime", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -137,9 +127,9 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
           }),
         });
         const aiData = await aiResponse.json();
-        aiReasoning = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
+        aiReasoningText = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
       } else {
-        aiReasoning = aiReasoningRef.current ?? `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
+        aiReasoningText = aiReasoningRef.current ?? `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
       }
 
       if (isRegimeChanged) {
@@ -151,9 +141,9 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
       setCurrentRegime(macroResult.regime);
       currentRegimeRef.current = macroResult.regime;
-      aiReasoningRef.current = aiReasoning;
+      aiReasoningRef.current = aiReasoningText;
 
-      setAiReasoning(aiReasoning);
+      setAiReasoning(aiReasoningText);
       setLastUpdated(new Date());
       hasAnalyzedInitially.current = true;
     } catch (error) {
@@ -164,53 +154,31 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchLiquidity = async () => {
+  const fetchQuotes = async () => {
     try {
-      const res = await fetch("/api/v1/market-data/liquidity");
+      const res = await fetch("/api/macro");
       const data = await res.json();
-      if (data.success && data.data) {
-        setLiquidity(data.data);
-        return data.data;
-      }
-    } catch (error) {
-      console.error("Failed to fetch liquidity data:", error);
-    }
-    return null;
-  };
 
-const fetchQuotes = async () => {
-    try {
-      const symbols = initialAssets.map(a => a.ticker).join(",");
-      const res = await fetch(`/api/v1/market-data?symbols=${symbols}`);
-      const data = (await res.json()) as QuoteApiResponse;
-
-      if (data.success && data.data) {
-        const updatedAssets = initialAssets.map(asset => {
-          const apiQuote = data.data.find((q) => q.symbol === asset.ticker);
-          const change = apiQuote?.data?.dp;
-
-          return {
-            ...asset,
-            change: change ?? null
-          };
-        });
-
+      if (data.success) {
+        const updatedAssets = initialAssets.map(asset => ({
+          ...asset,
+          change: null
+        }));
         setAssets(updatedAssets);
         setIsFallback(false);
         setLastUpdated(new Date());
 
-        await analyzeRegime(updatedAssets, null);
+        setLiquidity(data.liquidity ?? null);
+        await analyzeRegime(updatedAssets, data.liquidity ?? null);
       } else {
         throw new Error("Invalid API response");
       }
     } catch (error) {
       console.error("Market data API failed:", error);
       setIsFallback(true);
-      setAssets(prev => prev.map(a => ({ ...a, change: null })));
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchQuotes();
     const liveInterval = setInterval(fetchQuotes, 60000);
