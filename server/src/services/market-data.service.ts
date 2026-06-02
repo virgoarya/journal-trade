@@ -178,7 +178,7 @@ export const marketDataService = {
         };
       });
 
-      const trend = history.slice(0, 5).map((item) => (item.status === "DRAINING" ? "draining" : "injecting"));
+      const trend = history.slice(0, 5).map((item: { date: string; value: number; status: "INJECTING" | "DRAINING" | "UNKNOWN" }) => (item.status === "DRAINING" ? "draining" : "injecting"));
 
       const data: LiquidityData = {
         value: current,
