@@ -95,26 +95,7 @@ export const marketDataService = {
   async getLiquidity() {
     const key = env.FRED_API_KEY;
     if (!key) {
-      const cacheKey = "liquidity_onrrp";
-      if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
-        return cache[cacheKey].data;
-      }
-
-      const dummyData = {
-        value: 2000,
-        change: 0,
-        status: "UNKNOWN" as const,
-        date: new Date().toISOString().split('T')[0],
-        trend: [],
-        history: [],
-      };
-
-      cache[cacheKey] = {
-        data: dummyData,
-        timestamp: Date.now(),
-      };
-
-      return dummyData;
+      throw new Error("FRED_API_KEY is not configured");
     }
 
     const cacheKey = "liquidity_onrrp";
@@ -122,7 +103,7 @@ export const marketDataService = {
       return cache[cacheKey].data;
     }
 
-    const fetchLiquidityWithRetry = async (retryCount: number = 0): Promise<any> => {
+    // ... rest of the code remains unchanged
       try {
         const response = await axios.get(
           `https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=7`,

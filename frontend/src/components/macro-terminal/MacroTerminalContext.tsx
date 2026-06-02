@@ -62,18 +62,12 @@ const MacroTerminalContext = createContext<MacroTerminalContextProps | undefined
 
 export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
-  const [liquidity, setLiquidity] = useState<LiquidityData | null>({
-    value: 1.30,
-    change: -10.38,
-    status: "DRAINING",
-    date: new Date().toISOString(),
-    trend: ["draining", "draining", "injecting", "injecting", "injecting"]
-  });
+  const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
   const [isFallback, setIsFallback] = useState(false);
-  const [currentRegime, setCurrentRegime] = useState<RegimeType | null>("Goldilocks");
+  const [currentRegime, setCurrentRegime] = useState<RegimeType | null>(null);
   const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
-  
-  const [aiReasoning, setAiReasoning] = useState<string | null>("Regime Goldilocks aktif - pertumbuhan ekonomi stabil dengan inflasi terkendali.");
+
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
@@ -90,13 +84,11 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const analyzeRegime = async (currentAssetsToAnalyze: Asset[], currentLiquidity: LiquidityData | null) => {
     setIsAnalyzing(true);
     try {
-      // Compute growth, inflation, assetSignals
       const spy = getChange(currentAssetsToAnalyze, "SPY");
       const ief = getChange(currentAssetsToAnalyze, "IEF");
       const tip = getChange(currentAssetsToAnalyze, "TIP");
       const gld = getChange(currentAssetsToAnalyze, "GLD");
       const vix = getChange(currentAssetsToAnalyze, "VIXY");
-      const uup = getChange(currentAssetsToAnalyze, "UUP");
       const fxy = getChange(currentAssetsToAnalyze, "FXY");
 
       const growth = spy - ief;
@@ -110,21 +102,18 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       };
 
       const macroResult = classifyMacroRegime({ growth, inflation, assetSignals });
-      const rawLiquidity = currentLiquidity;
 
-      // Normalize liquidity status to match OnRrpStatus type
       let liquidityStatus: OnRrpStatus = 'Neutral';
-      if (rawLiquidity) {
-        if (rawLiquidity.status === 'DRAINING') {
+      if (currentLiquidity) {
+        if (currentLiquidity.status === 'DRAINING') {
           liquidityStatus = 'Draining';
-        } else if (rawLiquidity.status === 'INJECTING') {
+        } else if (currentLiquidity.status === 'INJECTING') {
           liquidityStatus = 'Refilling';
         }
       }
 
-      const { sentiment, impactOnRisk } = deriveSentimentAndImpact(macroResult.regime, liquidityStatus);
+      const { sentiment } = deriveSentimentAndImpact(macroResult.regime, liquidityStatus);
 
-      // Determine regime shift using currentRegimeRef
       const previousRegime = currentRegimeRef.current;
       const isInitialAnalysis = !hasAnalyzedInitially.current;
       const isRegimeChanged = previousRegime !== null && previousRegime !== macroResult.regime;
@@ -148,41 +137,14 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
           }),
         });
         const aiData = await aiResponse.json();
-
-        // AI now generates full narrative, pass template data for context
-        const narrativeContext = buildNarrativeTemplate(
-          macroResult.regime,
-          macroResult.shortReason,
-          liquidityStatus,
-          { sentiment, impactOnRisk }
-        );
-
-        // Use AI output directly, fallback is just the raw data context
         aiReasoning = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
       } else {
-        // Keep existing reasoning to avoid unnecessary API call
         aiReasoning = aiReasoningRef.current ?? `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
       }
 
       if (isRegimeChanged) {
         setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime!.toUpperCase()} TO ${macroResult.regime.toUpperCase()}.`);
         setLastRegime(previousRegime);
-
-        // Create system notification for regime shift
-        try {
-          await fetch("/api/v1/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: "system",
-              type: "SYSTEM",
-              title: "⚠️ MACRO REGIME SHIFT",
-              message: `Market telah memasuki fase ${macroResult.regime}.`,
-            }),
-          });
-        } catch (notifyError) {
-          console.error("Failed to create regime shift notification:", notifyError);
-        }
       } else if (currentRegimeRef.current === null) {
         setLastRegime(macroResult.regime);
       }
@@ -196,7 +158,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       hasAnalyzedInitially.current = true;
     } catch (error) {
       console.error("Failed to analyze regime:", error);
-      setAiReasoning("Gagal mendapatkan analisis regime. Coba lagi nanti.");
+      setAiReasoning(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -216,7 +178,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const fetchQuotes = async () => {
+const fetchQuotes = async () => {
     try {
       const symbols = initialAssets.map(a => a.ticker).join(",");
       const res = await fetch(`/api/v1/market-data?symbols=${symbols}`);
@@ -225,15 +187,11 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         const updatedAssets = initialAssets.map(asset => {
           const apiQuote = data.data.find((q) => q.symbol === asset.ticker);
-          let change: number | null = null;
-
-          if (apiQuote?.data?.dp !== undefined && apiQuote.data.dp !== null) {
-            change = apiQuote.data.dp;
-          }
+          const change = apiQuote?.data?.dp;
 
           return {
             ...asset,
-            change: (change ?? 0)
+            change: change ?? null
           };
         });
 
@@ -243,25 +201,14 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
         await analyzeRegime(updatedAssets, null);
       } else {
-        console.warn("Yahoo Finance quotes returned empty or invalid data, using mock data");
-        const mockAssets = initialAssets.map(a => ({
-          ...a,
-          change: parseFloat(((a.change ?? 0) + (Math.random() - 0.5) * 0.8).toFixed(2))
-        }));
-        setAssets(mockAssets);
-        await analyzeRegime(mockAssets, null);
+        throw new Error("Invalid API response");
       }
     } catch (error) {
-      console.warn("Stooq quotes failed, using mock ticker fallback");
+      console.error("Market data API failed:", error);
       setIsFallback(true);
-      const mockAssets = initialAssets.map(a => ({
-        ...a,
-        change: parseFloat(((a.change ?? 0) + (Math.random() - 0.5) * 0.8).toFixed(2))
-      }));
-      setAssets(mockAssets);
-      await analyzeRegime(mockAssets, null);
+      setAssets(prev => prev.map(a => ({ ...a, change: null })));
     }
-};
+  };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
