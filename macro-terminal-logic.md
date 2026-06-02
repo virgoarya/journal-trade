@@ -33,13 +33,16 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 - Jika `change > 0` → status **DRAINING** (uang mengalir ke Fed, likuiditas pasar berkurang)
 - Jika `change < 0` → status **INJECTING** (uang kembali ke pasar, likuiditas bertambah)
 - Format nilai: `>= 1000` ditampilkan sebagai Triliun, sisanya Miliar.
+- **5-Day Trend**: Backend mengambil 7 hari terakhir dari FRED (`limit=7`), menghitung perubahan harian berturut-turut, lalu kirim array `trend[]` (maks 5 item dengan status `injecting`/`draining`) ke frontend untuk dirender sebagai 5 dot kecil (hijau/merah).
 
 ### Update Cycle
 - Backend cache 1 jam untuk menghindari spam request ke FRED.
-- Jika `FRED_API_KEY` tidak terset, sistemFallback dummy (`value: 2000`).
+- Jika `FRED_API_KEY` tidak terset, sistem fallback dummy (`value: 2000`).
 
 ### File Terkait
-- `server/src/services/market-data.service.ts` (`getLiquidity`)
+- `server/src/services/market-data.service.ts` (`getLiquidity`) — query 7 hari, hitung `trend[]`
+- `frontend/src/components/macro-terminal/LiquidityGaugePanel.tsx` — render 5 dot trend under "Current Balance"
+- `frontend/src/components/macro-terminal/MacroTerminalContext.tsx` — interface `LiquidityData` menyertakan `trend` field
 
 ## 3. Macro ETFs Heatmap
 
@@ -107,7 +110,11 @@ AI (Groq/Gemini) dipaksa mengeluarkan JSON dengan 6 field:
 
 ### Fungsi
 - Menampilkan narasi makro lengkap untuk quadrant aktif.
-- Sumber: AI (Groq/Gemini) memproses `assets`, `currentRegime`, dan `liquidityStatus`.
+- Sumber: AI (Groq ⇄ Gemini) memproses `assets`, `currentRegime`, dan `liquidityStatus`.
+
+### Event-Driven Trigger
+- `analyzeRegime()` **hanya memanggil backend AI saat regime berubah** (initial load atau transition `previousRegime !== currentRegime`).
+- Jika regime tetap sama, narasi diambil dari cache in-memory (`aiReasoningRef`) — **tidak ada API call** ke Groq/Gemini.
 
 ### Rumus Narasi
 - Backend `macroAiService.analyzeRegime()` menghitung:
@@ -118,7 +125,7 @@ AI (Groq/Gemini) dipaksa mengeluarkan JSON dengan 6 field:
 
 ### Alur
 1. `MacroTerminalContext` fetch quotes → hitung regime → fetch AI reasoning.
-2. `analyzeRegime()` dipanggil setiap kali ada update quotes.
+2. `analyzeRegime()` **hanya dipanggil jika regime berubah** (initial load atau transition). Jika `currentRegime === previousRegime`, gunakan cache `aiReasoningRef` yang sudah ada — tidak tembak API.
 3. Hasil disimpan di state `aiReasoning`.
 4. Ditampilkan di `HeatmapPanel` di bawah heatmap.
 
@@ -130,12 +137,20 @@ AI (Groq/Gemini) dipaksa mengeluarkan JSON dengan 6 field:
 ### Fungsi
 - Chat interface untuk query makro langsung ke AI.
 
+### Dual-Engine (Groq ⇄ Gemini)
+- Primary: **Groq** (`llama-3.3-70b-versatile`, fallback ke `llama-3.1-8b-instant`).
+- Secondary: **Google Gemini** (`gemini-2.5-flash` via `GEMINI_API_KEY`).
+- Auto-switch: Jika Groq melempar error **429 (Rate Limit)** atau **5xx (Server Error)**, backend otomatis oper prompt ke Gemini tanpa UI menampilkan error.
+
 ### Flow
 1. User ketik pesan + tekan Enter / klik Send.
 2. `handleSubmit` kirim POST ke `/api/v1/macro-ai/chat` dengan `messages`, `currentRegime`, `assets`, `liquidityStatus`.
-3. Backend stream balasan (SSE). Frontend menerima chunk dan update `content` secara real-time.
-4. Jika response selesai, stream dihentikan.
-5. Pesan disimpan di `localStorage` (`hunterDeskHistory`).
+3. Backend (`macroAiService.chatStream()`) menggunakan `callDualEngineStream()`:
+   - Coba Groq streaming dulu.
+   - Jika 429/5xx → fallback ke Gemini streaming (`generateContent` dengan `responseType: "stream"`).
+4. Frontend menerima chunk dan update `content` secara real-time.
+5. Jika response selesai, stream dihentikan.
+6. Pesan disimpan di `localStorage` (`hunterDeskHistory`).
 
 ### State Chat
 - `thinkingIndexRef` — daftar pesan "Hunter sedang membaca pasar...", berganti setiap **700ms** sampai AI jawab.
@@ -143,7 +158,7 @@ AI (Groq/Gemini) dipaksa mengeluarkan JSON dengan 6 field:
 
 ### Rate Limit
 - Chat: **1 request per 2 detik** (`RATE_LIMIT_MS = 2000`).
-- Macro Regime: **1 request per 5 menit** (`RATE_LIMIT_MS = 300000`), dengan backoff maks 30 menit jika error.
+- AI Reasoning (`analyzeRegime`): **Event-driven** — hanya dipanggil saat regime berubah (initial load atau transition). Jika regime tetap, tidak ada API call — menggunakan cache `aiReasoningRef`.
 
 ## 7. Alur Data Keseluruhan
 
@@ -165,14 +180,31 @@ Frontend (page.tsx)
 
 Backend Services
   - `marketDataService.getQuotes()`      → Finnhub / Stooq / Yahoo
-  - `marketDataService.getLiquidity()`   → FRED
+  - `marketDataService.getLiquidity()`   → FRED (7-day trend)
   - `marketDataService.getNews()`        → Finnhub News
-  - `macroAiService.analyzeRegime()`     → Groq / Gemini
-  - `macroAiService.analyzeMacroFeed()`  → Groq (JSON 6-field)
-  - `macroAiService.chatStream()`        → Groq streaming
+  - `macroAiService.analyzeRegime()`     → Groq primary, Gemini fallback (event-driven)
+  - `macroAiService.analyzeMacroFeed()`  → Groq primary, Gemini fallback (JSON 6-field)
+  - `macroAiService.chatStream()`        → Groq streaming primary, Gemini streaming fallback
 ```
 
-## 8. Catatan Error Handling
+## 8. Market Session Status (Heatmap)
+
+### Fungsi
+- Menampilkan status sesi pasar AS secara real-time di pojok kanan atas Heatmap.
+- Membantu user mengetahui apakah data yang diterima adalah live market data atau closing data kemarin.
+
+### Logika Waktu (EST)
+- Menggunakan `Intl.DateTimeFormat` dengan `timeZone: "America/New_York"` (native JS, tanpa library eksternal).
+- Badge ditentukan berdasarkan jam EST dan hari kerja:
+  - **LIVE (US SESSION)** — Senin–Jumat, 09:30–16:00 EST → badge hijau
+  - **PRE-MARKET** — Senin–Jumat, sebelum 09:30 EST → badge kuning/oranye
+  - **AFTER-HOURS** — Senin–Jumat, 16:00–17:00 EST → badge kuning/oranye
+  - **CLOSED** — Weekend / luar jam sesi → badge abu-abu
+
+### File Terkait
+- `frontend/src/components/macro-terminal/HeatmapPanel.tsx` — fungsi `getMarketSessionStatus()` + badge render
+
+## 9. Catatan Error Handling
 
 - Setiap card memiliki **retry button** pada state error.
 - Backend melakukan **cache** untuk mengurangi rate limit:
