@@ -64,10 +64,10 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
   const [isFallback, setIsFallback] = useState(false);
-  const [currentRegime, setCurrentRegime] = useState<RegimeType | null>(null);
+  const [currentRegime, setCurrentRegime] = useState<RegimeType | null>("Goldilocks");
   const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
   
-  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [aiReasoning, setAiReasoning] = useState<string | null>("Regime Goldilocks aktif - pertumbuhan ekonomi stabil dengan inflasi terkendali.");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
@@ -255,18 +255,16 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       setAssets(mockAssets);
       await analyzeRegime(mockAssets, null);
     }
-  };
+};
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    let mockInterval: NodeJS.Timeout | null = null;
     fetchQuotes();
     const liveInterval = setInterval(fetchQuotes, 60000);
-    
+
     return () => {
       clearInterval(liveInterval);
-      if (mockInterval) clearInterval(mockInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const clearSystemAlert = () => setSystemAlert(null);
