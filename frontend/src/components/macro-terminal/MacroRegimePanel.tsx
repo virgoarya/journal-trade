@@ -53,8 +53,8 @@ const GRID_LAYOUT: Record<string, { row: number; col: number }> = {
 };
 
 export function MacroRegimePanel() {
-  const { currentRegime, lastRegime, isAnalyzing } = useMacroTerminal();
-  const [selectedRegime, setSelectedRegime] = useState<string>("");
+  const { currentRegime, lastRegime } = useMacroTerminal();
+  const [selectedRegime, setSelectedRegime] = useState<string | null>(null);
 
   const activeRegime = useMemo(() => {
     const fromContext = (currentRegime || lastRegime || "").toLowerCase();
@@ -63,38 +63,36 @@ export function MacroRegimePanel() {
 
   useEffect(() => {
     const regime = (currentRegime || lastRegime || "").toLowerCase();
-    if (regime && selectedRegime === "") {
+    if (regime && !selectedRegime) {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       setSelectedRegime(regime);
     }
-  }, [currentRegime, lastRegime]);
+  }, [currentRegime, lastRegime, selectedRegime]);
 
   const hasRegime = !!(currentRegime || lastRegime);
 
   return (
-    <div className="flex h-full max-h-[260px] flex-col glass border border-border-subtle rounded-xl bg-bg-void">
-      <div className="flex items-center justify-between border-b border-border-subtle p-2">
-        <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
-        {hasRegime && (
-          <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-1.5 py-0.5 rounded animate-pulse">LIVE</span>
-        )}
-      </div>
-
-      {!hasRegime ? (
-        <div className="flex flex-1 items-center justify-center p-2">
-          <span className="text-text-muted text-xs">Loading...</span>
+    <>
+      <div className="flex flex-col h-full max-h-[260px] glass border border-border-subtle rounded-xl bg-bg-void">
+        <div className="flex items-center justify-between border-b border-border-subtle p-2">
+          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
+          {hasRegime && (
+            <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-1.5 py-0.5 rounded animate-pulse">LIVE</span>
+          )}
         </div>
-      ) : (
-        <>
-          {/* Grid Layout - Cross Pattern */}
+
+        {!hasRegime ? (
+          <div className="flex flex-1 items-center justify-center p-2">
+            <span className="text-text-muted text-xs">Loading...</span>
+          </div>
+        ) : (
           <div className="grid grid-cols-3 grid-rows-3 gap-1.5 p-2 relative">
-            {/* Empty placeholder cells */}
             <div style={{ gridColumn: 2, gridRow: 1 }} />
             <div style={{ gridColumn: 1, gridRow: 2 }} />
             <div style={{ gridColumn: 3, gridRow: 2 }} />
-            {/* Regime Cards */}
             {regimeCards.map((card) => {
               const isActive = card.id.toLowerCase() === activeRegime.toLowerCase();
-              const isSelected = card.id.toLowerCase() === selectedRegime.toLowerCase();
+              const isSelected = card.id.toLowerCase() === (selectedRegime || "").toLowerCase();
               const layout = GRID_LAYOUT[card.id] || { row: 2, col: 2 };
 
               return (
@@ -127,27 +125,29 @@ export function MacroRegimePanel() {
               );
             })}
           </div>
+        )}
+      </div>
 
-          {/* Playbook Panel */}
-          {selectedRegime && REGIME_PLAYBOOKS[selectedRegime] && (
-            <div className="border-t border-border-subtle px-2 py-1.5 bg-surface-elevated/30">
-              <div className="mb-1">
-                <span className="text-accent-gold text-[10px] font-mono uppercase">Playbook:</span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap gap-1">
-                  {REGIME_PLAYBOOKS[selectedRegime].assets.map((asset) => (
-                    <span key={asset} className="text-[9px] bg-accent-gold/10 text-accent-gold px-1 py-0.5 rounded font-mono">
-                      {asset}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-[9px] text-text-secondary leading-tight">{REGIME_PLAYBOOKS[selectedRegime].reasoning}</p>
-              </div>
+      {selectedRegime && REGIME_PLAYBOOKS[selectedRegime] && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setSelectedRegime(null)}>
+          <div className="glass border border-border-subtle rounded-xl bg-bg-void max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-accent-gold text-xs font-mono uppercase">PLAYBOOK • {regimeCards.find(c => c.id === selectedRegime)?.title}</span>
+              <button onClick={() => setSelectedRegime(null)} className="text-text-muted hover:text-text-primary text-xs">✕</button>
             </div>
-          )}
-        </>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {REGIME_PLAYBOOKS[selectedRegime].assets.map((asset) => (
+                  <span key={asset} className="text-[10px] bg-accent-gold/10 text-accent-gold px-1.5 py-0.5 rounded font-mono">
+                    {asset}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-text-secondary leading-tight">{REGIME_PLAYBOOKS[selectedRegime].reasoning}</p>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
