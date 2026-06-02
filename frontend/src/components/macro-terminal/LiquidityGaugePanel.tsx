@@ -30,6 +30,9 @@ export function LiquidityGaugePanel() {
   const absChange = Math.abs(liquidity.change);
   const changeFormatted = absChange >= 1000 ? `${(liquidity.change / 1000).toFixed(2)}T` : `${liquidity.change > 0 ? "+" : ""}${liquidity.change.toFixed(2)}B`;
 
+  const trend = Array.isArray(liquidity.trend) ? liquidity.trend : [];
+  const trendDots = trend.slice(0, 5);
+
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl p-4 relative overflow-hidden">
       <div className="flex items-center justify-between mb-3 z-10">
@@ -67,6 +70,19 @@ export function LiquidityGaugePanel() {
         <div className="flex justify-between text-[10px] font-mono text-text-muted font-bold tracking-widest mt-1">
           <span className={isInjecting ? "text-data-profit" : ""}>INJECTION (BULLISH)</span>
           <span className={isDraining ? "text-data-loss" : ""}>DRAIN (BEARISH)</span>
+        </div>
+
+        <div className="mt-2">
+          <div className="text-[10px] font-mono text-text-muted mb-1">5-DAY TREND</div>
+          <div className="flex items-center gap-2">
+            {trendDots.length === 0 && <span className="text-[10px] text-text-muted">-</span>}
+            {trendDots.map((dot, idx) => (
+              <span
+                key={idx}
+                className={`h-2.5 w-2.5 rounded-full ${dot === "injecting" ? "bg-data-profit" : "bg-data-loss"}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
