@@ -28,6 +28,7 @@ function getMarketSessionStatus() {
   const PRE_START = 4 * 60;
   const MARKET_OPEN = 9 * 60 + 30;
   const MARKET_CLOSE = 16 * 60;
+  const AFTER_CLOSE = 20 * 60;
 
   if (currentMinutes >= PRE_START && currentMinutes < MARKET_OPEN) {
     return { label: "PRE-MARKET", color: "bg-yellow-600", textColor: "text-yellow-400" };
@@ -35,7 +36,7 @@ function getMarketSessionStatus() {
   if (currentMinutes >= MARKET_OPEN && currentMinutes < MARKET_CLOSE) {
     return { label: "LIVE (US SESSION)", color: "bg-data-profit", textColor: "text-data-profit" };
   }
-  if (currentMinutes >= MARKET_CLOSE && currentMinutes < MARKET_CLOSE + 60) {
+  if (currentMinutes >= MARKET_CLOSE && currentMinutes < AFTER_CLOSE) {
     return { label: "AFTER-HOURS", color: "bg-yellow-600", textColor: "text-yellow-400" };
   }
 
