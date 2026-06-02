@@ -61,14 +61,6 @@ export function MacroRegimePanel() {
     return fromContext || "";
   }, [currentRegime, lastRegime]);
 
-  useEffect(() => {
-    const regime = (currentRegime || lastRegime || "").toLowerCase();
-    if (regime && !selectedRegime) {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      setSelectedRegime(regime);
-    }
-  }, [currentRegime, lastRegime, selectedRegime]);
-
   const hasRegime = !!(currentRegime || lastRegime);
 
   return (

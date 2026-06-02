@@ -350,26 +350,26 @@ export function NewsFeedPanel() {
         const data = await res.json();
         
         if (data.success && data.data && data.data.length > 0) {
-          const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
-            const date = new Date(item.datetime * 1000);
-            
-            let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
-            let asset = "MKT";
-            const headline = item.headline.toLowerCase();
-            
-            if (headline.includes("fed") || headline.includes("rate") || headline.includes("inflation")) {
-              impact = headline.includes("cut") ? "BEARISH" : "BULLISH";
-              asset = "USD";
-            } else if (headline.includes("gold") || headline.includes("safe haven")) {
-              impact = "BULLISH";
-              asset = "GOLD";
-            } else if (headline.includes("crash") || headline.includes("drop") || headline.includes("fall")) {
-              impact = "BEARISH";
-              asset = "EQUITY";
-            } else if (headline.includes("jump") || headline.includes("rise") || headline.includes("gain")) {
-              impact = "BULLISH";
-              asset = "EQUITY";
-            }
+const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
+             const date = item.datetime ? new Date(item.datetime * 1000) : new Date();
+             
+             let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
+             let asset = "MKT";
+             const headline = item.headline?.toLowerCase() || "";
+             
+             if (headline.includes("fed") || headline.includes("rate") || headline.includes("inflation")) {
+               impact = headline.includes("cut") ? "BEARISH" : "BULLISH";
+               asset = "USD";
+             } else if (headline.includes("gold") || headline.includes("safe haven")) {
+               impact = "BULLISH";
+               asset = "GOLD";
+             } else if (headline.includes("crash") || headline.includes("drop") || headline.includes("fall")) {
+               impact = "BEARISH";
+               asset = "EQUITY";
+             } else if (headline.includes("jump") || headline.includes("rise") || headline.includes("gain")) {
+               impact = "BULLISH";
+               asset = "EQUITY";
+             }
 
             return {
               id: String(item.id || index),
