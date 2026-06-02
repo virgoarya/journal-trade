@@ -89,7 +89,14 @@ router.post("/analyze-macro-feed", requireAuth, async (req, res) => {
     }
 
     const analysis = await macroAiService.analyzeMacroFeed(headline, targetAsset, context);
-    res.json({ success: true, analysis });
+
+    if (typeof analysis === "string") {
+      res.json({ success: true, analysis });
+    } else if (analysis && typeof analysis === "object") {
+      res.json({ success: true, analysis: JSON.stringify(analysis) });
+    } else {
+      res.status(500).json({ success: false, error: "Invalid analysis response from AI service" });
+    }
   } catch (error: any) {
     console.error("Macro AI Analyze Feed Route Error:", error);
     res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
