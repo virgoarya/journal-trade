@@ -56,16 +56,16 @@ const GRID_LAYOUT: Record<string, { row: number; col: number }> = {
 type State = "loading" | "ready" | "error";
 
 export function MacroRegimePanel() {
-  const { currentRegime } = useMacroTerminal();
+  const { currentRegime, lastRegime } = useMacroTerminal();
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedRegime, setSelectedRegime] = useState<string>("");
 
-  const activeRegime = useMemo(() => {
-    const fromContext = (currentRegime || "").toLowerCase();
+const activeRegime = useMemo(() => {
+    const fromContext = (currentRegime || lastRegime || "").toLowerCase();
     if (fromContext) return fromContext;
     return "";
-  }, [currentRegime]);
+  }, [currentRegime, lastRegime]);
 
   useEffect(() => {
     if (currentRegime && selectedRegime === "") {
@@ -73,7 +73,12 @@ export function MacroRegimePanel() {
     }
   }, [currentRegime, selectedRegime]);
 
-const fetchMacroData = async () => {
+  useEffect(() => {
+    if (!currentRegime && !lastRegime) return;
+    setState("ready");
+  }, [currentRegime, lastRegime]);
+
+  const fetchMacroData = async () => {
     setState("loading");
     setErrorMessage("");
     try {
@@ -82,6 +87,10 @@ const fetchMacroData = async () => {
       });
       if (!response.ok) {
         throw new Error(`Gagal memuat data makro (HTTP ${response.status})`);
+      }
+      const result = (await response.json()) as { success?: boolean; regime?: string; error?: string };
+      if (!result.success) {
+        throw new Error(result.error || "Respons data makro tidak valid");
       }
       setState("ready");
     } catch (err) {
