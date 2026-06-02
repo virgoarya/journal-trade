@@ -5,6 +5,34 @@ const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
+function isRetryableGroqError(error: any): boolean {
+  if (!error) return false;
+  const status = error.response?.status;
+  return status === 429 || (typeof status === "number" && status >= 500);
+}
+
+async function callGemini(prompt: string, systemPrompt?: string): Promise<string | null> {
+  if (!env.GEMINI_API_KEY) return null;
+
+  try {
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const response = await axios.post(
+      `${GEMINI_API_URL}?key=${env.GEMINI_API_KEY}`,
+      {
+        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+        generationConfig: { maxOutputTokens: 300, temperature: 0.2 },
+      },
+      { headers: { "Content-Type": "application/json" }, timeout: 20000 }
+    );
+
+    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    return typeof text === "string" && text.trim() ? text.trim() : null;
+  } catch (error) {
+    console.error("[MacroAI] Gemini fallback failed:", (error as any)?.message);
+    return null;
+  }
+}
+
 // Groq API response interface
 interface GroqResponse {
   id: string;

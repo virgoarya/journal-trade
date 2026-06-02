@@ -73,6 +73,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const [systemAlert, setSystemAlert] = useState<string | null>(null);
   const hasAnalyzedInitially = useRef(false);
   const currentRegimeRef = useRef<RegimeType | null>(null);
+  const aiReasoningRef = useRef<string | null>(null);
 
   // Helper untuk mendapatkan persentase ubahan berdasarkan ticker
   const getChange = (currentAssets: Asset[], ticker: string) => {
@@ -103,7 +104,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
       const macroResult = classifyMacroRegime({ growth, inflation, assetSignals });
       const rawLiquidity = currentLiquidity;
-      
+
       // Normalize liquidity status to match OnRrpStatus type
       let liquidityStatus: OnRrpStatus = 'Neutral';
       if (rawLiquidity) {
@@ -113,45 +114,53 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
           liquidityStatus = 'Refilling';
         }
       }
-      
+
       const { sentiment, impactOnRisk } = deriveSentimentAndImpact(macroResult.regime, liquidityStatus);
-      
-      // Call the macro-ai endpoint to get shortReason (1-2 sentences) in Indonesian
-      const assetsForService = currentAssetsToAnalyze.map(a => ({
-        ticker: a.ticker,
-        name: a.name,
-        change: a.change,
-      }));
-const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-           assets: assetsForService,
-           calculatedRegime: macroResult.regime,
-           liquidityStatus: liquidityStatus,
-           sentiment: sentiment,
-         }),
-       });
-      const aiData = await aiResponse.json();
-      
-      // AI now generates full narrative, pass template data for context
-      const narrativeContext = buildNarrativeTemplate(
-        macroResult.regime,
-        macroResult.shortReason,
-        liquidityStatus,
-        { sentiment, impactOnRisk }
-      );
-      
-      // Use AI output directly, fallback is just the raw data context
-      const aiReasoning = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
 
       // Determine regime shift using currentRegimeRef
+      const previousRegime = currentRegimeRef.current;
       const isInitialAnalysis = !hasAnalyzedInitially.current;
-      const isRegimeShift = currentRegimeRef.current !== null && currentRegimeRef.current !== macroResult.regime;
-      if (isRegimeShift) {
-        setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${currentRegimeRef.current!.toUpperCase()} TO ${macroResult.regime.toUpperCase()}.`);
-        setLastRegime(currentRegimeRef.current);
-        
+      const isRegimeChanged = previousRegime !== null && previousRegime !== macroResult.regime;
+      const shouldFetchAI = isInitialAnalysis || isRegimeChanged;
+
+      let aiReasoning: string;
+      if (shouldFetchAI) {
+        const assetsForService = currentAssetsToAnalyze.map(a => ({
+          ticker: a.ticker,
+          name: a.name,
+          change: a.change,
+        }));
+        const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assets: assetsForService,
+            calculatedRegime: macroResult.regime,
+            liquidityStatus: liquidityStatus,
+            sentiment: sentiment,
+          }),
+        });
+        const aiData = await aiResponse.json();
+
+        // AI now generates full narrative, pass template data for context
+        const narrativeContext = buildNarrativeTemplate(
+          macroResult.regime,
+          macroResult.shortReason,
+          liquidityStatus,
+          { sentiment, impactOnRisk }
+        );
+
+        // Use AI output directly, fallback is just the raw data context
+        aiReasoning = aiData.success && aiData.reasoning ? aiData.reasoning.trim() : `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
+      } else {
+        // Keep existing reasoning to avoid unnecessary API call
+        aiReasoning = aiReasoningRef.current ?? `Regime: ${macroResult.regime}, Liquidity: ${liquidityStatus}`;
+      }
+
+      if (isRegimeChanged) {
+        setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime!.toUpperCase()} TO ${macroResult.regime.toUpperCase()}.`);
+        setLastRegime(previousRegime);
+
         // Create system notification for regime shift
         try {
           await fetch("/api/v1/notifications", {
@@ -170,11 +179,14 @@ const aiResponse = await fetch(`/api/v1/macro-ai/analyze-regime`, {
       } else if (currentRegimeRef.current === null) {
         setLastRegime(macroResult.regime);
       }
+
       setCurrentRegime(macroResult.regime);
       currentRegimeRef.current = macroResult.regime;
+      aiReasoningRef.current = aiReasoning;
 
       setAiReasoning(aiReasoning);
       setLastUpdated(new Date());
+      hasAnalyzedInitially.current = true;
     } catch (error) {
       console.error("Failed to analyze regime:", error);
       setAiReasoning("Gagal mendapatkan analisis regime. Coba lagi nanti.");

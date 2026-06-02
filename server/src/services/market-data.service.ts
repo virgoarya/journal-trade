@@ -6,6 +6,15 @@ import { notificationService } from "./notification.service";
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_TTL_MS = 60000; // 60 seconds
 
+export interface LiquidityData {
+  value: number;
+  change: number;
+  status: "INJECTING" | "DRAINING" | "UNKNOWN";
+  date: string;
+  trend: ("injecting" | "draining")[];
+  history: Array<{ date: string; value: number; status: "INJECTING" | "DRAINING" | "UNKNOWN" }>;
+}
+
 export const marketDataService = {
   async getNews() {
     const key = process.env.FINNHUB_API_KEY;
@@ -86,41 +95,39 @@ export const marketDataService = {
   async getLiquidity() {
     const key = env.FRED_API_KEY;
     if (!key) {
-      // If no FRED API key is configured, return dummy data for development
       const cacheKey = "liquidity_onrrp";
-      // Cache for 1 hour to avoid generating dummy data too frequently
       if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
         return cache[cacheKey].data;
       }
 
       const dummyData = {
-        value: 2000, // Represents $2.0 trillion (since panel divides by 1000 to show trillions)
+        value: 2000,
         change: 0,
         status: "UNKNOWN" as const,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        trend: [],
+        history: [],
       };
 
-      // Update cache
       cache[cacheKey] = {
         data: dummyData,
         timestamp: Date.now(),
       };
-      
+
       return dummyData;
     }
 
     const cacheKey = "liquidity_onrrp";
-    // Cache for 1 hour since FRED updates daily
     if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 3600000) {
       return cache[cacheKey].data;
     }
 
-    // Function to fetch with exponential backoff retry
     const fetchLiquidityWithRetry = async (retryCount: number = 0): Promise<any> => {
       try {
-        const response = await axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=2`, {
-          timeout: 5000
-        });
+        const response = await axios.get(
+          `https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=7`,
+          { timeout: 5000 }
+        );
         return response;
       } catch (error: any) {
         console.error(`[FRED Liquidity] Error fetching: ${error.message}`);
@@ -130,7 +137,7 @@ export const marketDataService = {
         if (error.response?.status === 429 && retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
           console.log(`[FRED Liquidity] Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
           return fetchLiquidityWithRetry(retryCount + 1);
         }
         throw error;
@@ -139,53 +146,71 @@ export const marketDataService = {
 
     try {
       const response = await fetchLiquidityWithRetry();
-      
+
       const observations = response.data.observations;
       if (!observations || observations.length < 2) {
         throw new Error("Insufficient data from FRED");
       }
 
-      const current = parseFloat(observations[0].value);
-      const previous = parseFloat(observations[1].value);
+      const parsed = observations
+        .map((obs: any) => ({
+          date: obs.date,
+          value: parseFloat(obs.value),
+        }))
+        .filter((item: any) => !Number.isNaN(item.value));
+
+      if (parsed.length < 2) {
+        throw new Error("Insufficient numeric liquidity data from FRED");
+      }
+
+      const current = parsed[0].value;
+      const previous = parsed[1].value;
       const change = current - previous;
-      // If ON RRP value increases, money is flowing TO Fed overnight (DRAINING market liquidity)
-      // If ON RRP value decreases, money is flowing FROM Fed overnight (INJECTING market liquidity)
       const status = change > 0 ? "DRAINING" : "INJECTING";
-      
-      const data = {
+
+      const history = parsed.slice(0, 7).map((item: any, idx: number) => {
+        const prev = idx < parsed.length - 1 ? parsed[idx + 1].value : item.value;
+        const dailyChange = item.value - prev;
+        return {
+          date: item.date,
+          value: item.value,
+          status: dailyChange > 0 ? "DRAINING" : "INJECTING",
+        };
+      });
+
+      const trend = history.slice(0, 5).map((item) => (item.status === "DRAINING" ? "draining" : "injecting"));
+
+      const data: LiquidityData = {
         value: current,
-        change: change,
-        status: status,
-        date: observations[0].date
+        change,
+        status,
+        date: observations[0].date,
+        trend,
+        history,
       };
 
-      // Check if this is a significant change and create notification
       try {
         const previousCached = cache[cacheKey];
         const prevValue = previousCached ? parseFloat(previousCached.data?.value) : null;
-        
-        // Only create notification if there's a change (first time or new change)
+
         if (prevValue !== null && prevValue !== current) {
           const absChange = Math.abs(current - prevValue);
-          // Only notify if change is significant (> $0.1B)
           if (absChange > 0.1) {
             const isDraining = change > 0;
             await notificationService.create({
               userId: "system",
               type: isDraining ? "RISK_WARNING" : "SYSTEM",
-              title: isDraining 
-                ? "⚠️ Institutional Liquidity Draining" 
-                : "🚀 Institutional Liquidity Injecting",
+              title: isDraining ? "⚠️ Institutional Liquidity Draining" : "🚀 Institutional Liquidity Injecting",
               message: isDraining
                 ? `Dana ON RRP meningkat sebesar $${absChange.toFixed(2)}B. Institusi memarkir uang ke Fed, likuiditas pasar berpotensi mengetat.`
                 : `Dana ON RRP menurun sebesar $${absChange.toFixed(2)}B. Likuiditas kembali disuntikkan ke pasar bursa!`,
               metadata: {
                 currentValue: current,
                 previousValue: prevValue,
-                change: change,
-                status: status,
-                source: "FRED_ON_RRP"
-              }
+                change,
+                status,
+                source: "FRED_ON_RRP",
+              },
             });
           }
         }
@@ -193,16 +218,15 @@ export const marketDataService = {
         console.error("Failed to create liquidity notification:", (notifyError as any)?.message);
       }
 
-      // Update cache
       cache[cacheKey] = {
-        data: data,
+        data,
         timestamp: Date.now(),
       };
-      
+
       return data;
     } catch (error: any) {
       console.error("FRED API Error:", error.message);
       throw new Error("Failed to fetch ON RRP liquidity data");
     }
-  }
+  },
 };
