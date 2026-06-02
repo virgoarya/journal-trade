@@ -39,6 +39,7 @@ export interface LiquidityData {
   change: number;
   status: "INJECTING" | "DRAINING" | "UNKNOWN";
   date: string;
+  trend: ("injecting" | "draining")[];
 }
 
 export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Slowdown" | "Deflation" | "Neutral Transition";
