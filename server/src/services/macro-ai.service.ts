@@ -1,26 +1,21 @@
 import axios from "axios";
 import { env } from "../config/env";
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+const GEMINI_API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
-function isRetryableGroqError(error: any): boolean {
-  if (!error) return false;
-  const status = error.response?.status;
-  return status === 429 || (typeof status === "number" && status >= 500);
-}
-
-async function callGemini(prompt: string, systemPrompt?: string): Promise<string | null> {
+async function callGeminiDirect(systemPrompt: string, userPrompt: string, geminiModel: string, generationConfig?: Record<string, any>): Promise<string | null> {
   if (!env.GEMINI_API_KEY) return null;
 
   try {
-    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt;
+    const config = generationConfig || { maxOutputTokens: 150, temperature: 0.2 };
     const response = await axios.post(
-      `${GEMINI_API_URL}?key=${env.GEMINI_API_KEY}`,
+      `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-        generationConfig: { maxOutputTokens: 300, temperature: 0.2 },
+        generationConfig: config,
       },
       { headers: { "Content-Type": "application/json" }, timeout: 20000 }
     );
@@ -30,6 +25,119 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
   } catch (error) {
     console.error("[MacroAI] Gemini fallback failed:", (error as any)?.message);
     return null;
+  }
+}
+
+function isRetryableGroqError(error: any): boolean {
+  if (!error) return false;
+  const status = error.response?.status;
+  return status === 429 || (typeof status === "number" && status >= 500);
+}
+
+async function callDualEngine(
+  userPrompt: string,
+  systemPrompt?: string,
+  generationConfig?: Record<string, any>
+): Promise<string | null> {
+  const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+
+  let lastError: any = null;
+  for (const model of GROQ_MODELS) {
+    if (!env.GROQ_API_KEY) break;
+    try {
+      const cacheKey = `dual-${JSON.stringify({ model, userPrompt, systemPrompt })}`;
+      const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
+        model,
+        messages: [
+          { role: "system", content: systemPrompt || "" },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: generationConfig?.max_output_tokens || 150,
+        temperature: generationConfig?.temperature || 0.2,
+        stream: false,
+      }, { useCache: true, cacheKey });
+
+      const text = response.choices?.[0]?.message?.content;
+      if (text && text.trim()) {
+        return text.trim();
+      }
+    } catch (error: any) {
+      lastError = error;
+      if (!isRetryableGroqError(error)) {
+        break;
+      }
+      console.warn(`[MacroAI] Groq model ${model} failed (${error.response?.status}), trying next...`);
+      continue;
+    }
+  }
+
+  const geminiText = await callGeminiDirect(systemPrompt || "", userPrompt, geminiModel, generationConfig);
+  if (geminiText) {
+    return geminiText;
+  }
+
+  console.error("[MacroAI] All engines failed. Groq:", lastError?.message, "Gemini: no response");
+  return null;
+}
+
+async function callDualEngineStream(
+  messages: any[],
+  geminiModel: string
+): Promise<any> {
+  if (env.GROQ_API_KEY) {
+    try {
+      return await groqRequestStream(
+        GROQ_API_URL,
+        {
+          model: GROQ_MODELS[0],
+          messages,
+          max_tokens: 150,
+          temperature: 0.2,
+          stream: true,
+        }
+      );
+    } catch (error: any) {
+      if (!isRetryableGroqError(error)) {
+        throw error;
+      }
+      console.warn("[MacroAI] Groq stream error, switching to Gemini fallback:", error.response?.status);
+    }
+  }
+
+  if (!env.GEMINI_API_KEY) {
+    throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY dan GEMINI_API_KEY tidak ditemukan");
+  }
+
+  const systemPrompt = messages.find((m) => m.role === "system")?.content || "";
+  const chatMessages = messages.filter((m) => m.role !== "system");
+
+  const geminiContents = [];
+  if (systemPrompt) {
+    geminiContents.push({ role: "user", parts: [{ text: systemPrompt }] });
+  }
+  for (const msg of chatMessages) {
+    const role = msg.role === "assistant" ? "model" : "user";
+    geminiContents.push({ role, parts: [{ text: msg.content }] });
+  }
+
+  try {
+    const response = await axios.post(
+      `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        contents: geminiContents,
+        generationConfig: { maxOutputTokens: 150, temperature: 0.2 },
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000,
+        responseType: "stream",
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("[MacroAI] Gemini stream fallback failed:", (error as any)?.message);
+    throw new Error("Gagal mendapatkan respons AI dari semua mesin.");
   }
 }
 
@@ -180,6 +288,8 @@ async function groqRequestStream(url: string, data: any): Promise<any> {
 
 export const macroAiService = {
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
+    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+
     const spy = assets.find(a => a.ticker === "SPY")?.change ?? 0;
     const ief = assets.find(a => a.ticker === "IEF")?.change ?? 0;
     const tip = assets.find(a => a.ticker === "TIP")?.change ?? 0;
@@ -221,7 +331,7 @@ export const macroAiService = {
       keyAssets,
     };
 
-    let prompt = `Anda adalah analis makro institusional. 
+    const prompt = `Anda adalah analis makro institusional. 
 
 Diberikan data:
 - Regime: ${calculatedRegime || "unknown"}
@@ -230,86 +340,38 @@ Diberikan data:
 
 Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja. KALIMAT PERTAMA WAJIB menyebut fase makro yang sedang terjadi (${calculatedRegime || "Stagflasi/Reflasi/dsb"}) agar user langsung tahu posisi regime kita. JANGAN mengulang penjelasan yang sudah tersirat dalam data. Setiap kalimat diakhiri titik. Tanpa meta-language.`;
 
-    // Try Gemini first
-    if (env.GEMINI_API_KEY) {
-      try {
-        const geminiRes = await axios.post(
-          GEMINI_API_URL,
-          {
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 150 },
-          },
-          { headers: { "Content-Type": "application/json" }, timeout: 20000 }
-        );
-        const text = geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return text.trim();
-        }
-      } catch (e) {
-        // fall through to Groq
-      }
-    }
+    const text = await callDualEngine(
+      prompt,
+      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia.",
+      { max_output_tokens: 150, temperature: 0.2 }
+    );
 
-    if (!env.GROQ_API_KEY) {
-      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
-    }
-
-    // Try Groq models with caching and throttling
-    const cacheKey = `regime-${JSON.stringify({ assets, calculatedRegime, liquidityStatus })}`;
-    for (const model of GROQ_MODELS) {
-      try {
-        const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
-          model,
-          messages: [
-            { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 150,
-          temperature: 0.2,
-          stream: false,
-        }, { useCache: true, cacheKey });
-
-        const text = response.choices?.[0]?.message?.content;
-        if (text) {
-          return text.trim();
-        }
-      } catch (err: any) {
-        if (err.response?.status === 429) {
-          // groqRequest already handles retry and backoff, so if we get here it means max retries exceeded
-          continue; // try next model
-        }
-        // For other errors, try next model
-        continue;
-      }
+    if (text) {
+      return text.trim();
     }
 
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
   },
 
   async chatStream(messages: any[], currentRegime?: string, assets?: any[], liquidityStatus?: string) {
-    if (!env.GROQ_API_KEY) {
-      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
-    }
-    // Use throttler and retry with exponential backoff for 429 - return raw response for streaming
-    return await groqRequestStream(
-      GROQ_API_URL,
-      {
-        model: GROQ_MODELS[0],
-        messages: [
+    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+
+    try {
+      return await callDualEngineStream(
+        [
           { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
           ...messages,
         ],
-        max_tokens: 150,
-        temperature: 0.2,
-        stream: true,
-      }
-    );
+        geminiModel
+      );
+    } catch (error: any) {
+      console.error("[MacroAI] chatStream failed after all attempts:", error.message);
+      throw new Error("Gagal mendapatkan respons chat dari layanan AI.");
+    }
   },
 
   async analyzeMacroFeed(headline: string, targetAsset: string, context?: string) {
-    if (!env.GROQ_API_KEY) {
-      throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY tidak ditemukan");
-    }
+    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const prompt = `Berita ekonomi: ${headline}
 Aset target: ${targetAsset}
@@ -325,30 +387,42 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
   "confidenceScore": "..."
 }`;
 
-    const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
-    try {
-      const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
-        model: GROQ_MODELS[0],
-        messages: [
-          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Output HANYA JSON valid yang diminta, tanpa penjelasan tambahan. Balas dalam Bahasa Indonesia." },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 300,
-        temperature: 0.2,
-        stream: false,
-      }, { useCache: true, cacheKey });
+    const systemPrompt = "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Output HANYA JSON valid yang diminta, tanpa penjelasan tambahan. Balas dalam Bahasa Indonesia.";
 
-      const text = response.choices?.[0]?.message?.content || "";
-      const parsed = parseMacroFeedText(text);
-      return {
-        fakta: parsed.fakta || "Tidak ada data",
-        dampakMarket: parsed.dampakMarket || "Tidak ada data",
-        logika: parsed.logika || "Tidak ada data",
-        contrarian: parsed.contrarian || "Tidak ada data",
-        triggerFundamentalNonTeknikal: parsed.triggerFundamentalNonTeknikal || "Tidak ada data",
-        confidenceScore: parsed.confidenceScore || "Sedang",
-      };
+    let text: string | null = null;
+    try {
+      if (env.GROQ_API_KEY) {
+        const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
+        const response = await groqRequest<GroqResponse>(GROQ_API_URL, {
+          model: GROQ_MODELS[0],
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 300,
+          temperature: 0.2,
+          stream: false,
+        }, { useCache: true, cacheKey });
+
+        text = response.choices?.[0]?.message?.content || null;
+      }
     } catch (error: any) {
+      if (!isRetryableGroqError(error) || !env.GEMINI_API_KEY) {
+        if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY) {
+          throw new Error("Fitur AI dinonaktifkan: GROQ_API_KEY dan GEMINI_API_KEY tidak ditemukan");
+        }
+        if (!isRetryableGroqError(error)) {
+          throw error;
+        }
+      }
+      console.warn("[MacroAI] Groq macro feed error, switching to Gemini fallback:", error.response?.status);
+    }
+
+    if (!text) {
+      text = await callGeminiDirect(systemPrompt, prompt, geminiModel, { maxOutputTokens: 300, temperature: 0.2 });
+    }
+
+    if (!text) {
       return {
         fakta: headline || "Tidak ada data",
         dampakMarket: "Analisis tidak tersedia",
@@ -358,6 +432,16 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
         confidenceScore: "Sedang",
       };
     }
+
+    const parsed = parseMacroFeedText(text);
+    return {
+      fakta: parsed.fakta || "Tidak ada data",
+      dampakMarket: parsed.dampakMarket || "Tidak ada data",
+      logika: parsed.logika || "Tidak ada data",
+      contrarian: parsed.contrarian || "Tidak ada data",
+      triggerFundamentalNonTeknikal: parsed.triggerFundamentalNonTeknikal || "Tidak ada data",
+      confidenceScore: parsed.confidenceScore || "Sedang",
+    };
   }
 };
 

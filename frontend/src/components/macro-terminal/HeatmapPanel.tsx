@@ -4,8 +4,48 @@ import React from "react";
 import { ShieldAlert, BrainCircuit, RefreshCw } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
+function getMarketSessionStatus() {
+  const now = new Date();
+  const day = now.getDay();
+  const hour = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hour12: false,
+    }).format(now),
+    10
+  );
+  const minute = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      minute: "numeric",
+    }).format(now),
+    10
+  );
+  const currentMinutes = hour * 60 + minute;
+
+  if (day === 0 || day === 6) {
+    return { label: "CLOSED", color: "bg-gray-500", textColor: "text-gray-400" };
+  }
+
+  if (currentMinutes >= 570 && currentMinutes < 960) {
+    return { label: "LIVE (US SESSION)", color: "bg-data-profit", textColor: "text-data-profit" };
+  }
+
+  if (currentMinutes >= 240 && currentMinutes < 390) {
+    return { label: "PRE-MARKET", color: "bg-yellow-600", textColor: "text-yellow-500" };
+  }
+
+  if (currentMinutes >= 960 && currentMinutes < 1020) {
+    return { label: "AFTER-HOURS", color: "bg-yellow-600", textColor: "text-yellow-500" };
+  }
+
+  return { label: "CLOSED", color: "bg-gray-500", textColor: "text-gray-400" };
+}
+
 export function HeatmapPanel() {
   const { assets, isFallback, aiReasoning, isAnalyzing, lastUpdated, analyzeRegime } = useMacroTerminal();
+  const sessionStatus = getMarketSessionStatus();
 
   console.log("[HeatmapPanel] assets:", JSON.stringify(assets, null, 2));
 
@@ -40,6 +80,10 @@ export function HeatmapPanel() {
           Macro ETFs Heatmap
         </h2>
         <div className="flex items-center gap-3" role="status">
+          <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border border-border-subtle">
+            <span className={`h-1.5 w-1.5 rounded-full ${sessionStatus.color}`} aria-hidden />
+            <span className={`${sessionStatus.textColor}`}>{sessionStatus.label}</span>
+          </span>
           {isFallback ? (
             <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
               <ShieldAlert size={10} /> MOCK FALLBACK
