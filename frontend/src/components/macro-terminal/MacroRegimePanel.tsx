@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
 type RegimeCardData = {
@@ -53,86 +52,36 @@ const GRID_LAYOUT: Record<string, { row: number; col: number }> = {
   goldilocks: { row: 3, col: 3 },
 };
 
-type State = "loading" | "ready" | "error";
-
 export function MacroRegimePanel() {
-  const { currentRegime, lastRegime } = useMacroTerminal();
-  const [state, setState] = useState<State>("loading");
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const { currentRegime, lastRegime, isAnalyzing } = useMacroTerminal();
   const [selectedRegime, setSelectedRegime] = useState<string>("");
 
-const activeRegime = useMemo(() => {
+  const activeRegime = useMemo(() => {
     const fromContext = (currentRegime || lastRegime || "").toLowerCase();
-    if (fromContext) return fromContext;
-    return "";
+    return fromContext || "";
   }, [currentRegime, lastRegime]);
 
   useEffect(() => {
-    if (currentRegime && selectedRegime === "") {
-      setSelectedRegime(currentRegime.toLowerCase());
+    const regime = (currentRegime || lastRegime || "").toLowerCase();
+    if (regime && selectedRegime === "") {
+      setSelectedRegime(regime);
     }
-  }, [currentRegime, selectedRegime]);
-
-  useEffect(() => {
-    if (!currentRegime && !lastRegime) return;
-    setState("ready");
   }, [currentRegime, lastRegime]);
 
-  const fetchMacroData = async () => {
-    setState("loading");
-    setErrorMessage("");
-    try {
-      const response = await fetch("/api/macro", {
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        throw new Error(`Gagal memuat data makro (HTTP ${response.status})`);
-      }
-      const result = (await response.json()) as { success?: boolean; regime?: string; error?: string };
-      if (!result.success) {
-        throw new Error(result.error || "Respons data makro tidak valid");
-      }
-      setState("ready");
-    } catch (err) {
-      setState("error");
-      setErrorMessage(err instanceof Error ? err.message : "Terjadi kesalahan tak terduga");
-    }
-  };
-
-  useEffect(() => {
-    fetchMacroData();
-  });
+  const hasRegime = !!(currentRegime || lastRegime);
 
   return (
     <div className="flex h-full max-h-[260px] flex-col glass border border-border-subtle rounded-xl bg-bg-void">
       <div className="flex items-center justify-between border-b border-border-subtle p-2">
         <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
-        <div className="flex items-center gap-2">
-          {state === "ready" && <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-1.5 py-0.5 rounded animate-pulse">LIVE</span>}
-          <span
-            className={`inline-flex h-2 w-2 rounded-full ${
-              state === "error" ? "bg-data-loss" : state === "loading" ? "bg-data-warning animate-pulse" : "bg-data-profit animate-pulse"
-            }`}
-            aria-hidden
-          />
-        </div>
+        {hasRegime && (
+          <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-1.5 py-0.5 rounded animate-pulse">LIVE</span>
+        )}
       </div>
 
-      {state === "loading" ? (
+      {!hasRegime ? (
         <div className="flex flex-1 items-center justify-center p-2">
           <span className="text-text-muted text-xs">Loading...</span>
-        </div>
-      ) : state === "error" ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-3">
-          <span className="text-data-loss text-xs font-mono">{errorMessage}</span>
-          <button
-            type="button"
-            onClick={fetchMacroData}
-            className="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-white/5 px-3 py-1.5 text-[10px] font-mono text-accent-gold transition-colors hover:border-accent-gold hover:bg-accent-gold/10"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </button>
         </div>
       ) : (
         <>

@@ -19,7 +19,7 @@ import type { QuoteApiResponse } from '@/lib/macro/types';
 export interface Asset {
   ticker: string;
   name: string;
-  change: number;
+  change: number | null;
   weight: number; 
 }
 
@@ -213,10 +213,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const fetchQuotes = async () => {
     try {
       const symbols = initialAssets.map(a => a.ticker).join(",");
-      const res = await fetch(`/api/v1/market-data/quotes?symbols=${symbols}`);
+      const res = await fetch(`/api/v1/market-data?symbols=${symbols}`);
       const data = (await res.json()) as QuoteApiResponse;
-
-      const newLiquidity = await fetchLiquidity();
 
       if (data.success && data.data) {
         const updatedAssets = initialAssets.map(asset => {
@@ -229,7 +227,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
           return {
             ...asset,
-            change: change !== null ? parseFloat(change.toFixed(2)) : null
+            change: (change ?? 0)
           };
         });
 
@@ -237,19 +235,25 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         setIsFallback(false);
         setLastUpdated(new Date());
 
-        await analyzeRegime(updatedAssets, newLiquidity);
+        await analyzeRegime(updatedAssets, null);
       } else {
-        console.warn("Yahoo Finance quotes returned empty or invalid data");
+        console.warn("Yahoo Finance quotes returned empty or invalid data, using mock data");
+        const mockAssets = initialAssets.map(a => ({
+          ...a,
+          change: parseFloat(((a.change ?? 0) + (Math.random() - 0.5) * 0.8).toFixed(2))
+        }));
+        setAssets(mockAssets);
+        await analyzeRegime(mockAssets, null);
       }
     } catch (error) {
       console.warn("Stooq quotes failed, using mock ticker fallback");
       setIsFallback(true);
-      setAssets((current) =>
-        current.map((asset) => {
-          const jitter = (Math.random() - 0.5) * 0.8;
-          return { ...asset, change: parseFloat((asset.change + jitter).toFixed(2)) };
-        })
-      );
+      const mockAssets = initialAssets.map(a => ({
+        ...a,
+        change: parseFloat(((a.change ?? 0) + (Math.random() - 0.5) * 0.8).toFixed(2))
+      }));
+      setAssets(mockAssets);
+      await analyzeRegime(mockAssets, null);
     }
   };
 
