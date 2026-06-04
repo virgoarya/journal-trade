@@ -356,10 +356,29 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
   async chatStream(messages: any[], currentRegime?: string, assets?: any[], liquidityStatus?: string) {
     const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
 
+    const regimeContext = currentRegime ? `Macro Regime Saat Ini: ${currentRegime}. ` : "";
+    const liquidityContext = liquidityStatus ? `Status Likuiditas ON RRP: ${liquidityStatus}. ` : "";
+    
+    // Simplifikasi data aset agar tidak membebani token
+    const assetData = assets && Array.isArray(assets) 
+      ? assets.map(a => `${a.ticker}: ${a.change !== null ? a.change + '%' : 'N/A'}`).join(', ')
+      : "";
+    const assetContext = assetData ? `Performa Aset Hari Ini: ${assetData}.` : "";
+
+    const systemPrompt = `ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. 
+    
+KONTEKS PASAR SAAT INI (BERDASARKAN DATA REAL-TIME TERMINAL):
+${regimeContext}${liquidityContext}
+${assetContext}
+
+Gunakan konteks di atas sebagai fakta dasar untuk semua jawaban Anda. Jika ditanya tentang kondisi makro saat ini, sebutkan regime dan data di atas.
+
+RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia.`;
+
     try {
       return await callDualEngineStream(
         [
-          { role: "system", content: "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia." },
+          { role: "system", content: systemPrompt },
           ...messages,
         ],
         geminiModel
