@@ -103,7 +103,7 @@ export const marketDataService = {
       return cache[cacheKey].data;
     }
 
-    // ... rest of the code remains unchanged
+    const fetchLiquidityWithRetry = async (retryCount = 0): Promise<any> => {
       try {
         const response = await axios.get(
           `https://api.stlouisfed.org/fred/series/observations?series_id=RRPONTSYD&api_key=${key}&file_type=json&sort_order=desc&limit=7`,
