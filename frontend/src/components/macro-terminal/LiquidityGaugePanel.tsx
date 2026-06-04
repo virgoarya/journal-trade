@@ -42,6 +42,26 @@ export function LiquidityGaugePanel() {
   const trend = Array.isArray(liquidity.trend) ? liquidity.trend : [];
   const trendDots = trend.slice(0, 5);
 
+  const curveData = Array.isArray(liquidity.history) ? [...liquidity.history].slice(0, 5).reverse() : [];
+  let sparklinePath = "";
+  if (curveData.length > 1) {
+    const minVal = Math.min(...curveData.map(d => d.value));
+    const maxVal = Math.max(...curveData.map(d => d.value));
+    const range = maxVal - minVal || 1;
+    const w = 48;
+    const h = 24;
+
+    const points = curveData.map((d, i) => {
+      const x = (i / (curveData.length - 1)) * w;
+      const y = 2 + (1 - (d.value - minVal) / range) * (h - 4);
+      return `${x},${y}`;
+    });
+
+    // Create a smooth curve using cubic bezier approximation or just simple lines
+    // For a sparkline, straight lines with rounded joins usually look good
+    sparklinePath = `M ${points.join(" L ")}`;
+  }
+
   const pct = Math.min(Math.max((liquidity.value / MAX_RRP_REF) * 100, 0), 100);
   const strokeOffset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
   const gaugeColor = isInjecting ? "#22c55e" : "#ef4444";
@@ -154,22 +174,43 @@ export function LiquidityGaugePanel() {
         <div className="w-px self-stretch bg-border-subtle/50 flex-shrink-0" />
 
         {/* Col 3: 5-Day Trend (right) */}
-        <div className="flex flex-col items-center justify-center gap-1.5 flex-shrink-0">
+        <div className="flex flex-col items-center justify-center gap-2 flex-shrink-0">
           <span className="text-[9px] font-mono text-text-muted uppercase tracking-widest whitespace-nowrap">
             5-Day Trend
           </span>
-          <div className="flex flex-col items-center gap-1">
-            {trendDots.length === 0 ? (
+          <div className="flex items-center justify-center h-8">
+            {curveData.length > 1 ? (
+              <svg width="48" height="24" className="overflow-visible">
+                <path
+                  d={sparklinePath}
+                  fill="none"
+                  stroke={gaugeColor}
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ filter: `drop-shadow(0px 2px 4px ${gaugeColor}40)` }}
+                />
+                {/* Endpoint dot */}
+                <circle 
+                  cx="48" 
+                  cy={2 + (1 - (curveData[curveData.length - 1].value - Math.min(...curveData.map(d => d.value))) / (Math.max(...curveData.map(d => d.value)) - Math.min(...curveData.map(d => d.value)) || 1)) * 20} 
+                  r="2.5" 
+                  fill={gaugeColor} 
+                />
+              </svg>
+            ) : trendDots.length === 0 ? (
               <span className="text-[10px] text-text-muted">—</span>
             ) : (
-              trendDots.map((dot, idx) => (
-                <span
-                  key={idx}
-                  className={`h-2 w-2 rounded-full flex-shrink-0 ${
-                    dot === "injecting" ? "bg-data-profit" : "bg-data-loss"
-                  }`}
-                />
-              ))
+              <div className="flex items-center gap-1.5">
+                {trendDots.map((dot, idx) => (
+                  <span
+                    key={idx}
+                    className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                      dot === "injecting" ? "bg-data-profit" : "bg-data-loss"
+                    }`}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </div>
