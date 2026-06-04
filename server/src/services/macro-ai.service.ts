@@ -91,7 +91,7 @@ async function callDualEngineStream(
         {
           model: GROQ_MODELS[0],
           messages,
-          max_tokens: 150,
+          max_tokens: 1000,
           temperature: 0.2,
           stream: true,
         }
@@ -125,7 +125,7 @@ async function callDualEngineStream(
       `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         contents: geminiContents,
-        generationConfig: { maxOutputTokens: 150, temperature: 0.2 },
+        generationConfig: { maxOutputTokens: 1000, temperature: 0.2 },
       },
       {
         headers: { "Content-Type": "application/json" },
