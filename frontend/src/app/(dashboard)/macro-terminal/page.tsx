@@ -52,12 +52,12 @@ export default function MacroTerminalPage() {
           {/* Left Column (Regime + Liquidity + News) */}
           <div className="flex flex-col gap-4 lg:col-span-1 xl:col-span-1 h-full overflow-hidden">
             {/* Top Left: Regime Matrix (fixed height) */}
-            <div className="h-64 shrink-0">
+            <div className="h-52 shrink-0">
               <MacroRegimePanel />
             </div>
 
             {/* Middle Left: Liquidity Gauge (fixed height) */}
-            <div className="h-32 shrink-0">
+            <div className="h-44 shrink-0">
               <LiquidityGaugePanel />
             </div>
 

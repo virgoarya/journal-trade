@@ -61,7 +61,7 @@ export function MacroRegimePanel() {
 
   return (
     <>
-      <div className="flex flex-col h-full max-h-[260px] glass border border-border-subtle rounded-xl bg-bg-void">
+      <div className="flex flex-col h-full max-h-[210px] glass border border-border-subtle rounded-xl bg-bg-void">
         <div className="flex items-center justify-between border-b border-border-subtle p-2">
           <div className="flex items-center gap-2">
             <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
