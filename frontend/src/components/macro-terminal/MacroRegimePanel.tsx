@@ -79,7 +79,7 @@ export function MacroRegimePanel() {
             <div style={{ gridColumn: 1, gridRow: 2 }} />
             <div style={{ gridColumn: 3, gridRow: 2 }} />
             {regimeCards.map((card) => {
-              const isActive = card.id.toLowerCase() === activeRegime.toLowerCase();
+              const isActive = activeRegime.toLowerCase().includes(card.id.toLowerCase());
               const isSelected = card.id.toLowerCase() === (selectedRegime || "").toLowerCase();
               const layout = GRID_LAYOUT[card.id] || { row: 2, col: 2 };
 

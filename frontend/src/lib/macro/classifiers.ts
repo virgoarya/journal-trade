@@ -36,9 +36,9 @@ export function classifyMacroRegime(
 
   // Determine growth state using asymmetric thresholds
   let growthCategory: 'low' | 'high' | 'medium';
-  if (growth > 0.5) {
+  if (growth > 0.15) {
     growthCategory = 'high';
-  } else if (growth < -0.4) {
+  } else if (growth < -0.15) {
     growthCategory = 'low';
   } else {
     growthCategory = 'medium';
@@ -46,9 +46,9 @@ export function classifyMacroRegime(
 
   // Determine inflation state using asymmetric thresholds
   let inflationCategory: 'low' | 'high' | 'medium';
-  if (inflation > 0.3) {
+  if (inflation > 0.15) {
     inflationCategory = 'high';
-  } else if (inflation < -0.5) {
+  } else if (inflation < -0.15) {
     inflationCategory = 'low';
   } else {
     inflationCategory = 'medium';
