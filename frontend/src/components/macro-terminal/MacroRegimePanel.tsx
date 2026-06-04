@@ -49,7 +49,7 @@ const GRID_LAYOUT: Record<string, { row: number; col: number }> = {
 };
 
 export function MacroRegimePanel() {
-  const { currentRegime, lastRegime } = useMacroTerminal();
+  const { currentRegime, lastRegime, lastUpdated } = useMacroTerminal();
   const [selectedRegime, setSelectedRegime] = useState<string | null>(null);
 
   const activeRegime = useMemo(() => {
@@ -63,7 +63,14 @@ export function MacroRegimePanel() {
     <>
       <div className="flex flex-col h-full max-h-[260px] glass border border-border-subtle rounded-xl bg-bg-void">
         <div className="flex items-center justify-between border-b border-border-subtle p-2">
-          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest">Macro Regime Matrix</h2>
+            {lastUpdated && (
+              <span className="text-[9px] text-text-muted font-mono whitespace-nowrap hidden sm:inline-block">
+                {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)} WIB
+              </span>
+            )}
+          </div>
           {hasRegime && (
             <span className="text-[10px] bg-accent-gold/20 text-accent-gold px-1.5 py-0.5 rounded animate-pulse">LIVE</span>
           )}

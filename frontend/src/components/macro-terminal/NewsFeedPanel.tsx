@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain, X, Zap, TrendingUp, Activity, ShieldCheck } from "lucide-react";
+import { useMacroTerminal } from "./MacroTerminalContext";
 
 interface NewsItem {
   id: string;
@@ -307,6 +308,7 @@ function Section({
 
 // ==================== MAIN COMPONENT ====================
 export function NewsFeedPanel() {
+  const { lastUpdated } = useMacroTerminal();
   const [feed, setFeed] = useState<NewsItem[]>([]);
   const [isFallback, setIsFallback] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -414,10 +416,17 @@ const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
     <>
       <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
         <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
-          <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
-            <AlertCircle size={14} />
-            Macro Feed
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
+              <AlertCircle size={14} />
+              Macro Feed
+            </h2>
+            {lastUpdated && (
+              <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
+                {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)} WIB
+              </span>
+            )}
+          </div>
           {isFallback ? (
             <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
               <ShieldAlert size={10} /> MOCK FALLBACK

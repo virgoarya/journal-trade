@@ -5,7 +5,7 @@ import { useMacroTerminal } from "./MacroTerminalContext";
 import { Activity, ArrowDownRight, ArrowUpRight, Droplets } from "lucide-react";
 
 export function LiquidityGaugePanel() {
-  const { liquidity } = useMacroTerminal();
+  const { liquidity, lastUpdated } = useMacroTerminal();
 
   if (!liquidity) {
     return (
@@ -39,6 +39,11 @@ export function LiquidityGaugePanel() {
         <div className="flex items-center gap-2">
           <Droplets className="w-4 h-4 text-accent-gold" />
           <h2 className="text-sm font-bold font-mono tracking-wider text-text-primary uppercase">Liquidity Flow</h2>
+          {lastUpdated && (
+            <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
+              {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)} WIB
+            </span>
+          )}
         </div>
         <div className="text-[10px] text-text-muted font-mono tracking-widest bg-surface-elevated/50 px-2 py-0.5 rounded border border-border-subtle">ON RRP</div>
       </div>
