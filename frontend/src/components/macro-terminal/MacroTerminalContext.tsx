@@ -156,26 +156,51 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
   const fetchQuotes = async () => {
     try {
-      const res = await fetch("/api/macro");
-      const data = await res.json();
+      const symbols = initialAssets.map(a => a.ticker).join(",");
+      const [quotesRes, liquidityRes] = await Promise.all([
+        fetch(`/api/v1/market-data/quotes?symbols=${symbols}`),
+        fetch("/api/v1/market-data/liquidity"),
+      ]);
 
-      if (data.success) {
-        const updatedAssets = initialAssets.map(asset => ({
-          ...asset,
-          change: null
-        }));
+      const quotesData = await quotesRes.json();
+      const liquidityData = await liquidityRes.json();
+
+      if (quotesData.success) {
+        const updatedAssets = initialAssets.map(asset => {
+          const quote = quotesData.data?.find((q: any) => q.symbol === asset.ticker);
+          return {
+            ...asset,
+            change: quote?.data?.dp ?? null
+          };
+        });
         setAssets(updatedAssets);
         setIsFallback(false);
         setLastUpdated(new Date());
 
-        setLiquidity(data.liquidity ?? null);
-        await analyzeRegime(updatedAssets, data.liquidity ?? null);
+        const newLiquidity = liquidityData.success ? liquidityData.data : null;
+        setLiquidity(newLiquidity);
+        
+        await analyzeRegime(updatedAssets, newLiquidity);
       } else {
-        throw new Error("Invalid API response");
+        throw new Error("Invalid API response from quotes API");
       }
     } catch (error) {
-      console.error("Market data API failed:", error);
+      console.error("Live Market data API failed:", error);
       setIsFallback(true);
+      
+      // Fallback to fundamental only
+      try {
+        const res = await fetch("/api/macro");
+        const fallbackData = await res.json();
+        if (fallbackData.success) {
+          const updatedAssets = initialAssets.map(asset => ({ ...asset, change: null }));
+          setAssets(updatedAssets);
+          setLiquidity(fallbackData.liquidity ?? null);
+          await analyzeRegime(updatedAssets, fallbackData.liquidity ?? null);
+        }
+      } catch (e) {
+        console.error("Fallback macro API also failed", e);
+      }
     }
   };
 
