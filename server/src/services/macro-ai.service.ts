@@ -492,6 +492,9 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
     const prompt = `Anda adalah Head of Institutional Macro Desk. Berikut adalah status Causal Loop makroekonomi saat ini secara real-time:
 ${Object.entries(nodesData).map(([k, v]) => `- ${v.label}: ${v.value}`).join('\n')}
 
+CATATAN PENTING UNTUK ANALISIS ANDA:
+- Node "Liquidity (RRP)" adalah Overnight Reverse Repo (ON RRP). Ini adalah metrik terbalik (inverse). Saldo yang MENURUN berarti The Fed sedang MENGINJEKSI likuiditas ke pasar (Positif untuk market). Saldo yang NAIK/TINGGI berarti The Fed MENYEDOT (Draining) likuiditas dari pasar. Jika saldo sangat rendah (mendekati $0), itu berarti likuiditas maksimal sudah diinjeksi, namun bantalan darurat menipis. JANGAN menyebut "likuiditas rendah" sebagai hal yang buruk tanpa konteks bahwa itu adalah RRP.
+
 Tugas Anda:
 1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi (sebab-akibat antar node).
 2. Sebutkan node mana yang menjadi driver utama atau risiko terbesar saat ini.
