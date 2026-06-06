@@ -27,7 +27,7 @@ function extractAssistantText(combined: string): string {
 
 router.post("/chat", requireAuth, async (req, res) => {
   try {
-    const { messages, currentRegime, assets, liquidityStatus } = req.body;
+    const { messages, currentRegime, assets, liquidityStatus, personaId } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ success: false, error: "Format pesan tidak valid" });
@@ -36,7 +36,7 @@ router.post("/chat", requireAuth, async (req, res) => {
 
     res.setHeader("Content-Type", "application/json");
 
-    const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus);
+    const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus, personaId);
 
     const chunks: string[] = [];
     await new Promise<void>((resolve, reject) => {

@@ -353,7 +353,7 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
   },
 
-  async chatStream(messages: any[], currentRegime?: string, assets?: any[], liquidityStatus?: string) {
+  async chatStream(messages: any[], currentRegime?: string, assets?: any[], liquidityStatus?: string, personaId: string = "default") {
     const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const regimeContext = currentRegime ? `Macro Regime Saat Ini: ${currentRegime}. ` : "";
@@ -365,7 +365,16 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
       : "";
     const assetContext = assetData ? `Performa Aset Hari Ini: ${assetData}.` : "";
 
-    const systemPrompt = `ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. 
+    let personaDescription = "Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.";
+    if (personaId === "hawk") {
+      personaDescription = "Anda adalah Hawkish Quant Analyst yang sangat berhati-hati terhadap inflasi, sangat memperhatikan pengetatan likuiditas (draining), dan pesimis terhadap aset berisiko tinggi saat yield naik. Gunakan bahasa yang teknis dan waspada.";
+    } else if (personaId === "dove") {
+      personaDescription = "Anda adalah Dovish Economic Strategist yang optimis terhadap pemangkasan suku bunga, pelonggaran likuiditas, dan pertumbuhan ekuitas. Anda selalu mencari peluang 'buy the dip' di aset berisiko.";
+    } else if (personaId === "contrarian") {
+      personaDescription = "Anda adalah Contrarian Hedge Fund Manager. Anda selalu skeptis terhadap konsensus pasar (herd mentality), suka mencari anomali data, dan merekomendasikan posisi melawan arus ketika pasar terlalu serakah atau terlalu takut.";
+    }
+
+    const systemPrompt = `ROLE & PERSONA: ${personaDescription}
     
 KONTEKS PASAR SAAT INI (BERDASARKAN DATA REAL-TIME TERMINAL):
 ${regimeContext}${liquidityContext}
