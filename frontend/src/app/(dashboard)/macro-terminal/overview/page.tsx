@@ -12,27 +12,30 @@ export default function MacroOverviewPage() {
     <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 h-full overflow-hidden">
       {/* Left Column */}
       <div className="flex flex-col gap-4 lg:col-span-1 xl:col-span-1 h-full overflow-hidden">
-        {/* Top row: Macro Regime + Liquidity Flow, equal height */}
-        <div className="flex gap-4 flex-1 min-h-0">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <MacroRegimePanel />
-          </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <LiquidityGaugePanel />
-          </div>
+        {/* Top Left: Regime Matrix (fixed height) */}
+        <div className="h-52 shrink-0">
+          <MacroRegimePanel />
         </div>
 
-        {/* Bottom row: News Feed */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Middle Left: Liquidity Gauge (fixed height) */}
+        <div className="h-44 shrink-0">
+          <LiquidityGaugePanel />
+        </div>
+
+        {/* Bottom Left: News Feed (takes remaining height) */}
+        <div className="flex-1 min-h-0">
           <NewsFeedPanel />
         </div>
       </div>
 
       {/* Right Column */}
       <div className="flex flex-col gap-4 lg:col-span-2 xl:col-span-3 h-full overflow-hidden">
+        {/* Top Right: Heatmap */}
         <div className="flex-1 min-h-0">
           <HeatmapPanel />
         </div>
+
+        {/* Bottom Right: Economic Calendar */}
         <div className="h-80 shrink-0">
           <EconomicCalendarPanel />
         </div>
