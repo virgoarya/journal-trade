@@ -11,6 +11,7 @@ import mt5Routes from "./mt5.routes";
 import macroAiRoutes from "./macro-ai.routes";
 import marketDataRoutes from "./market-data.routes";
 import geoRiskRoutes from "./geo-risk.routes";
+import quantRoutes from "./quant.routes";
 
 const router = Router();
 
@@ -31,5 +32,6 @@ router.use("/v1/mt5", mt5Routes);
 router.use("/v1/macro-ai", macroAiRoutes);
 router.use("/v1/market-data", marketDataRoutes);
 router.use("/v1/geo-risk", geoRiskRoutes);
+router.use("/v1/quant", quantRoutes);
 
 export default router;

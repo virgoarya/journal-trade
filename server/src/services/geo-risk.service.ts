@@ -1,6 +1,7 @@
 import axios from "axios";
 import { env } from "../config/env";
 import { GeoRiskSnapshot, IGeoRiskSnapshot } from "../models/GeoRiskSnapshot";
+import { fredLatest, fredYoY } from "../utils/fred-api.helper";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
@@ -16,77 +17,7 @@ const FRED_SERIES = {
   ONRRP: "RRPONTSYD",       // Fed ON RRP Balance (liquidity drain)
 } as const;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Fetch the latest observation value for a FRED series.
- * Returns null on failure (graceful degradation).
- * @param limit - how many observations to scan (default 12 for monthly series)
- */
-async function fredLatest(seriesId: string, limit = 12): Promise<number | null> {
-  if (!env.FRED_API_KEY) return null;
-  try {
-    const resp = await axios.get(FRED_BASE, {
-      params: {
-        series_id: seriesId,
-        api_key: env.FRED_API_KEY,
-        file_type: "json",
-        sort_order: "desc",
-        limit,              // scan enough obs to skip pending "."
-        observation_start: "2020-01-01",
-      },
-      timeout: 10000,
-    });
-    const obs: Array<{ value: string; date: string }> =
-      resp.data?.observations ?? [];
-    // Find the latest non-"." value
-    for (const o of obs) {
-      if (o.value && o.value !== ".") {
-        const parsed = parseFloat(o.value);
-        if (!isNaN(parsed)) return parsed;
-      }
-    }
-    return null;
-  } catch (err: any) {
-    console.warn(`[GeoRisk] FRED fetch failed for ${seriesId}:`, err.message);
-    return null;
-  }
-}
-
-/**
- * Fetch 2 observations to compute YoY CPI change in percent.
- */
-async function fredCpiYoy(): Promise<number | null> {
-  if (!env.FRED_API_KEY) return null;
-  try {
-    const resp = await axios.get(FRED_BASE, {
-      params: {
-        series_id: FRED_SERIES.CPI,
-        api_key: env.FRED_API_KEY,
-        file_type: "json",
-        sort_order: "desc",
-        limit: 14, // get last 14 months to safely compute YoY
-      },
-      timeout: 10000,
-    });
-    const obs: Array<{ value: string; date: string }> =
-      resp.data?.observations ?? [];
-
-    // Filter valid values
-    const valid = obs
-      .filter((o) => o.value !== ".")
-      .map((o) => ({ val: parseFloat(o.value), date: o.date }));
-
-    if (valid.length < 13) return null;
-
-    const latest = valid[0].val;
-    const yearAgo = valid[12].val;
-    return parseFloat((((latest - yearAgo) / yearAgo) * 100).toFixed(2));
-  } catch (err: any) {
-    console.warn(`[GeoRisk] CPI YoY fetch failed:`, err.message);
-    return null;
-  }
-}
 
 // ── Score Formula ─────────────────────────────────────────────────────────────
 // All formulas output 0–100 (integer)
@@ -131,7 +62,7 @@ async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
   // Parallel fetch – partial failure is acceptable
   // Use limit=12 for PMI to reliably skip pending "." entries
   let [cpi_yoy, fedfunds_raw, vix, pmi_raw, onRrp_raw] = await Promise.all([
-    fredCpiYoy(),
+    fredYoY(FRED_SERIES.CPI),
     fredLatest(FRED_SERIES.FEDFUNDS, 6),
     fredLatest(FRED_SERIES.VIX, 6),
     fredLatest(FRED_SERIES.PMI, 12),
