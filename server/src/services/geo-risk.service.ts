@@ -61,13 +61,26 @@ async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
 
   // Parallel fetch – partial failure is acceptable
   // Use limit=12 for PMI to reliably skip pending "." entries
-  let [cpi_yoy, fedfunds_raw, vix, pmi_raw, onRrp_raw] = await Promise.all([
+  let [cpi_yoy, fedfunds_raw, pmi_raw, onRrp_raw] = await Promise.all([
     fredYoY(FRED_SERIES.CPI),
     fredLatest(FRED_SERIES.FEDFUNDS, 6),
-    fredLatest(FRED_SERIES.VIX, 6),
     fredLatest(FRED_SERIES.PMI, 12),
     fredLatest(FRED_SERIES.ONRRP, 6),
   ]);
+
+  // VIX: fetch LIVE from Yahoo Finance, fallback to FRED if unavailable
+  let vix: number | null = null;
+  try {
+    const vixRes = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/^VIX');
+    if (!vixRes.ok) throw new Error(`Yahoo HTTP ${vixRes.status}`);
+    const vixData = (await vixRes.json()) as any;
+    vix = vixData?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+    if (typeof vix !== 'number') throw new Error('Invalid VIX format');
+    console.log(`[GeoRisk] Live VIX from Yahoo Finance: ${vix}`);
+  } catch (err: any) {
+    console.warn("[GeoRisk] Yahoo Finance VIX failed, falling back to FRED:", err.message);
+    vix = await fredLatest(FRED_SERIES.VIX, 6);
+  }
 
   // Fallback: if ISM NAPM returns null, try Manufacturing Employment as proxy
   // Store the RAW value before rounding so UI shows the real number

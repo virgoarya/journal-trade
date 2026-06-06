@@ -9,10 +9,12 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 - Menandai quadrant aktif dengan highlight khusus.
 
 ### Rumus & Sumber Data
-- Source: `MacroTerminalContext.tsx` melakukan fetch ke `/api/macro`.
-- Backend memakai `server/src/app/api/macro/route.ts` → `lib/macro/calculations.ts` (`calculateInflationMomentum`) + `lib/macro/classifiers.ts` (`classifyMacroRegime`).
-- `classifyMacroRegime` menerima `inflation`, `growth`, dan `liquidityStatus` untuk menentukan quadrant.
-- `inflationMomentum` dihitung dari rata-rata perubahan CPI month-over-month (stored di `cpiMoM`). Jika `cpiMoM.mean() > 0` → momentum naik; sebaliknya turun.
+- Source: `MacroTerminalContext.tsx` melakukan fetch ke `/api/v1/market-data/quotes` (Finnhub).
+- Rumus **price-implied** (bukan data fundamental lambat):
+  - `growth = SPY(dp) - IEF(dp)` — Selisih pergerakan harian ekuitas vs obligasi.
+  - `inflation = (TIP(dp) + GLD(dp)) / 2 - IEF(dp)` — Proksi tekanan inflasi dari TIPS dan Gold vs Bonds.
+- Classifier: `lib/macro/classifiers.ts` → `classifyMacroRegime()` menggunakan z-score threshold ±0.15 untuk menentukan quadrant.
+- **SSOT (Single Source of Truth)**: Macro Regime Matrix adalah satu-satunya penentu regime makroekonomi di seluruh terminal. Panel lain (Quant Lab, Nexus) tidak boleh mengklaim regime sendiri.
 
 ### Update Cycle
 - Frontend melakukan polling **setiap 5 menit** (dengan backoff 30 menit jika error).
@@ -185,6 +187,8 @@ Backend Services
   - `macroAiService.analyzeRegime()`     → Groq primary, Gemini fallback (event-driven)
   - `macroAiService.analyzeMacroFeed()`  → Groq primary, Gemini fallback (JSON 6-field)
   - `macroAiService.chatStream()`        → Groq streaming primary, Gemini streaming fallback
+  - `geoRiskService.getScores()`         → FRED (CPI, FedFunds, PMI, ON RRP) + Yahoo Finance (VIX live)
+  - `quantService.getSnapshot()`         → FRED (Yield Curve) + Yahoo Finance (VIX live)
 ```
 
 ## 8. Market Session Status (Heatmap)
@@ -221,14 +225,16 @@ Backend Services
 | Variable | Digunakan Untuk |
 |----------|-----------------|
 | `FINNHUB_API_KEY` | Quotes + News |
-| `FRED_API_KEY` | Liquidity (ON RRP) + Quant Lab (Yields & VIX) |
+| `FRED_API_KEY` | Liquidity (ON RRP) + Quant Lab (Yields) + Geo-Risk (CPI, FedFunds, PMI) |
 | `GROQ_API_KEY` | AI reasoning + chat |
 | `GEMINI_API_KEY` | Opsional, AI reasoning fallback |
+
+> **Catatan**: Data VIX di Quant Lab dan Geo-Risk Radar **tidak lagi menggunakan FRED**. VIX diambil secara *live* dari Yahoo Finance REST API (`query1.finance.yahoo.com/v8/finance/chart/^VIX`) untuk menghindari lag data End-of-Day. FRED hanya digunakan sebagai *fallback* jika Yahoo Finance tidak tersedia.
 
 ## 11. Quant Lab
 
 ### Fungsi
-- Tab khusus untuk analisis kuantitatif mendalam (*yield curve* dan *volatility*).
+- Tab khusus untuk analisis kuantitatif mendalam (*yield curve* dan *volatility status*).
 - Menarik *snapshot* data dari endpoint gabungan `/api/v1/quant/snapshot`.
 
 ### Komponen
@@ -237,19 +243,47 @@ Backend Services
    - Menghitung **10Y - 2Y Spread**. Jika bernilai negatif, maka berstatus **INVERTED** (sinyal kuat resesi).
    - Menghitung **Recession Probability** menggunakan model *Estrella & Mishkin* (berbasis distribusi normal probit) berdasarkan spread 10Y-2Y.
 
-2. **Volatility Regime (VIX)**
-   - Menarik data spot VIX dari FRED secara EOD (*End-of-Day*). FRED digunakan sebagai *primary source* karena lebih andal (API Yahoo Finance/Finnhub sering memblokir IP server cloud).
-   - Memetakan skor VIX ke sentimen:
-     - `< 15` = CALM (Risk-On)
-     - `15 - 20` = CHOPPY (Caution)
-     - `20 - 30` = FEAR (Risk-Off)
-     - `> 30` = PANIC (Capitulation)
-   - Sinkronisasi dengan Matrix Regime utama.
+2. **Volatility Status (VIX)**
+   - Menarik data spot VIX secara **live** dari Yahoo Finance REST API (`query1.finance.yahoo.com/v8/finance/chart/^VIX`). FRED digunakan sebagai *fallback* jika Yahoo tidak tersedia.
+   - **PENTING**: Panel ini adalah *Market Fear Gauge* murni, **bukan** *Regime Classifier*. Tidak ada label "Mapped Regime" — sumber kebenaran regime hanya ada di Macro Regime Matrix (tab Overview).
+   - Memetakan level VIX ke status volatilitas:
+     - `< 15` = **CALM** (Hijau) — Pasar tenang, risk-on environment
+     - `15 – 20` = **NORMAL** (Kuning) — Volatilitas wajar, pasar berjalan normal
+     - `20 – 30` = **ELEVATED** (Oranye) — Ketakutan meningkat, potensi koreksi
+     - `> 30` = **FEAR** (Merah) — Kepanikan ekstrem, potensi crash/kapitulasi
+   - Label subtitle: "Market Fear Gauge · VIX {nilai}" (menggantikan label "Mapped Regime" yang sudah dihapus).
 
 ### File Terkait
-- `server/src/services/quant.service.ts`
+- `server/src/services/quant.service.ts` — fetch VIX dari Yahoo Finance, yield dari FRED
+- `server/src/models/YieldCurveSnapshot.ts` — schema MongoDB dengan regime enum: `CALM | NORMAL | ELEVATED | FEAR | UNKNOWN`
 - `frontend/src/components/macro-terminal/YieldCurvePanel.tsx`
 - `frontend/src/components/macro-terminal/VixRegimePanel.tsx`
+
+## 11.5. Geo-Risk Radar (Intelligence Tab)
+
+### Fungsi
+- Radar chart 5 sumbu yang mengukur tingkat risiko makroekonomi dari berbagai dimensi.
+- Skor keseluruhan dihitung sebagai rata-rata dari 5 dimensi (0-100).
+
+### Dimensi & Sumber Data
+| Dimensi | Sumber Data | Rumus Skor (0–100) |
+|---------|-------------|--------------------|
+| Inflation Risk | FRED `CPIAUCSL` (CPI YoY) | `min(100, cpiYoy / 9 * 100)` |
+| Rate Hike | FRED `FEDFUNDS` | `min(100, fedfunds / 5.5 * 100)` |
+| Geopolitics | **Yahoo Finance** `^VIX` (Live) | `min(100, max(10, vix / 45 * 100))` |
+| Supply Chain | FRED `NAPM` (ISM PMI) | `(50 - pmi) * 5 + 50` (inverted) |
+| Liquidity Drain | FRED `RRPONTSYD` (ON RRP) | `100 - (onRrpB / 2500 * 100)` |
+
+> **Catatan VIX**: Geopolitics VIX sebelumnya menggunakan FRED (`VIXCLS`) yang bersifat End-of-Day (lagging). Sekarang sudah diganti ke Yahoo Finance REST API untuk data real-time. FRED tetap sebagai fallback.
+
+### Cache & Update
+- MongoDB cache 12 jam. Auto-refresh frontend setiap 30 menit.
+- Tombol Refresh ikon bypass cache untuk force-fetch data terbaru.
+
+### File Terkait
+- `server/src/services/geo-risk.service.ts` — fetch data FRED + Yahoo Finance VIX
+- `server/src/models/GeoRiskSnapshot.ts` — schema MongoDB
+- `frontend/src/components/macro-terminal/GeoRiskRadarPanel.tsx` — UI radar chart + breakdown list
 
 ## 12. Nexus Causal Loop
 

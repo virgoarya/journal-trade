@@ -100,7 +100,7 @@ export function GeoRiskRadarPanel() {
     }
   };
 
-  // Force-refresh: hits POST /refresh (bypasses 12h MongoDB cache → calls FRED API live)
+  // Force-refresh: hits POST /refresh (bypasses 12h MongoDB cache → calls FRED/Yahoo API live)
   const forceRefresh = async () => {
     if (refreshing || loading) return;
     setRefreshing(true);
@@ -182,7 +182,7 @@ export function GeoRiskRadarPanel() {
             onClick={forceRefresh}
             disabled={loading || refreshing}
             className="p-1 rounded text-text-muted hover:text-accent-gold transition-colors disabled:opacity-40"
-            title="Force refresh dari FRED API (bypass cache)"
+            title="Force refresh data (bypass cache)"
           >
             <RefreshCw className={`w-3 h-3 ${(loading || refreshing) ? "animate-spin" : ""}`} />
           </button>
@@ -201,7 +201,7 @@ export function GeoRiskRadarPanel() {
       <div className="flex-1 min-h-0">
         {loading && !data ? (
           <div className="flex items-center justify-center h-full text-text-muted text-xs font-mono animate-pulse">
-            Fetching FRED API data…
+            Fetching live data…
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -261,7 +261,7 @@ export function GeoRiskRadarPanel() {
       {/* Footer: last updated */}
       {lastUpdated && (
         <p className="text-[9px] font-mono text-text-muted mt-2 text-right shrink-0">
-          Updated {lastUpdated} · 12h cache · FRED API
+          Updated {lastUpdated} · 12h cache · FRED + Yahoo Finance
         </p>
       )}
     </div>
