@@ -103,4 +103,21 @@ router.post("/analyze-macro-feed", requireAuth, async (req, res) => {
   }
 });
 
+router.post("/analyze-nexus", requireAuth, async (req, res) => {
+  try {
+    const { nodesData } = req.body;
+
+    if (!nodesData) {
+      res.status(400).json({ success: false, error: "Data node Nexus diperlukan" });
+      return;
+    }
+
+    const reasoning = await macroAiService.analyzeNexus(nodesData);
+    res.json({ success: true, reasoning });
+  } catch (error: any) {
+    console.error("Macro AI Analyze Nexus Route Error:", error);
+    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+  }
+});
+
 export default router;

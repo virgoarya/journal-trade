@@ -11,7 +11,10 @@ import {
   AlertOctagon, 
   LineChart, 
   DollarSign,
-  Activity
+  Activity,
+  Terminal,
+  Cpu,
+  RefreshCw
 } from "lucide-react";
 
 // Edge animation component
@@ -108,6 +111,10 @@ function SvgEdge({
 export function MacroNexusDiagram() {
   const { assets, liquidity, currentRegime } = useMacroTerminal();
   const [quantData, setQuantData] = useState<any>(null);
+  
+  const [nexusReasoning, setNexusReasoning] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [displayedReasoning, setDisplayedReasoning] = useState<string>("");
 
   useEffect(() => {
     async function fetchQuant() {
@@ -125,6 +132,24 @@ export function MacroNexusDiagram() {
     const interval = setInterval(fetchQuant, 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (!nexusReasoning) {
+      setDisplayedReasoning("");
+      return;
+    }
+    
+    let i = 0;
+    const speed = 15; // ms per char
+    const timer = setInterval(() => {
+      setDisplayedReasoning(nexusReasoning.slice(0, i));
+      i++;
+      if (i > nexusReasoning.length) clearInterval(timer);
+    }, speed);
+    
+    return () => clearInterval(timer);
+  }, [nexusReasoning]);
 
   // Calculate Node States based on context data
 
@@ -176,20 +201,60 @@ export function MacroNexusDiagram() {
     inf: { x: 50, y: 85, color: infColor, label: "Inflation Proxy", icon: LineChart, value: infValue },
   };
 
+  const fetchNexusAnalysis = async () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    setNexusReasoning(null);
+    setDisplayedReasoning("");
+
+    try {
+      const res = await fetch("/api/v1/macro-ai/analyze-nexus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodesData: nodes }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNexusReasoning(data.reasoning);
+      } else {
+        setNexusReasoning("Gagal mendapatkan analisis: " + data.error);
+      }
+    } catch (err: any) {
+      setNexusReasoning("Terjadi kesalahan saat memanggil AI: " + err.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
-    <div className="relative w-full h-[600px] glass border border-border-subtle rounded-xl bg-bg-void overflow-hidden flex items-center justify-center">
+    <div className="flex flex-col gap-4">
+      <div className="relative w-full h-[600px] glass border border-border-subtle rounded-xl bg-bg-void overflow-hidden flex items-center justify-center">
       
       {/* Background Grid */}
       <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10 pointer-events-none" />
 
-      {/* Title */}
-      <div className="absolute top-4 left-4 z-20">
-        <h2 className="text-sm font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
-          <Activity className="w-4 h-4 text-accent-gold" /> Macro Causal Loop
-        </h2>
-        <p className="text-[10px] font-mono text-text-muted mt-1 max-w-xs">
-          Visualisasi real-time bagaimana likuiditas, inflasi, dan sentimen saling mempengaruhi aliran modal institusional.
-        </p>
+      {/* Title & Controls */}
+      <div className="absolute top-4 left-4 right-4 z-20 flex items-start justify-between">
+        <div>
+          <h2 className="text-sm font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
+            <Activity className="w-4 h-4 text-accent-gold" /> Macro Causal Loop
+          </h2>
+          <p className="text-[10px] font-mono text-text-muted mt-1 max-w-xs">
+            Visualisasi real-time bagaimana likuiditas, inflasi, dan sentimen saling mempengaruhi aliran modal institusional.
+          </p>
+        </div>
+        <button
+          onClick={fetchNexusAnalysis}
+          disabled={isAnalyzing}
+          className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase rounded border border-accent-gold/30 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+        >
+          {isAnalyzing ? (
+            <RefreshCw className="w-3 h-3 animate-spin" />
+          ) : (
+            <Cpu className="w-3 h-3" />
+          )}
+          Analyze Flow
+        </button>
       </div>
 
       {/* We no longer need the global SVG because SvgEdge wraps its own SVG */}
@@ -230,6 +295,39 @@ export function MacroNexusDiagram() {
         />
       ))}
       
+      </div>
+
+      {/* AI Reasoning Bottom Panel */}
+      <div className="glass border border-border-subtle rounded-xl bg-bg-void p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Terminal className="w-4 h-4 text-accent-gold" />
+          <span className="text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+            Institutional Desk AI
+          </span>
+          {isAnalyzing && (
+            <span className="text-[10px] font-mono text-text-muted ml-auto animate-pulse">
+              Analyzing causal flow...
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] font-mono leading-relaxed min-h-[60px]">
+          {isAnalyzing ? (
+            <div className="flex items-center gap-2 text-text-muted">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Memproses data node secara real-time...
+            </div>
+          ) : displayedReasoning ? (
+            <p className="text-text-secondary whitespace-pre-line">
+              {displayedReasoning}
+              <span className="animate-pulse inline-block ml-1 w-1.5 h-3 bg-accent-gold align-middle"></span>
+            </p>
+          ) : (
+            <p className="text-text-muted italic">
+              Klik "Analyze Flow" untuk mendapatkan interpretasi arah aliran modal berdasarkan Causal Loop saat ini.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

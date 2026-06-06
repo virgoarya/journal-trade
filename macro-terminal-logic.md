@@ -307,6 +307,12 @@ Backend Services
   - *Spesifikasi Khusus*: Kabel dari Liquidity ke Risk Assets menggunakan stroke warna merah saat status DRAINING (change > 0), dan warna hijau neon saat status INJECTING (change < 0).
 - **Pulsating Alert**: Node yang dalam bahaya (misal: VIX > 20 atau Liquidity Draining) akan menyalakan *glow backdrop* berdenyut layaknya alarm peringatan.
 
+### Institutional Desk AI
+- **Fungsi**: AI bertindak sebagai *Head of Institutional Macro Desk* untuk menerjemahkan ke-7 node menjadi narasi aliran dana (capital flow).
+- **Trigger**: Tombol manual **"Analyze Flow"** (menghemat kuota AI dan memberi kendali pada user).
+- **Endpoint**: Frontend memanggil `POST /api/v1/macro-ai/analyze-nexus` mengirimkan status semua node (label, nilai, dan warna).
+- **Animasi UI**: Menggunakan *typewriter effect* di panel terminal bagian bawah diagram untuk mensimulasikan AI sedang mengetik analisis secara real-time.
+
 ### File Terkait
 - `frontend/src/components/macro-terminal/nexus/MacroNexusDiagram.tsx`
 - `frontend/src/components/macro-terminal/nexus/NexusNode.tsx`

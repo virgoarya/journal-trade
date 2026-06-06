@@ -486,6 +486,25 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
       triggerFundamentalNonTeknikal: parsed.triggerFundamentalNonTeknikal || "Tidak ada data",
       confidenceScore: parsed.confidenceScore || "Sedang",
     };
+  },
+
+  async analyzeNexus(nodesData: Record<string, any>) {
+    const prompt = `Anda adalah Head of Institutional Macro Desk. Berikut adalah status Causal Loop makroekonomi saat ini secara real-time:
+${Object.entries(nodesData).map(([k, v]) => `- ${v.label}: ${v.value}`).join('\n')}
+
+Tugas Anda:
+1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi (sebab-akibat antar node).
+2. Sebutkan node mana yang menjadi driver utama atau risiko terbesar saat ini.
+3. Berikan satu kesimpulan taktis.
+
+Tulis dalam format 1 paragraf padat (maksimal 4-5 kalimat). Gunakan bahasa institusional yang tajam dan langsung pada intinya. JANGAN gunakan pengantar seperti "Berdasarkan data...". Langsung tembak ke analisis.`;
+
+    const systemPrompt = "ROLE & PERSONA: Head of Institutional Macro Desk untuk Hunter Trades. RULES: 1. Tanpa meta-language. 2. Fokus pada cause-and-effect aliran likuiditas. 3. Balas dalam Bahasa Indonesia.";
+
+    const text = await callDualEngine(prompt, systemPrompt, { max_output_tokens: 250, temperature: 0.3 });
+    if (text) return text.trim();
+    
+    throw new Error("Gagal mendapatkan analisis Nexus dari layanan AI.");
   }
 };
 
