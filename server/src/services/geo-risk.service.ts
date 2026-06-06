@@ -12,6 +12,7 @@ const FRED_SERIES = {
   FEDFUNDS: "FEDFUNDS",     // Effective Federal Funds Rate
   VIX: "VIXCLS",            // CBOE Volatility Index (geopolitics proxy)
   PMI: "NAPM",              // ISM Manufacturing PMI
+  PMI_FALLBACK: "MANEMP",   // All Employees Manufacturing (fallback proxy)
   ONRRP: "RRPONTSYD",       // Fed ON RRP Balance (liquidity drain)
 } as const;
 
@@ -30,7 +31,7 @@ async function fredLatest(seriesId: string): Promise<number | null> {
         api_key: env.FRED_API_KEY,
         file_type: "json",
         sort_order: "desc",
-        limit: 2,
+        limit: 6,          // enough to skip pending "." monthly obs
         observation_start: "2020-01-01",
       },
       timeout: 10000,
@@ -126,13 +127,27 @@ async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
   console.log("[GeoRisk] Fetching fresh data from FRED APIs…");
 
   // Parallel fetch – partial failure is acceptable
-  const [cpi_yoy, fedfunds_raw, vix, pmi_raw, onRrp_raw] = await Promise.all([
+  let [cpi_yoy, fedfunds_raw, vix, pmi_raw, onRrp_raw] = await Promise.all([
     fredCpiYoy(),
     fredLatest(FRED_SERIES.FEDFUNDS),
     fredLatest(FRED_SERIES.VIX),
     fredLatest(FRED_SERIES.PMI),
     fredLatest(FRED_SERIES.ONRRP),
   ]);
+
+  // Fallback: if ISM NAPM returns null, try Manufacturing Employment as proxy
+  if (pmi_raw === null) {
+    console.warn("[GeoRisk] NAPM returned null, trying MANEMP fallback…");
+    const manemp = await fredLatest(FRED_SERIES.PMI_FALLBACK);
+    // MANEMP is in thousands of employees; normalize around ~12,500k (expansion)
+    // >12500 ≈ expansion (PMI>50 equiv), <12000 ≈ contraction
+    if (manemp !== null) {
+      // Map to a synthetic PMI: 13000k → 55, 12500k → 50, 12000k → 45
+      pmi_raw = 50 + ((manemp - 12500) / 100);
+      pmi_raw = Math.round(Math.min(65, Math.max(35, pmi_raw)));
+      console.log(`[GeoRisk] MANEMP fallback: ${manemp}k → synthetic PMI ${pmi_raw}`);
+    }
+  }
 
   const fedfunds_rate = fedfunds_raw;
   const globalPmi = pmi_raw;
@@ -192,7 +207,9 @@ export const geoRiskService = {
 
     const now = Date.now();
     const isStale =
-      !recent || now - new Date(recent.fetchedAt).getTime() > CACHE_TTL_MS;
+      !recent ||
+      now - new Date(recent.fetchedAt).getTime() > CACHE_TTL_MS ||
+      recent.globalPmi === null; // force refresh if PMI was missing
 
     let snapshot: IGeoRiskSnapshot | (typeof recent & {}) = recent as any;
 
