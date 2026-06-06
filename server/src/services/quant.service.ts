@@ -22,12 +22,22 @@ function classifyRegime(vix: number | null): IYieldCurveSnapshot["regime"] {
 async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
   console.log("[QuantLab] Fetching fresh data from FRED APIs…");
 
-  const [y2, y5, y10, vix] = await Promise.all([
+  const [y2, y5, y10] = await Promise.all([
     fredLatest(FRED_SERIES.DGS2, 6),
     fredLatest(FRED_SERIES.DGS5, 6),
     fredLatest(FRED_SERIES.DGS10, 6),
-    fredLatest(FRED_SERIES.VIX, 6),
   ]);
+
+  let vix: number | null = null;
+  try {
+    const YahooFinance = require('yahoo-finance2').default;
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const vixQuote = await yf.quote('^VIX');
+    vix = vixQuote?.regularMarketPrice ?? null;
+  } catch (err: any) {
+    console.warn("[QuantLab] Failed to fetch live VIX from Yahoo Finance, falling back to FRED:", err.message);
+    vix = await fredLatest(FRED_SERIES.VIX, 6);
+  }
 
   let spread2y10y = null;
   let inverted = false;
