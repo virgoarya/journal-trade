@@ -490,10 +490,20 @@ Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) den
 
   async analyzeNexus(nodesData: Record<string, any>) {
     const prompt = `Anda adalah Head of Institutional Macro Desk. Berikut adalah status Causal Loop makroekonomi saat ini secara real-time:
-${Object.entries(nodesData).map(([k, v]) => `- ${v.label}: ${v.value}`).join('\n')}
+${Object.entries(nodesData).map(([k, v]) => {
+      let status = "Netral";
+      if (v.color === "#ef4444") status = "Merah (Negatif/Bahaya/Kontraksi)";
+      if (v.color === "#22c55e") status = "Hijau (Positif/Aman/Ekspansi)";
+      if (v.color === "#f97316" || v.color === "#f59e0b") status = "Kuning/Oranye (Waspada)";
+      if (v.color === "#3b82f6") status = "Biru (Informasi)";
+      return `- ${v.label}: ${v.value} [Status: ${status}]`;
+    }).join('\n')}
 
-CATATAN PENTING UNTUK ANALISIS ANDA:
-- Node "Liquidity (RRP)" adalah Overnight Reverse Repo (ON RRP). Ini adalah metrik terbalik (inverse). Saldo yang MENURUN berarti The Fed sedang MENGINJEKSI likuiditas ke pasar (Positif untuk market). Saldo yang NAIK/TINGGI berarti The Fed MENYEDOT (Draining) likuiditas dari pasar. Jika saldo sangat rendah (mendekati $0), itu berarti likuiditas maksimal sudah diinjeksi, namun bantalan darurat menipis. JANGAN menyebut "likuiditas rendah" sebagai hal yang buruk tanpa konteks bahwa itu adalah RRP.
+CATATAN LOGIKA ABSOLUT (DILARANG BERHALUSINASI):
+- Node "Liquidity (RRP)" membaca likuiditas sistem. Jika statusnya "Hijau" berarti The Fed sedang MENGINJEKSI likuiditas ke pasar (saldo RRP turun/rendah). Jika statusnya "Merah" berarti The Fed MENYEDOT (Draining) likuiditas (saldo RRP naik/tinggi).
+- Jangan pernah mengatakan "menyedot likuiditas" jika status RRP adalah Hijau.
+- Angka RRP di bawah $10B ($0.xxB) sangat rendah, artinya The Fed TIDAK menyedot likuiditas, melainkan uang sudah masuk semua ke pasar (Injeksi penuh).
+- Lihat status warna dari masing-masing node untuk menentukan apakah itu sentimen positif atau negatif, jangan menebak sendiri.
 
 Tugas Anda:
 1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi (sebab-akibat antar node).
