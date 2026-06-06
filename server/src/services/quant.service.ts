@@ -25,7 +25,7 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
 
   let vix: number | null = null;
   try {
-    const vixQuote = await yahooFinance.quote('^VIX');
+    const vixQuote = (await yahooFinance.quote('^VIX')) as any;
     vix = vixQuote.regularMarketPrice ?? null;
   } catch (err: any) {
     console.warn("[QuantLab] Yahoo Finance VIX fetch failed:", err.message);
