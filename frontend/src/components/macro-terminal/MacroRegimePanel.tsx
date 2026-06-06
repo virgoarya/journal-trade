@@ -1,75 +1,35 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Play, X } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
-import { ArrowDown, ArrowUp, Play, X, Activity } from "lucide-react";
 
-const QUADRANT_PLAYBOOKS = {
+const QUADRANT_PLAYBOOKS: Record<string, Array<{ asset: string; desc: string }>> = {
   goldilocks: [
-    { asset: "SPY / QQQ", desc: "Korporasi menikmati ekspansi margin maksimal karena daya beli kuat sementara biaya input stabil. Sektor teknologi memimpin reli." },
-    { asset: "BTCUSD", desc: "Likuiditas melimpah beralih agresif ke high-beta risk-on assets untuk memburu alpha return tertinggi." }
+    { asset: "SPY / QQQ", desc: "Korporasi menikmati ekspansi margin karena daya beli kuat." },
+    { asset: "BTCUSD", desc: "Likuiditas melimpah beralih ke high-beta assets." }
   ],
   stagflation: [
-    { asset: "GLD (Gold)", desc: "Berfungsi sebagai lindung nilai murni (hard asset) saat mata uang fiat terdevaluasi oleh inflasi di tengah ekonomi yang mandek." },
-    { asset: "VIXY (Volatility)", desc: "Ketakutan pasar ekuitas terhadap macetnya roda ekonomi memicu lonjakan volatilitas pasar secara mendadak." },
-    { asset: "UUP (US Dollar)", desc: "Suku bunga yang dipaksa tetap tinggi demi melawan inflasi membuat modal asing masuk mengamankan yield mata uang Dollar." }
+    { asset: "GLD (Gold)", desc: "Lindung nilai saat fiat terdevaluasi oleh inflasi." },
+    { asset: "VIXY (Vol)", desc: "Ketakutan pasar memicu lonjakan volatilitas." },
+    { asset: "UUP (USD)", desc: "Modal asing masuk mengamankan yield Dollar." }
   ],
   deflation: [
-    { asset: "IEF (US 10Y Bonds)", desc: "Saat bank sentral memotong suku bunga, harga obligasi lama berkupon tinggi langsung meroket (capital gain naik tajam)." },
-    { asset: "UUP (US Dollar)", desc: "Cash is king. Semua institusi berebut mencairkan asetnya menjadi likuiditas US Dollar murni untuk mengamankan modal." }
+    { asset: "IEF (10Y)", desc: "Obligasi berkupon tinggi meroket saat suku bunga dipotong." },
+    { asset: "UUP (USD)", desc: "Cash is king, likuiditas Dollar dijaga." }
   ],
   reflation: [
-    { asset: "SPY (Equities)", desc: "Saham-saham sektor siklikal, industri, dan energi diuntungkan langsung dari roda ekonomi yang kembali berputar kencang." },
-    { asset: "TIP (TIPS)", desc: "Melindungi nilai pokok modal dari gerusan inflasi karena nilai prinsipal obligasi ini naik mengikuti indeks CPI." },
-    { asset: "BTCUSD", desc: "Berfungsi sebagai instrumen spekulasi awal karena sensitivitasnya yang tinggi terhadap ekspansi moneter baru." }
+    { asset: "SPY (Equities)", desc: "Sektor siklikal untung dari roda ekonomi yang berputar." },
+    { asset: "TIP (TIPS)", desc: "Melindungi nilai pokok dari inflasi." },
+    { asset: "BTCUSD", desc: "Spekulasi dari ekspansi moneter baru." }
   ],
 };
 
-const QUADRANT_CONFIG: Record<string, {
-  title: string;
-  description: string;
-  color: string;
-  bgActive: string;
-  borderActive: string;
-  glow: string;
-  icon: string;
-}> = {
-  goldilocks: {
-    title: "GOLDILOCKS",
-    description: "Growth ⬆️ · Inflation ⬇️",
-    color: "#10B981",
-    bgActive: "rgba(16, 185, 129, 0.15)",
-    borderActive: "rgba(16, 185, 129, 0.6)",
-    glow: "rgba(16, 185, 129, 0.25)",
-    icon: "🌱",
-  },
-  reflation: {
-    title: "REFLATION",
-    description: "Growth ⬆️ · Inflation ⬆️",
-    color: "#3B82F6",
-    bgActive: "rgba(59, 130, 246, 0.15)",
-    borderActive: "rgba(59, 130, 246, 0.6)",
-    glow: "rgba(59, 130, 246, 0.25)",
-    icon: "🔥",
-  },
-  stagflation: {
-    title: "STAGFLATION",
-    description: "Growth ⬇️ · Inflation ⬆️",
-    color: "#F59E0B",
-    bgActive: "rgba(245, 158, 11, 0.15)",
-    borderActive: "rgba(245, 158, 11, 0.6)",
-    glow: "rgba(245, 158, 11, 0.25)",
-    icon: "⚠️",
-  },
-  deflation: {
-    title: "DEFLATION",
-    description: "Growth ⬇️ · Inflation ⬇️",
-    color: "#94A3B8",
-    bgActive: "rgba(148, 163, 184, 0.15)",
-    borderActive: "rgba(148, 163, 184, 0.6)",
-    glow: "rgba(148, 163, 184, 0.25)",
-    icon: "❄️",
-  },
+const QUADRANT_CONFIG: Record<string, { title: string; desc: string; color: string }> = {
+  goldilocks: { title: "GOLDILOCKS", desc: "Growth / Inflation", color: "#10B981" },
+  reflation: { title: "REFLATION", desc: "Growth / Inflation", color: "#3B82F6" },
+  stagflation: { title: "STAGFLATION", desc: "Growth / Inflation", color: "#F59E0B" },
+  deflation: { title: "DEFLATION", desc: "Growth / Inflation", color: "#94A3B8" },
 };
 
 export function MacroRegimePanel() {
@@ -86,7 +46,6 @@ export function MacroRegimePanel() {
   const hasRegime = !!activeQuadrant;
   const cfg = activeQuadrant ? QUADRANT_CONFIG[activeQuadrant] : null;
 
-  // Map API status to display values
   const growthStatus = regimeData?.growth?.status === "ACCELERATING" ? "ACCELERATING" : "DECELERATING";
   const inflationStatus = regimeData?.inflation?.status === "ACCELERATING" ? "ACCELERATING" : "DECELERATING";
   const liquidityRisk = regimeData?.liquidity?.riskState || "STRESSED";
@@ -95,145 +54,118 @@ export function MacroRegimePanel() {
   const isInflationUp = inflationStatus === "ACCELERATING";
 
   return (
-    <div className="flex flex-col h-full bg-[#020202] border border-neutral-800 rounded-xl p-5">
-      
+    <div className="flex flex-col h-full bg-[#020202] border border-neutral-800 rounded-xl p-4 overflow-hidden">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-3 shrink-0">
         <h2 className="text-neutral-400 font-mono text-xs tracking-widest uppercase">Macro Regime Matrix</h2>
-        {lastUpdated && (
-          <span className="text-[9px] text-neutral-500 font-mono">
-            {new Intl.DateTimeFormat('en-US', {
-              month: 'short', day: '2-digit', year: 'numeric',
-              hour: '2-digit', minute: '2-digit', second: '2-digit',
-              hour12: false, timeZone: 'Asia/Jakarta'
-            }).format(lastUpdated)} WIB
-          </span>
-        )}
-        {hasRegime && (
-          <span className="text-green-500 text-xs font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            LIVE
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-[9px] text-neutral-500 font-mono whitespace-nowrap">
+              {new Intl.DateTimeFormat('en-US', {
+                month: 'short', day: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false, timeZone: 'Asia/Jakarta'
+              }).format(lastUpdated)} WIB
+            </span>
+          )}
+          {hasRegime && (
+            <span className="text-green-500 text-[10px] font-mono flex items-center gap-1.5 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Full Visual 2x2 Quadrant Grid */}
-      <div className="grid grid-cols-2 grid-rows-2 gap-2 mb-4">
+      {/* 2x2 Quadrant Grid */}
+      <div className="grid grid-cols-2 grid-rows-2 gap-2 mb-3 shrink-0">
         {(["goldilocks", "reflation", "stagflation", "deflation"] as const).map((q) => {
           const qCfg = QUADRANT_CONFIG[q];
           const isActive = activeQuadrant === q;
-          const isDecel = q === "deflation";
 
           return (
             <div
               key={q}
-              className="relative flex flex-col items-center justify-center rounded-xl border transition-all duration-300 cursor-pointer"
+              className="flex flex-col items-center justify-center rounded-lg border p-2 transition-all duration-200 cursor-pointer"
               style={{
-                backgroundColor: isActive ? qCfg.bgActive : "#0a0a0a",
-                borderColor: isActive ? qCfg.borderActive : "#262626",
-                boxShadow: isActive ? `0 0 20px ${qCfg.glow}, inset 0 0 10px ${qCfg.glow}` : "none",
+                backgroundColor: isActive ? qCfg.color + "18" : "#0a0a0a",
+                borderColor: isActive ? qCfg.color + "80" : "#262626",
+                boxShadow: isActive ? "0 0 12px " + qCfg.color + "30" : "none",
               }}
-              onClick={() => {
-                if (isActive) setShowPlaybook(true);
-              }}
+              onClick={() => { if (isActive) setShowPlaybook(true); }}
             >
-              {/* Active indicator */}
-              {isActive && (
-                <div
-                  className="absolute top-2 right-2 h-2 w-2 rounded-full animate-pulse"
-                  style={{ backgroundColor: qCfg.color, boxShadow: `0 0 8px ${qCfg.color}` }}
-                />
-              )}
-
-              {/* Icon */}
-              <span className="text-2xl mb-1">{qCfg.icon}</span>
-
-              {/* Title */}
-              <span
-                className="text-xs font-bold font-mono uppercase tracking-wider"
-                style={{ color: isActive ? qCfg.color : "#525252" }}
-              >
+              <span className="text-[10px] font-bold font-mono uppercase tracking-wider" style={{ color: isActive ? qCfg.color : "#525252" }}>
                 {qCfg.title}
               </span>
-
-              {/* Description */}
-              <span className="text-[10px] text-neutral-500 mt-1 font-mono tracking-wide">
-                {qCfg.description}
-              </span>
-
-              {/* Deceleration indicator for deflation */}
-              {isDecel && isActive && (
-                <div className="mt-2 flex items-center gap-1">
-                  <ArrowDown className="w-3 h-3 text-red-500" />
-                  <span className="text-[9px] text-red-500 font-mono font-bold">DECELERATING</span>
-                </div>
+              <span className="text-[8px] text-neutral-500 mt-0.5 font-mono">{qCfg.desc}</span>
+              {isActive && (
+                <span className="text-[8px] font-mono font-bold mt-1" style={{ color: qCfg.color }}>
+                  ACTIVE
+                </span>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* Integrated Status Panels */}
-      <div className="space-y-2 mt-auto">
-        {/* Growth Status */}
-        <div className="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg border border-neutral-800/50">
-          <span className="text-neutral-500 font-mono text-xs tracking-widest uppercase">Growth</span>
-          <span className={`font-bold text-xs tracking-wider flex items-center gap-2 ${isGrowthUp ? "text-green-500" : "text-red-500"}`}>
+      {/* Growth / Inflation Status */}
+      <div className="grid grid-cols-2 gap-2 mb-2 shrink-0">
+        <div className="flex items-center justify-between bg-neutral-900/50 rounded-lg border border-neutral-800/50 px-3 py-2">
+          <span className="text-neutral-500 font-mono text-[10px] tracking-widest uppercase">Growth</span>
+          <span className={"font-bold text-[10px] tracking-wider flex items-center gap-1 " + (isGrowthUp ? "text-green-500" : "text-red-500")}>
             {growthStatus} {isGrowthUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
           </span>
         </div>
-
-        {/* Inflation Status */}
-        <div className="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg border border-neutral-800/50">
-          <span className="text-neutral-500 font-mono text-xs tracking-widest uppercase">Inflation</span>
-          <span className={`font-bold text-xs tracking-wider flex items-center gap-2 ${isInflationUp ? "text-green-500" : "text-red-500"}`}>
+        <div className="flex items-center justify-between bg-neutral-900/50 rounded-lg border border-neutral-800/50 px-3 py-2">
+          <span className="text-neutral-500 font-mono text-[10px] tracking-widest uppercase">Inflation</span>
+          <span className={"font-bold text-[10px] tracking-wider flex items-center gap-1 " + (isInflationUp ? "text-green-500" : "text-red-500")}>
             {inflationStatus} {isInflationUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
           </span>
         </div>
+      </div>
 
-        {/* Liquidity Health */}
-        <div className="bg-red-950/20 border border-red-900/50 p-3 rounded-lg flex justify-center items-center">
-          <span className="text-red-500 font-mono font-bold text-xs tracking-[0.2em]">
+      {/* Liquidity Health */}
+      <div className="shrink-0 mb-2">
+        <div className="bg-red-950/20 border border-red-900/50 rounded-lg px-3 py-2 flex justify-center items-center">
+          <span className="text-red-500 font-mono font-bold text-[10px] tracking-[0.15em]">
             LIQUIDITY HEALTH: {liquidityRisk}
           </span>
         </div>
       </div>
 
+      {/* Active Regime Footer */}
+      {cfg && (
+        <div className="text-center pt-2 border-t border-neutral-800/50 shrink-0">
+          <span className="text-neutral-600 font-mono text-[10px] uppercase tracking-widest">Active Regime: </span>
+          <span className="font-bold text-xs tracking-widest" style={{ color: cfg.color }}>{cfg.title}</span>
+        </div>
+      )}
+
       {/* Playbook Modal */}
       {showPlaybook && activeQuadrant && cfg && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(8px)" }}
+          style={{ backgroundColor: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)" }}
           onClick={() => setShowPlaybook(false)}
         >
           <div
-            className="w-full max-w-xl rounded-2xl border p-6 relative"
+            className="w-full max-w-xl rounded-xl border p-5"
             style={{ backgroundColor: "#0a0a0a", borderColor: cfg.color + "40" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">{cfg.icon}</span>
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]" style={{ color: cfg.color }}>
-                  Playbook / {cfg.title}
-                </span>
-              </div>
-              <button
-                onClick={() => setShowPlaybook(false)}
-                className="p-1.5 rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-700 transition-colors"
-              >
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-mono font-bold uppercase tracking-widest" style={{ color: cfg.color }}>
+                Playbook / {cfg.title}
+              </span>
+              <button onClick={() => setShowPlaybook(false)} className="text-neutral-500 hover:text-white text-xs">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="space-y-3">
-              {(QUADRANT_PLAYBOOKS[activeQuadrant as keyof typeof QUADRANT_PLAYBOOKS] || []).map((entry, idx) => (
-                <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl border border-neutral-800 bg-neutral-900/30">
-                  <span className="text-[10px] font-mono font-bold px-2 py-1 rounded-md inline-block w-fit" style={{ color: cfg.color, backgroundColor: cfg.color + "15", border: `1px solid ${cfg.color}30` }}>
-                    {entry.asset}
-                  </span>
-                  <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">
-                    {entry.desc}
-                  </p>
+            <div className="space-y-2">
+              {(QUADRANT_PLAYBOOKS[activeQuadrant] || []).map((entry, idx) => (
+                <div key={idx} className="flex flex-col gap-1 p-3 rounded-lg border border-neutral-800 bg-neutral-900/40">
+                  <span className="text-[10px] font-mono font-bold inline-block w-fit px-2 py-0.5 rounded" style={{ color: cfg.color, backgroundColor: cfg.color + "15" }}>{entry.asset}</span>
+                  <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">{entry.desc}</p>
                 </div>
               ))}
             </div>
