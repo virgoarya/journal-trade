@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useMacroTerminal } from "./MacroTerminalContext";
-import { Activity, TrendingDown, TrendingUp, AlertTriangle, Play, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Play, X } from "lucide-react";
 
 const QUADRANT_PLAYBOOKS = {
   goldilocks: [
@@ -25,61 +25,16 @@ const QUADRANT_PLAYBOOKS = {
   ],
 };
 
- const QUADRANT_CONFIG: Record<string, {
-  title: string;
-  description: string;
-  color: string;
-  bgActive: string;
-  borderActive: string;
-  glow: string;
-  icon: string;
-}> = {
-  goldilocks: {
-    title: "Goldilocks",
-    description: "Growth ↑ · Inflation ↓",
-    color: "#10B981",
-    bgActive: "rgba(16, 185, 129, 0.12)",
-    borderActive: "rgba(16, 185, 129, 0.6)",
-    glow: "rgba(16, 185, 129, 0.25)",
-    icon: "🌱",
-  },
-  reflation: {
-    title: "Reflation",
-    description: "Growth ↑ · Inflation ↑",
-    color: "#3B82F6",
-    bgActive: "rgba(59, 130, 246, 0.12)",
-    borderActive: "rgba(59, 130, 246, 0.6)",
-    glow: "rgba(59, 130, 246, 0.25)",
-    icon: "🔥",
-  },
-  stagflation: {
-    title: "Stagflation",
-    description: "Growth ↓ · Inflation ↑",
-    color: "#F59E0B",
-    bgActive: "rgba(245, 158, 11, 0.12)",
-    borderActive: "rgba(245, 158, 11, 0.6)",
-    glow: "rgba(245, 158, 11, 0.25)",
-    icon: "⚠️",
-  },
-  deflation: {
-    title: "Deflation",
-    description: "Growth ↓ · Inflation ↓",
-    color: "#94A3B8",
-    bgActive: "rgba(148, 163, 184, 0.12)",
-    borderActive: "rgba(148, 163, 184, 0.6)",
-    glow: "rgba(148, 163, 184, 0.25)",
-    icon: "❄️",
-  },
-};
-
-const STATUS_COLORS: Record<string, { text: string; bg: string; border: string }> = {
-  ACCELERATING: { text: "#10B981", bg: "rgba(16, 185, 129, 0.12)", border: "rgba(16, 185, 129, 0.3)" },
-  DECELERATING: { text: "#EF4444", bg: "rgba(239, 68, 68, 0.12)", border: "rgba(239, 68, 68, 0.3)" },
+const QUADRANT_CONFIG: Record<string, { title: string; color: string; icon: string }> = {
+  goldilocks: { title: "GOLDILOCKS", color: "#10B981", icon: "🌱" },
+  reflation: { title: "REFLATION", color: "#3B82F6", icon: "🔥" },
+  stagflation: { title: "STAGFLATION", color: "#F59E0B", icon: "⚠️" },
+  deflation: { title: "DEFLATION", color: "#94A3B8", icon: "❄️" },
 };
 
 export function MacroRegimePanel() {
   const { currentRegime, lastUpdated, regimeData } = useMacroTerminal();
-  const [showPlaybook, setShowPlaybook] = useState(false);
+  const [showPlaybook, setShowPlaybook] = React.useState(false);
 
   const activeQuadrant = useMemo(() => {
     if (!currentRegime) return "";
@@ -91,356 +46,104 @@ export function MacroRegimePanel() {
   const hasRegime = !!activeQuadrant;
   const cfg = activeQuadrant ? QUADRANT_CONFIG[activeQuadrant] : null;
 
-  const formatNumber = (val: number | null | undefined, digits = 4) => {
-    if (val === null || val === undefined || Number.isNaN(val)) return "—";
-    return val.toFixed(digits);
-  };
+  // Map API status to display values
+  const growthStatus = regimeData?.growth?.status === "ACCELERATING" ? "ACCELERATING" : "DECELERATING";
+  const inflationStatus = regimeData?.inflation?.status === "ACCELERATING" ? "ACCELERATING" : "DECELERATING";
+  const liquidityRisk = regimeData?.liquidity?.riskState || "STRESSED";
 
-  const TrendBar = ({ label, value, ema, status, ratioLabel, invert = false }: {
-    label: string;
-    value: number;
-    ema: number;
-    status: string;
-    ratioLabel: string;
-    invert?: boolean;
-  }) => {
-    const colors = STATUS_COLORS[status] || STATUS_COLORS.DECELERATING;
-    const pct = Math.min(100, Math.max(0, ((value - ema) / ema) * 100 + 50));
-    const isAccel = status === "ACCELERATING";
-
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold text-text-muted uppercase tracking-widest">
-              {label}
-            </span>
-            <span
-              className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border"
-              style={{ color: colors.text, backgroundColor: colors.bg, borderColor: colors.border }}
-            >
-              {status}
-            </span>
-          </div>
-          <span className="text-[10px] font-mono text-text-muted">
-            {ratioLabel}
-          </span>
-        </div>
-
-        <div className="relative h-2 rounded-full bg-[#1a1a24] overflow-hidden">
-          <div
-            className="absolute inset-y-0 left-1/2 rounded-full transition-all duration-700 ease-out"
-            style={{
-              width: `${Math.abs(pct - 50) * 2}%`,
-              marginLeft: isAccel ? "50%" : "auto",
-              marginRight: isAccel ? "auto" : "50%",
-              backgroundColor: colors.text,
-              opacity: 0.8,
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-px h-3 bg-white/20" />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] font-mono text-text-muted">
-            EMA-50: {formatNumber(ema)}
-          </span>
-          <span className="text-[9px] font-mono" style={{ color: colors.text }}>
-            {isAccel ? "+" : ""}{formatNumber((value - ema) / ema * 100, 2)}%
-          </span>
-        </div>
-      </div>
-    );
-  };
+  const isGrowthUp = growthStatus === "ACCELERATING";
+  const isInflationUp = inflationStatus === "ACCELERATING";
 
   return (
-    <div
-      className="flex flex-col h-full rounded-2xl overflow-hidden border border-[#1a1a24]"
-      style={{ backgroundColor: "#0a0a0f", maxHeight: "380px" }}
-    >
-      {/* ========== HEADER ========== */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1a1a24]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <h2 className="text-[11px] font-mono font-bold text-[#D4AF37] uppercase tracking-[0.15em]">
-              Macro Regime Matrix
-            </h2>
-          </div>
-          {lastUpdated && (
-            <span className="text-[9px] font-mono text-[#5a5a6e] tracking-wide">
-              {new Intl.DateTimeFormat('en-US', {
-                month: 'short', day: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: false, timeZone: 'Asia/Jakarta'
-              }).format(lastUpdated)} WIB
+    <div className="flex flex-col h-full bg-[#020202] border border-neutral-800 rounded-xl p-5">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-neutral-400 font-mono text-xs tracking-widest uppercase">Macro Regime Matrix</h2>
+        {hasRegime && (
+          <span className="text-green-500 text-xs font-mono flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            LIVE
+          </span>
+        )}
+      </div>
+
+      {/* Main Content: Clean Indicators */}
+      <div className="flex flex-col space-y-3 flex-grow justify-center">
+        
+        {/* Growth Indicator */}
+        <div className="flex justify-between items-center bg-neutral-900/50 p-4 rounded-lg border border-neutral-800/50">
+          <span className="text-neutral-500 font-mono text-sm tracking-wide">GROWTH</span>
+          <span className={`font-bold text-sm tracking-wider flex items-center gap-2 ${isGrowthUp ? "text-green-500" : "text-red-500"}`}>
+            {growthStatus} {isGrowthUp ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+          </span>
+        </div>
+
+        {/* Inflation Indicator */}
+        <div className="flex justify-between items-center bg-neutral-900/50 p-4 rounded-lg border border-neutral-800/50">
+          <span className="text-neutral-500 font-mono text-sm tracking-wide">INFLATION</span>
+          <span className={`font-bold text-sm tracking-wider flex items-center gap-2 ${isInflationUp ? "text-green-500" : "text-red-500"}`}>
+            {inflationStatus} {isInflationUp ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+          </span>
+        </div>
+
+      </div>
+
+      {/* Bottom Section: Liquidity & Overall Status */}
+      <div className="mt-6 space-y-3">
+        
+        {/* Liquidity Alert */}
+        <div className="bg-red-950/20 border border-red-900/50 p-3 rounded-lg flex justify-center items-center">
+          <span className="text-red-500 font-mono font-bold text-xs tracking-[0.2em]">
+            LIQUIDITY HEALTH: {liquidityRisk}
+          </span>
+        </div>
+
+        {/* Active Regime */}
+        <div className="text-center pt-2">
+          <span className="text-neutral-600 font-mono text-xs uppercase tracking-widest">Active Regime: </span>
+          {cfg && (
+            <span className="font-bold text-sm tracking-widest" style={{ color: cfg.color }}>
+              {cfg.title}
             </span>
           )}
         </div>
-        {hasRegime && (
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10B981]" />
-            </div>
-            <span className="text-[9px] font-mono font-bold text-[#10B981] uppercase tracking-widest">
-              Live
-            </span>
-          </div>
-        )}
+
       </div>
 
-      {/* ========== MAIN CONTENT ========== */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4" style={{ scrollbarWidth: "none" }}>
-        {/* Hide scrollbar */}
-        <style jsx>{`
-          div::-webkit-scrollbar { display: none; }
-        `}</style>
-
-        {!hasRegime || !regimeData ? (
-          <div className="flex items-center justify-center h-32">
-            <span className="text-[#5a5a6e] text-xs font-mono">Initializing matrix...</span>
-          </div>
-        ) : (
-          <>
-            {/* ROW 1: 2x2 Grid + Active Hero */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* 2x2 Quadrant Grid */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-2">
-                {(["goldilocks", "reflation", "stagflation", "deflation"] as const).map((q) => {
-                  const qCfg = QUADRANT_CONFIG[q];
-                  const isActive = activeQuadrant === q;
-
-                  return (
-                    <button
-                      key={q}
-                      onClick={() => {
-                        if (isActive) {
-                          setShowPlaybook(true);
-                        }
-                      }}
-                      className="relative flex flex-col items-center justify-center rounded-xl border transition-all duration-300 group"
-                      style={{
-                        backgroundColor: "#111118",
-                        borderColor: isActive ? qCfg.borderActive : "#1a1a24",
-                        boxShadow: isActive
-                          ? `0 0 24px ${qCfg.glow}, inset 0 0 12px ${qCfg.glow}`
-                          : "none",
-                      }}
-                    >
-                      {/* Active indicator dot */}
-                      {isActive && (
-                        <div
-                          className="absolute top-2.5 right-2.5 h-2.5 w-2.5 rounded-full animate-pulse"
-                          style={{ backgroundColor: qCfg.color, boxShadow: `0 0 10px ${qCfg.color}` }}
-                        />
-                      )}
-
-                      <span className="text-lg mb-1 opacity-80 group-hover:scale-110 transition-transform duration-300">
-                        {qCfg.icon}
-                      </span>
-                      <span
-                        className="text-[11px] font-bold font-mono uppercase tracking-wider"
-                        style={{ color: isActive ? qCfg.color : "#6b7280" }}
-                      >
-                        {qCfg.title}
-                      </span>
-                      <span className="text-[9px] text-[#6b7280] mt-1 font-mono tracking-wide">
-                        {qCfg.description}
-                      </span>
-
-                      {/* Hover effect */}
-                      <div
-                        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{
-                          background: `linear-gradient(135deg, ${qCfg.bgActive}, transparent 60%)`,
-                        }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Active Regime Hero */}
-              <div
-                className="flex flex-col items-center justify-center rounded-xl border relative overflow-hidden"
-                style={{
-                  backgroundColor: "#111118",
-                  borderColor: cfg ? cfg.borderActive : "#1a1a24",
-                  boxShadow: cfg ? `0 0 30px ${cfg.glow}` : "none",
-                }}
-              >
-                {cfg && (
-                  <>
-                    <div
-                      className="absolute inset-0 opacity-30 pointer-events-none"
-                      style={{
-                        background: `radial-gradient(circle at center, ${cfg.bgActive}, transparent 70%)`,
-                      }}
-                    />
-                    <div className="relative z-10 flex flex-col items-center gap-2 p-3">
-                      <span className="text-[10px] font-mono font-bold text-[#5a5a6e] uppercase tracking-[0.2em]">
-                        Active Regime
-                      </span>
-                      <span
-                        className="text-3xl font-black font-mono uppercase tracking-tight"
-                        style={{ color: cfg.color, textShadow: `0 0 20px ${cfg.glow}` }}
-                      >
-                        {cfg.title}
-                      </span>
-                      <span className="text-[10px] text-[#9ca3af] font-mono text-center leading-relaxed">
-                        {regimeData.description}
-                      </span>
-
-                      <button
-                        onClick={() => setShowPlaybook(true)}
-                        className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-200 hover:brightness-125 active:scale-95"
-                        style={{
-                          backgroundColor: cfg.bgActive,
-                          borderColor: cfg.borderActive,
-                          color: cfg.color,
-                        }}
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-widest">
-                          View Playbook
-                        </span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* ROW 2: Metrics / Trend Gauges */}
-            <div className="grid grid-cols-2 gap-3">
-              {regimeData.growth && (
-                <TrendBar
-                  label="Growth Trend"
-                  value={regimeData.growth.current}
-                  ema={regimeData.growth.ema50}
-                  status={regimeData.growth.status}
-                  ratioLabel="XLY / XLP"
-                />
-              )}
-              {regimeData.inflation && (
-                <TrendBar
-                  label="Inflation Trend"
-                  value={regimeData.inflation.current}
-                  ema={regimeData.inflation.ema50}
-                  status={regimeData.inflation.status}
-                  ratioLabel="TIP / TLT"
-                />
-              )}
-            </div>
-
-            {/* ROW 3: Liquidity Health Badge */}
-            {regimeData.liquidity && (
-              <div
-                className="flex items-center justify-between rounded-xl border px-4 py-3"
-                style={{
-                  backgroundColor: "#111118",
-                  borderColor: "#1a1a24",
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-4 h-4" style={{ color: regimeData.liquidity.riskState === "STRESSED" ? "#EF4444" : "#10B981" }} />
-                  <div>
-                    <span className="text-[9px] font-mono font-bold text-[#5a5a6e] uppercase tracking-widest block">
-                      Liquidity Health
-                    </span>
-                    <span className="text-[10px] font-mono text-[#9ca3af]">
-                      HYG / SHY
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono text-[#9ca3af] block">
-                      Ratio: {formatNumber(regimeData.liquidity.current)}
-                    </span>
-                    <span className="text-[9px] font-mono text-[#5a5a6e]">
-                      EMA-50: {formatNumber(regimeData.liquidity.ema50)}
-                    </span>
-                  </div>
-                  <span
-                    className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border"
-                    style={{
-                      color: regimeData.liquidity.riskState === "HEALTHY" ? "#10B981" : "#EF4444",
-                      backgroundColor: regimeData.liquidity.riskState === "HEALTHY"
-                        ? "rgba(16, 185, 129, 0.12)"
-                        : "rgba(239, 68, 68, 0.12)",
-                      borderColor: regimeData.liquidity.riskState === "HEALTHY"
-                        ? "rgba(16, 185, 129, 0.3)"
-                        : "rgba(239, 68, 68, 0.3)",
-                    }}
-                  >
-                    {regimeData.liquidity.riskState}
-                  </span>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* ========== PLAYBOOK MODAL ========== */}
+      {/* Playbook Modal */}
       {showPlaybook && activeQuadrant && cfg && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(8px)" }}
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(8px)" }}
           onClick={() => setShowPlaybook(false)}
         >
           <div
             className="w-full max-w-xl rounded-2xl border p-6 relative"
-            style={{
-              backgroundColor: "#0f0f16",
-              borderColor: cfg.borderActive,
-              boxShadow: `0 0 40px ${cfg.glow}`,
-            }}
+            style={{ backgroundColor: "#0a0a0a", borderColor: cfg.color + "40" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <span className="text-xl">{cfg.icon}</span>
-                <div>
-                  <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]" style={{ color: cfg.color }}>
-                    Playbook
-                  </span>
-                  <span className="text-[10px] text-[#5a5a6e] font-mono ml-2">
-                    {regimeData?.description}
-                  </span>
-                </div>
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]" style={{ color: cfg.color }}>
+                  Playbook / {cfg.title}
+                </span>
               </div>
               <button
                 onClick={() => setShowPlaybook(false)}
-                className="p-1.5 rounded-lg border border-[#1a1a24] text-[#5a5a6e] hover:text-white hover:border-[#2a2a34] transition-colors"
+                className="p-1.5 rounded-lg border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-700 transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Modal Body */}
             <div className="space-y-3">
               {(QUADRANT_PLAYBOOKS[activeQuadrant as keyof typeof QUADRANT_PLAYBOOKS] || []).map((entry, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col gap-1.5 p-3 rounded-xl border border-[#1a1a24]"
-                  style={{ backgroundColor: "#111118" }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-[10px] font-mono font-bold px-2 py-1 rounded-md"
-                      style={{ backgroundColor: cfg.bgActive, color: cfg.color, border: `1px solid ${cfg.borderActive}` }}
-                    >
-                      {entry.asset}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-[#9ca3af] leading-relaxed font-mono">
+                <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl border border-neutral-800 bg-neutral-900/30">
+                  <span className="text-[10px] font-mono font-bold px-2 py-1 rounded-md inline-block w-fit" style={{ color: cfg.color, backgroundColor: cfg.color + "15", border: `1px solid ${cfg.color}30` }}>
+                    {entry.asset}
+                  </span>
+                  <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">
                     {entry.desc}
                   </p>
                 </div>
