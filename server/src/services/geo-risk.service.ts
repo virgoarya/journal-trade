@@ -21,8 +21,9 @@ const FRED_SERIES = {
 /**
  * Fetch the latest observation value for a FRED series.
  * Returns null on failure (graceful degradation).
+ * @param limit - how many observations to scan (default 12 for monthly series)
  */
-async function fredLatest(seriesId: string): Promise<number | null> {
+async function fredLatest(seriesId: string, limit = 12): Promise<number | null> {
   if (!env.FRED_API_KEY) return null;
   try {
     const resp = await axios.get(FRED_BASE, {
@@ -31,7 +32,7 @@ async function fredLatest(seriesId: string): Promise<number | null> {
         api_key: env.FRED_API_KEY,
         file_type: "json",
         sort_order: "desc",
-        limit: 6,          // enough to skip pending "." monthly obs
+        limit,              // scan enough obs to skip pending "."
         observation_start: "2020-01-01",
       },
       timeout: 10000,
@@ -41,7 +42,8 @@ async function fredLatest(seriesId: string): Promise<number | null> {
     // Find the latest non-"." value
     for (const o of obs) {
       if (o.value && o.value !== ".") {
-        return parseFloat(o.value);
+        const parsed = parseFloat(o.value);
+        if (!isNaN(parsed)) return parsed;
       }
     }
     return null;
@@ -127,24 +129,28 @@ async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
   console.log("[GeoRisk] Fetching fresh data from FRED APIs…");
 
   // Parallel fetch – partial failure is acceptable
+  // Use limit=12 for PMI to reliably skip pending "." entries
   let [cpi_yoy, fedfunds_raw, vix, pmi_raw, onRrp_raw] = await Promise.all([
     fredCpiYoy(),
-    fredLatest(FRED_SERIES.FEDFUNDS),
-    fredLatest(FRED_SERIES.VIX),
-    fredLatest(FRED_SERIES.PMI),
-    fredLatest(FRED_SERIES.ONRRP),
+    fredLatest(FRED_SERIES.FEDFUNDS, 6),
+    fredLatest(FRED_SERIES.VIX, 6),
+    fredLatest(FRED_SERIES.PMI, 12),
+    fredLatest(FRED_SERIES.ONRRP, 6),
   ]);
 
   // Fallback: if ISM NAPM returns null, try Manufacturing Employment as proxy
+  // Store the RAW value before rounding so UI shows the real number
+  let pmiSource: "NAPM" | "MANEMP_SYNTHETIC" = "NAPM";
   if (pmi_raw === null) {
     console.warn("[GeoRisk] NAPM returned null, trying MANEMP fallback…");
-    const manemp = await fredLatest(FRED_SERIES.PMI_FALLBACK);
+    const manemp = await fredLatest(FRED_SERIES.PMI_FALLBACK, 6);
     // MANEMP is in thousands of employees; normalize around ~12,500k (expansion)
     // >12500 ≈ expansion (PMI>50 equiv), <12000 ≈ contraction
     if (manemp !== null) {
       // Map to a synthetic PMI: 13000k → 55, 12500k → 50, 12000k → 45
-      pmi_raw = 50 + ((manemp - 12500) / 100);
-      pmi_raw = Math.round(Math.min(65, Math.max(35, pmi_raw)));
+      pmi_raw = parseFloat((50 + ((manemp - 12500) / 100)).toFixed(1));
+      pmi_raw = Math.min(65, Math.max(35, pmi_raw));
+      pmiSource = "MANEMP_SYNTHETIC";
       console.log(`[GeoRisk] MANEMP fallback: ${manemp}k → synthetic PMI ${pmi_raw}`);
     }
   }
