@@ -35,7 +35,7 @@ export interface LiquidityData {
   history?: { date: string; value: number; status: string }[];
 }
 
-export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Slowdown" | "Deflation" | "Neutral Transition";
+export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Transition";
 
 interface MacroTerminalContextProps {
   assets: Asset[];

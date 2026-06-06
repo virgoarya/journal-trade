@@ -5,7 +5,7 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 ## 1. Macro Regime Matrix
 
 ### Fungsi
-- Menampilkan 4 quadrant regime makro: **Stagflation**, **Goldilocks**, **Deflation**, **Reflation**.
+- Menampilkan 5 quadrant regime makro: **Stagflation**, **Reflation**, **Transition**, **Deflation**, **Goldilocks**.
 - Menandai quadrant aktif dengan highlight khusus.
 
 ### Rumus & Sumber Data

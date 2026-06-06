@@ -62,7 +62,7 @@ export function classifyMacroRegime(
 
   // Handle the case where both are medium -> Neutral Transition
   if (growthCategory === 'medium' && inflationCategory === 'medium') {
-    regime = 'Neutral Transition';
+    regime = 'Transition';
     reason = 'Pertumbuhan dan inflasi berada di zona netral, menunjukkan transisi regime.';
   } else {
     // Resolve MEDIUM states by comparing absolute z-scores
@@ -118,7 +118,7 @@ export function classifyMacroRegime(
     //   (HIGH, LOW) -> Goldilocks
     //   (HIGH, HIGH) -> Reflation
     //   (LOW, HIGH) -> Stagflation
-    //   (LOW, LOW) -> Slowdown
+    //   (LOW, LOW) -> Deflation
     //   (HIGH, MEDIUM) -> ? 
     //   (LOW, MEDIUM) -> ?
     //   (MEDIUM, HIGH) -> ?
@@ -188,7 +188,7 @@ export function classifyMacroRegime(
       regime = 'Stagflation';
       reason = 'Pertumbuhan melambat sementara tekanan inflasi masih tinggi, sering akibat gangguan pasokan.';
     } else if (growthCatForRegime === 'low' && inflationCatForRegime === 'low') {
-      regime = 'Slowdown';
+      regime = 'Deflation';
       reason = 'Pertumbuhan dan inflasi keduanya berada di zona rendah, menunjukkan penurunan aktivitas ekonomi.';
     } else {
       // Handle the remaining cases where at least one is medium
@@ -203,11 +203,11 @@ export function classifyMacroRegime(
         regime = 'Goldilocks'; // High growth with medium inflation
         reason = 'Pertumbuhan tinggi dengan inflasi netral, kondisi ideal.';
       } else if (growthCatForRegime === 'low' && inflationCatForRegime === 'medium') {
-        regime = 'Slowdown'; // Low growth with medium inflation
+        regime = 'Deflation'; // Low growth with medium inflation
         reason = 'Pertumbuhan rendah dengan inflasi netral, menunjukkan pelambatan.';
       } else {
         // This should not happen because we already handled both medium.
-        regime = 'Neutral Transition';
+        regime = 'Transition';
         reason = 'Kondisi campur yang tidak jelas; default ke transisi netral.';
       }
     }
@@ -330,14 +330,8 @@ export function deriveSentimentAndImpact(
         ? 'dengan stagflasi/deflasi yang menambah aversi risiko'
         : 'dengan likuiditas refill mengimbangi tekanan';
   }
-  else if (regime === 'Slowdown') {
-    sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
-    impactOnRisk =
-      sentiment === 'RISK-OFF'
-        ? 'pertumbuhan rendah dan inflasi rendah mengindikasikan lemahnya ekonomi, cenderung risiko‑off'
-        : 'netral karena likuiditas refill mengimbangi tekanan';
-  }
-  else if (regime === 'Neutral Transition') {
+  // 'Slowdown' removed — now unified under 'Deflation' above
+  else if (regime === 'Transition') {
     sentiment = 'NEUTRAL';
     impactOnRisk = 'netral karena berada dalam transisi regime tanpa arah jelas';
   }
