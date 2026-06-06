@@ -49,7 +49,11 @@ function SvgEdge({
   const pathD = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 
   return (
-    <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+    <svg 
+      className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" 
+      viewBox="0 0 100 100" 
+      preserveAspectRatio="none"
+    >
       <defs>
         <linearGradient id={`grad-${x1}-${y1}`} x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor={color} stopOpacity="0.2" />
@@ -64,6 +68,7 @@ function SvgEdge({
         stroke={color}
         strokeWidth="3"
         strokeOpacity={0.15}
+        vectorEffect="non-scaling-stroke"
       />
 
       {/* Dashed Overlay */}
@@ -74,6 +79,7 @@ function SvgEdge({
         strokeWidth="1.5"
         strokeOpacity={0.4}
         strokeDasharray="4 6"
+        vectorEffect="non-scaling-stroke"
       />
 
       {/* Flowing Energy Overlay */}
@@ -82,9 +88,10 @@ function SvgEdge({
           d={pathD}
           fill="none"
           stroke={color}
-          strokeWidth="2"
-          strokeDasharray="8 8"
-          initial={{ strokeDashoffset: 16 }}
+          strokeWidth="2.5"
+          strokeDasharray="4 8"
+          vectorEffect="non-scaling-stroke"
+          initial={{ strokeDashoffset: 24 }}
           animate={{ strokeDashoffset: 0 }}
           transition={{
             duration: 1,
@@ -185,34 +192,27 @@ export function MacroNexusDiagram() {
         </p>
       </div>
 
-      {/* SVG Edges Layer */}
-      {/* 
-        To make SVG lines responsive to percentages, we draw them from % to %.
-        React doesn't natively support % in SVG x1/y1 without wrapping in a full-size SVG. 
-      */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+      {/* We no longer need the global SVG because SvgEdge wraps its own SVG */}
         
-        {/* Fed -> Liquidity */}
-        <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.liq.color} active={!isDraining} />
-        {/* Liquidity -> Equities */}
-        <SvgEdge x1={nodes.liq.x} y1={nodes.liq.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.eq.color} active={!isDraining} />
-        
-        {/* DXY -> Liquidity (Inverse) */}
-        <SvgEdge x1={nodes.dxy.x} y1={nodes.dxy.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.dxy.color} active={uup > 0} />
-        
-        {/* Fed -> Yield Curve */}
-        <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.yc.x} y2={nodes.yc.y} color={nodes.yc.color} active={true} />
-        
-        {/* Yield Curve -> Equities */}
-        <SvgEdge x1={nodes.yc.x} y1={nodes.yc.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.yc.color} active={!isInverted} />
-        
-        {/* VIX -> Equities */}
-        <SvgEdge x1={nodes.vix.x} y1={nodes.vix.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.vix.color} active={vix >= 20} />
-        
-        {/* Inflation -> Fed */}
-        <SvgEdge x1={nodes.inf.x} y1={nodes.inf.y} x2={nodes.fed.x} y2={nodes.fed.y} color={nodes.inf.color} active={infProxy > 0} />
-
-      </svg>
+      {/* Fed -> Liquidity */}
+      <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.liq.color} active={!isDraining} />
+      {/* Liquidity -> Equities */}
+      <SvgEdge x1={nodes.liq.x} y1={nodes.liq.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.eq.color} active={!isDraining} />
+      
+      {/* DXY -> Liquidity (Inverse) */}
+      <SvgEdge x1={nodes.dxy.x} y1={nodes.dxy.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.dxy.color} active={uup > 0} />
+      
+      {/* Fed -> Yield Curve */}
+      <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.yc.x} y2={nodes.yc.y} color={nodes.yc.color} active={true} />
+      
+      {/* Yield Curve -> Equities */}
+      <SvgEdge x1={nodes.yc.x} y1={nodes.yc.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.yc.color} active={!isInverted} />
+      
+      {/* VIX -> Equities */}
+      <SvgEdge x1={nodes.vix.x} y1={nodes.vix.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.vix.color} active={vix >= 20} />
+      
+      {/* Inflation -> Fed */}
+      <SvgEdge x1={nodes.inf.x} y1={nodes.inf.y} x2={nodes.fed.x} y2={nodes.fed.y} color={nodes.inf.color} active={infProxy > 0} />
 
       {/* Nodes Layer */}
       {Object.entries(nodes).map(([key, n]) => (
