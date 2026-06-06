@@ -30,10 +30,11 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
 
   let vix: number | null = null;
   try {
-    const YahooFinance = require('yahoo-finance2').default;
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const vixQuote = await yf.quote('^VIX');
-    vix = vixQuote?.regularMarketPrice ?? null;
+    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/^VIX');
+    if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+    const data = await res.json();
+    vix = data.chart.result[0].meta.regularMarketPrice;
+    if (typeof vix !== 'number') throw new Error('Invalid VIX format');
   } catch (err: any) {
     console.warn("[QuantLab] Failed to fetch live VIX from Yahoo Finance, falling back to FRED:", err.message);
     vix = await fredLatest(FRED_SERIES.VIX, 6);
