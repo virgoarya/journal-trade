@@ -9,7 +9,7 @@ export interface IYieldCurveSnapshot extends Document {
   spread2y10y: number | null;
   inverted: boolean;
   vix: number | null;
-  regime: "GOLDILOCKS" | "STAGFLATION" | "DEFLATION" | "REFLATION" | "TRANSITION" | "UNKNOWN";
+  regime: "CALM" | "NORMAL" | "ELEVATED" | "FEAR" | "UNKNOWN";
 }
 
 const YieldCurveSnapshotSchema = new Schema<IYieldCurveSnapshot>(
@@ -24,7 +24,7 @@ const YieldCurveSnapshotSchema = new Schema<IYieldCurveSnapshot>(
     vix: { type: Number, default: null },
     regime: { 
       type: String, 
-      enum: ["GOLDILOCKS", "STAGFLATION", "DEFLATION", "REFLATION", "TRANSITION", "UNKNOWN"],
+      enum: ["CALM", "NORMAL", "ELEVATED", "FEAR", "UNKNOWN"],
       default: "UNKNOWN" 
     },
   },

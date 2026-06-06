@@ -12,11 +12,11 @@ const FRED_SERIES = {
 
 function classifyRegime(vix: number | null): IYieldCurveSnapshot["regime"] {
   if (vix === null) return "UNKNOWN";
-  if (vix < 15) return "GOLDILOCKS"; // Calm
-  if (vix >= 15 && vix < 20) return "REFLATION"; // Normal / Rising
-  if (vix >= 20 && vix < 30) return "STAGFLATION"; // Elevated / Stress
-  if (vix >= 30) return "DEFLATION"; // Fear / Crash
-  return "TRANSITION";
+  if (vix < 15) return "CALM";
+  if (vix >= 15 && vix < 20) return "NORMAL";
+  if (vix >= 20 && vix < 30) return "ELEVATED";
+  if (vix >= 30) return "FEAR";
+  return "UNKNOWN";
 }
 
 async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {

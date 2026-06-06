@@ -50,17 +50,18 @@ export function VixRegimePanel() {
 
   if (vix >= 30) {
     vixColor = "#ef4444"; // Red
-    vixLabel = "FEAR (Crash/Deflation)";
+    vixLabel = "FEAR";
     pctFill = 100;
   } else if (vix >= 20) {
     vixColor = "#f97316"; // Orange
-    vixLabel = "ELEVATED (Stress)";
+    vixLabel = "ELEVATED";
     pctFill = ((vix - 10) / 30) * 100;
   } else if (vix >= 15) {
     vixColor = "#f59e0b"; // Yellow
-    vixLabel = "NORMAL (Rising)";
+    vixLabel = "NORMAL";
     pctFill = ((vix - 10) / 30) * 100;
   } else if (vix > 0) {
+    vixLabel = "CALM";
     pctFill = ((vix - 10) / 30) * 100; // start chart at 10
   }
 
@@ -72,7 +73,7 @@ export function VixRegimePanel() {
       <div className="flex items-center gap-2 mb-6 shrink-0">
         <AlertOctagon className="w-4 h-4 text-accent-gold" />
         <span className="text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
-          Volatility Regime
+          Volatility Status
         </span>
       </div>
 
@@ -101,7 +102,7 @@ export function VixRegimePanel() {
                 {vixLabel}
               </h3>
               <p className="text-xs text-text-muted font-mono mt-1">
-                Mapped Regime: <span className="text-text-primary font-bold">{regime}</span>
+                Market Fear Gauge · <span className="text-text-primary font-bold">VIX {vix ? vix.toFixed(1) : "—"}</span>
               </p>
             </div>
 
