@@ -210,4 +210,39 @@ export const marketDataService = {
       throw new Error("Failed to fetch ON RRP liquidity data");
     }
   },
+
+  async getEconomicCalendar() {
+    const cacheKey = "economic_calendar";
+    if (cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < 300000) { // 5 minutes cache
+      return cache[cacheKey].data;
+    }
+
+    try {
+      const response = await axios.get("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
+        timeout: 10000,
+      });
+
+      // Filter only High and Medium impact events, or keep all and let frontend decide.
+      // We'll keep all and let frontend filter, but limit to relevant data
+      const data = response.data.map((item: any) => ({
+        title: item.title,
+        country: item.country,
+        date: item.date,
+        impact: item.impact,
+        forecast: item.forecast,
+        previous: item.previous,
+        actual: item.actual || "",
+      }));
+
+      cache[cacheKey] = {
+        data,
+        timestamp: Date.now(),
+      };
+
+      return data;
+    } catch (error: any) {
+      console.error("ForexFactory API Error:", error.message);
+      throw new Error("Failed to fetch economic calendar data");
+    }
+  },
 };

@@ -38,6 +38,15 @@ router.get("/liquidity", async (req, res) => {
   }
 });
 
+router.get("/economic-calendar", async (req, res) => {
+  try {
+    const data = await marketDataService.getEconomicCalendar();
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(503).json({ success: false, error: error.message });
+  }
+});
+
 // Temporary mock endpoint for testing - inject mock liquidity change to trigger notification
 router.post("/liquidity/mock-trigger", requireAuth, async (req, res) => {
   try {

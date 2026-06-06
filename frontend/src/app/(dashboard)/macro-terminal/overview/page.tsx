@@ -5,7 +5,7 @@ import { MacroRegimePanel } from "@/components/macro-terminal/MacroRegimePanel";
 import { LiquidityGaugePanel } from "@/components/macro-terminal/LiquidityGaugePanel";
 import { HeatmapPanel } from "@/components/macro-terminal/HeatmapPanel";
 import { NewsFeedPanel } from "@/components/macro-terminal/NewsFeedPanel";
-import { TerminalChatPanel } from "@/components/macro-terminal/TerminalChatPanel";
+import { EconomicCalendarPanel } from "@/components/macro-terminal/EconomicCalendarPanel";
 
 export default function MacroOverviewPage() {
   return (
@@ -35,9 +35,9 @@ export default function MacroOverviewPage() {
           <HeatmapPanel />
         </div>
 
-        {/* Bottom Right: Terminal Chat (fixed smaller height) */}
+        {/* Bottom Right: Economic Calendar (fixed smaller height) */}
         <div className="h-80 shrink-0">
-          <TerminalChatPanel />
+          <EconomicCalendarPanel />
         </div>
       </div>
     </div>

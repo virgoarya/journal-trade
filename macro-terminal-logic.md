@@ -316,3 +316,26 @@ Backend Services
 ### File Terkait
 - `frontend/src/components/macro-terminal/nexus/MacroNexusDiagram.tsx`
 - `frontend/src/components/macro-terminal/nexus/NexusNode.tsx`
+
+## 13. Economic Calendar (Overview Tab)
+
+### Fungsi
+- Menampilkan jadwal rilis berita fundamental dan data makroekonomi (CPI, NFP, GDP, FOMC, dll).
+- Diletakkan di tab **Overview** untuk memberikan konteks seketika (*at-a-glance*) terhadap pergerakan Heatmap dan Regime tanpa memakan kuota token AI.
+- Menampilkan data penting: Waktu (Time), Mata Uang/Negara (Cur), Judul Event (Event), **Actual** (ACT), **Forecast** (FCS), dan **Previous** (PRV).
+
+### Sumber Data
+- Menggunakan endpoint publik JSON dari **ForexFactory** (`https://nfs.faireconomy.media/ff_calendar_thisweek.json`).
+- Gratis, tidak memerlukan API key, dan di-*cache* oleh backend selama 5 menit.
+
+### Logika UI
+- **Filter**: Hanya menampilkan event dengan dampak (Impact) `High` atau `Medium` dan untuk mata uang mayor (USD, EUR, GBP, JPY, CAD, AUD).
+- **Indikator Masa Lalu**: Event yang sudah terlewati batas waktunya akan dirender sedikit transparan (`opacity-50`).
+- **Warna Angka Aktual**: 
+  - Jika `Actual > Forecast`, warna hijau (`text-data-profit`).
+  - Jika `Actual < Forecast`, warna merah (`text-data-loss`).
+  - *(Catatan: Pembandingan ini bersifat matematis absolut, belum membalikkan logika untuk indikator khusus seperti Klaim Pengangguran/Unemployment).*
+
+### File Terkait
+- `server/src/services/market-data.service.ts` — fungsi `getEconomicCalendar()`
+- `frontend/src/components/macro-terminal/EconomicCalendarPanel.tsx`
