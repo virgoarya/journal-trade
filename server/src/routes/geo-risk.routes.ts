@@ -21,16 +21,24 @@ router.get("/", async (req, res) => {
 /**
  * POST /api/v1/geo-risk/refresh
  * Force-refreshes the Geo-Risk snapshot (requires auth).
+ * Returns full data shape so frontend doesn't need a second GET call.
  */
 router.post("/refresh", requireAuth, async (req, res) => {
   try {
     const snapshot = await geoRiskService.forceRefresh();
     res.json({
       success: true,
-      message: "Geo-Risk snapshot refreshed from FRED APIs.",
       data: {
         scores: snapshot.scores,
+        raw: {
+          cpi_yoy: snapshot.cpi_yoy ?? null,
+          fedfunds_rate: snapshot.fedfunds_rate ?? null,
+          vix: snapshot.vix ?? null,
+          globalPmi: snapshot.globalPmi ?? null,
+          onRrpBalance: snapshot.onRrpBalance ?? null,
+        },
         fetchedAt: snapshot.fetchedAt,
+        fromCache: false,
       },
     });
   } catch (error: any) {

@@ -81,6 +81,8 @@ export function GeoRiskRadarPanel() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -95,6 +97,26 @@ export function GeoRiskRadarPanel() {
       setError(err.message ?? "Gagal memuat data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Force-refresh: hits POST /refresh (bypasses 12h MongoDB cache → calls FRED API live)
+  const forceRefresh = async () => {
+    if (refreshing || loading) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const resp = await fetch("/api/v1/geo-risk/refresh", { method: "POST" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      if (!json.success) throw new Error(json.error ?? "Force refresh gagal");
+      // POST returns full data shape with fromCache: false — set directly
+      setData(json.data);
+      setLastUpdated(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
+    } catch (err: any) {
+      setError(err.message ?? "Force refresh gagal");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -157,12 +179,12 @@ export function GeoRiskRadarPanel() {
             </div>
           )}
           <button
-            onClick={fetchData}
-            disabled={loading}
+            onClick={forceRefresh}
+            disabled={loading || refreshing}
             className="p-1 rounded text-text-muted hover:text-accent-gold transition-colors disabled:opacity-40"
-            title="Refresh"
+            title="Force refresh dari FRED API (bypass cache)"
           >
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3 h-3 ${(loading || refreshing) ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
