@@ -34,12 +34,20 @@ function AnimatedEdge({ startX, startY, endX, endY, color, flowDirection }: { st
   );
 }
 
-// Proper SVG Edge
+// Proper SVG Edge with Bezier Curve (Cable style)
 function SvgEdge({ 
   x1, y1, x2, y2, color, active 
 }: { 
   x1: number, y1: number, x2: number, y2: number, color: string, active: boolean 
 }) {
+  // S-curve control points
+  const cx1 = (x1 + x2) / 2;
+  const cy1 = y1;
+  const cx2 = (x1 + x2) / 2;
+  const cy2 = y2;
+  
+  const pathD = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+
   return (
     <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
       <defs>
@@ -48,28 +56,42 @@ function SvgEdge({
           <stop offset="100%" stopColor={color} stopOpacity="0.8" />
         </linearGradient>
       </defs>
+      
+      {/* Background Cable */}
       <path
-        d={`M ${x1} ${y1} L ${x2} ${y2}`}
+        d={pathD}
         fill="none"
         stroke={color}
-        strokeWidth="2"
-        strokeOpacity={0.3}
-        strokeDasharray="4 4"
+        strokeWidth="3"
+        strokeOpacity={0.15}
       />
+
+      {/* Dashed Overlay */}
+      <path
+        d={pathD}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeOpacity={0.4}
+        strokeDasharray="4 6"
+      />
+
+      {/* Flowing Energy Overlay */}
       {active && (
-        <motion.circle
-          r="3"
-          fill={color}
-          style={{ filter: `drop-shadow(0 0 4px ${color})` }}
-          animate={{
-            cx: [`${x1}%`, `${x2}%`],
-            cy: [`${y1}%`, `${y2}%`],
-          }}
+        <motion.path
+          d={pathD}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeDasharray="8 8"
+          initial={{ strokeDashoffset: 16 }}
+          animate={{ strokeDashoffset: 0 }}
           transition={{
-            duration: 2,
+            duration: 1,
             repeat: Infinity,
             ease: "linear"
           }}
+          style={{ filter: `drop-shadow(0 0 4px ${color})` }}
         />
       )}
     </svg>
