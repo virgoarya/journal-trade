@@ -499,14 +499,13 @@ ${Object.entries(nodesData).map(([k, v]) => {
       return `- ${v.label}: ${v.value} [Status: ${status}]`;
     }).join('\n')}
 
-CATATAN LOGIKA ABSOLUT (DILARANG BERHALUSINASI):
-- Node "Liquidity (RRP)" membaca likuiditas sistem. Jika statusnya "Hijau" berarti The Fed sedang MENGINJEKSI likuiditas ke pasar (saldo RRP turun/rendah). Jika statusnya "Merah" berarti The Fed MENYEDOT (Draining) likuiditas (saldo RRP naik/tinggi).
-- Jangan pernah mengatakan "menyedot likuiditas" jika status RRP adalah Hijau.
-- Angka RRP di bawah $10B ($0.xxB) sangat rendah, artinya The Fed TIDAK menyedot likuiditas, melainkan uang sudah masuk semua ke pasar (Injeksi penuh).
-- Lihat status warna dari masing-masing node untuk menentukan apakah itu sentimen positif atau negatif, jangan menebak sendiri.
+ATURAN WAJIB ANALISIS (DILARANG BERHALUSINASI):
+1. SINTESIS SELURUH NODE: Anda WAJIB mengaitkan hubungan sebab-akibat antar SEMUA elemen (terutama Yield Curve, US Dollar, Inflation, dan Risk Assets). JANGAN hanya berfokus pada Liquidity.
+2. LOGIKA REVERSE REPO (ON RRP): Jika statusnya "Hijau", The Fed sedang MENGINJEKSI likuiditas (positif untuk risk assets). Jika "Merah", The Fed MENYEDOT likuiditas. Saldo < $10B ($0.xxB) berarti injeksi penuh sudah terjadi ke pasar.
+3. LOGIKA MAKRO STANDAR: Perhatikan pergerakan Yield Curve dan US Dollar. Yield yang naik (+ bps) biasanya menekan Risk Assets.
 
 Tugas Anda:
-1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi (sebab-akibat antar node).
+1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi secara komprehensif menyertakan peran Yield Curve, Dollar, dan Likuiditas.
 2. Sebutkan node mana yang menjadi driver utama atau risiko terbesar saat ini.
 3. Berikan satu kesimpulan taktis.
 
