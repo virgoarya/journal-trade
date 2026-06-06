@@ -1,5 +1,6 @@
 import axios from "axios";
 import { env } from "../config/env";
+import { geoRiskService } from "./geo-risk.service";
 
 const GEMINI_API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -374,11 +375,26 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
       personaDescription = "Anda adalah Contrarian Hedge Fund Manager. Anda selalu skeptis terhadap konsensus pasar (herd mentality), suka mencari anomali data, dan merekomendasikan posisi melawan arus ketika pasar terlalu serakah atau terlalu takut.";
     }
 
+    let geoRiskContext = "";
+    try {
+      const geoRisk = await geoRiskService.getScores();
+      if (geoRisk && geoRisk.scores) {
+        geoRiskContext = `\nDATA GEO-RISK RADAR (0-100, 100 = Kritis/Bahaya Ekstrem):
+- Inflation Risk: ${geoRisk.scores.inflation} (100 = Hiperinflasi)
+- Rate Hike Risk: ${geoRisk.scores.rateHike} (100 = Suku bunga sangat tinggi)
+- Geopolitics Risk (VIX): ${geoRisk.scores.geopolitics} (100 = Kepanikan global)
+- Supply Chain Risk (PMI): ${geoRisk.scores.supplyChain} (100 = Kontraksi rantai pasok)
+- Liquidity Drain Risk: ${geoRisk.scores.liquidityDrain} (PENTING: 100 berarti Saldo ON RRP di The Fed sudah HABIS total / $0, yang berarti sistem perbankan kekurangan bantalan likuiditas darurat, memicu krisis likuiditas sistemik. Jika 0 berarti kas berlimpah.)`;
+      }
+    } catch (e) {
+      console.warn("[MacroAI] Failed to fetch geo-risk scores for chat context", e);
+    }
+
     const systemPrompt = `ROLE & PERSONA: ${personaDescription}
     
 KONTEKS PASAR SAAT INI (BERDASARKAN DATA REAL-TIME TERMINAL):
 ${regimeContext}${liquidityContext}
-${assetContext}
+${assetContext}${geoRiskContext}
 
 Gunakan konteks di atas sebagai fakta dasar untuk semua jawaban Anda. Jika ditanya tentang kondisi makro saat ini, sebutkan regime dan data di atas.
 
