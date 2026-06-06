@@ -128,7 +128,7 @@ export function VixRegimePanel() {
             </div>
             {resp?.fetchedAt && (
               <p className="text-[9px] font-mono text-text-muted mt-8 text-center shrink-0">
-                Updated {new Date(resp.fetchedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} · FRED API
+                Updated {new Date(resp.fetchedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} · Live Yahoo Finance API
               </p>
             )}
           </>
