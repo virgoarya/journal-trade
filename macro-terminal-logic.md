@@ -193,13 +193,13 @@ Backend Services
 - Menampilkan status sesi pasar AS secara real-time di pojok kanan atas Heatmap.
 - Membantu user mengetahui apakah data yang diterima adalah live market data atau closing data kemarin.
 
-### Logika Waktu (EST)
-- Menggunakan `Intl.DateTimeFormat` dengan `timeZone: "America/New_York"` (native JS, tanpa library eksternal).
-- Badge ditentukan berdasarkan jam EST dan hari kerja:
-  - **LIVE (US SESSION)** — Senin–Jumat, 09:30–16:00 EST → badge hijau
-  - **PRE-MARKET** — Senin–Jumat, sebelum 09:30 EST → badge kuning/oranye
-  - **AFTER-HOURS** — Senin–Jumat, 16:00–17:00 EST → badge kuning/oranye
-  - **CLOSED** — Weekend / luar jam sesi → badge abu-abu
+### Logika Waktu Dinamis (EDT/EST)
+- Menggunakan `Intl.DateTimeFormat` dengan `timeZone: "America/New_York"` untuk mendukung penyesuaian dinamis antara EDT dan EST secara otomatis tanpa library eksternal.
+- Badge ditentukan berdasarkan jam New York dan hari kerja:
+  - **LIVE (US SESSION)** — Senin–Jumat, 09:30–16:00 (New York Time) → badge hijau
+  - **PRE-MARKET** — Senin–Jumat, sebelum 09:30 (New York Time) → badge kuning/oranye
+  - **AFTER-HOURS** — Senin–Jumat, 16:00–17:00 (New York Time) → badge kuning/oranye
+  - **CLOSED** — Pada saat weekend (Sabtu/Minggu), status harus otomatis CLOSED dan data persentase (dp) untuk Heatmap harus mengunci pada data penutupan hari Jumat agar komponen tidak render sebagai DATA UNAVAILABLE.
 
 ### File Terkait
 - `frontend/src/components/macro-terminal/HeatmapPanel.tsx` — fungsi `getMarketSessionStatus()` + badge render
@@ -216,7 +216,7 @@ Backend Services
   - `DATA UNAVAILABLE` untuk heatmap.
   - Pesan error untuk regime matrix.
 
-## 9. Environment Variables Wajib
+## 10. Environment Variables Wajib
 
 | Variable | Digunakan Untuk |
 |----------|-----------------|
@@ -225,7 +225,7 @@ Backend Services
 | `GROQ_API_KEY` | AI reasoning + chat |
 | `GEMINI_API_KEY` | Opsional, AI reasoning fallback |
 
-## 10. Quant Lab
+## 11. Quant Lab
 
 ### Fungsi
 - Tab khusus untuk analisis kuantitatif mendalam (*yield curve* dan *volatility*).
@@ -251,7 +251,7 @@ Backend Services
 - `frontend/src/components/macro-terminal/YieldCurvePanel.tsx`
 - `frontend/src/components/macro-terminal/VixRegimePanel.tsx`
 
-## 11. Nexus Causal Loop
+## 12. Nexus Causal Loop
 
 ### Fungsi
 - Tab visual interaktif (*Causal Loop Diagram*) yang memetakan bagaimana variabel makroekonomi saling mempengaruhi secara langsung (*real-time*).
@@ -270,6 +270,7 @@ Backend Services
 - **Bespoke Responsive SVG**: Diagram dirender menggunakan `<svg viewBox="0 0 100 100" preserveAspectRatio="none">`. Ini memastikan koordinat presisi dan responsif mengikuti `width/height` kontainer, mengkonversi koordinat menjadi persentase secara *native*.
 - **Bezier Cable Routing**: Kabel menggunakan kurva Bezier tipe *S-Curve* murni (`M x1 y1 C cx1 cy1, cx2 cy2, x2 y2`).
 - **Flowing Energy Animation**: Menggunakan properti `stroke-dashoffset` dari `framer-motion`. Kabel dirender dengan gaya putus-putus (*dashed*) lalu dianimasikan secara linier tanpa henti, menciptakan ilusi aliran listrik/data (warna merah muda untuk kontraksi, hijau neon untuk ekspansi) sesuai nilai elemen *causal* penyebabnya.
+  - *Spesifikasi Khusus*: Kabel dari Liquidity ke Risk Assets menggunakan stroke warna merah saat status DRAINING (change > 0), dan warna hijau neon saat status INJECTING (change < 0).
 - **Pulsating Alert**: Node yang dalam bahaya (misal: VIX > 20 atau Liquidity Draining) akan menyalakan *glow backdrop* berdenyut layaknya alarm peringatan.
 
 ### File Terkait
