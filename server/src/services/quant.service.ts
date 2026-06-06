@@ -1,5 +1,6 @@
 import { YieldCurveSnapshot, IYieldCurveSnapshot } from "../models/YieldCurveSnapshot";
 import { fredLatest } from "../utils/fred-api.helper";
+import yahooFinance from "yahoo-finance2";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -20,13 +21,20 @@ function classifyRegime(vix: number | null): IYieldCurveSnapshot["regime"] {
 }
 
 async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
-  console.log("[QuantLab] Fetching fresh data from FRED APIs…");
+  console.log("[QuantLab] Fetching fresh data (FRED + Yahoo Finance)…");
 
-  const [y2, y5, y10, vix] = await Promise.all([
+  let vix: number | null = null;
+  try {
+    const vixQuote = await yahooFinance.quote('^VIX');
+    vix = vixQuote.regularMarketPrice ?? null;
+  } catch (err: any) {
+    console.warn("[QuantLab] Yahoo Finance VIX fetch failed:", err.message);
+  }
+
+  const [y2, y5, y10] = await Promise.all([
     fredLatest(FRED_SERIES.DGS2, 6),
     fredLatest(FRED_SERIES.DGS5, 6),
     fredLatest(FRED_SERIES.DGS10, 6),
-    fredLatest(FRED_SERIES.VIX, 6),
   ]);
 
   let spread2y10y = null;
