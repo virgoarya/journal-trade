@@ -24,11 +24,40 @@ export interface NewsApiResponse {
   data: NewsApiItem[];
 }
 
+export interface RegimeMetricData {
+  current: number;
+  ema50: number;
+  status: "ACCELERATING" | "DECELERATING";
+  label: string;
+}
+
+export interface RegimeSnapshotData {
+  quadrant: string;
+  quadNumber: number;
+  description: string;
+  growth: RegimeMetricData;
+  inflation: RegimeMetricData;
+  liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
+  position: { x: number; y: number };
+  history: Array<{
+    date: string;
+    growthRatio: number;
+    growthEma: number;
+    inflationRatio: number;
+    inflationEma: number;
+    liquidityRatio: number;
+    liquidityEma: number;
+    quadrant: string;
+  }>;
+  fetchedAt: string;
+}
+
 export function useMacroTypedData() {
-  const { assets, liquidity } = useMacroTerminal();
+  const { assets, liquidity, regimeData } = useMacroTerminal();
 
   return {
     assets,
     liquidity,
+    regimeData,
   };
 }

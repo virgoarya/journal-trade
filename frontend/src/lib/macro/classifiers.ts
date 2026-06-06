@@ -23,12 +23,11 @@ export type {
 };
 
 /* ---------- 1. Macro Regime Classification ---------- */
-// Thresholds can be tuned; values below are illustrative.
-// Growth: > 0.2%/month considered high, <= 0.2% low
-// Inflation: > 3%/year considered high, <= 3% low
-const GROWTH_THRESHOLD = 0.2; // percent per month
-const INFLATION_THRESHOLD = 3.0; // percent per year
-
+// NOTE: Fungsi ini sudah di-deprecate. Klasifikasi regime kini menggunakan pendekatan
+// ETF Ratio + EMA-50 melalui API `/api/v1/macro-regime/snapshot` (server-side).
+// Fungsi ini hanya dipertahankan untuk kompatibilitas dengan route API `/api/macro`
+// yang masih menggunakan skor agregasi FRED sebagai fallback.
+// @deprecated
 export function classifyMacroRegime(
   inputs: MacroInputs
 ): MacroRegimeResult {
