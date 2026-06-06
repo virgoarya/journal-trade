@@ -4,12 +4,12 @@ FROM node:20-alpine AS builder
 # Install frontend dependencies
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --omit=optional
 
 # Install server dependencies
 WORKDIR /app/server
 COPY server/package*.json ./
-RUN npm ci
+RUN npm ci --omit=optional
 
 # Copy all source
 WORKDIR /app
@@ -32,7 +32,7 @@ ENV NODE_ENV=production
 COPY --from=builder /app/server/package*.json ./server/
 
 # Install only production deps inside server directory
-RUN cd server && npm ci --only=production --ignore-scripts
+RUN cd server && npm ci --only=production --omit=optional --ignore-scripts
 
 # Copy built server files
 COPY --from=builder /app/server/dist ./server/dist
