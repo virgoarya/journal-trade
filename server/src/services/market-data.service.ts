@@ -218,20 +218,50 @@ export const marketDataService = {
     }
 
     try {
-      const response = await axios.get("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
-        timeout: 10000,
-      });
+      // Calculate date range for TradingView (this week)
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - dayOfWeek);
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-      // Filter only High and Medium impact events, or keep all and let frontend decide.
-      // We'll keep all and let frontend filter, but limit to relevant data
-      const data = response.data.map((item: any) => ({
+      const fromStr = startOfWeek.toISOString();
+      const toStr = endOfWeek.toISOString();
+
+      const response = await axios.get(
+        `https://economic-calendar.tradingview.com/events?from=${fromStr}&to=${toStr}&countries=US,GB,EU,JP,AU,CA,NZ`, 
+        {
+          timeout: 10000,
+          headers: {
+            'Origin': 'https://www.tradingview.com',
+            'User-Agent': 'Mozilla/5.0'
+          }
+        }
+      );
+
+      // TradingView importance mapping: 1 = High, 0 = Medium, -1 = Low
+      const getImpactStr = (importance: number) => {
+        if (importance === 1) return "High";
+        if (importance === 0) return "Medium";
+        return "Low";
+      };
+
+      const formatValue = (val: any, unit: string = "") => {
+        if (val === null || val === undefined) return "";
+        return `${val}${unit}`;
+      };
+
+      const data = response.data.result.map((item: any) => ({
         title: item.title,
-        country: item.country,
+        country: item.currency || item.country,
         date: item.date,
-        impact: item.impact,
-        forecast: item.forecast,
-        previous: item.previous,
-        actual: item.actual || "",
+        impact: getImpactStr(item.importance),
+        forecast: formatValue(item.forecast, item.unit),
+        previous: formatValue(item.previous, item.unit),
+        actual: formatValue(item.actual, item.unit),
       }));
 
       cache[cacheKey] = {
@@ -241,7 +271,7 @@ export const marketDataService = {
 
       return data;
     } catch (error: any) {
-      console.error("ForexFactory API Error:", error.message);
+      console.error("TradingView Calendar API Error:", error.message);
       throw new Error("Failed to fetch economic calendar data");
     }
   },

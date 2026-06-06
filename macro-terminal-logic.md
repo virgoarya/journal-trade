@@ -325,8 +325,8 @@ Backend Services
 - Menampilkan data penting: Waktu (Time), Mata Uang/Negara (Cur), Judul Event (Event), **Actual** (ACT), **Forecast** (FCS), dan **Previous** (PRV).
 
 ### Sumber Data
-- Menggunakan endpoint publik JSON dari **ForexFactory** (`https://nfs.faireconomy.media/ff_calendar_thisweek.json`).
-- Gratis, tidak memerlukan API key, dan di-*cache* oleh backend selama 5 menit.
+- Menggunakan endpoint publik dari **TradingView Economic Calendar** (`economic-calendar.tradingview.com/events`).
+- Gratis, sangat andal, dan menyediakan data komprehensif termasuk nilai **Actual** yang muncul langsung saat event terjadi. Di-*cache* oleh backend selama 5 menit.
 
 ### Logika UI
 - **Filter**: Hanya menampilkan event dengan dampak (Impact) `High` atau `Medium` dan untuk mata uang mayor (USD, EUR, GBP, JPY, CAD, AUD).
