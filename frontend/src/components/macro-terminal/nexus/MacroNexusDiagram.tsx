@@ -197,7 +197,7 @@ export function MacroNexusDiagram() {
       {/* Fed -> Liquidity */}
       <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.liq.color} active={!isDraining} />
       {/* Liquidity -> Equities */}
-      <SvgEdge x1={nodes.liq.x} y1={nodes.liq.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.eq.color} active={!isDraining} />
+      <SvgEdge x1={nodes.liq.x} y1={nodes.liq.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.liq.color} active={liqStatus !== "UNKNOWN"} />
       
       {/* DXY -> Liquidity (Inverse) */}
       <SvgEdge x1={nodes.dxy.x} y1={nodes.dxy.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.dxy.color} active={uup > 0} />

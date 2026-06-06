@@ -4,39 +4,45 @@ import React from "react";
 import { ShieldAlert, BrainCircuit, RefreshCw } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
-function getMarketSessionStatus() {
-  const now = new Date();
-  const day = now.getDay();
+export type MarketSession = "LIVE" | "PRE-MARKET" | "AFTER-HOURS" | "CLOSED";
 
+export function getMarketSessionStatus(): { label: MarketSession; color: string; textColor: string } {
+  const now = new Date();
+  
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
-    hour: "2-digit",
-    minute: "2-digit",
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
     hour12: false,
   });
 
   const parts = formatter.formatToParts(now);
-  const getPart = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
-  const hour = getPart("hour");
-  const minute = getPart("minute");
-  const currentMinutes = hour * 60 + minute;
+  
+  let weekday = "";
+  let hour = 0;
+  let minute = 0;
 
-  if (day === 0 || day === 6) {
+  for (const part of parts) {
+    if (part.type === "weekday") weekday = part.value;
+    if (part.type === "hour") hour = parseInt(part.value, 10);
+    if (part.type === "minute") minute = parseInt(part.value, 10);
+  }
+
+  // 1. Filter Weekend
+  if (weekday === "Sat" || weekday === "Sun") {
     return { label: "CLOSED", color: "bg-gray-500", textColor: "text-gray-400" };
   }
 
-  const PRE_START = 4 * 60;
-  const MARKET_OPEN = 9 * 60 + 30;
-  const MARKET_CLOSE = 16 * 60;
-  const AFTER_CLOSE = 20 * 60;
+  const timeAsFloat = hour + minute / 60;
 
-  if (currentMinutes >= PRE_START && currentMinutes < MARKET_OPEN) {
+  if (timeAsFloat >= 4.0 && timeAsFloat < 9.5) {
     return { label: "PRE-MARKET", color: "bg-yellow-600", textColor: "text-yellow-400" };
   }
-  if (currentMinutes >= MARKET_OPEN && currentMinutes < MARKET_CLOSE) {
-    return { label: "LIVE (US SESSION)", color: "bg-data-profit", textColor: "text-data-profit" };
+  if (timeAsFloat >= 9.5 && timeAsFloat < 16.0) {
+    return { label: "LIVE", color: "bg-data-profit", textColor: "text-data-profit" };
   }
-  if (currentMinutes >= MARKET_CLOSE && currentMinutes < AFTER_CLOSE) {
+  if (timeAsFloat >= 16.0 && timeAsFloat < 20.0) {
     return { label: "AFTER-HOURS", color: "bg-yellow-600", textColor: "text-yellow-400" };
   }
 
@@ -51,6 +57,9 @@ export function HeatmapPanel() {
 
   const renderChange = (change: number | null | undefined) => {
     if (change === null || change === undefined || Number.isNaN(change)) {
+      if (sessionStatus.label === "CLOSED") {
+        return "0.00%"; // Mengunci nilai agar tidak render UNAVAILABLE saat weekend
+      }
       return "DATA UNAVAILABLE";
     }
 
@@ -61,6 +70,9 @@ export function HeatmapPanel() {
 
   const getColor = (change: number | null | undefined) => {
     if (change === null || change === undefined || Number.isNaN(change)) {
+      if (sessionStatus.label === "CLOSED") {
+        return "bg-surface-elevated text-text-muted"; // Grey color when frozen
+      }
       return "bg-surface-elevated text-text-secondary";
     }
 
@@ -84,10 +96,12 @@ export function HeatmapPanel() {
             <span className={`h-1.5 w-1.5 rounded-full ${sessionStatus.color}`} aria-hidden />
             <span className={`${sessionStatus.textColor}`}>{sessionStatus.label}</span>
           </span>
-          {isFallback ? (
+          {isFallback && sessionStatus.label !== "CLOSED" ? (
             <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
               <ShieldAlert size={10} /> MOCK FALLBACK
             </span>
+          ) : sessionStatus.label === "CLOSED" ? (
+            <span className="text-[10px] text-text-muted font-mono">FROZEN</span>
           ) : (
             <span className="text-[10px] text-data-profit font-mono animate-pulse">LIVE API</span>
           )}
