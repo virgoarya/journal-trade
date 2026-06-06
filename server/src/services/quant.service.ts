@@ -1,5 +1,5 @@
 import { YieldCurveSnapshot, IYieldCurveSnapshot } from "../models/YieldCurveSnapshot";
-import { fredLatest, FRED_SERIES } from "../utils/fred-api.helper";
+import { fredLatest } from "../utils/fred-api.helper";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
