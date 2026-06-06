@@ -221,6 +221,57 @@ Backend Services
 | Variable | Digunakan Untuk |
 |----------|-----------------|
 | `FINNHUB_API_KEY` | Quotes + News |
-| `FRED_API_KEY` | Liquidity (ON RRP) |
+| `FRED_API_KEY` | Liquidity (ON RRP) + Quant Lab (Yields & VIX) |
 | `GROQ_API_KEY` | AI reasoning + chat |
 | `GEMINI_API_KEY` | Opsional, AI reasoning fallback |
+
+## 10. Quant Lab
+
+### Fungsi
+- Tab khusus untuk analisis kuantitatif mendalam (*yield curve* dan *volatility*).
+- Menarik *snapshot* data dari endpoint gabungan `/api/v1/quant/snapshot`.
+
+### Komponen
+1. **US Treasury Yield Curve**
+   - Menarik imbal hasil obligasi 2Y, 5Y, dan 10Y dari FRED (`DGS2`, `DGS5`, `DGS10`).
+   - Menghitung **10Y - 2Y Spread**. Jika bernilai negatif, maka berstatus **INVERTED** (sinyal kuat resesi).
+   - Menghitung **Recession Probability** menggunakan model *Estrella & Mishkin* (berbasis distribusi normal probit) berdasarkan spread 10Y-2Y.
+
+2. **Volatility Regime (VIX)**
+   - Menarik data spot VIX dari FRED secara EOD (*End-of-Day*). FRED digunakan sebagai *primary source* karena lebih andal (API Yahoo Finance/Finnhub sering memblokir IP server cloud).
+   - Memetakan skor VIX ke sentimen:
+     - `< 15` = CALM (Risk-On)
+     - `15 - 20` = CHOPPY (Caution)
+     - `20 - 30` = FEAR (Risk-Off)
+     - `> 30` = PANIC (Capitulation)
+   - Sinkronisasi dengan Matrix Regime utama.
+
+### File Terkait
+- `server/src/services/quant.service.ts`
+- `frontend/src/components/macro-terminal/YieldCurvePanel.tsx`
+- `frontend/src/components/macro-terminal/VixRegimePanel.tsx`
+
+## 11. Nexus Causal Loop
+
+### Fungsi
+- Tab visual interaktif (*Causal Loop Diagram*) yang memetakan bagaimana variabel makroekonomi saling mempengaruhi secara langsung (*real-time*).
+
+### Causal Routing Logic (Hukum Makro)
+1. **Inflation Proxy ➔ Federal Reserve**: Inflasi (momentum TIP & GLD) mendikte *stance* The Fed (Hawkish/Dovish).
+2. **Federal Reserve ➔ Yield Curve**: Kebijakan moneter (suku bunga & QT) membentuk kurva imbal hasil.
+3. **Federal Reserve ➔ Liquidity (RRP)**: Operasi QT/QE dan Repo mengontrol ketersediaan likuiditas uang tunai di sistem perbankan.
+4. **US Dollar (DXY) ➔ Liquidity**: *Strong Dollar* (Proxy UUP) menyerap likuiditas global karena kredit berbasis USD menjadi sangat mahal (*Wrecking Ball effect*).
+5. **Liquidity ➔ Risk Assets**: Likuiditas berlebih mengalir ke aset berisiko tinggi memompa harga S&P 500 (SPY).
+6. **Market Fear (VIX) ➔ Risk Assets**: Korelasi terbalik algoritmik; lonjakan volatilitas VIX memicu institusi meruntuhkan ekuitas (Risk-Off).
+7. **Yield Curve ➔ Risk Assets**: Kurva terbalik (*Inverted*) menandakan ancaman resesi dan kontraksi margin bank, menekan sentimen risiko.
+
+### Animasi SVG Flowchart (Terminal Noir Engine)
+- **Tanpa Library Berat**: Tidak menggunakan `react-flow` atau *canvas engine* untuk menjaga agar beban DOM tetap sangat ringan.
+- **Bespoke Responsive SVG**: Diagram dirender menggunakan `<svg viewBox="0 0 100 100" preserveAspectRatio="none">`. Ini memastikan koordinat presisi dan responsif mengikuti `width/height` kontainer, mengkonversi koordinat menjadi persentase secara *native*.
+- **Bezier Cable Routing**: Kabel menggunakan kurva Bezier tipe *S-Curve* murni (`M x1 y1 C cx1 cy1, cx2 cy2, x2 y2`).
+- **Flowing Energy Animation**: Menggunakan properti `stroke-dashoffset` dari `framer-motion`. Kabel dirender dengan gaya putus-putus (*dashed*) lalu dianimasikan secara linier tanpa henti, menciptakan ilusi aliran listrik/data (warna merah muda untuk kontraksi, hijau neon untuk ekspansi) sesuai nilai elemen *causal* penyebabnya.
+- **Pulsating Alert**: Node yang dalam bahaya (misal: VIX > 20 atau Liquidity Draining) akan menyalakan *glow backdrop* berdenyut layaknya alarm peringatan.
+
+### File Terkait
+- `frontend/src/components/macro-terminal/nexus/MacroNexusDiagram.tsx`
+- `frontend/src/components/macro-terminal/nexus/NexusNode.tsx`
