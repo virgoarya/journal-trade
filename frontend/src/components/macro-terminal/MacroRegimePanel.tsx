@@ -112,7 +112,7 @@ export function MacroRegimePanel() {
                 {cfg.title}
               </span>
               <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">
-                Growth / Inflation — Contraction: weakening economy and falling prices.
+                {regimeData?.description || `${cfg.title} — Loading...`}
               </p>
             </>
           )}
