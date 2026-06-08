@@ -113,7 +113,7 @@ export function YieldCurvePanel() {
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-accent-gold" />
-          <span className="text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+          <span className="text-[10px] sm:text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
             US Treasury Yield Curve
           </span>
           {resp && (

@@ -52,6 +52,19 @@ export interface RegimeSnapshotData {
   fetchedAt: string;
 }
 
+export interface MacroRawInputs {
+  ismPmi: number[];
+  joblessClaims: number[];
+  unemployment: number[];
+  nfp: number[];
+  realGdp: number[];
+  corePce: number[];
+  supercore: number[];
+  cpiYoY: number[];
+  breakeven5y: number[];
+  breakeven10y: number[];
+}
+
 export function useMacroTypedData() {
   const { assets, liquidity, regimeData } = useMacroTerminal();
 

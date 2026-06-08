@@ -227,8 +227,8 @@ export function MacroNexusDiagram() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="relative w-full h-[600px] glass border border-border-subtle rounded-xl bg-bg-void overflow-hidden flex items-center justify-center">
+    <div className="flex flex-col gap-4 overflow-visible">
+      <div className="relative w-full h-[600px] glass border border-border-subtle rounded-xl bg-bg-void overflow-visible flex items-center justify-center">
       
       {/* Background Grid */}
       <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10 pointer-events-none" />
@@ -236,10 +236,10 @@ export function MacroNexusDiagram() {
       {/* Title & Controls */}
       <div className="absolute top-4 left-4 right-4 z-20 flex items-start justify-between">
         <div>
-          <h2 className="text-sm font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
+          <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
             <Activity className="w-4 h-4 text-accent-gold" /> Macro Causal Loop
           </h2>
-          <p className="text-[10px] font-mono text-text-muted mt-1 max-w-xs">
+          <p className="text-[9px] font-mono text-text-muted mt-1 max-w-xs">
             Visualisasi real-time bagaimana likuiditas, inflasi, dan sentimen saling mempengaruhi aliran modal institusional.
           </p>
         </div>

@@ -62,7 +62,7 @@ export interface LiquidityData {
   history?: { date: string; value: number; status: string }[];
 }
 
-export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation";
+export type RegimeType = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Transition";
 
 interface MacroTerminalContextProps {
   assets: Asset[];
@@ -138,12 +138,14 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
         aiReasoningText = aiReasoningRef.current ?? `Regime: ${regime}, Liquidity: ${liquidityStatus}`;
       }
 
-      if (isRegimeChanged && previousRegime) {
-        setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime.toUpperCase()} TO ${regime?.toUpperCase()}.`);
-        setLastRegime(previousRegime);
-      } else if (currentRegimeRef.current === null && regime) {
-        setLastRegime(regime);
-      }
+if (isRegimeChanged && previousRegime) {
+         setSystemAlert(`[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime.toUpperCase()} TO ${regime?.toUpperCase()}.`);
+         setLastRegime(previousRegime);
+         // Clear AI observer cache on regime shift
+         fetch("/api/v1/macro-ai-observer/clear-cache", { method: "POST" }).catch(console.error);
+       } else if (currentRegimeRef.current === null && regime) {
+         setLastRegime(regime);
+       }
 
       if (regime) {
         setCurrentRegime(regime);

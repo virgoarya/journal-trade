@@ -35,7 +35,7 @@ export function NexusNode({ label, value, icon: Icon, statusColor, glowColor, x,
       
       {/* Node Container */}
       <div 
-        className="relative flex flex-col items-center justify-center w-24 h-24 rounded-2xl glass border-2 shadow-lg hover:scale-105 transition-transform duration-300 cursor-default"
+        className="relative flex flex-col items-center justify-center w-24 h-24 rounded-2xl glass border-2 shadow-lg transition-transform duration-300 cursor-default"
         style={{ borderColor: `${statusColor}40`, backgroundColor: "rgba(10,10,15,0.8)" }}
       >
         <Icon className="w-6 h-6 mb-2" style={{ color: statusColor }} />

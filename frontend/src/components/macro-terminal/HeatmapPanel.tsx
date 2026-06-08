@@ -88,7 +88,7 @@ export function HeatmapPanel() {
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
       <div className="flex items-center justify-between border-b border-border-subtle p-3">
-        <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest" id="heatmap-heading">
+        <h2 className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs" id="heatmap-heading">
           Macro ETFs Heatmap
         </h2>
         <div className="flex items-center gap-3" role="status">
@@ -150,9 +150,9 @@ export function HeatmapPanel() {
             <div className="text-text-muted">Menunggu pergerakan pasar untuk dianalisis...</div>
           )}
         </div>
-        {lastUpdated && (
+{lastUpdated && (
           <div className="mt-auto pt-2 text-[9px] text-text-muted text-right">
-            Last Sync: {lastUpdated.toLocaleTimeString()}
+            Last Sync: {new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(lastUpdated)}
           </div>
         )}
       </div>

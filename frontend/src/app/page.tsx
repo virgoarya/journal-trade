@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { signIn } from "@/lib/auth-client";
 
@@ -8,8 +8,7 @@ export default function LoginPage() {
       console.log("[AUTH] Starting Discord login...");
       await signIn.social({
         provider: "discord",
-        // Use BETTER_AUTH_URL from environment or default to production URL
-        callbackURL: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://journal-trade-production.up.railway.app'}/dashboard`,
+        callbackURL: `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
       });
       console.log("[AUTH] Redirect to Discord initiated.");
     } catch (error) {
@@ -28,7 +27,7 @@ export default function LoginPage() {
       <div className="absolute bottom-[-15%] right-[-5%] w-[400px] h-[400px] rounded-full blur-[180px] pointer-events-none animate-pulse"
         style={{ backgroundColor: 'rgba(88,101,242,0.05)', animationDelay: '2s' }} />
 
-      {/* Login Card — Discord Dark Glass */}
+      {/* Login Card ΓÇö Discord Dark Glass */}
       <main className="relative z-10 flex flex-col items-center w-full max-w-[420px] px-10 py-12 text-center animate-in fade-in zoom-in-95 duration-1000"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(43,45,49,0.6) 40%, rgba(30,31,34,0.95) 100%)',
@@ -43,7 +42,7 @@ export default function LoginPage() {
         }}
       >
         
-        {/* Logo — with gold heartbeat */}
+        {/* Logo ΓÇö with gold heartbeat */}
         <div className="mb-6 relative">
           <div className="absolute inset-0 rounded-full bg-accent-gold blur-[40px]"
             style={{ animation: 'glowBreath 3s ease-in-out infinite' }} />
@@ -77,7 +76,7 @@ export default function LoginPage() {
         <div className="w-full h-[1px] mb-10"
           style={{ background: 'linear-gradient(to right, transparent, rgba(88,101,242,0.3), transparent)' }} />
 
-        {/* Login Button — Discord Blurple */}
+        {/* Login Button ΓÇö Discord Blurple */}
         <button 
           onClick={handleLogin}
           className="w-full h-[48px] rounded-[8px] font-semibold text-[15px] flex items-center justify-center space-x-3 transition-all duration-200 group cursor-pointer active:scale-[0.97]"

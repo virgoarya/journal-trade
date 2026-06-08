@@ -16,56 +16,30 @@ import { setAuthInstance } from "./auth-context";
 import { startMt5AutoSync } from "./services/mt5-scheduler.service";
 import path from "node:path";
 
-// Next.js app setup
-const dev = process.env.NODE_ENV !== "production";
-// In production, frontend is copied to server/dist/frontend
-// In development, frontend is at project root
-const nextAppDir = dev
-  ? path.join(__dirname, "..", "..", "..", "frontend") // dev: server/src -> project/frontend
-  : path.join(__dirname, "frontend");                  // prod: server/dist/frontend
-const nextApp = next({ dev, dir: nextAppDir });
+// nextapp
+const nextAppDir = path.join(__dirname, "..", "..", "frontend");
+const nextApp = next({ dev: true, dir: nextAppDir });
 
 const app = express();
-
-// CORS - must be first
 app.use(corsMiddleware);
+app.use(express.json());
 
-// JSON body parser — SKIP for /api/auth routes (Better Auth needs raw stream)
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/auth")) {
-    return next();
-  }
-  return express.json()(req, res, next);
-});
-
-// Health route
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
-});
+app.get("/health", (req, res) => res.status(200).json({ status: "OK", timestamp: new Date().toISOString() }));
 
 const PORT = env.PORT || 5000;
 
-// Initialize after DB connection
 connectDB()
   .then(async () => {
     try {
       const auth = createAuth();
       setAuthInstance(auth);
       const authHandler = toNodeHandler(auth);
-
-      // Start MT5 auto sync service
       await startMt5AutoSync();
 
-      // ─── Better Auth Middleware ───
-      // CRITICAL: Do NOT use app.use("/api/auth", handler).
-      // Express 5 strips the mount path from req.url, so the handler
-      // receives "/callback/discord" instead of "/api/auth/callback/discord".
-      // Better Auth needs the FULL path to match its internal routes.
       app.use((req, res, next) => {
         if (req.url.startsWith("/api/auth")) {
-          console.log(`[AUTH] ${req.method} ${req.url}`);
-          authHandler(req, res).catch((err: unknown) => {
-            console.error("❌ Auth error:", err);
+          authHandler(req, res).catch((err) => {
+            console.error("Auth error:", err);
             next(err);
           });
         } else {
@@ -73,30 +47,19 @@ connectDB()
         }
       });
 
-      // Other API routes
       app.use("/api", apiRoutes);
-
-      // Next.js request handler (must be after API routes)
-      app.all(/.*/, (req, res) => {
-        return nextApp.getRequestHandler()(req, res);
-      });
-
-      // Error handler
       app.use(errorHandler);
 
-      // Start server after Next.js is prepared
-      await nextApp.prepare();
       app.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
-        console.log(`✅ Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
-        console.log(`✅ Frontend ready`);
+        console.log(`API running on port ${PORT}`);
+        console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
       });
-    } catch (error) {
-      console.error("❌ Failed to initialize:", error);
+    } catch (e) {
+      console.error("Init failed:", e);
       process.exit(1);
     }
   })
-  .catch((error) => {
-    console.error("❌ Database connection failed:", error);
+  .catch((e) => {
+    console.error("DB connection failed:", e);
     process.exit(1);
   });

@@ -72,7 +72,7 @@ export function VixRegimePanel() {
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-bg-void p-4">
       <div className="flex items-center gap-2 mb-6 shrink-0">
         <AlertOctagon className="w-4 h-4 text-accent-gold" />
-        <span className="text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+        <span className="text-[10px] sm:text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
           Volatility Status
         </span>
       </div>

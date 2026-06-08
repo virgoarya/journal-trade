@@ -86,7 +86,7 @@ export function EconomicCalendarPanel() {
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden bg-bg-void relative">
       <div className="flex items-center justify-between border-b border-border-subtle p-3 shrink-0">
-        <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
+        <h2 className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs flex items-center gap-2">
           <CalendarDays size={14} /> Economic Calendar
         </h2>
         <span className="text-[9px] font-mono text-text-muted uppercase tracking-wider border border-border-subtle px-2 py-0.5 rounded">

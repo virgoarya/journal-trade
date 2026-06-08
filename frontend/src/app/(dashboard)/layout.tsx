@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { settingsService } from "@/services/settings.service";
@@ -16,6 +16,7 @@ export default function DashboardLayout({
   const { data: session, isPending: sessionPending } = useSession();
   const [isGuildVerified, setIsGuildVerified] = useState<boolean | null>(null);
   const [guildCheckPending, setGuildCheckPending] = useState(true);
+  const hasVerifiedRef = useRef(false);
 
   // Mobile sidebar state
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -49,14 +50,19 @@ export default function DashboardLayout({
   // Guild membership verification
   useEffect(() => {
     const verifyGuildMembership = async () => {
-      // If session still loading, wait
+      // Skip if session still loading
       if (sessionPending) return;
 
-      // If no session (should not happen due to route protection, but safety)
+      // Skip if no session
       if (!session) {
         router.push("/");
         return;
       }
+
+      // Skip if already verified (guard against re-render loops)
+      if (hasVerifiedRef.current) return;
+
+      hasVerifiedRef.current = true;
 
       try {
         const res = await fetch("/api/v1/auth/verify-guild", {
@@ -64,18 +70,16 @@ export default function DashboardLayout({
           headers: {
             "Content-Type": "application/json",
           },
-          credentials: "include", // include cookies/session
+          credentials: "include",
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          // If error 403, 401, or not member -> redirect to access denied
           if (res.status === 403 || res.status === 401 || data.data?.isMember === false) {
             router.push("/akses-ditolak");
             return;
           }
-          // Other errors (500, 429, etc) - also redirect to access denied with error param
           console.error("Guild verification failed:", data);
           router.push(`/akses-ditolak${res.status === 429 ? '?error=rate_limit' : '?error=verification_failed'}`);
           return;

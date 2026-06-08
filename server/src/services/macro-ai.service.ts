@@ -6,6 +6,16 @@ const GEMINI_API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/mo
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
+// Cache for playbook per regime - cleared on regime change
+const playbookCache: Record<string, { playbook: Array<{ asset: string; desc: string }> }> = {};
+
+function clearPlaybookCache() {
+  for (const key of Object.keys(playbookCache)) {
+    delete playbookCache[key];
+  }
+  console.log("[MacroAI] Playbook cache cleared");
+}
+
 async function callGeminiDirect(systemPrompt: string, userPrompt: string, geminiModel: string, generationConfig?: Record<string, any>): Promise<string | null> {
   if (!env.GEMINI_API_KEY) return null;
 
@@ -288,6 +298,9 @@ async function groqRequestStream(url: string, data: any): Promise<any> {
 }
 
 export const macroAiService = {
+  // Clear cache when regime changes (call this from frontend on regime transition)
+  clearPlaybookCache,
+
   async analyzeRegime(assets: { ticker: string; name: string; change: number }[], calculatedRegime?: string, liquidityStatus?: string) {
     const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
 
@@ -499,17 +512,17 @@ ${Object.entries(nodesData).map(([k, v]) => {
       return `- ${v.label}: ${v.value} [Status: ${status}]`;
     }).join('\n')}
 
-ATURAN WAJIB ANALISIS (DILARANG BERHALUSINASI):
-1. SINTESIS SELURUH NODE: Anda WAJIB mengaitkan hubungan sebab-akibat antar SEMUA elemen (terutama Yield Curve, US Dollar, Inflation, dan Risk Assets). JANGAN hanya berfokus pada Liquidity.
-2. LOGIKA REVERSE REPO (ON RRP): Jika statusnya "Hijau", The Fed sedang MENGINJEKSI likuiditas (positif untuk risk assets). Jika "Merah", The Fed MENYEDOT likuiditas. Saldo < $10B ($0.xxB) berarti injeksi penuh sudah terjadi ke pasar.
-3. LOGIKA MAKRO STANDAR: Perhatikan pergerakan Yield Curve dan US Dollar. Yield yang naik (+ bps) biasanya menekan Risk Assets.
+ ATURAN WAJIB ANALISIS (DILARANG BERHALUSINASI):
+ 1. SINTESIS SELURUH NODE: Anda WAJIB mengaitkan hubungan sebab-akibat antar SEMUA elemen (terutama Yield Curve, US Dollar, Inflation, dan Risk Assets). JANGAN hanya berfokus pada Liquidity.
+ 2. LOGIKA REVERSE REPO (ON RRP): Jika statusnya "Hijau", The Fed sedang MENGINJEKSI likuiditas (positif untuk risk assets). Jika "Merah", The Fed MENYEDOT likuiditas. Saldo < $10B ($0.xxB) berarti injeksi penuh sudah terjadi ke pasar.
+ 3. LOGIKA MAKRO STANDAR: Perhatikan pergerakan Yield Curve dan US Dollar. Yield yang naik (+ bps) biasanya menekan Risk Assets.
 
-Tugas Anda:
-1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi secara komprehensif menyertakan peran Yield Curve, Dollar, dan Likuiditas.
-2. Sebutkan node mana yang menjadi driver utama atau risiko terbesar saat ini.
-3. Berikan satu kesimpulan taktis.
+ Tugas Anda:
+ 1. Jelaskan arah aliran dana (capital flow) yang sedang terjadi secara komprehensif menyertakan peran Yield Curve, Dollar, dan Likuiditas.
+ 2. Sebutkan node mana yang menjadi driver utama atau risiko terbesar saat ini.
+ 3. Berikan satu kesimpulan taktis.
 
-Tulis dalam format 1 paragraf padat (maksimal 4-5 kalimat). Gunakan bahasa institusional yang tajam dan langsung pada intinya. JANGAN gunakan pengantar seperti "Berdasarkan data...". Langsung tembak ke analisis.`;
+ Tulis dalam format 1 paragraf padat (maksimal 4-5 kalimat). Gunakan bahasa institusional yang tajam dan langsung pada intinya. JANGAN gunakan pengantar seperti "Berdasarkan data...". Langsung tembak ke analisis.`;
 
     const systemPrompt = "ROLE & PERSONA: Head of Institutional Macro Desk untuk Hunter Trades. RULES: 1. Tanpa meta-language. 2. Fokus pada cause-and-effect aliran likuiditas. 3. Balas dalam Bahasa Indonesia.";
 
@@ -517,7 +530,69 @@ Tulis dalam format 1 paragraf padat (maksimal 4-5 kalimat). Gunakan bahasa insti
     if (text) return text.trim();
     
     throw new Error("Gagal mendapatkan analisis Nexus dari layanan AI.");
-  }
+  },
+
+  async observePlaybook(regime: string, assets: Array<{ ticker: string; name: string; change: number | null }>, liquidityStatus: string, regimeDescription: string): Promise<Array<{ asset: string; desc: string }>> {
+    // Check cache first
+    const cacheKey = `playbook-${regime.toLowerCase()}`;
+    if (playbookCache[cacheKey]) {
+      console.log(`[MacroAI] Using cached playbook for regime: ${regime}`);
+      return playbookCache[cacheKey].playbook;
+    }
+
+    const prompt = `Anda adalah observer meja makro institusi. Diberikan regime makro "${regime}" beserta data aset dan status likuiditas "${liquidityStatus}", identifikasi aset/ETF yang secara struktural menguntungkan di regime ini berdasarkan performa terkini atau peran strukturalnya.
+
+Deskripsi regime: ${regimeDescription}
+
+Snapshot aset:
+${assets.map((a) => `- ${a.ticker} (${a.name}) pergerakan: ${a.change ?? "N/A"}%`).join("\n")}
+
+Kembalikan HANYA JSON yang valid dengan skema:
+{
+  "playbook": [
+    { "asset": "TICKER", "desc": "satu kalimat alasan (dalam bahasa Indonesia)" }
+  ]
+}
+
+Aturan:
+- Maksimal 2-4 entri
+- Fokus pada alokasi aset dan mekanik hedging, bukan teori makro umum
+- Jika tidak ada edge yang jelas, kembalikan playbook kosong []`;
+
+    const systemPrompt = "Anda adalah strategis perdagangan makro. Selalu kembalikan JSON yang valid tanpa teks tambahan.";
+
+    const text = await callDualEngine(prompt, systemPrompt, { max_output_tokens: 300, temperature: 0.2 });
+    if (!text) {
+      return [];
+    }
+
+    const cleaned = text
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      return [];
+    }
+
+    const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
+    const parsed = JSON.parse(jsonText);
+    if (!parsed || typeof parsed !== "object") {
+      return [];
+    }
+
+    const playbook = Array.isArray(parsed.playbook) ? parsed.playbook : [];
+    const result = playbook.slice(0, 4);
+
+    // Cache the result
+    playbookCache[cacheKey] = { playbook: result };
+    console.log(`[MacroAI] Cached playbook for regime: ${regime}`);
+
+    return result;
+  },
 };
 
 function parseMacroFeedText(text: string | null | undefined) {

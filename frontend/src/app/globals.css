@@ -81,41 +81,41 @@
 }
 
 @layer utilities {
-  .glass {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(30, 30, 40, 0.3) 40%, rgba(5, 5, 10, 0.8) 100%);
-    backdrop-filter: blur(28px) saturate(140%);
-    -webkit-backdrop-filter: blur(28px) saturate(140%);
-    
-    /* Bevel borders for physical 3D edge */
-    border-top: 1px solid rgba(255, 255, 255, 0.25);
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    border-right: 1px solid rgba(0, 0, 0, 0.5);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.7);
-    
-    /* Ultra 3D Drop Shadows */
-    box-shadow: 
-      inset 1px 1px 2px rgba(255, 255, 255, 0.12),
-      inset -1px -1px 4px rgba(0, 0, 0, 0.8),
-      0 6px 12px rgba(0, 0, 0, 0.6),
-      0 24px 48px rgba(0, 0, 0, 0.9);
-      
-    border-radius: var(--radius-lg);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
-  }
+.glass {
+     background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(30, 30, 40, 0.3) 40%, rgba(5, 5, 10, 0.8) 100%);
+     backdrop-filter: blur(28px) saturate(140%);
+     -webkit-backdrop-filter: blur(28px) saturate(140%);
+     
+     /* Bevel borders for physical 3D edge */
+     border-top: 1px solid rgba(255, 255, 255, 0.25);
+     border-left: 1px solid rgba(255, 255, 255, 0.15);
+     border-right: 1px solid rgba(0, 0, 0, 0.5);
+     border-bottom: 1px solid rgba(0, 0, 0, 0.7);
+     
+     /* Ultra 3D Drop Shadows */
+     box-shadow: 
+       inset 1px 1px 2px rgba(255, 255, 255, 0.12),
+       inset -1px -1px 4px rgba(0, 0, 0, 0.8),
+       0 6px 12px rgba(0, 0, 0, 0.6),
+       0 24px 48px rgba(0, 0, 0, 0.9);
+       
+     border-radius: var(--radius-lg);
+     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+     position: relative;
+   }
 
-  .glass:hover {
-    transform: translateY(-4px) scale(1.01);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(30, 30, 40, 0.4) 40%, rgba(5, 5, 10, 0.9) 100%);
-    
-    border-top-color: rgba(212, 175, 55, 0.6);
-    border-left-color: rgba(212, 175, 55, 0.4);
-    
-    box-shadow: 
-      inset 1px 1px 3px rgba(212, 175, 55, 0.25),
-      inset -1px -1px 6px rgba(0, 0, 0, 0.9),
-      0 12px 24px rgba(0, 0, 0, 0.7),
-      0 32px 64px rgba(0, 0, 0, 0.95);
-  }
+.glass:hover {
+     background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(30, 30, 40, 0.4) 40%, rgba(5, 5, 10, 0.9) 100%);
+     
+     border-top-color: rgba(212, 175, 55, 0.6);
+     border-left-color: rgba(212, 175, 55, 0.4);
+     
+     box-shadow: 
+       inset 1px 1px 3px rgba(212, 175, 55, 0.25),
+       inset -1px -1px 6px rgba(0, 0, 0, 0.9),
+       0 8px 16px rgba(0, 0, 0, 0.5),
+       0 24px 48px rgba(0, 0, 0, 0.75);
+   }
 
   .glass-sidebar {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(30, 30, 40, 0.2) 40%, rgba(5, 5, 10, 0.7) 100%);
@@ -224,18 +224,20 @@
     inset -1px -1px 3px rgba(0,0,0,0.04),
     0 4px 8px rgba(0,0,0,0.06),
     0 12px 24px rgba(0,0,0,0.08);
+  position: relative;
 }
 
 :root.light .glass:hover {
-  background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(245,243,238,0.7) 40%, rgba(237,234,228,0.98) 100%);
-  border-top-color: rgba(212,175,55,0.5);
-  border-left-color: rgba(212,175,55,0.3);
-  box-shadow: 
-    inset 1px 1px 3px rgba(212,175,55,0.2),
-    inset -1px -1px 4px rgba(0,0,0,0.05),
-    0 8px 16px rgba(0,0,0,0.08),
-    0 20px 40px rgba(0,0,0,0.1);
-}
+   background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(245,243,238,0.7) 40%, rgba(237,234,228,0.98) 100%);
+   border-top-color: rgba(212,175,55,0.5);
+   border-left-color: rgba(212,175,55,0.3);
+   box-shadow: 
+     inset 1px 1px 3px rgba(212,175,55,0.2),
+     inset -1px -1px 4px rgba(0,0,0,0.05),
+     0 8px 16px rgba(0,0,0,0.08),
+     0 20px 40px rgba(0,0,0,0.1);
+   z-index: 10;
+ }
 
 :root.light .glass-sidebar {
   background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(245,243,238,0.8) 40%, rgba(237,234,228,0.95) 100%);

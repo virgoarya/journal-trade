@@ -352,30 +352,31 @@ export function NewsFeedPanel() {
         const data = await res.json();
         
         if (data.success && data.data && data.data.length > 0) {
-const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
-             const date = item.datetime ? new Date(item.datetime * 1000) : new Date();
-             
-             let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
-             let asset = "MKT";
-             const headline = item.headline?.toLowerCase() || "";
-             
-             if (headline.includes("fed") || headline.includes("rate") || headline.includes("inflation")) {
-               impact = headline.includes("cut") ? "BEARISH" : "BULLISH";
-               asset = "USD";
-             } else if (headline.includes("gold") || headline.includes("safe haven")) {
-               impact = "BULLISH";
-               asset = "GOLD";
-             } else if (headline.includes("crash") || headline.includes("drop") || headline.includes("fall")) {
-               impact = "BEARISH";
-               asset = "EQUITY";
-             } else if (headline.includes("jump") || headline.includes("rise") || headline.includes("gain")) {
-               impact = "BULLISH";
-               asset = "EQUITY";
-             }
+        const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
+              const date = item.datetime ? new Date(item.datetime * 1000) : new Date();
+              const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+              
+              let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
+              let asset = "MKT";
+              const headline = item.headline?.toLowerCase() || "";
+              
+              if (headline.includes("fed") || headline.includes("rate") || headline.includes("inflation")) {
+                impact = headline.includes("cut") ? "BEARISH" : "BULLISH";
+                asset = "USD";
+              } else if (headline.includes("gold") || headline.includes("safe haven")) {
+                impact = "BULLISH";
+                asset = "GOLD";
+              } else if (headline.includes("crash") || headline.includes("drop") || headline.includes("fall")) {
+                impact = "BEARISH";
+                asset = "EQUITY";
+              } else if (headline.includes("jump") || headline.includes("rise") || headline.includes("gain")) {
+                impact = "BULLISH";
+                asset = "EQUITY";
+              }
 
-            return {
-              id: String(item.id || index),
-              time: `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`,
+             return {
+               id: item.id ?? `news-${index}`,
+               time: timeStr,
               headline: item.headline,
               impact,
               targetAsset: asset,
@@ -417,15 +418,15 @@ const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
       <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
         <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
           <div className="flex items-center gap-2">
-            <h2 className="text-xs font-mono font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2">
+            <h2 className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs flex items-center gap-2">
               <AlertCircle size={14} />
               Macro Feed
             </h2>
-            {lastUpdated && (
-              <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
-                {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)} WIB
-              </span>
-            )}
+{lastUpdated && (
+               <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
+                 {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(lastUpdated)} WIB
+               </span>
+             )}
           </div>
           {isFallback ? (
             <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">

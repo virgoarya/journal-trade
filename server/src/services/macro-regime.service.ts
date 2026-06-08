@@ -1,8 +1,8 @@
 import axios from "axios";
 
 // ─── Types ───────────────────────────────────────────────────────
-export type MacroQuadrant = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation";
-export type MomentumStatus = "ACCELERATING" | "DECELERATING";
+export type MacroQuadrant = "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Transition";
+export type MomentumStatus = "ACCELERATING" | "DECELERATING" | "NEUTRAL";
 export type LiquidityRisk = "HEALTHY" | "STRESSED";
 
 export interface RatioMetric {
@@ -97,6 +97,9 @@ async function fetchHistoricalClosePrices(ticker: string, days: number = 150): P
 
 // ─── Quadrant Classifier ────────────────────────────────────────
 function classifyQuadrant(growthStatus: MomentumStatus, inflationStatus: MomentumStatus): { quadrant: MacroQuadrant; quadNumber: number; description: string } {
+  if (growthStatus === "NEUTRAL" && inflationStatus === "NEUTRAL") {
+    return { quadrant: "Transition", quadNumber: 5, description: "Growth ~ Inflation — Momentum netral di kedua sumbu: pasar dalam transisi regime." };
+  }
   if (growthStatus === "ACCELERATING" && inflationStatus === "DECELERATING") {
     return { quadrant: "Goldilocks", quadNumber: 1, description: "Growth ↑ Inflation ↓ — Ideal conditions: strong growth with controlled inflation." };
   }
@@ -113,7 +116,7 @@ function classifyQuadrant(growthStatus: MomentumStatus, inflationStatus: Momentu
 // ─── Cache ──────────────────────────────────────────────────────
 let cachedSnapshot: MacroRegimeSnapshot | null = null;
 let cachedAt: number = 0;
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_TTL_MS = 1 * 60 * 60 * 1000; // 1 hour — data pasar butuh freshness
 
 // ─── Main Service ───────────────────────────────────────────────
 export const macroRegimeService = {
@@ -153,7 +156,7 @@ export const macroRegimeService = {
     const shy = trim(shyData.closes);
     const dates = trimDates(xlyData.dates);
 
-    // 3. Calculate ratios
+    // 3. Calculate ratios on trimmed data
     const growthRatios: number[] = [];
     const inflationRatios: number[] = [];
     const liquidityRatios: number[] = [];
@@ -164,7 +167,7 @@ export const macroRegimeService = {
       liquidityRatios.push(shy[i] !== 0 ? hyg[i] / shy[i] : 0);
     }
 
-    // 4. Calculate EMA-50 for each ratio
+    // 4. Calculate EMA-50 for each ratio (seed with SMA of first 50, then EMA)
     const EMA_PERIOD = 50;
     const growthEma = calculateEMA(growthRatios, EMA_PERIOD);
     const inflationEma = calculateEMA(inflationRatios, EMA_PERIOD);
@@ -180,9 +183,13 @@ export const macroRegimeService = {
     const currentInflationEma = inflationEma[lastIdx];
     const currentLiquidityEma = liquidityEma[lastIdx];
 
-    // 6. Determine statuses
-    const growthStatus: MomentumStatus = currentGrowth > currentGrowthEma ? "ACCELERATING" : "DECELERATING";
-    const inflationStatus: MomentumStatus = currentInflation > currentInflationEma ? "ACCELERATING" : "DECELERATING";
+    // 6. Determine statuses using z-score threshold (±0.15 relative to EMA)
+    const ZSCORE_THRESHOLD = 0.15;
+    const growthDeltaRelative = currentGrowthEma !== 0 ? (currentGrowth - currentGrowthEma) / currentGrowthEma : 0;
+    const inflationDeltaRelative = currentInflationEma !== 0 ? (currentInflation - currentInflationEma) / currentInflationEma : 0;
+
+    const growthStatus: MomentumStatus = Math.abs(growthDeltaRelative) < ZSCORE_THRESHOLD ? "NEUTRAL" : (growthDeltaRelative > 0 ? "ACCELERATING" : "DECELERATING");
+    const inflationStatus: MomentumStatus = Math.abs(inflationDeltaRelative) < ZSCORE_THRESHOLD ? "NEUTRAL" : (inflationDeltaRelative > 0 ? "ACCELERATING" : "DECELERATING");
     const liquidityStatus: MomentumStatus = currentLiquidity > currentLiquidityEma ? "ACCELERATING" : "DECELERATING";
     const liquidityRisk: LiquidityRisk = currentLiquidity > currentLiquidityEma ? "HEALTHY" : "STRESSED";
 

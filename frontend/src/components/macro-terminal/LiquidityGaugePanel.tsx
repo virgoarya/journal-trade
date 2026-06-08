@@ -15,7 +15,7 @@ export function LiquidityGaugePanel() {
       <div className="flex flex-col h-full glass border border-border-subtle rounded-xl p-3 relative overflow-hidden">
         <div className="flex items-center gap-2 mb-2">
           <Droplets className="w-3.5 h-3.5 text-accent-gold" />
-          <h2 className="text-xs font-bold font-mono tracking-widest text-accent-gold uppercase">Liquidity Flow</h2>
+          <h2 className="font-semibold text-text-primary uppercase tracking-wider text-xs sm:text-sm">Liquidity Flow</h2>
           <span className="ml-auto text-[10px] text-text-muted font-mono bg-surface-elevated/50 px-1.5 py-0.5 rounded border border-border-subtle">ON RRP</span>
         </div>
         <div className="flex-1 flex items-center justify-center">
@@ -67,28 +67,15 @@ export function LiquidityGaugePanel() {
   const gaugeColor = isInjecting ? "#22c55e" : "#ef4444";
   const trackColor = isInjecting ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
 
-  return (
+return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl p-3 relative overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-2 z-10 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <Droplets className="w-3.5 h-3.5 text-accent-gold flex-shrink-0" />
-          <h2 className="text-xs font-bold font-mono tracking-widest text-accent-gold uppercase whitespace-nowrap">
+          <h2 className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs whitespace-nowrap">
             Liquidity Flow
           </h2>
-          {lastUpdated && (
-            <span className="text-[9px] text-text-muted font-mono whitespace-nowrap hidden lg:inline-block ml-1">
-              {new Intl.DateTimeFormat("id-ID", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }).format(lastUpdated)}{" "}
-              WIB
-            </span>
-          )}
         </div>
         <span className="text-[10px] text-text-muted font-mono bg-surface-elevated/50 px-1.5 py-0.5 rounded border border-border-subtle whitespace-nowrap flex-shrink-0 ml-2">
           ON RRP
