@@ -79,8 +79,7 @@ export function GeoRiskRadarPanel() {
   const [data, setData] = useState<GeoRiskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>("");
-
+  const [lastUpdated, setLastUpdated] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
@@ -100,7 +99,6 @@ export function GeoRiskRadarPanel() {
     }
   };
 
-  // Force-refresh: hits POST /refresh (bypasses 12h MongoDB cache → calls FRED/Yahoo API live)
   const forceRefresh = async () => {
     if (refreshing || loading) return;
     setRefreshing(true);
@@ -110,7 +108,6 @@ export function GeoRiskRadarPanel() {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const json = await resp.json();
       if (!json.success) throw new Error(json.error ?? "Force refresh gagal");
-      // POST returns full data shape with fromCache: false — set directly
       setData(json.data);
       setLastUpdated(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
     } catch (err: any) {
@@ -122,7 +119,6 @@ export function GeoRiskRadarPanel() {
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh every 30 minutes to pick up new DB cache
     const interval = setInterval(fetchData, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -144,7 +140,6 @@ export function GeoRiskRadarPanel() {
 
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-bg-void p-4">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-accent-gold" />
@@ -175,7 +170,7 @@ export function GeoRiskRadarPanel() {
               }}
             >
               <TrendingUp className="w-3 h-3" />
-              {riskLabel(overallScore)} · {overallScore}
+              {riskLabel(overallScore)} - {overallScore}
             </div>
           )}
           <button
@@ -189,7 +184,6 @@ export function GeoRiskRadarPanel() {
         </div>
       </div>
 
-      {/* Error state */}
       {error && !loading && (
         <div className="flex items-center gap-2 text-xs font-mono text-data-loss bg-data-loss/10 border border-data-loss/20 rounded-lg px-3 py-2 mb-3">
           <AlertTriangle className="w-3 h-3 shrink-0" />
@@ -197,37 +191,41 @@ export function GeoRiskRadarPanel() {
         </div>
       )}
 
-      {/* Radar Chart */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[200px] min-w-0">
         {loading && !data ? (
           <div className="flex items-center justify-center h-full text-text-muted text-xs font-mono animate-pulse">
-            Fetching live data…
+            Fetching live data
           </div>
-        ) : (
+        ) : data ? (
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={radarData} margin={{ top: 4, right: 24, bottom: 4, left: 24 }}>
-              <PolarGrid stroke="#2a2a3a" />
-              <PolarAngleAxis
-                dataKey="subject"
-                tick={{ fill: "#888899", fontSize: 9, fontFamily: "monospace" }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Radar
-                name="Risk Score"
-                dataKey="score"
-                stroke="#f59e0b"
-                fill="#f59e0b"
-                fillOpacity={0.18}
-                strokeWidth={2}
-                dot={{ fill: "#f59e0b", r: 3 }}
-                animationDuration={800}
-              />
-            </RadarChart>
+            <div style={{ width: "100%", height: "100%", minHeight: 180 }}>
+              <RadarChart data={radarData} margin={{ top: 4, right: 24, bottom: 4, left: 24 }}>
+                <PolarGrid stroke="#2a2a3a" />
+                <PolarAngleAxis
+                  dataKey="subject"
+                  tick={{ fill: "#888899", fontSize: 9, fontFamily: "monospace" }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Radar
+                  name="Risk Score"
+                  dataKey="score"
+                  stroke="#f59e0b"
+                  fill="#f59e0b"
+                  fillOpacity={0.18}
+                  strokeWidth={2}
+                  dot={{ fill: "#f59e0b", r: 3 }}
+                  animationDuration={800}
+                />
+              </RadarChart>
+            </div>
           </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-full text-text-muted text-xs font-mono">
+            No data available
+          </div>
         )}
       </div>
 
-      {/* Breakdown list */}
       <div className="grid grid-cols-1 gap-1.5 mt-2 shrink-0">
         {loading && !data
           ? Array.from({ length: 5 }).map((_, i) => <SkeletonBar key={i} />)
@@ -258,10 +256,9 @@ export function GeoRiskRadarPanel() {
             })}
       </div>
 
-      {/* Footer: last updated */}
       {lastUpdated && (
         <p className="text-[9px] font-mono text-text-muted mt-2 text-right shrink-0">
-          Updated {lastUpdated} · 12h cache · FRED + Yahoo Finance
+          Updated {lastUpdated} - 12h cache - FRED + Yahoo Finance
         </p>
       )}
     </div>

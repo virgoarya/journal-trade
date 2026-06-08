@@ -351,7 +351,7 @@ export function NewsFeedPanel() {
         const res = await fetch("/api/v1/market-data/news");
         const data = await res.json();
         
-        if (data.success && data.data && data.data.length > 0) {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
               const date = item.datetime ? new Date(item.datetime * 1000) : new Date();
               const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
