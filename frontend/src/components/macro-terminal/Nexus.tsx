@@ -16,6 +16,10 @@ import {
   Terminal,
   Cpu,
   RefreshCw,
+  Layers,
+  Gem,
+  Globe,
+  Shield,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +73,26 @@ interface RiskAssetsState {
   delta: number;
 }
 
+interface CommoditiesState {
+  value: number;
+  delta: number;
+}
+
+interface GoldState {
+  value: number;
+  delta: number;
+}
+
+interface EmRiskOnState {
+  value: number;
+  delta: number;
+}
+
+interface RiskOffFxState {
+  value: number;
+  delta: number;
+}
+
 interface MacroState {
   rrp: RrpState;
   tga: TgaState;
@@ -80,6 +104,10 @@ interface MacroState {
   vix: VixState;
   yield_curve: YieldCurveState;
   risk_assets: RiskAssetsState;
+  commodities: CommoditiesState;
+  gold: GoldState;
+  em_risk_on: EmRiskOnState;
+  risk_off_fx: RiskOffFxState;
 }
 
 interface NodeConfig {
@@ -110,6 +138,10 @@ const createMockState = (): MacroState => ({
   vix: { value: 14.8 },
   yield_curve: { status: "Normal", spread: 28 },
   risk_assets: { value: 528.7, delta: 1.42 },
+  commodities: { value: 274.5, delta: 0.45 },
+  gold: { value: 2350.4, delta: 0.12 },
+  em_risk_on: { value: 0.32, delta: 0.32 },
+  risk_off_fx: { value: -0.05, delta: -0.05 },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,30 +179,46 @@ function getNodeColor(state: MacroState, nodeKey: string): string {
       return "#3b82f6";
     case "eq":
       return state.risk_assets.delta > 0 ? "#22c55e" : state.risk_assets.delta < 0 ? "#ef4444" : "#64748b";
+    case "commodities":
+      return state.commodities.delta > 0 ? "#ef4444" : state.commodities.delta < 0 ? "#22c55e" : "#f97316";
+    case "gold":
+      return state.gold.delta > 0 ? "#f59e0b" : state.gold.delta < 0 ? "#ef4444" : "#eab308";
+    case "em_risk_on":
+      return state.em_risk_on.delta > 0 ? "#22c55e" : state.em_risk_on.delta < 0 ? "#ef4444" : "#64748b";
+    case "risk_off_fx":
+      return state.risk_off_fx.delta > 0 ? "#3b82f6" : state.risk_off_fx.delta < 0 ? "#a855f7" : "#6366f1";
     default:
       return "#64748b";
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NODE CONFIG (10 nodes, 3 zones)
+// NODE CONFIG (14 nodes, 5-row × 3-col grid)
 // ─────────────────────────────────────────────────────────────────────────────
 const NODES: NodeConfig[] = [
-  // ZONA 1 — Market Drivers (Left)
-  { key: "liq", label: "LIQUIDITY (RRP)", x: 12, y: 20, icon: Droplets, zone: 1 },
-  { key: "tga", label: "TREASURY DEP", x: 12, y: 42, icon: BarChart3, zone: 1 },
-  { key: "oil", label: "ENERGY / CRUDE OIL", x: 12, y: 64, icon: Zap, zone: 1 },
+  // ROW 1
+  { key: "liq", label: "LIQUIDITY (RRP)", x: 25, y: 8, icon: Droplets, zone: 1 },
+  { key: "fed", label: "FEDERAL RESERVE", x: 50, y: 8, icon: Building2, zone: 2 },
+  { key: "yc", label: "YIELD CURVE", x: 75, y: 8, icon: TrendingUp, zone: 3 },
 
-  // ZONA 2 — Policy & Transformers (Center)
-  { key: "fed", label: "FEDERAL RESERVE", x: 50, y: 15, icon: Building2, zone: 2 },
-  { key: "inf", label: "INFLATION PROXY", x: 50, y: 38, icon: LineChart, zone: 2 },
-  { key: "dxy", label: "US DOLLAR", x: 50, y: 52, icon: DollarSign, zone: 2 },
-  { key: "ry", label: "REAL YIELDS (10Y)", x: 50, y: 70, icon: Activity, zone: 2 },
-  { key: "vix", label: "MARKET FEAR (VIX)", x: 50, y: 86, icon: AlertOctagon, zone: 2 },
+  // ROW 2
+  { key: "tga", label: "TREASURY DEP", x: 25, y: 16, icon: BarChart3, zone: 1 },
+  { key: "inf", label: "INFLATION PROXY", x: 50, y: 16, icon: LineChart, zone: 2 },
+  { key: "eq", label: "RISK ASSETS", x: 75, y: 16, icon: TrendingUp, zone: 3 },
 
-  // ZONA 3 — Capital Destination (Right)
-  { key: "yc", label: "YIELD CURVE", x: 84, y: 30, icon: TrendingUp, zone: 3 },
-  { key: "eq", label: "RISK ASSETS", x: 84, y: 72, icon: TrendingUp, zone: 3 },
+  // ROW 3
+  { key: "oil", label: "ENERGY / CRUDE OIL", x: 25, y: 24, icon: Zap, zone: 1 },
+  { key: "dxy", label: "US DOLLAR", x: 50, y: 24, icon: DollarSign, zone: 2 },
+  { key: "em_risk_on", label: "EM CURRENCIES (RISK-ON)", x: 75, y: 24, icon: Globe, zone: 3 },
+
+  // ROW 4
+  { key: "commodities", label: "COMMODITIES (CRB)", x: 25, y: 32, icon: Layers, zone: 1 },
+  { key: "ry", label: "REAL YIELDS (10Y)", x: 50, y: 32, icon: Activity, zone: 2 },
+  { key: "gold", label: "GOLD (XAU)", x: 75, y: 32, icon: Gem, zone: 3 },
+
+  // ROW 5
+  { key: "vix", label: "MARKET FEAR (VIX)", x: 50, y: 40, icon: AlertOctagon, zone: 2 },
+  { key: "risk_off_fx", label: "RISK-OFF FX (JPY/CHF)", x: 75, y: 40, icon: Globe, zone: 3 },
 ];
 
 const EDGES: EdgeConfig[] = [
@@ -186,15 +234,23 @@ const EDGES: EdgeConfig[] = [
   ["fed", "ry"],     // Fed policy → Real Yields (transmission)
   ["fed", "yc"],     // Fed policy → Yield Curve (primary driver)
 
+  // ── ZONA 1 → ZONA 3: Commodities & Gold drivers ──
+  ["inf", "commodities"],  // Inflation → Commodities (positive correlation)
+  ["dxy", "commodities"],  // USD → Commodities (negative correlation)
+  ["ry", "gold"],          // Real Yields → Gold (inverse relationship)
+  ["dxy", "gold"],         // USD → Gold (inverse relationship)
+
   // ── ZONA 2 → ZONA 3: Transmission to Capital Markets ──
   ["ry", "eq"],      // Real Yields → Risk Assets (inverse correlation)
   ["dxy", "eq"],     // US Dollar → Risk Assets (inverse correlation)
   ["vix", "eq"],     // Market Fear → Risk Assets
   ["yc", "eq"],      // Yield Curve → Risk Assets (growth expectations)
+  ["eq", "em_risk_on"],   // Risk Assets → EM Currencies (positive correlation)
+  ["vix", "risk_off_fx"], // Market Fear → Risk-Off FX (positive correlation)
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SVG EDGE COMPONENT (Cable-style Bezier)
+// SVG EDGE COMPONENT (Orthogonal / Step-style wiring panel)
 // ─────────────────────────────────────────────────────────────────────────────
 function CableEdge({
   x1,
@@ -203,6 +259,8 @@ function CableEdge({
   y2,
   color,
   active,
+  sourceOffsetY = 0,
+  targetOffsetY = 0,
 }: {
   x1: number;
   y1: number;
@@ -210,15 +268,13 @@ function CableEdge({
   y2: number;
   color: string;
   active: boolean;
+  sourceOffsetY?: number;
+  targetOffsetY?: number;
 }) {
-  const dx = Math.abs(x2 - x1);
-  const tension = Math.max(dx * 0.45, 22);
-  const sign = x2 >= x1 ? 1 : -1;
-  const cx1 = x1 + sign * tension;
-  const cy1 = y1 + (y2 - y1) * 0.2;
-  const cx2 = x2 - sign * tension;
-  const cy2 = y1 + (y2 - y1) * 0.8;
-  const pathD = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+  const sy1 = y1 + sourceOffsetY;
+  const ty2 = y2 + targetOffsetY;
+  const midX = x1 + (x2 - x1) / 2;
+  const pathD = `M ${x1},${sy1} L ${midX},${sy1} L ${midX},${ty2} L ${x2},${ty2}`;
 
   return (
     <g>
@@ -517,22 +573,48 @@ export default function Nexus() {
     return map;
   }, [macroState]);
 
-  const edges = useMemo(
-    () =>
-      EDGES.map(([from, to]) => {
-        const a = nodeMap[from];
-        const b = nodeMap[to];
-        if (!a || !b) return null;
-        return { from, to, x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: a.color };
-      }),
-    [nodeMap]
-  );
+  const edges = useMemo(() => {
+    const raw: Array<{ from: string; to: string; x1: number; y1: number; x2: number; y2: number; color: string }> = [];
+    EDGES.forEach(([from, to]) => {
+      const a = nodeMap[from];
+      const b = nodeMap[to];
+      if (!a || !b) return;
+      raw.push({ from, to, x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: a.color });
+    });
+
+    const targetFan: Record<string, { count: number; index: number }> = {};
+    const sourceFan: Record<string, { count: number; index: number }> = {};
+
+    raw.forEach((e) => {
+      targetFan[e.to] = targetFan[e.to] || { count: 0, index: 0 };
+      targetFan[e.to].count++;
+      sourceFan[e.from] = sourceFan[e.from] || { count: 0, index: 0 };
+      sourceFan[e.from].count++;
+    });
+
+    return raw.map((e) => {
+      const tf = targetFan[e.to];
+      const sf = sourceFan[e.from];
+      const tIdx = tf.index++;
+      const sIdx = sf.index++;
+
+      const spread = 1.2;
+      const targetOffsetY = (tIdx - (tf.count - 1) / 2) * spread;
+      const sourceOffsetY = (sIdx - (sf.count - 1) / 2) * spread;
+
+      return {
+        ...e,
+        targetOffsetY,
+        sourceOffsetY,
+      };
+    });
+  }, [nodeMap]);
 
   // ── 6. RENDER ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       {/* ── DIAGRAM CONTAINER ───────────────────────────────────── */}
-      <div className="relative w-full min-h-[680px] glass border border-border-subtle rounded-2xl bg-bg-void overflow-hidden">
+      <div className="relative w-full min-h-[320px] glass border border-border-subtle rounded-2xl bg-bg-void overflow-hidden">
         {/* dot grid */}
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.06]"
@@ -544,28 +626,28 @@ export default function Nexus() {
         />
 
         {/* Header */}
-        <div className="absolute top-4 left-5 right-5 z-20 flex items-start justify-between gap-4">
+        <div className="absolute top-3 left-4 right-4 z-20 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[11px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-[0.2em] flex items-center gap-2.5">
-              <Activity className="w-4 h-4 text-accent-gold" />
+            <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-[0.2em] flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-accent-gold" />
               Macro Causal Loop
             </h2>
-            <p className="text-[10px] font-mono text-text-muted mt-1.5 max-w-md leading-relaxed">
+            <p className="text-[9px] font-mono text-text-muted mt-1 max-w-md leading-relaxed">
               Institutional flow: Liquidity → Policy → Yield → Risk Assets
             </p>
-            <span className={`text-[10px] font-mono font-bold ${isApiReady ? "text-emerald-400" : "text-amber-500 animate-pulse"}`}>
+            <span className={`text-[9px] font-mono font-bold ${isApiReady ? "text-emerald-400" : "text-amber-500 animate-pulse"}`}>
               SOURCES: {isApiReady ? "LIVE MACRO TERMINAL API" : "SIMULATED FALLBACK"}
             </span>
           </div>
           <button
             onClick={fetchNexusAnalysis}
             disabled={isAnalyzing}
-            className="flex items-center gap-2 px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg border border-accent-gold/40 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_14px_rgba(212,175,55,0.12)] shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-accent-gold/40 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)] shrink-0"
           >
             {isAnalyzing ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3 h-3 animate-spin" />
             ) : (
-              <Cpu className="w-3.5 h-3.5" />
+              <Cpu className="w-3 h-3" />
             )}
             Analyze Flow
           </button>
@@ -574,9 +656,9 @@ export default function Nexus() {
         {/* Zone Bottom Labels */}
         <div className="absolute bottom-4 left-0 right-0 z-10 flex justify-around pointer-events-none px-8">
           {[
-            { label: "ZONA 1 // LIQUIDITY DRIVERS", x: "12%" },
+            { label: "ZONA 1 // LIQUIDITY DRIVERS", x: "25%" },
             { label: "ZONA 2 // POLICY TRANSFORMERS", x: "50%" },
-            { label: "ZONA 3 // CAPITAL DESTINATION", x: "84%" },
+            { label: "ZONA 3 // CAPITAL DESTINATION", x: "75%" },
           ].map(({ label, x }) => (
             <div
               key={label}
@@ -584,7 +666,7 @@ export default function Nexus() {
               style={{ position: "absolute", left: x, bottom: "2rem", transform: "translateX(-50%)" }}
             >
               <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">{label}</span>
-              <div className="mt-1 flex items-center gap-1">
+              <div className="mt-0.5 flex items-center gap-1">
                 <span className="inline-block w-3 h-px bg-zinc-700" />
                 <span className="inline-block w-1.5 h-1.5 border border-zinc-600 rotate-45" />
                 <span className="inline-block w-3 h-px bg-zinc-700" />
@@ -632,22 +714,22 @@ export default function Nexus() {
                   opacity: [0.25, 0.5, 0.25],
                 }}
                 transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                className="absolute w-36 h-36 rounded-full blur-2xl pointer-events-none"
+                className="absolute w-28 h-28 rounded-full blur-2xl pointer-events-none"
                 style={{ backgroundColor: data.color }}
               />
               <div
-                className="relative flex flex-col items-center justify-center w-36 h-36 rounded-2xl border backdrop-blur-xl transition-all duration-500 cursor-default"
+                className="relative flex flex-col items-center justify-center w-28 h-28 rounded-2xl border backdrop-blur-xl transition-all duration-500 cursor-default"
                 style={{
                   borderColor: `${data.color}35`,
                   backgroundColor: "rgba(8, 8, 14, 0.85)",
                   boxShadow: `0 0 24px ${data.color}18, 0 0 60px ${data.color}08, inset 0 1px 0 rgba(255,255,255,0.05)`,
                 }}
               >
-                <Icon className="w-7 h-7 mb-3" style={{ color: data.color }} />
-                <span className="text-[10px] font-mono font-bold text-text-muted text-center leading-tight mb-2 uppercase px-2 tracking-widest">
+                <Icon className="w-6 h-6 mb-2" style={{ color: data.color }} />
+                <span className="text-[9px] font-mono font-bold text-text-muted text-center leading-tight mb-1 uppercase px-2 tracking-widest">
                   {node.label}
                 </span>
-                <span className="text-base font-mono font-bold tabular-nums mb-1" style={{ color: data.color }}>
+                <span className="text-sm font-mono font-bold tabular-nums mb-1" style={{ color: data.color }}>
                   {node.key === "fed"
                     ? macroState.fed_policy.status.toUpperCase()
                     : node.key === "vix"
@@ -668,9 +750,17 @@ export default function Nexus() {
                                     ? `${macroState.yield_curve.spread} bps`
                                     : node.key === "eq"
                                       ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
-                                      : "—"}
+                                      : node.key === "commodities"
+                                        ? `${macroState.commodities.value.toFixed(2)}`
+                                        : node.key === "gold"
+                                          ? `$${macroState.gold.value.toFixed(2)}`
+                                          : node.key === "em_risk_on"
+                                            ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
+                                            : node.key === "risk_off_fx"
+                                              ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
+                                              : "—"}
                 </span>
-                <span className="text-[9px] font-mono font-medium uppercase tracking-wider" style={{ color: data.color, opacity: 0.85 }}>
+                <span className="text-[8px] font-mono font-medium uppercase tracking-wider" style={{ color: data.color, opacity: 0.85 }}>
                   {node.key === "liq"
                     ? macroState.rrp.delta < 0 ? "Injecting" : "Draining"
                     : node.key === "tga"
@@ -691,6 +781,14 @@ export default function Nexus() {
                       ? macroState.yield_curve.status
                     : node.key === "eq"
                       ? macroState.risk_assets.delta > 0 ? "Bull" : "Bear"
+                    : node.key === "commodities"
+                      ? macroState.commodities.delta > 0 ? "Inflation Risk" : "Disinflation"
+                    : node.key === "gold"
+                      ? macroState.gold.delta > 0 ? "Safe Haven Up" : "Safe Haven Down"
+                    : node.key === "em_risk_on"
+                      ? macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow"
+                    : node.key === "risk_off_fx"
+                      ? macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge"
                     : ""}
                 </span>
               </div>
