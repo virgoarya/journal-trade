@@ -263,6 +263,7 @@ function CableEdge({
   sourceOffsetY = 0,
   targetOffsetY = 0,
   midXOffset = 0,
+  side = "left",
 }: {
   x1: number;
   y1: number;
@@ -273,12 +274,23 @@ function CableEdge({
   sourceOffsetY?: number;
   targetOffsetY?: number;
   midXOffset?: number;
+  side?: "left" | "right";
 }) {
   const sy1 = y1 + sourceOffsetY;
   const ty2 = y2 + targetOffsetY;
-  const baseMidX = x1 + (x2 - x1) / 2;
-  const midX = baseMidX + midXOffset;
-  const pathD = `M ${x1},${sy1} L ${midX},${sy1} L ${midX},${ty2} L ${x2},${ty2}`;
+  const isSameColumn = x1 === x2;
+  const SAME_COLUMN_LEFT_HOOK = 7;
+  let pathD = "";
+  if (isSameColumn) {
+    const hookX = side === "right" ? x2 + SAME_COLUMN_LEFT_HOOK : x1 - SAME_COLUMN_LEFT_HOOK;
+    const entryX = side === "right" ? x2 : x1;
+    pathD = `M ${x1},${sy1} L ${hookX},${sy1} L ${hookX},${ty2} L ${entryX},${ty2}`;
+  } else {
+    const baseMidX = x1 + (x2 - x1) / 2;
+    const midX = baseMidX + midXOffset;
+    const targetEntryX = side === "right" ? x2 + SAME_COLUMN_LEFT_HOOK : x2;
+    pathD = `M ${x1},${sy1} L ${midX},${sy1} L ${midX},${ty2} L ${targetEntryX},${ty2}`;
+  }
 
   return (
     <g>
@@ -587,6 +599,7 @@ export default function Nexus() {
       x2: number;
       y2: number;
       color: string;
+      side: "left" | "right";
     }> = [];
     EDGES.forEach(([from, to], i) => {
       const a = nodeMap[from];
@@ -601,6 +614,7 @@ export default function Nexus() {
         x2: b.x,
         y2: b.y,
         color: a.color,
+        side: from === "yc" && to === "eq" ? "right" : "left",
       });
     });
 
