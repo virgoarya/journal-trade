@@ -172,31 +172,34 @@ export function MacroNexusDiagram() {
   const infColor = infProxy > 0 ? "#ef4444" : "#22c55e"; // Inflation up is "red/hot", down is "green/cool"
   const infValue = infProxy !== 0 ? `${infProxy > 0 ? '+' : ''}${infProxy.toFixed(2)}%` : "—";
 
-  // 5. YIELD CURVE (Quant)
-  const spread = quantData?.spread2y10y ?? null;
-  const isInverted = quantData?.inverted ?? false;
-  const ycColor = isInverted ? "#ef4444" : "#22c55e";
-  const ycValue = spread !== null ? `${spread > 0 ? '+' : ''}${spread} bps` : "—";
+// 5. YIELD CURVE (Quant)
+   const y10 = quantData?.y10 ?? null;
+   const spread = quantData?.spread10y2y ?? null;
+   const isInverted = quantData?.inverted ?? false;
+   const ycColor = isInverted ? "#ef4444" : "#22c55e";
+   const ycValue = spread !== null ? `${spread > 0 ? '+' : ''}${spread} bps` : "—";
 
-  // 6. VIX (Quant)
-  const vix = quantData?.vix ?? 0;
-  let vixColor = "#22c55e";
-  if (vix >= 30) vixColor = "#ef4444";
-  else if (vix >= 20) vixColor = "#f97316";
-  else if (vix >= 15) vixColor = "#f59e0b";
-  const vixValue = vix ? vix.toFixed(1) : "—";
+   // 6. VIX (Quant)
+   const vix = quantData?.vix ?? 0;
+   let vixColor = "#22c55e";
+   if (vix >= 30) vixColor = "#ef4444";
+   else if (vix >= 20) vixColor = "#f97316";
+   else if (vix >= 15) vixColor = "#f59e0b";
+   const vixValue = vix ? vix.toFixed(1) : "—";
 
-  const tgaValue = quantData?.tgaValue ?? "—";
-  const tgaColor = quantData?.tgaColor ?? "#64748b";
+   // 7. Real Yield
+   const realYield = y10 != null ? y10 - infProxy : null;
+   const realYieldColor = realYield != null ? (realYield > 2 ? "#8b5cf6" : realYield > 0 ? "#a855f7" : "#c084fc") : "#64748b";
+   const realYieldValue = realYield != null ? `${realYield.toFixed(2)}%` : "—";
 
-  const oilChange = quantData?.oilChange ?? null;
-  const oilColor = oilChange != null ? (oilChange > 0 ? "#f59e0b" : "#3b82f6") : "#64748b";
-  const oilValue = oilChange != null ? `${oilChange > 0 ? '+' : ''}${oilChange.toFixed(2)}%` : "—";
+   // 8. Oil & TGA (from separate endpoints) - placeholder fallback
+   const oilChange = null; // Would come from /api/v1/market-data/quotes
+   const oilColor = oilChange != null ? (oilChange > 0 ? "#f59e0b" : "#3b82f6") : "#64748b";
+   const oilValue = "—";
 
-  const nominalYield10Y = quantData?.y10 ?? null;
-  const realYield = nominalYield10Y != null ? nominalYield10Y - infProxy : null;
-  const realYieldColor = realYield != null ? (realYield > 2 ? "#8b5cf6" : realYield > 0 ? "#a855f7" : "#c084fc") : "#64748b";
-  const realYieldValue = realYield != null ? `${realYield.toFixed(2)}%` : "—";
+   const tgaChange = null;
+   const tgaColor = "#64748b";
+   const tgaValue = "—";
 
   // Node Positions (x, y percentages) — 10 NODES
   const nodes: Record<string, { x: number; y: number; color: string; label: string; icon: React.ElementType; value: string }> = {
@@ -316,20 +319,45 @@ export function MacroNexusDiagram() {
           </div>
         </div>
 
-        {Object.entries(nodes).map(([key, n]) => (
-          <NexusNode
-            key={key}
-            id={key}
-            label={n.label}
-            value={n.value}
-            icon={n.icon}
-            statusColor={n.color}
-            glowColor={n.color}
-            x={n.x}
-            y={n.y}
-            pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
-          />
-        ))}
+{Object.entries(nodes).map(([key, n]) => {
+          const statusLabel = key === "liq"
+            ? (!isDraining ? "Injecting" : "Draining")
+            : key === "tga"
+              ? ""
+            : key === "oil"
+              ? ""
+            : key === "fed"
+              ? (currentRegime || "")
+            : key === "inf"
+              ? (infProxy > 0 ? "Hot" : "Cooling")
+            : key === "dxy"
+              ? (uup > 0 ? "Risk-Off" : "Risk-On")
+            : key === "ry"
+              ? (realYield && realYield > 0 ? "Restrictive" : "Accommodative")
+            : key === "vix"
+              ? (vix < 15 ? "Calm" : vix <= 25 ? "Elevated" : "Panic")
+            : key === "yc"
+              ? (isInverted ? "Inverted" : "Normal")
+            : key === "eq"
+              ? (spy > 0 ? "Bull" : "Bear")
+            : "";
+
+          return (
+            <NexusNode
+              key={key}
+              id={key}
+              label={n.label}
+              value={n.value}
+              statusLabel={statusLabel}
+              icon={n.icon}
+              statusColor={n.color}
+              glowColor={n.color}
+              x={n.x}
+              y={n.y}
+              pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
+            />
+          );
+        })}
       </div>
 
       {/* AI Reasoning Bottom Panel */}

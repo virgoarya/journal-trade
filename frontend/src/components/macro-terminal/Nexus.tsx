@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useMacroTerminal } from "@/components/macro-terminal/MacroTerminalContext";
+import { NexusNode } from "./nexus/NexusNode";
 import {
   Building2,
   Droplets,
@@ -201,24 +202,24 @@ const NODES: NodeConfig[] = [
   { key: "fed", label: "FEDERAL RESERVE", x: 50, y: 8, icon: Building2, zone: 2 },
   { key: "yc", label: "YIELD CURVE", x: 75, y: 8, icon: TrendingUp, zone: 3 },
 
-  // ROW 2
-  { key: "tga", label: "TREASURY DEP", x: 25, y: 16, icon: BarChart3, zone: 1 },
-  { key: "inf", label: "INFLATION PROXY", x: 50, y: 16, icon: LineChart, zone: 2 },
-  { key: "eq", label: "RISK ASSETS", x: 75, y: 16, icon: TrendingUp, zone: 3 },
+  // ROW 2 (gap 9)
+  { key: "tga", label: "TREASURY DEP", x: 25, y: 17, icon: BarChart3, zone: 1 },
+  { key: "inf", label: "INFLATION PROXY", x: 50, y: 17, icon: LineChart, zone: 2 },
+  { key: "eq", label: "RISK ASSETS", x: 75, y: 17, icon: TrendingUp, zone: 3 },
 
-  // ROW 3
-  { key: "oil", label: "ENERGY / CRUDE OIL", x: 25, y: 24, icon: Zap, zone: 1 },
-  { key: "dxy", label: "US DOLLAR", x: 50, y: 24, icon: DollarSign, zone: 2 },
-  { key: "em_risk_on", label: "EM CURRENCIES (RISK-ON)", x: 75, y: 24, icon: Globe, zone: 3 },
+  // ROW 3 (gap 9)
+  { key: "oil", label: "ENERGY / CRUDE OIL", x: 25, y: 26, icon: Zap, zone: 1 },
+  { key: "dxy", label: "US DOLLAR", x: 50, y: 26, icon: DollarSign, zone: 2 },
+  { key: "em_risk_on", label: "EM CURRENCIES (RISK-ON)", x: 75, y: 26, icon: Globe, zone: 3 },
 
-  // ROW 4
-  { key: "commodities", label: "COMMODITIES (CRB)", x: 25, y: 32, icon: Layers, zone: 1 },
-  { key: "ry", label: "REAL YIELDS (10Y)", x: 50, y: 32, icon: Activity, zone: 2 },
-  { key: "gold", label: "GOLD (XAU)", x: 75, y: 32, icon: Gem, zone: 3 },
+  // ROW 4 (gap 9)
+  { key: "commodities", label: "COMMODITIES (CRB)", x: 25, y: 35, icon: Layers, zone: 1 },
+  { key: "ry", label: "REAL YIELDS (10Y)", x: 50, y: 35, icon: Activity, zone: 2 },
+  { key: "gold", label: "GOLD (XAU)", x: 75, y: 35, icon: Gem, zone: 3 },
 
-  // ROW 5
-  { key: "vix", label: "MARKET FEAR (VIX)", x: 50, y: 40, icon: AlertOctagon, zone: 2 },
-  { key: "risk_off_fx", label: "RISK-OFF FX (JPY/CHF)", x: 75, y: 40, icon: Globe, zone: 3 },
+  // ROW 5 (gap 9)
+  { key: "vix", label: "MARKET FEAR (VIX)", x: 50, y: 44, icon: AlertOctagon, zone: 2 },
+  { key: "risk_off_fx", label: "RISK-OFF FX (JPY/CHF)", x: 75, y: 44, icon: Globe, zone: 3 },
 ];
 
 const EDGES: EdgeConfig[] = [
@@ -261,6 +262,7 @@ function CableEdge({
   active,
   sourceOffsetY = 0,
   targetOffsetY = 0,
+  midXOffset = 0,
 }: {
   x1: number;
   y1: number;
@@ -270,10 +272,12 @@ function CableEdge({
   active: boolean;
   sourceOffsetY?: number;
   targetOffsetY?: number;
+  midXOffset?: number;
 }) {
   const sy1 = y1 + sourceOffsetY;
   const ty2 = y2 + targetOffsetY;
-  const midX = x1 + (x2 - x1) / 2;
+  const baseMidX = x1 + (x2 - x1) / 2;
+  const midX = baseMidX + midXOffset;
   const pathD = `M ${x1},${sy1} L ${midX},${sy1} L ${midX},${ty2} L ${x2},${ty2}`;
 
   return (
@@ -574,22 +578,44 @@ export default function Nexus() {
   }, [macroState]);
 
   const edges = useMemo(() => {
-    const raw: Array<{ from: string; to: string; x1: number; y1: number; x2: number; y2: number; color: string }> = [];
-    EDGES.forEach(([from, to]) => {
+    const raw: Array<{
+      id: string;
+      from: string;
+      to: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      color: string;
+    }> = [];
+    EDGES.forEach(([from, to], i) => {
       const a = nodeMap[from];
       const b = nodeMap[to];
       if (!a || !b) return;
-      raw.push({ from, to, x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: a.color });
+      raw.push({
+        id: `${from}-${to}-${i}`,
+        from,
+        to,
+        x1: a.x,
+        y1: a.y,
+        x2: b.x,
+        y2: b.y,
+        color: a.color,
+      });
     });
 
     const targetFan: Record<string, { count: number; index: number }> = {};
     const sourceFan: Record<string, { count: number; index: number }> = {};
+    const midXGroups: Record<string, { count: number; index: number }> = {};
 
     raw.forEach((e) => {
       targetFan[e.to] = targetFan[e.to] || { count: 0, index: 0 };
       targetFan[e.to].count++;
       sourceFan[e.from] = sourceFan[e.from] || { count: 0, index: 0 };
       sourceFan[e.from].count++;
+      const groupKey = `${e.x1}-${e.x2}`;
+      midXGroups[groupKey] = midXGroups[groupKey] || { count: 0, index: 0 };
+      midXGroups[groupKey].count++;
     });
 
     return raw.map((e) => {
@@ -598,14 +624,21 @@ export default function Nexus() {
       const tIdx = tf.index++;
       const sIdx = sf.index++;
 
-      const spread = 1.2;
+      const spread = 2.8125; // 9px spacing at 320px container
       const targetOffsetY = (tIdx - (tf.count - 1) / 2) * spread;
       const sourceOffsetY = (sIdx - (sf.count - 1) / 2) * spread;
+
+      const groupKey = `${e.x1}-${e.x2}`;
+      const mg = midXGroups[groupKey];
+      const mIdx = mg.index++;
+      const midXSpread = 2.5;
+      const midXOffset = (mIdx - (mg.count - 1) / 2) * midXSpread;
 
       return {
         ...e,
         targetOffsetY,
         sourceOffsetY,
+        midXOffset,
       };
     });
   }, [nodeMap]);
@@ -683,13 +716,16 @@ export default function Nexus() {
         >
           {edges.map((edge) => (
             <CableEdge
-              key={`${edge.from}-${edge.to}`}
+              key={edge.id}
               x1={edge.x1}
               y1={edge.y1}
               x2={edge.x2}
               y2={edge.y2}
               color={edge.color}
               active={isApiReady}
+              sourceOffsetY={edge.sourceOffsetY}
+              targetOffsetY={edge.targetOffsetY}
+              midXOffset={edge.midXOffset}
             />
           ))}
         </svg>
@@ -699,100 +735,78 @@ export default function Nexus() {
           const data = nodeMap[node.key];
           if (!data) return null;
           const Icon = data.icon;
+          const statusLabel = node.key === "liq"
+            ? macroState.rrp.delta < 0 ? "Injecting" : "Draining"
+            : node.key === "tga"
+              ? macroState.tga.delta < 0 ? "Yellen Drain" : "Cash Absorbed"
+            : node.key === "oil"
+              ? macroState.crude_oil.delta > 0 ? "Inflation Risk" : "Disinflation Tailwind"
+            : node.key === "fed"
+              ? macroState.fed_policy.status
+            : node.key === "inf"
+              ? macroState.inflation_proxy.value > 2.5 || macroState.inflation_proxy.delta > 0 ? "Hot" : "Cooling"
+            : node.key === "dxy"
+              ? macroState.dxy.delta > 0 ? "Risk-Off" : "Risk-On"
+            : node.key === "ry"
+              ? macroState.real_yields.value > 0 && macroState.real_yields.delta > 0 ? "Restrictive" : "Accommodative"
+            : node.key === "vix"
+              ? macroState.vix.value < 15 ? "Calm" : macroState.vix.value <= 25 ? "Elevated" : "Panic"
+            : node.key === "yc"
+              ? macroState.yield_curve.status
+            : node.key === "eq"
+              ? macroState.risk_assets.delta > 0 ? "Bull" : "Bear"
+            : node.key === "commodities"
+              ? macroState.commodities.delta > 0 ? "Inflation Risk" : "Disinflation"
+            : node.key === "gold"
+              ? macroState.gold.delta > 0 ? "Safe Haven Up" : "Safe Haven Down"
+            : node.key === "em_risk_on"
+              ? macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow"
+            : node.key === "risk_off_fx"
+              ? macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge"
+            : "";
+
           return (
-            <motion.div
+            <NexusNode
               key={node.key}
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
-              className="absolute flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 z-10"
-              style={{ left: `${node.x}%`, top: `${node.y}%` }}
-            >
-              <motion.div
-                animate={{
-                  scale: [1, 1.25, 1],
-                  opacity: [0.25, 0.5, 0.25],
-                }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                className="absolute w-28 h-28 rounded-full blur-2xl pointer-events-none"
-                style={{ backgroundColor: data.color }}
-              />
-              <div
-                className="relative flex flex-col items-center justify-center w-28 h-28 rounded-2xl border backdrop-blur-xl transition-all duration-500 cursor-default"
-                style={{
-                  borderColor: `${data.color}35`,
-                  backgroundColor: "rgba(8, 8, 14, 0.85)",
-                  boxShadow: `0 0 24px ${data.color}18, 0 0 60px ${data.color}08, inset 0 1px 0 rgba(255,255,255,0.05)`,
-                }}
-              >
-                <Icon className="w-6 h-6 mb-2" style={{ color: data.color }} />
-                <span className="text-[9px] font-mono font-bold text-text-muted text-center leading-tight mb-1 uppercase px-2 tracking-widest">
-                  {node.label}
-                </span>
-                <span className="text-sm font-mono font-bold tabular-nums mb-1" style={{ color: data.color }}>
-                  {node.key === "fed"
-                    ? macroState.fed_policy.status.toUpperCase()
-                    : node.key === "vix"
-                      ? macroState.vix.value.toFixed(1)
-                      : node.key === "tga"
-                        ? `$${macroState.tga.value.toFixed(0)}B`
-                        : node.key === "oil"
-                          ? `${macroState.crude_oil.delta > 0 ? "+" : ""}${macroState.crude_oil.delta.toFixed(2)}%`
-                          : node.key === "ry"
-                            ? `${macroState.real_yields.value.toFixed(2)}%`
-                            : node.key === "liq"
-                              ? `$${macroState.rrp.value.toFixed(1)}B`
-                              : node.key === "inf"
-                                ? `${macroState.inflation_proxy.value.toFixed(2)}%`
-                                : node.key === "dxy"
-                                  ? macroState.dxy.value.toFixed(2)
-                                  : node.key === "yc"
-                                    ? `${macroState.yield_curve.spread} bps`
-                                    : node.key === "eq"
-                                      ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
-                                      : node.key === "commodities"
-                                        ? `${macroState.commodities.value.toFixed(2)}`
-                                        : node.key === "gold"
-                                          ? `$${macroState.gold.value.toFixed(2)}`
-                                          : node.key === "em_risk_on"
-                                            ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
-                                            : node.key === "risk_off_fx"
-                                              ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
-                                              : "—"}
-                </span>
-                <span className="text-[8px] font-mono font-medium uppercase tracking-wider" style={{ color: data.color, opacity: 0.85 }}>
-                  {node.key === "liq"
-                    ? macroState.rrp.delta < 0 ? "Injecting" : "Draining"
-                    : node.key === "tga"
-                      ? macroState.tga.delta < 0 ? "Yellen Drain" : "Cash Absorbed"
+              id={node.key}
+              label={node.label}
+              value={node.key === "fed"
+                ? macroState.fed_policy.status.toUpperCase()
+                : node.key === "vix"
+                  ? macroState.vix.value.toFixed(1)
+                  : node.key === "tga"
+                    ? `$${macroState.tga.value.toFixed(0)}B`
                     : node.key === "oil"
-                      ? macroState.crude_oil.delta > 0 ? "Inflation Risk" : "Disinflation Tailwind"
-                    : node.key === "fed"
-                      ? macroState.fed_policy.status
-                    : node.key === "inf"
-                      ? macroState.inflation_proxy.value > 2.5 || macroState.inflation_proxy.delta > 0 ? "Hot" : "Cooling"
-                    : node.key === "dxy"
-                      ? macroState.dxy.delta > 0 ? "Risk-Off" : "Risk-On"
+                      ? `${macroState.crude_oil.delta > 0 ? "+" : ""}${macroState.crude_oil.delta.toFixed(2)}%`
                     : node.key === "ry"
-                      ? macroState.real_yields.value > 0 && macroState.real_yields.delta > 0 ? "Restrictive" : "Accommodative"
-                    : node.key === "vix"
-                      ? macroState.vix.value < 15 ? "Calm" : macroState.vix.value <= 25 ? "Elevated" : "Panic"
+                      ? `${macroState.real_yields.value.toFixed(2)}%`
+                    : node.key === "liq"
+                      ? `$${macroState.rrp.value.toFixed(1)}B`
+                    : node.key === "inf"
+                      ? `${macroState.inflation_proxy.value.toFixed(2)}%`
+                    : node.key === "dxy"
+                      ? macroState.dxy.value.toFixed(2)
                     : node.key === "yc"
-                      ? macroState.yield_curve.status
+                      ? `${macroState.yield_curve.spread} bps`
                     : node.key === "eq"
-                      ? macroState.risk_assets.delta > 0 ? "Bull" : "Bear"
+                      ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
                     : node.key === "commodities"
-                      ? macroState.commodities.delta > 0 ? "Inflation Risk" : "Disinflation"
+                      ? `${macroState.commodities.value.toFixed(2)}`
                     : node.key === "gold"
-                      ? macroState.gold.delta > 0 ? "Safe Haven Up" : "Safe Haven Down"
+                      ? `$${macroState.gold.value.toFixed(2)}`
                     : node.key === "em_risk_on"
-                      ? macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow"
+                      ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
                     : node.key === "risk_off_fx"
-                      ? macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge"
-                    : ""}
-                </span>
-              </div>
-            </motion.div>
+                      ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
+                    : "—"}
+              statusLabel={statusLabel}
+              icon={Icon}
+              statusColor={data.color}
+              glowColor={data.color}
+              x={node.x}
+              y={node.y}
+              pulsate={node.key === "fed" || (node.key === "liq" && !macroState.rrp.delta < 0) || (node.key === "vix" && macroState.vix.value >= 20)}
+            />
           );
         })}
       </div>
