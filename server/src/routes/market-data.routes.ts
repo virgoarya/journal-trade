@@ -13,6 +13,23 @@ router.get("/news", async (req, res) => {
   }
 });
 
+router.get("/tga", async (req, res) => {
+  try {
+    const data = await marketDataService.getTGA();
+    res.json({
+      success: true,
+      data: {
+        value: data.balance,
+        delta: data.delta,
+        displayValue: data.displayValue,
+        date: data.date,
+      },
+    });
+  } catch (error: any) {
+    res.status(503).json({ success: false, error: error.message });
+  }
+});
+
 router.get("/quotes", async (req, res) => {
   try {
     const symbolsParam = req.query.symbols as string;

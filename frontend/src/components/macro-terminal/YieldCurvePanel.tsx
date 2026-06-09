@@ -146,10 +146,10 @@ export function YieldCurvePanel() {
     recessionProb = Math.round((Math.exp(-0.5333 - 0.633 * sp) / (1 + Math.exp(-0.5333 - 0.633 * sp))) * 100);
   }
 
-  const chartData = data && data.y3m != null && data.y2y != null && data.y5 != null && data.y10 != null && data.y30 != null
+  const chartData = data && data.y5 != null && data.y10 != null && data.y30 != null
     ? [
-        { tenor: "3M", yield: data.y3m },
-        { tenor: "2Y", yield: data.y2y },
+        ...(data.y3m != null ? [{ tenor: "3M", yield: data.y3m }] : []),
+        ...(data.y2y != null ? [{ tenor: "2Y", yield: data.y2y }] : []),
         { tenor: "5Y", yield: data.y5 },
         { tenor: "10Y", yield: data.y10 },
         { tenor: "30Y", yield: data.y30 },

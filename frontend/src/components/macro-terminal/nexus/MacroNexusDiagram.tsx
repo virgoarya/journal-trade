@@ -4,17 +4,19 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { NexusNode } from "./NexusNode";
 import { useMacroTerminal } from "../MacroTerminalContext";
-import { 
-  Building2, 
-  Droplets, 
-  TrendingUp, 
-  AlertOctagon, 
-  LineChart, 
+import {
+  Building2,
+  Droplets,
+  TrendingUp,
+  AlertOctagon,
+  LineChart,
   DollarSign,
   Activity,
   Terminal,
   Cpu,
-  RefreshCw
+  RefreshCw,
+  BarChart3,
+  Zap,
 } from "lucide-react";
 
 // Edge animation component
@@ -133,21 +135,15 @@ export function MacroNexusDiagram() {
     return () => clearInterval(interval);
   }, []);
 
-  // Typing animation effect
   useEffect(() => {
-    if (!nexusReasoning) {
-      setDisplayedReasoning("");
-      return;
-    }
-    
+    if (!nexusReasoning) { setDisplayedReasoning(""); return; }
     let i = 0;
-    const speed = 15; // ms per char
+    const speed = 15;
     const timer = setInterval(() => {
       setDisplayedReasoning(nexusReasoning.slice(0, i));
       i++;
       if (i > nexusReasoning.length) clearInterval(timer);
     }, speed);
-    
     return () => clearInterval(timer);
   }, [nexusReasoning]);
 
@@ -190,8 +186,20 @@ export function MacroNexusDiagram() {
   else if (vix >= 15) vixColor = "#f59e0b";
   const vixValue = vix ? vix.toFixed(1) : "—";
 
-  // Node Positions (x, y percentages)
-  const nodes = {
+  const tgaValue = quantData?.tgaValue ?? "—";
+  const tgaColor = quantData?.tgaColor ?? "#64748b";
+
+  const oilChange = quantData?.oilChange ?? null;
+  const oilColor = oilChange != null ? (oilChange > 0 ? "#f59e0b" : "#3b82f6") : "#64748b";
+  const oilValue = oilChange != null ? `${oilChange > 0 ? '+' : ''}${oilChange.toFixed(2)}%` : "—";
+
+  const nominalYield10Y = quantData?.y10 ?? null;
+  const realYield = nominalYield10Y != null ? nominalYield10Y - infProxy : null;
+  const realYieldColor = realYield != null ? (realYield > 2 ? "#8b5cf6" : realYield > 0 ? "#a855f7" : "#c084fc") : "#64748b";
+  const realYieldValue = realYield != null ? `${realYield.toFixed(2)}%` : "—";
+
+  // Node Positions (x, y percentages) — 10 NODES
+  const nodes: Record<string, { x: number; y: number; color: string; label: string; icon: React.ElementType; value: string }> = {
     fed: { x: 50, y: 50, color: "#3b82f6", label: "Federal Reserve", icon: Building2, value: currentRegime || "MONITORING" },
     liq: { x: 20, y: 25, color: liqColor, label: "Liquidity (RRP)", icon: Droplets, value: liqValue },
     yc:  { x: 80, y: 25, color: ycColor, label: "Yield Curve", icon: Activity, value: ycValue },
@@ -199,6 +207,9 @@ export function MacroNexusDiagram() {
     eq:  { x: 80, y: 75, color: eqColor, label: "Risk Assets", icon: TrendingUp, value: eqValue },
     dxy: { x: 50, y: 15, color: dxyColor, label: "US Dollar", icon: DollarSign, value: dxyValue },
     inf: { x: 50, y: 85, color: infColor, label: "Inflation Proxy", icon: LineChart, value: infValue },
+    tga: { x: 20, y: 42, color: tgaColor, label: "Treasury General Account", icon: BarChart3, value: tgaValue },
+    oil: { x: 14, y: 58, color: oilColor, label: "Crude Oil", icon: Zap, value: oilValue },
+    ry:  { x: 50, y: 70, color: realYieldColor, label: "Real Yield (10Y)", icon: TrendingUp, value: realYieldValue },
   };
 
   const fetchNexusAnalysis = async () => {
@@ -206,7 +217,6 @@ export function MacroNexusDiagram() {
     setIsAnalyzing(true);
     setNexusReasoning(null);
     setDisplayedReasoning("");
-
     try {
       const res = await fetch("/api/v1/macro-ai/analyze-nexus", {
         method: "POST",
@@ -214,11 +224,8 @@ export function MacroNexusDiagram() {
         body: JSON.stringify({ nodesData: nodes }),
       });
       const data = await res.json();
-      if (data.success) {
-        setNexusReasoning(data.reasoning);
-      } else {
-        setNexusReasoning("Gagal mendapatkan analisis: " + data.error);
-      }
+      if (data.success) setNexusReasoning(data.reasoning);
+      else setNexusReasoning("Gagal mendapatkan analisis: " + data.error);
     } catch (err: any) {
       setNexusReasoning("Terjadi kesalahan saat memanggil AI: " + err.message);
     } finally {
@@ -227,74 +234,102 @@ export function MacroNexusDiagram() {
   };
 
   return (
-    <div className="flex flex-col gap-4 overflow-visible">
-      <div className="relative w-full h-[600px] glass border border-border-subtle rounded-xl bg-bg-void overflow-visible flex items-center justify-center">
-      
-      {/* Background Grid */}
-      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10 pointer-events-none" />
+    <div className="flex flex-col gap-4 overflow-hidden">
+      <div className="relative w-full min-h-[640px] glass border border-border-subtle rounded-xl bg-bg-void overflow-hidden flex items-center justify-center">
 
-      {/* Title & Controls */}
-      <div className="absolute top-4 left-4 right-4 z-20 flex items-start justify-between">
-        <div>
-          <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
-            <Activity className="w-4 h-4 text-accent-gold" /> Macro Causal Loop
-          </h2>
-          <p className="text-[9px] font-mono text-text-muted mt-1 max-w-xs">
-            Visualisasi real-time bagaimana likuiditas, inflasi, dan sentimen saling mempengaruhi aliran modal institusional.
-          </p>
+        {/* Background Grid */}
+        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10 pointer-events-none" />
+
+        {/* Title & Controls */}
+        <div className="absolute top-4 left-4 right-4 z-20 flex items-start justify-between">
+          <div>
+            <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-widest flex items-center gap-2">
+              <Activity className="w-4 h-4 text-accent-gold" /> Macro Causal Loop
+            </h2>
+            <p className="text-[9px] font-mono text-text-muted mt-1 max-w-xs">
+              Visualisasi real-time bagaimana likuiditas, inflasi, dan sentimen saling mempengaruhi aliran modal institusional.
+            </p>
+          </div>
+          <button
+            onClick={fetchNexusAnalysis}
+            disabled={isAnalyzing}
+            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase rounded border border-accent-gold/30 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+          >
+            {isAnalyzing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Cpu className="w-3 h-3" />}
+            Analyze Flow
+          </button>
         </div>
-        <button
-          onClick={fetchNexusAnalysis}
-          disabled={isAnalyzing}
-          className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase rounded border border-accent-gold/30 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)]"
-        >
-          {isAnalyzing ? (
-            <RefreshCw className="w-3 h-3 animate-spin" />
-          ) : (
-            <Cpu className="w-3 h-3" />
-          )}
-          Analyze Flow
-        </button>
-      </div>
 
-      {/* We no longer need the global SVG because SvgEdge wraps its own SVG */}
-        
-      {/* Fed -> Liquidity */}
-      <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.liq.color} active={!isDraining} />
-      {/* Liquidity -> Equities */}
-      <SvgEdge x1={nodes.liq.x} y1={nodes.liq.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.liq.color} active={liqStatus !== "UNKNOWN"} />
-      
-      {/* DXY -> Liquidity (Inverse) */}
-      <SvgEdge x1={nodes.dxy.x} y1={nodes.dxy.y} x2={nodes.liq.x} y2={nodes.liq.y} color={nodes.dxy.color} active={uup > 0} />
-      
-      {/* Fed -> Yield Curve */}
-      <SvgEdge x1={nodes.fed.x} y1={nodes.fed.y} x2={nodes.yc.x} y2={nodes.yc.y} color={nodes.yc.color} active={true} />
-      
-      {/* Yield Curve -> Equities */}
-      <SvgEdge x1={nodes.yc.x} y1={nodes.yc.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.yc.color} active={!isInverted} />
-      
-      {/* VIX -> Equities */}
-      <SvgEdge x1={nodes.vix.x} y1={nodes.vix.y} x2={nodes.eq.x} y2={nodes.eq.y} color={nodes.vix.color} active={vix >= 20} />
-      
-      {/* Inflation -> Fed */}
-      <SvgEdge x1={nodes.inf.x} y1={nodes.inf.y} x2={nodes.fed.x} y2={nodes.fed.y} color={nodes.inf.color} active={infProxy > 0} />
+        {/* Causal Flow Edges */}
+        {[
+          ["oil", "inf"],
+          ["inf", "ry"],
+          ["yc", "ry"],
+          ["liq", "fed"],
+          ["tga", "fed"],
+          ["ry", "eq"],
+          ["dxy", "eq"],
+          ["vix", "eq"],
+          ["yc", "eq"],
+        ].map(([from, to]) => {
+          const a = nodes[from];
+          const b = nodes[to];
+          if (!a || !b) return null;
+          return (
+            <SvgEdge
+              key={`${from}-${to}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              color={a.color}
+              active={true}
+            />
+          );
+        })}
 
-      {/* Nodes Layer */}
-      {Object.entries(nodes).map(([key, n]) => (
-        <NexusNode
-          key={key}
-          id={key}
-          label={n.label}
-          value={n.value}
-          icon={n.icon}
-          statusColor={n.color}
-          glowColor={n.color}
-          x={n.x}
-          y={n.y}
-          pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
-        />
-      ))}
-      
+        {/* Zone Labels */}
+        <div className="absolute bottom-4 left-0 right-0 z-10 flex justify-around pointer-events-none px-8">
+          <div className="flex flex-col items-center" style={{ position: "absolute", left: "12%", bottom: "2rem", transform: "translateX(-50%)" }}>
+            <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">Zona 1 // Liquidity Drivers</span>
+            <div className="mt-1 flex items-center gap-1">
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+              <span className="inline-block w-1.5 h-1.5 border border-zinc-600 rotate-45" />
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+            </div>
+          </div>
+          <div className="flex flex-col items-center" style={{ position: "absolute", left: "50%", bottom: "2rem", transform: "translateX(-50%)" }}>
+            <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">Zona 2 // Policy Transformers</span>
+            <div className="mt-1 flex items-center gap-1">
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+              <span className="inline-block w-1.5 h-1.5 border border-zinc-600 rotate-45" />
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+            </div>
+          </div>
+          <div className="flex flex-col items-center" style={{ position: "absolute", left: "84%", bottom: "2rem", transform: "translateX(-50%)" }}>
+            <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">Zona 3 // Capital Destination</span>
+            <div className="mt-1 flex items-center gap-1">
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+              <span className="inline-block w-1.5 h-1.5 border border-zinc-600 rotate-45" />
+              <span className="inline-block w-3 h-px bg-zinc-700" />
+            </div>
+          </div>
+        </div>
+
+        {Object.entries(nodes).map(([key, n]) => (
+          <NexusNode
+            key={key}
+            id={key}
+            label={n.label}
+            value={n.value}
+            icon={n.icon}
+            statusColor={n.color}
+            glowColor={n.color}
+            x={n.x}
+            y={n.y}
+            pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
+          />
+        ))}
       </div>
 
       {/* AI Reasoning Bottom Panel */}

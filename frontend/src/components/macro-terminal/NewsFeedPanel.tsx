@@ -375,13 +375,13 @@ export function NewsFeedPanel() {
               }
 
              return {
-               id: item.id ?? `news-${index}`,
-               time: timeStr,
-              headline: item.headline,
-              impact,
-              targetAsset: asset,
-              aiSummary: item.summary ? item.summary.substring(0, 100) + "..." : "Simulated AI macro parsing complete.",
-            };
+                id: `news-${index}-${(item.headline || item.id || Math.random()).toString().slice(0, 24)}`,
+                time: timeStr,
+               headline: item.headline,
+               impact,
+               targetAsset: asset,
+               aiSummary: item.summary ? item.summary.substring(0, 100) + "..." : "Simulated AI macro parsing complete.",
+             };
           });
           
           setFeed(mappedNews);
