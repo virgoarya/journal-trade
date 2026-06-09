@@ -624,14 +624,14 @@ export default function Nexus() {
       const tIdx = tf.index++;
       const sIdx = sf.index++;
 
-      const spread = 2.8125; // 9px spacing at 320px container
+      const spread = 1.0;
       const targetOffsetY = (tIdx - (tf.count - 1) / 2) * spread;
       const sourceOffsetY = (sIdx - (sf.count - 1) / 2) * spread;
 
       const groupKey = `${e.x1}-${e.x2}`;
       const mg = midXGroups[groupKey];
       const mIdx = mg.index++;
-      const midXSpread = 2.5;
+      const midXSpread = 1.2;
       const midXOffset = (mIdx - (mg.count - 1) / 2) * midXSpread;
 
       return {
