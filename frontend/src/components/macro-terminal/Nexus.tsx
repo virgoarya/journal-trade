@@ -264,6 +264,8 @@ function CableEdge({
   targetOffsetY = 0,
   midXOffset = 0,
   side = "left",
+  from,
+  to,
 }: {
   x1: number;
   y1: number;
@@ -275,6 +277,8 @@ function CableEdge({
   targetOffsetY?: number;
   midXOffset?: number;
   side?: "left" | "right";
+  from?: string;
+  to?: string;
 }) {
   const sy1 = y1 + sourceOffsetY;
   const ty2 = y2 + targetOffsetY;
@@ -282,8 +286,11 @@ function CableEdge({
   const SAME_COLUMN_LEFT_HOOK = 7;
   let pathD = "";
   if (isSameColumn) {
-    const hookX = side === "right" ? x2 + SAME_COLUMN_LEFT_HOOK : x1 - SAME_COLUMN_LEFT_HOOK;
-    const entryX = side === "right" ? x2 : x1;
+    const isInfToFed = from === "inf" && to === "fed";
+    const HOOK = isInfToFed ? 5 : SAME_COLUMN_LEFT_HOOK;
+    const sideLocal = isInfToFed ? "left" : side;
+    const hookX = sideLocal === "right" ? x2 + HOOK : x1 - HOOK;
+    const entryX = sideLocal === "right" ? x2 : x1;
     pathD = `M ${x1},${sy1} L ${hookX},${sy1} L ${hookX},${ty2} L ${entryX},${ty2}`;
   } else {
     const baseMidX = x1 + (x2 - x1) / 2;
