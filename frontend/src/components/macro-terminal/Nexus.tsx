@@ -740,6 +740,7 @@ export default function Nexus() {
               sourceOffsetY={edge.sourceOffsetY}
               targetOffsetY={edge.targetOffsetY}
               midXOffset={edge.midXOffset}
+              side={edge.side}
             />
           ))}
         </svg>
