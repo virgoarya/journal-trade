@@ -5,30 +5,32 @@ import { motion } from "framer-motion";
 import { LucideIcon } from "lucide-react";
 
 interface NexusNodeProps {
-  id: string;
+  id?: string;
   label: string;
   value: string | React.ReactNode;
-  statusLabel?: string;
   icon: LucideIcon;
   statusColor: string;
   glowColor: string;
   x: number;
   y: number;
   pulsate?: boolean;
+  inputs?: number;
+  outputs?: number;
 }
 
 export function NexusNode({
   label,
   value,
-  statusLabel = "",
   icon: Icon,
   statusColor,
   glowColor,
   x,
   y,
   pulsate = false,
+  inputs = 0,
+  outputs = 0,
 }: NexusNodeProps) {
-return (
+  return (
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -38,31 +40,50 @@ return (
     >
       {pulsate && (
         <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
+          animate={{ scale: [1, 1.25, 1], opacity: [0.25, 0.5, 0.25] }}
           transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          className="absolute w-32 h-32 rounded-full blur-2xl pointer-events-none"
+          className="absolute w-28 h-28 rounded-full blur-2xl pointer-events-none"
           style={{ backgroundColor: glowColor }}
         />
       )}
       <div
-        className="relative flex flex-col items-center justify-center w-32 h-32 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-default hover:-translate-y-1"
+        className="relative flex flex-col items-center justify-center w-28 h-28 rounded-2xl border backdrop-blur-xl transition-all duration-500 cursor-default"
         style={{
-          borderColor: `${statusColor}50`,
-          backgroundColor: "rgba(10, 10, 20, 0.9)",
-          boxShadow: `0 0 20px ${glowColor}20, inset 0 1px 0 rgba(255,255,255,0.08)`,
+          borderColor: `${statusColor}35`,
+          backgroundColor: "rgba(8, 8, 14, 0.85)",
+          boxShadow: `0 0 24px ${glowColor}18, 0 0 60px ${glowColor}08, inset 0 1px 0 rgba(255,255,255,0.05)`,
         }}
       >
-        <Icon className="w-6 h-6 mb-2" style={{ color: statusColor }} />
-        <span className="text-[10px] sm:text-xs font-mono font-semibold text-text-secondary text-center leading-tight mb-1 uppercase px-2 tracking-wider">
+        <Icon className="w-5 h-5 mb-2" style={{ color: statusColor }} />
+        <span className="text-[8px] font-mono font-bold text-text-muted text-center leading-tight mb-1 uppercase px-2 tracking-widest">
           {label}
         </span>
-        <span className="text-sm sm:text-base font-mono font-bold tabular-nums mb-1" style={{ color: statusColor }}>
+        <span className="text-sm font-mono font-bold tabular-nums" style={{ color: statusColor }}>
           {value}
         </span>
-        <span className="text-[9px] sm:text-[10px] font-mono font-medium uppercase tracking-wider" style={{ color: statusColor, opacity: 0.85 }}>
-          {statusLabel}
-        </span>
       </div>
+
+      {inputs > 0 && Array.from({ length: inputs }).map((_, i) => {
+        const offsetPx = (i - (inputs - 1) / 2) * 16;
+        return (
+          <div 
+            key={`in-${i}`} 
+            className="absolute left-0 w-1.5 h-1.5 bg-[#ef4444] rounded-sm -translate-x-1.5 -translate-y-1/2 z-20" 
+            style={{ top: `calc(50% + ${offsetPx}px)`, boxShadow: '0 0 4px #ef4444' }} 
+          />
+        );
+      })}
+
+      {outputs > 0 && Array.from({ length: outputs }).map((_, i) => {
+        const offsetPx = (i - (outputs - 1) / 2) * 16;
+        return (
+          <div 
+            key={`out-${i}`} 
+            className="absolute right-0 w-1.5 h-1.5 bg-[#ef4444] rounded-sm translate-x-1.5 -translate-y-1/2 z-20" 
+            style={{ top: `calc(50% + ${offsetPx}px)`, boxShadow: '0 0 4px #ef4444' }} 
+          />
+        );
+      })}
     </motion.div>
   );
 }

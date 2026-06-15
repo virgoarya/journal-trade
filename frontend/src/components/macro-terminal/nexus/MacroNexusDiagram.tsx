@@ -110,6 +110,17 @@ function SvgEdge({
   );
 }
 
+function getPort(node: any, side: 'in' | 'out', index: number) {
+  const count = node[side];
+  const step = 2.5; // 2.5% ~ 16px in 640px height
+  const offset = (index - (count - 1) / 2) * step;
+  const xOffset = side === 'in' ? -6 : 6;
+  return {
+    x: node.x + xOffset,
+    y: node.y + offset
+  };
+}
+
 export function MacroNexusDiagram() {
   const { assets, liquidity, currentRegime } = useMacroTerminal();
   const [quantData, setQuantData] = useState<any>(null);
@@ -149,11 +160,11 @@ export function MacroNexusDiagram() {
 
   // Calculate Node States based on context data
 
-  // 1. LIQUIDITY
+    // 1. LIQUIDITY
   const liqStatus = liquidity?.status || "UNKNOWN";
   const isDraining = liqStatus === "DRAINING";
   const liqColor = isDraining ? "#ef4444" : (liqStatus === "INJECTING" ? "#22c55e" : "#64748b");
-  const liqValue = liquidity ? `$${liquidity.value.toFixed(2)}B` : "—";
+  const liqValue = liquidity ? `${liquidity.value.toFixed(2)}B` : "—";
 
   // 2. EQUITIES (Risk Assets)
   const spy = assets.find(a => a.ticker === "SPY")?.change ?? 0;
@@ -169,51 +180,96 @@ export function MacroNexusDiagram() {
   const tip = assets.find(a => a.ticker === "TIP")?.change ?? 0;
   const gld = assets.find(a => a.ticker === "GLD")?.change ?? 0;
   const infProxy = (tip + gld) / 2;
-  const infColor = infProxy > 0 ? "#ef4444" : "#22c55e"; // Inflation up is "red/hot", down is "green/cool"
+  const infColor = infProxy > 0 ? "#ef4444" : "#22c55e"; 
   const infValue = infProxy !== 0 ? `${infProxy > 0 ? '+' : ''}${infProxy.toFixed(2)}%` : "—";
 
-// 5. YIELD CURVE (Quant)
-   const y10 = quantData?.y10 ?? null;
-   const spread = quantData?.spread10y2y ?? null;
-   const isInverted = quantData?.inverted ?? false;
-   const ycColor = isInverted ? "#ef4444" : "#22c55e";
-   const ycValue = spread !== null ? `${spread > 0 ? '+' : ''}${spread} bps` : "—";
+  // 5. YIELD CURVE (Quant)
+  const spread = quantData?.spread2y10y ?? null;
+  const isInverted = quantData?.inverted ?? false;
+  const ycColor = isInverted ? "#ef4444" : "#22c55e";
+  const ycValue = spread !== null ? `${spread > 0 ? '+' : ''}${spread} bps` : "—";
 
-   // 6. VIX (Quant)
-   const vix = quantData?.vix ?? 0;
-   let vixColor = "#22c55e";
-   if (vix >= 30) vixColor = "#ef4444";
-   else if (vix >= 20) vixColor = "#f97316";
-   else if (vix >= 15) vixColor = "#f59e0b";
-   const vixValue = vix ? vix.toFixed(1) : "—";
+  // 6. VIX (Quant)
+  const vix = quantData?.vix ?? 0;
+  let vixColor = "#22c55e";
+  if (vix >= 30) vixColor = "#ef4444";
+  else if (vix >= 20) vixColor = "#f97316";
+  else if (vix >= 15) vixColor = "#f59e0b";
+  const vixValue = vix ? vix.toFixed(1) : "—";
 
-   // 7. Real Yield
-   const realYield = y10 != null ? y10 - infProxy : null;
-   const realYieldColor = realYield != null ? (realYield > 2 ? "#8b5cf6" : realYield > 0 ? "#a855f7" : "#c084fc") : "#64748b";
-   const realYieldValue = realYield != null ? `${realYield.toFixed(2)}%` : "—";
+  const tgaValue = quantData?.tgaValue ?? "—";
+  const tgaColor = quantData?.tgaColor ?? "#64748b";
 
-   // 8. Oil & TGA (from separate endpoints) - placeholder fallback
-   const oilChange = null; // Would come from /api/v1/market-data/quotes
-   const oilColor = oilChange != null ? (oilChange > 0 ? "#f59e0b" : "#3b82f6") : "#64748b";
-   const oilValue = "—";
+  const oilChange = quantData?.oilChange ?? null;
+  const oilColor = oilChange != null ? (oilChange > 0 ? "#f59e0b" : "#3b82f6") : "#64748b";
+  const oilValue = oilChange != null ? `${oilChange > 0 ? '+' : ''}${oilChange.toFixed(2)}%` : "—";
 
-   const tgaChange = null;
-   const tgaColor = "#64748b";
-   const tgaValue = "—";
+  const nominalYield10Y = quantData?.y10 ?? null;
+  const realYield = nominalYield10Y != null ? nominalYield10Y - infProxy : null;
+  const realYieldColor = realYield != null ? (realYield > 2 ? "#8b5cf6" : realYield > 0 ? "#a855f7" : "#c084fc") : "#64748b";
+  const realYieldValue = realYield != null ? `${realYield.toFixed(2)}%` : "—";
 
-  // Node Positions (x, y percentages) — 10 NODES
-  const nodes: Record<string, { x: number; y: number; color: string; label: string; icon: React.ElementType; value: string }> = {
-    fed: { x: 50, y: 50, color: "#3b82f6", label: "Federal Reserve", icon: Building2, value: currentRegime || "MONITORING" },
-    liq: { x: 20, y: 25, color: liqColor, label: "Liquidity (RRP)", icon: Droplets, value: liqValue },
-    yc:  { x: 80, y: 25, color: ycColor, label: "Yield Curve", icon: Activity, value: ycValue },
-    vix: { x: 20, y: 75, color: vixColor, label: "Market Fear", icon: AlertOctagon, value: vixValue },
-    eq:  { x: 80, y: 75, color: eqColor, label: "Risk Assets", icon: TrendingUp, value: eqValue },
-    dxy: { x: 50, y: 15, color: dxyColor, label: "US Dollar", icon: DollarSign, value: dxyValue },
-    inf: { x: 50, y: 85, color: infColor, label: "Inflation Proxy", icon: LineChart, value: infValue },
-    tga: { x: 20, y: 42, color: tgaColor, label: "Treasury General Account", icon: BarChart3, value: tgaValue },
-    oil: { x: 14, y: 58, color: oilColor, label: "Crude Oil", icon: Zap, value: oilValue },
-    ry:  { x: 50, y: 70, color: realYieldColor, label: "Real Yield (10Y)", icon: TrendingUp, value: realYieldValue },
+  // New Nodes
+  const ief = assets.find(a => a.ticker === "IEF")?.change ?? 0;
+  const growthVal = spy - ief;
+  const growthColor = growthVal > 0 ? "#22c55e" : "#ef4444";
+  const growthValue = `${growthVal > 0 ? '+' : ''}${growthVal.toFixed(2)}%`;
+
+  const goldColor = gld > 0 ? "#22c55e" : (gld < 0 ? "#ef4444" : "#64748b");
+  const goldValue = gld !== 0 ? `${gld > 0 ? '+' : ''}${gld.toFixed(2)}%` : "—";
+
+  // Node Positions (x, y percentages) — 14 NODES
+  const nodes: Record<string, { x: number; y: number; color: string; label: string; icon: React.ElementType; value: string; in: number; out: number }> = {
+    crb:    { x: 12, y: 15, color: "#f59e0b", label: "CRB COMMODITIES INDEX", icon: LineChart, value: "—", in: 1, out: 1 },
+    oil:    { x: 12, y: 35, color: oilColor, label: "ENERGY/OIL", icon: Zap, value: oilValue, in: 0, out: 1 },
+    onrrp:  { x: 12, y: 55, color: "#64748b", label: "ON RRP", icon: Droplets, value: liqValue, in: 0, out: 1 },
+    tga:    { x: 12, y: 75, color: tgaColor, label: "TGA", icon: Building2, value: tgaValue, in: 0, out: 1 },
+
+    growth: { x: 30, y: 20, color: growthColor, label: "GROWTH", icon: TrendingUp, value: growthValue, in: 0, out: 1 },
+    inf:    { x: 30, y: 40, color: infColor, label: "INFLATION", icon: Activity, value: infValue, in: 2, out: 2 },
+    liq:    { x: 30, y: 65, color: liqColor, label: "NET LIQUIDITY", icon: Droplets, value: liqValue, in: 2, out: 2 },
+
+    fed:    { x: 50, y: 45, color: "#3b82f6", label: "FEDERAL RESERVE", icon: Building2, value: currentRegime || "MONITORING", in: 5, out: 1 },
+    dxy:    { x: 50, y: 70, color: dxyColor, label: "DXY", icon: DollarSign, value: dxyValue, in: 1, out: 4 },
+
+    yc:     { x: 68, y: 35, color: ycColor, label: "YIELD CURVE", icon: Activity, value: ycValue, in: 1, out: 2 },
+
+    ry:     { x: 88, y: 20, color: realYieldColor, label: "REAL YIELD", icon: TrendingUp, value: realYieldValue, in: 2, out: 2 },
+    eq:     { x: 88, y: 45, color: eqColor, label: "RISK ASSETS SP500", icon: TrendingUp, value: eqValue, in: 3, out: 0 },
+    gold:   { x: 88, y: 65, color: goldColor, label: "SAFE HAVEN GOLD", icon: DollarSign, value: goldValue, in: 3, out: 0 },
+    vix:    { x: 88, y: 85, color: vixColor, label: "VIX", icon: AlertOctagon, value: vixValue, in: 1, out: 3 },
   };
+
+  const edgesData = [
+    { from: 'crb', fromPort: 0, to: 'inf', toPort: 0 },
+    { from: 'oil', fromPort: 0, to: 'inf', toPort: 1 },
+    { from: 'onrrp', fromPort: 0, to: 'liq', toPort: 0 },
+    { from: 'tga', fromPort: 0, to: 'liq', toPort: 1 },
+    
+    { from: 'growth', fromPort: 0, to: 'fed', toPort: 0 },
+    { from: 'inf', fromPort: 1, to: 'fed', toPort: 1, route: 'inf-fed' },
+    { from: 'liq', fromPort: 0, to: 'fed', toPort: 2 },
+    { from: 'vix', fromPort: 0, to: 'fed', toPort: 3, route: 'vix-fed' },
+    { from: 'dxy', fromPort: 0, to: 'fed', toPort: 4, route: 'dxy-fed' },
+
+    { from: 'inf', fromPort: 0, to: 'ry', toPort: 0 },
+    { from: 'liq', fromPort: 1, to: 'dxy', toPort: 0 },
+    { from: 'fed', fromPort: 0, to: 'yc', toPort: 0 },
+
+    { from: 'dxy', fromPort: 3, to: 'crb', toPort: 0, route: 'dxy-crb' },
+    { from: 'dxy', fromPort: 1, to: 'eq', toPort: 1 },
+    { from: 'dxy', fromPort: 2, to: 'gold', toPort: 1 },
+
+    { from: 'yc', fromPort: 0, to: 'ry', toPort: 1 },
+    { from: 'yc', fromPort: 1, to: 'vix', toPort: 0 },
+
+    { from: 'ry', fromPort: 0, to: 'eq', toPort: 0 },
+    { from: 'ry', fromPort: 1, to: 'gold', toPort: 0 },
+
+    { from: 'vix', fromPort: 1, to: 'eq', toPort: 2 },
+    { from: 'vix', fromPort: 2, to: 'gold', toPort: 2 },
+  ];
+
 
   const fetchNexusAnalysis = async () => {
     if (isAnalyzing) return;
@@ -263,28 +319,22 @@ export function MacroNexusDiagram() {
           </button>
         </div>
 
-        {/* Causal Flow Edges */}
-        {[
-          ["oil", "inf"],
-          ["inf", "ry"],
-          ["yc", "ry"],
-          ["liq", "fed"],
-          ["tga", "fed"],
-          ["ry", "eq"],
-          ["dxy", "eq"],
-          ["vix", "eq"],
-          ["yc", "eq"],
-        ].map(([from, to]) => {
+                {/* Causal Flow Edges */}
+        {edgesData.map(({ from, fromPort, to, toPort, route }) => {
           const a = nodes[from];
           const b = nodes[to];
           if (!a || !b) return null;
+          
+          const start = getPort(a, 'out', fromPort);
+          const end = getPort(b, 'in', toPort);
+          
           return (
             <SvgEdge
               key={`${from}-${to}`}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
               color={a.color}
               active={true}
             />
@@ -319,45 +369,22 @@ export function MacroNexusDiagram() {
           </div>
         </div>
 
-{Object.entries(nodes).map(([key, n]) => {
-          const statusLabel = key === "liq"
-            ? (!isDraining ? "Injecting" : "Draining")
-            : key === "tga"
-              ? ""
-            : key === "oil"
-              ? ""
-            : key === "fed"
-              ? (currentRegime || "")
-            : key === "inf"
-              ? (infProxy > 0 ? "Hot" : "Cooling")
-            : key === "dxy"
-              ? (uup > 0 ? "Risk-Off" : "Risk-On")
-            : key === "ry"
-              ? (realYield && realYield > 0 ? "Restrictive" : "Accommodative")
-            : key === "vix"
-              ? (vix < 15 ? "Calm" : vix <= 25 ? "Elevated" : "Panic")
-            : key === "yc"
-              ? (isInverted ? "Inverted" : "Normal")
-            : key === "eq"
-              ? (spy > 0 ? "Bull" : "Bear")
-            : "";
-
-          return (
-            <NexusNode
-              key={key}
-              id={key}
-              label={n.label}
-              value={n.value}
-              statusLabel={statusLabel}
-              icon={n.icon}
-              statusColor={n.color}
-              glowColor={n.color}
-              x={n.x}
-              y={n.y}
-              pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
-            />
-          );
-        })}
+        {Object.entries(nodes).map(([key, n]) => (
+          <NexusNode
+            key={key}
+            id={key}
+            label={n.label}
+            value={n.value}
+            icon={n.icon as any}
+            statusColor={n.color}
+            glowColor={n.color}
+            x={n.x}
+            y={n.y}
+            pulsate={key === "fed" || (key === "liq" && !isDraining) || (key === "vix" && vix >= 20)}
+            inputs={n.in}
+            outputs={n.out}
+          />
+        ))}
       </div>
 
       {/* AI Reasoning Bottom Panel */}
