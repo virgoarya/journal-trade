@@ -9,35 +9,25 @@ import { EconomicCalendarPanel } from "@/components/macro-terminal/EconomicCalen
 
 export default function MacroOverviewPage() {
   return (
-    <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 h-full overflow-visible">
-      {/* Left Column */}
-      <div className="flex flex-col gap-4 lg:col-span-1 xl:col-span-1 h-full overflow-visible">
-        {/* Top Left: Regime Matrix (50% of heatmap height) */}
-        <div className="flex-1 min-h-0 overflow-visible">
+    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
+      <div className="lg:col-span-6 xl:col-span-6 flex flex-col gap-4 min-h-0">
+        <div className="min-h-0">
           <MacroRegimePanel />
         </div>
-
-        {/* Middle Left: Liquidity Gauge (50% of heatmap height) */}
-        <div className="flex-1 min-h-0 overflow-visible">
+        <div className="min-h-0">
           <LiquidityGaugePanel />
         </div>
-
-        {/* Bottom Left: News Feed (same height as Economic Calendar) */}
-        <div className="h-80 shrink-0 overflow-visible">
-          <NewsFeedPanel />
+        <div className="min-h-0">
+          <EconomicCalendarPanel />
         </div>
       </div>
 
-      {/* Right Column */}
-      <div className="flex flex-col gap-4 lg:col-span-2 xl:col-span-3 h-full overflow-visible">
-        {/* Top Right: Heatmap */}
-        <div className="flex-1 min-h-0 overflow-visible">
+      <div className="lg:col-span-6 xl:col-span-6 flex flex-col gap-4 min-h-0">
+        <div className="min-h-[400px]">
           <HeatmapPanel />
         </div>
-
-        {/* Bottom Right: Economic Calendar */}
-        <div className="h-80 shrink-0 overflow-visible">
-          <EconomicCalendarPanel />
+        <div className="min-h-0 h-[400px]">
+          <NewsFeedPanel />
         </div>
       </div>
     </div>

@@ -7,9 +7,12 @@ const router = Router();
 router.get("/news", async (req, res) => {
   try {
     const data = await marketDataService.getNews();
-    res.json({ success: true, data });
+    res.json({ success: true, data, fetchedAt: new Date().toISOString(), rateLimited: false });
   } catch (error: any) {
-    res.status(503).json({ success: false, error: error.message });
+    if (error.message.includes("Rate limited")) {
+      return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
+    }
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
@@ -24,9 +27,14 @@ router.get("/tga", async (req, res) => {
         displayValue: data.displayValue,
         date: data.date,
       },
+      fetchedAt: new Date().toISOString(),
+      rateLimited: false,
     });
   } catch (error: any) {
-    res.status(503).json({ success: false, error: error.message });
+    if (error.message.includes("Rate limited")) {
+      return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
+    }
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
@@ -34,70 +42,73 @@ router.get("/quotes", async (req, res) => {
   try {
     const symbolsParam = req.query.symbols as string;
     if (!symbolsParam) {
-      res.status(400).json({ success: false, error: "Missing symbols parameter" });
+      res.status(400).json({ success: false, error: "Missing symbols parameter", rateLimited: false });
       return;
     }
     
     const symbols = symbolsParam.split(",").map(s => s.trim()).filter(Boolean);
     const data = await marketDataService.getQuotes(symbols);
-    res.json({ success: true, data });
+    res.json({ success: true, data, fetchedAt: new Date().toISOString(), rateLimited: false });
   } catch (error: any) {
-    res.status(503).json({ success: false, error: error.message });
+    if (error.message.includes("Rate limited")) {
+      return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
+    }
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
 router.get("/liquidity", async (req, res) => {
   try {
     const data = await marketDataService.getLiquidity();
-    res.json({ success: true, data });
+    res.json({ success: true, data, fetchedAt: new Date().toISOString(), rateLimited: false });
   } catch (error: any) {
-    res.status(503).json({ success: false, error: error.message });
+    if (error.message.includes("Rate limited")) {
+      return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
+    }
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
 router.get("/economic-calendar", async (req, res) => {
   try {
     const data = await marketDataService.getEconomicCalendar();
-    res.json({ success: true, data });
+    res.json({ success: true, data, fetchedAt: new Date().toISOString(), rateLimited: false });
   } catch (error: any) {
-    res.status(503).json({ success: false, error: error.message });
+    if (error.message.includes("Rate limited")) {
+      return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
+    }
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
-// Temporary mock endpoint for testing - inject mock liquidity change to trigger notification
 router.post("/liquidity/mock-trigger", requireAuth, async (req, res) => {
   try {
     const { value, change } = req.body;
-    const data = await marketDataService.getLiquidity(); // Get current cached
-    const mockValue = value || 12000; // 12000B = $12T as test
-    const mockChange = change || 5.5; // +5.5B increase to trigger DRAINING
+    const data = await marketDataService.getLiquidity();
+    const mockValue = value || 12000;
+    const mockChange = change || 5.5;
     
-    // Manually trigger notification by updating cache and calling the logic
-    const cacheKey = "liquidity_onrrp";
-    const cache = (marketDataService as any).cache || {};
+    const prevValue = data.value;
+    const absChange = Math.abs(mockValue - prevValue);
     
-    // Simulate a change for notification
-    if (cache[cacheKey]) {
-      const prevValue = cache[cacheKey].data?.value || 11500;
-      const absChange = Math.abs(mockValue - prevValue);
-      
-      if (absChange > 0.1) {
-        const isDraining = mockChange > 0;
-        const { notificationService } = await import("../services/notification.service");
-        await notificationService.create({
-          userId: "system",
-          type: "RISK_WARNING",
-          title: "⚠️ Institutional Liquidity Draining",
-          message: `Dana ON RRP meningkat sebesar $${absChange.toFixed(2)}B. Institusi memarkir uang ke Fed, likuiditas pasar berpotensi mengetat.`,
-          metadata: {
-            currentValue: mockValue,
-            previousValue: prevValue,
-            change: mockChange,
-            status: isDraining ? "DRAINING" : "INJECTING",
-            source: "FRED_ON_RRP_MOCK"
-          }
-        });
-      }
+    if (absChange > 0.1) {
+      const isDraining = mockChange > 0;
+      const { notificationService } = await import("../services/notification.service");
+      await notificationService.create({
+        userId: "system",
+        type: "RISK_WARNING",
+        title: "⚠️ Institutional Liquidity Draining",
+        message: isDraining
+          ? `Dana ON RRP meningkat sebesar $${absChange.toFixed(2)}B. Institusi memarkir uang ke Fed, likuiditas pasar berpotensi mengetat.`
+          : `Dana ON RRP menurun sebesar $${absChange.toFixed(2)}B. Likuiditas kembali disuntikkan ke pasar bursa!`,
+        metadata: {
+          currentValue: mockValue,
+          previousValue: prevValue,
+          change: mockChange,
+          status: isDraining ? "DRAINING" : "INJECTING",
+          source: "FRED_ON_RRP_MOCK"
+        }
+      });
     }
     
     res.json({ success: true, message: "Mock notification triggered" });

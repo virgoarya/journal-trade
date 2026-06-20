@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Bot, Send, User, ChevronDown, Zap } from "lucide-react";
@@ -58,6 +58,13 @@ const THINKING_MESSAGES = [
   "Menyusun perspektif strategis...",
 ];
 
+const QUICK_PROMPTS = [
+  "What breaks this regime?",
+  "What would force Fed pivot?",
+  "Where is liquidity leaking?",
+  "What asset is most vulnerable if VIX > 20?",
+];
+
 function PersonaBadge({
   persona,
   selected,
@@ -85,7 +92,16 @@ function PersonaBadge({
 }
 
 export function AiPersonaChatPanel() {
-  const { currentRegime, assets, liquidity } = useMacroTerminal();
+  const {
+    currentRegime,
+    assets,
+    liquidity,
+    regimeData,
+    vix,
+    yieldCurve,
+    geoRisk,
+    nextEvent,
+  } = useMacroTerminal();
 
   const [activePersonaId, setActivePersonaId] = useState<PersonaId>("hawk");
   const [allMessages, setAllMessages] = useState<Record<PersonaId, Message[]>>({
@@ -103,6 +119,20 @@ export function AiPersonaChatPanel() {
 
   const activePersona = PERSONAS.find((p) => p.id === activePersonaId)!;
   const messages = allMessages[activePersonaId];
+
+  const briefing = useMemo(() => {
+    const lines = [
+      `Regime: ${currentRegime ?? "UNKNOWN"}`,
+      `Liquidity: ${liquidity?.status ?? "UNKNOWN"}`,
+      `VIX: ${vix.value === null ? "N/A" : `${vix.value.toFixed(1)} (${vix.regime})`}`,
+      `Yield Curve: ${yieldCurve.curveRegime}${yieldCurve.inverted ? " / Inverted" : ""}`,
+      `Geo-risk driver: ${geoRisk.topDriver}`,
+      nextEvent
+        ? `Next event: ${nextEvent.country} ${nextEvent.title} (${nextEvent.impact})`
+        : "Next event: none high-impact",
+    ];
+    return lines.join(" · ");
+  }, [currentRegime, liquidity, vix, yieldCurve, geoRisk, nextEvent]);
 
   // Initialize greeting for each persona
   useEffect(() => {
@@ -151,10 +181,14 @@ export function AiPersonaChatPanel() {
     const initial = THINKING_MESSAGES[0];
     setAllMessages((prev) => ({
       ...prev,
-      [activePersonaId]: [...prev[activePersonaId], { role: "assistant", content: initial }],
+      [activePersonaId]: [
+        ...prev[activePersonaId],
+        { role: "assistant", content: initial },
+      ],
     }));
     thinkingIntervalRef.current = setInterval(() => {
-      thinkingIndexRef.current = (thinkingIndexRef.current + 1) % THINKING_MESSAGES.length;
+      thinkingIndexRef.current =
+        (thinkingIndexRef.current + 1) % THINKING_MESSAGES.length;
       setAllMessages((prev) => {
         const updated = [...prev[activePersonaId]];
         const lastIdx = updated.length - 1;
@@ -185,7 +219,12 @@ export function AiPersonaChatPanel() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = input.trim();
-    if (!query || thinkingState === "thinking" || thinkingState === "responding") return;
+    if (
+      !query ||
+      thinkingState === "thinking" ||
+      thinkingState === "responding"
+    )
+      return;
 
     const now = Date.now();
     if (now - lastSentAtRef.current < RATE_LIMIT_MS) return;
@@ -208,6 +247,15 @@ export function AiPersonaChatPanel() {
           assets,
           liquidityStatus: liquidity?.status,
           personaId: activePersonaId,
+          context: {
+            vix,
+            yieldCurve,
+            geoRisk: {
+              scores: geoRisk.scores,
+              topDriver: geoRisk.topDriver,
+            },
+            nextEvent,
+          },
         }),
       });
 
@@ -215,7 +263,9 @@ export function AiPersonaChatPanel() {
       const data = await resp.json();
       finishThinking(data.reply || "AI tidak merespons. Coba lagi.");
     } catch {
-      finishThinking("Koneksi ke AI Engine gagal. Silakan coba beberapa saat lagi.");
+      finishThinking(
+        "Koneksi ke AI Engine gagal. Silakan coba beberapa saat lagi.",
+      );
     }
   };
 
@@ -230,11 +280,14 @@ export function AiPersonaChatPanel() {
     localStorage.removeItem(key);
     setAllMessages((prev) => ({
       ...prev,
-      [activePersonaId]: [{ role: "assistant", content: activePersona.greeting }],
+      [activePersonaId]: [
+        { role: "assistant", content: activePersona.greeting },
+      ],
     }));
   };
 
-  const isThinking = thinkingState === "thinking" || thinkingState === "responding";
+  const isThinking =
+    thinkingState === "thinking" || thinkingState === "responding";
 
   return (
     <div
@@ -243,13 +296,18 @@ export function AiPersonaChatPanel() {
     >
       {/* Header with Persona selector */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span className="text-2xl">{activePersona.emoji}</span>
-          <div>
-            <p className="text-xs font-mono font-bold text-text-primary tracking-wider">
+          <div className="min-w-0">
+            <p className="text-xs font-mono font-bold text-text-primary tracking-wider truncate max-w-[360px]">
               {activePersona.label}
             </p>
-            <p className="text-[10px] text-text-muted font-mono">{activePersona.description}</p>
+            <p className="text-[10px] text-text-muted font-mono truncate max-w-[360px]">
+              {activePersona.description}
+            </p>
+            <p className="text-[9px] text-text-muted font-mono mt-1 max-w-[420px] truncate">
+              {briefing}
+            </p>
           </div>
         </div>
 
@@ -275,6 +333,20 @@ export function AiPersonaChatPanel() {
         ))}
       </div>
 
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle shrink-0 overflow-x-auto scrollbar-hide">
+        {QUICK_PROMPTS.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            onClick={() => setInput(prompt)}
+            disabled={isThinking}
+            className="text-[9px] font-mono text-text-muted border border-border-subtle rounded px-2 py-1 hover:text-accent-gold hover:border-accent-gold/40 disabled:opacity-40 whitespace-nowrap"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-border-subtle">
         {messages.map((msg, idx) => (
@@ -295,12 +367,14 @@ export function AiPersonaChatPanel() {
                 msg.role === "user"
                   ? "bg-accent-gold/10 border border-accent-gold/30 text-text-primary"
                   : isThinking && idx === messages.length - 1
-                  ? "border border-border-subtle text-text-muted italic animate-pulse"
-                  : "glass border border-border-subtle text-text-main"
+                    ? "border border-border-subtle text-text-muted italic animate-pulse"
+                    : "glass border border-border-subtle text-text-main"
               }`}
             >
               {msg.role === "assistant" ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown>
               ) : (
                 msg.content
               )}
@@ -321,7 +395,10 @@ export function AiPersonaChatPanel() {
         className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle shrink-0"
       >
         <div className="flex-1 flex items-center gap-2 bg-surface-elevated border border-border-subtle rounded-lg px-3 py-2">
-          <Zap className="w-3 h-3 shrink-0" style={{ color: activePersona.color }} />
+          <Zap
+            className="w-3 h-3 shrink-0"
+            style={{ color: activePersona.color }}
+          />
           <input
             type="text"
             value={input}
@@ -335,7 +412,10 @@ export function AiPersonaChatPanel() {
           type="submit"
           disabled={!input.trim() || isThinking}
           className="p-2 rounded-lg transition-all disabled:opacity-30"
-          style={{ backgroundColor: activePersona.color + "25", color: activePersona.color }}
+          style={{
+            backgroundColor: activePersona.color + "25",
+            color: activePersona.color,
+          }}
         >
           <Send className="w-4 h-4" />
         </button>

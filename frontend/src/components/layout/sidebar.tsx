@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { AccountSwitcher } from "./account-switcher";
 import {
   LayoutDashboard,
   PenLine,
@@ -13,11 +15,6 @@ import {
   LogOut,
   Globe
 } from "lucide-react";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-import { useSession } from "@/lib/auth-client";
-import { AccountSwitcher } from "./account-switcher";
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -45,22 +42,6 @@ interface SidebarProps {
 
 export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Get initials for profile placeholder
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
 
   const sidebarClasses = cn(
     "h-screen sticky left-0 top-0 glass-sidebar flex flex-col justify-between py-6 z-50",
@@ -111,7 +92,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         {/* Main Navigation */}
         <nav className="space-y-2 px-3">
           {mainNav.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}

@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import tradingAccountRoutes from "./trading-account.routes";
 import tradeRoutes from "./trade.routes";
 import playbookRoutes from "./playbook.routes";
@@ -14,6 +14,7 @@ import marketDataRoutes from "./market-data.routes";
 import geoRiskRoutes from "./geo-risk.routes";
 import quantRoutes from "./quant.routes";
 import macroRegimeRoutes from "./macro-regime.routes";
+import nexusRoutes from "./nexus.routes";
 
 const router = Router();
 
@@ -37,5 +38,6 @@ router.use("/v1/market-data", marketDataRoutes);
 router.use("/v1/geo-risk", geoRiskRoutes);
 router.use("/v1/quant", quantRoutes);
 router.use("/v1/macro-regime", macroRegimeRoutes);
+router.use("/v1/nexus", nexusRoutes);
 
 export default router;

@@ -8,7 +8,7 @@ const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
 // Cache for FRED series data to prevent hitting rate limits
 const fredCache: Record<string, { data: { date: string; value: number }[]; timestamp: number }> = {};
-const FRED_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const FRED_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes — suitable for institutional macro desk real-time needs
 
 const SERIES_IDS = {
   // Growth

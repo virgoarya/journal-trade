@@ -8,7 +8,7 @@ interface PlaybookCardProps {
   onSelect?: (playbook: Strategy) => void;
   onView?: (playbook: Strategy) => void;
   onEdit?: (playbook: Strategy) => void;
-  onDelete?: (playbook: Strategy) => void;
+  onDelete?: (playbookId: string) => void;
   onArchive?: (playbookId: string) => void;
   onDuplicate?: (playbookId: string) => void;
   isSelectable?: boolean;

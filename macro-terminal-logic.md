@@ -9,10 +9,11 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 - Menandai quadrant aktif dengan highlight khusus.
 
 ### Rumus & Sumber Data
-- Source: `MacroTerminalContext.tsx` melakukan fetch ke `/api/v1/market-data/quotes` (Finnhub).
-- Rumus **price-implied** (bukan data fundamental lambat):
-  - `growth = SPY(dp) - IEF(dp)` — Selisih pergerakan harian ekuitas vs obligasi.
-  - `inflation = (TIP(dp) + GLD(dp)) / 2 - IEF(dp)` — Proksi tekanan inflasi dari TIPS dan Gold vs Bonds.
+- Source: `MacroRegimeSnapshot` di backend (`server/src/services/macro-regime.service.ts`).
+- Rumus **ETF ratio** (canonical, satu-satunya definisi):
+  - `growth = XLY / XLP` — Pergerakan ekuitas konsumer vs agregat (Consumer Discretionary vs Staples).
+  - `inflation = TIP / TLT` — Pergerakan obligasi inflasi vs jangka menengah (TIPS vs Treasury Bond).
+  - `liquidity = HYG / SHY` — Kredit ritel vs Government Bond (High Yield vs Short Treasury).
 - Classifier: `lib/macro/classifiers.ts` → `classifyMacroRegime()` menggunakan z-score threshold ±0.15 untuk menentukan quadrant.
 - **SSOT (Single Source of Truth)**: Macro Regime Matrix adalah satu-satunya penentu regime makroekonomi di seluruh terminal. Panel lain (Quant Lab, Nexus) tidak boleh mengklaim regime sendiri.
 
@@ -39,7 +40,7 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 
 ### Update Cycle
 - Backend cache 1 jam untuk menghindari spam request ke FRED.
-- Jika `FRED_API_KEY` tidak terset, sistem fallback dummy (`value: 2000`).
+- Jika `FRED_API_KEY` tidak terset, endpoint mengembalikan error yang ditandai context sebagai `fallback`/`error`; tidak ada dummy value yang disamarkan sebagai live data.
 
 ### File Terkait
 - `server/src/services/market-data.service.ts` (`getLiquidity`) — query 7 hari, hitung `trend[]`
@@ -54,7 +55,7 @@ Ringkasan ini menjelaskan bagaimana setiap card di halaman `/macro-terminal` men
 ### Sumber Data & Rumus
 - **Finnhub Quotes API** (`/api/v1/market-data/quotes`) → field `dp` (persentase perubahan).
 - Backend mengambil `dp` dari response Finnhub dan meneruskan ke frontend.
-- Jika API gagal/timeout, frontend fallback ke **mock ticker jitter** (`±0.8`).
+- Jika API gagal/timeout, heatmap menampilkan `DATA UNAVAILABLE` dan context menandai status quotes sebagai `error`/`fallback`, bukan menghasilkan angka mock.
 
 ### Warna Heatmap
 - `> +2%` → Hijau tua (`bg-data-profit text-white`)
@@ -169,7 +170,7 @@ Frontend (page.tsx)
   └── MacroTerminalProvider (context)
         ├── fetchLiquidity()          → FRED API (via backend)
         ├── fetchQuotes()             → Finnhub API (via backend)
-        │     └── Jika gagal: mock jitter
+        │     └── Jika gagal: `DATA UNAVAILABLE` + status quotes `error`/`fallback`
         ├── analyzeRegime()           → classifier + AI reasoning
         │     ├── classifyMacroRegime()
         │     └── macroAiService.analyzeRegime()
@@ -215,9 +216,9 @@ Backend Services
   - News: 60 detik
   - Liquidity: 1 jam
   - Quotes: 60 detik per symbol
-- Jika API error total, UI menampilkan:
-  - `MOCK FALLBACK` (badge) untuk quotes/news.
-  - `DATA UNAVAILABLE` untuk heatmap.
+- Jika API error total, UI menampilkan status eksplisit:
+  - `LIVE`, `CACHE`, `FALLBACK`, `STALE`, atau `ERROR` sesuai sumber data.
+  - `DATA UNAVAILABLE` untuk heatmap bila quote tidak tersedia.
   - Pesan error untuk regime matrix.
 
 ## 10. Environment Variables Wajib
@@ -248,14 +249,14 @@ Backend Services
    - **PENTING**: Panel ini adalah *Market Fear Gauge* murni, **bukan** *Regime Classifier*. Tidak ada label "Mapped Regime" — sumber kebenaran regime hanya ada di Macro Regime Matrix (tab Overview).
    - Memetakan level VIX ke status volatilitas:
      - `< 15` = **CALM** (Hijau) — Pasar tenang, risk-on environment
-     - `15 – 20` = **NORMAL** (Kuning) — Volatilitas wajar, pasar berjalan normal
+      - `15 – 20` = **NORMAL-CAUTIOUS** (Kuning) — Volatilitas wajar tetapi mulai perlu diwaspadai
      - `20 – 30` = **ELEVATED** (Oranye) — Ketakutan meningkat, potensi koreksi
      - `> 30` = **FEAR** (Merah) — Kepanikan ekstrem, potensi crash/kapitulasi
    - Label subtitle: "Market Fear Gauge · VIX {nilai}" (menggantikan label "Mapped Regime" yang sudah dihapus).
 
 ### File Terkait
 - `server/src/services/quant.service.ts` — fetch VIX dari Yahoo Finance, yield dari FRED
-- `server/src/models/YieldCurveSnapshot.ts` — schema MongoDB dengan regime enum: `CALM | NORMAL | ELEVATED | FEAR | UNKNOWN`
+- `server/src/models/YieldCurveSnapshot.ts` — schema MongoDB dengan regime enum: `CALM | NORMAL-CAUTIOUS | ELEVATED | FEAR | UNKNOWN`
 - `frontend/src/components/macro-terminal/YieldCurvePanel.tsx`
 - `frontend/src/components/macro-terminal/VixRegimePanel.tsx`
 
@@ -314,7 +315,7 @@ Backend Services
 - **Animasi UI**: Menggunakan *typewriter effect* di panel terminal bagian bawah diagram untuk mensimulasikan AI sedang mengetik analisis secara real-time.
 
 ### File Terkait
-- `frontend/src/components/macro-terminal/nexus/MacroNexusDiagram.tsx`
+- `frontend/src/components/macro-terminal/Nexus.tsx`
 - `frontend/src/components/macro-terminal/nexus/NexusNode.tsx`
 
 ## 13. Economic Calendar (Overview Tab)
@@ -332,9 +333,9 @@ Backend Services
 - **Filter**: Hanya menampilkan event dengan dampak (Impact) `High` atau `Medium` dan untuk mata uang mayor (USD, EUR, GBP, JPY, CAD, AUD).
 - **Indikator Masa Lalu**: Event yang sudah terlewati batas waktunya akan dirender sedikit transparan (`opacity-50`).
 - **Warna Angka Aktual**: 
-  - Jika `Actual > Forecast`, warna hijau (`text-data-profit`).
-  - Jika `Actual < Forecast`, warna merah (`text-data-loss`).
-  - *(Catatan: Pembandingan ini bersifat matematis absolut, belum membalikkan logika untuk indikator khusus seperti Klaim Pengangguran/Unemployment).*
+  - `higher_is_better`: Actual > Forecast → hijau, Actual < Forecast → merah.
+  - `lower_is_better`: Actual < Forecast → hijau, Actual > Forecast → merah.
+  - `neutral`: Actual vs Forecast ditampilkan tanpa bias arah.
 
 ### File Terkait
 - `server/src/services/market-data.service.ts` — fungsi `getEconomicCalendar()`

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
+import { silentLogger } from "../utils/silent-logger";
 
 const router = Router();
 
@@ -27,16 +28,32 @@ function extractAssistantText(combined: string): string {
 
 router.post("/chat", requireAuth, async (req, res) => {
   try {
-    const { messages, currentRegime, assets, liquidityStatus, personaId } = req.body;
+    const {
+      messages,
+      currentRegime,
+      assets,
+      liquidityStatus,
+      personaId,
+      context,
+    } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      res.status(400).json({ success: false, error: "Format pesan tidak valid" });
+      res
+        .status(400)
+        .json({ success: false, error: "Format pesan tidak valid" });
       return;
     }
 
     res.setHeader("Content-Type", "application/json");
 
-    const groqResponse = await macroAiService.chatStream(messages, currentRegime, assets, liquidityStatus, personaId);
+    const groqResponse = await macroAiService.chatStream(
+      messages,
+      currentRegime,
+      assets,
+      liquidityStatus,
+      personaId,
+      context,
+    );
 
     const chunks: string[] = [];
     await new Promise<void>((resolve, reject) => {
@@ -57,25 +74,36 @@ router.post("/chat", requireAuth, async (req, res) => {
 
     res.json({ success: true, reply: text });
   } catch (error: any) {
-    console.error("Macro AI Chat Route Error:", error);
-    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+    silentLogger.error("Macro AI Chat Route Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Terjadi kesalahan pada server",
+    });
   }
 });
 
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
-    const { assets, calculatedRegime, liquidityStatus } = req.body;
+    const { assets, calculatedRegime, liquidityStatus, context } = req.body;
 
     if (!assets || !Array.isArray(assets)) {
       res.status(400).json({ success: false, error: "Data aset tidak valid" });
       return;
     }
 
-    const reasoning = await macroAiService.analyzeRegime(assets, calculatedRegime, liquidityStatus);
+    const reasoning = await macroAiService.analyzeRegime(
+      assets,
+      calculatedRegime,
+      liquidityStatus,
+      context,
+    );
     res.json({ success: true, reasoning });
   } catch (error: any) {
-    console.error("Macro AI Analyze Regime Route Error:", error);
-    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+    silentLogger.error("Macro AI Analyze Regime Route Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Terjadi kesalahan pada server",
+    });
   }
 });
 
@@ -84,39 +112,55 @@ router.post("/analyze-macro-feed", requireAuth, async (req, res) => {
     const { headline, targetAsset, context } = req.body;
 
     if (!headline || !targetAsset) {
-      res.status(400).json({ success: false, error: "Headline dan target asset diperlukan" });
+      res.status(400).json({
+        success: false,
+        error: "Headline dan target asset diperlukan",
+      });
       return;
     }
 
-    const analysis = await macroAiService.analyzeMacroFeed(headline, targetAsset, context);
+    const analysis = await macroAiService.analyzeMacroFeed(
+      headline,
+      targetAsset,
+      context,
+    );
 
-    if (typeof analysis === "string") {
+    if (analysis && typeof analysis === "object") {
       res.json({ success: true, analysis });
-    } else if (analysis && typeof analysis === "object") {
-      res.json({ success: true, analysis: JSON.stringify(analysis) });
     } else {
-      res.status(500).json({ success: false, error: "Invalid analysis response from AI service" });
+      res.status(500).json({
+        success: false,
+        error: "Invalid analysis response from AI service",
+      });
     }
   } catch (error: any) {
-    console.error("Macro AI Analyze Feed Route Error:", error);
-    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+    silentLogger.error("Macro AI Analyze Feed Route Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Terjadi kesalahan pada server",
+    });
   }
 });
 
 router.post("/analyze-nexus", requireAuth, async (req, res) => {
   try {
-    const { nodesData } = req.body;
+    const { nodesData, context } = req.body;
 
     if (!nodesData) {
-      res.status(400).json({ success: false, error: "Data node Nexus diperlukan" });
+      res
+        .status(400)
+        .json({ success: false, error: "Data node Nexus diperlukan" });
       return;
     }
 
-    const reasoning = await macroAiService.analyzeNexus(nodesData);
+    const reasoning = await macroAiService.analyzeNexus(nodesData, context);
     res.json({ success: true, reasoning });
   } catch (error: any) {
-    console.error("Macro AI Analyze Nexus Route Error:", error);
-    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan pada server" });
+    silentLogger.error("Macro AI Analyze Nexus Route Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Terjadi kesalahan pada server",
+    });
   }
 });
 

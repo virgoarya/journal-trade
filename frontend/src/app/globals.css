@@ -1,27 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-void: #050508;
-  --color-bg-surface: #0A0A12;
-  --color-bg-elevated: #10101C;
-  --color-bg-input: #0D0D18;
-  --color-border-subtle: #1A1A2E;
+  --color-bg-void: #0D0D0D;
+  --color-bg-surface: #111116;
+  --color-bg-elevated: #151520;
+  --color-bg-input: #0F0F14;
+  --color-border-subtle: #1F2937;
   --color-accent-gold: #D4AF37;
   --color-accent-gold-dim: #8B7722;
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #F8FAFC;
-  --color-text-muted: #F1F5F9;
-  --color-data-profit: #00E676;
-  --color-data-loss: #FF1744;
+  --color-neon-green: #39FF88;
+  --color-neon-orange: #FF6A00;
+  --color-neon-red: #FF3864;
+  --color-text-primary: #E5E7EB;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #94A3B8;
+  --color-data-profit: #39FF88;
+  --color-data-loss: #FF3864;
   --color-data-warning: #FFA726;
 
   /* Access Denied Page Colors */
   --color-on-surface: #E5E1E7;
   --color-outline: #99907C;
-  --color-error: #FF1744;
+  --color-error: #FF3864;
   --color-primary: #F2CA50;
   --color-primary-container: #D4AF37;
-  --color-surface-dim: #050508;
+  --color-surface-dim: #0D0D0D;
 
   --font-sans: "Inter", "Geist Sans", sans-serif;
   --font-mono: "JetBrains Mono", "Geist Mono", monospace;
@@ -54,6 +57,41 @@
     --color-text-primary: #1A1A1A;
     --color-text-secondary: #4A4A4A;
     --color-text-muted: #7A7A7A;
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  45% { opacity: 0.12; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes terminalPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.75; }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .terminal-scanline {
+    background: linear-gradient(to bottom, transparent, rgba(57,255,136,0.12), transparent);
+    animation: scanline 7s linear infinite;
+  }
+
+  .terminal-pulse {
+    animation: terminalPulse 2.4s ease-in-out infinite;
   }
 }
 

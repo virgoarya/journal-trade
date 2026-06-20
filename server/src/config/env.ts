@@ -1,8 +1,11 @@
 import { z } from "zod";
 import "dotenv/config";
+import { silentLogger } from "../utils/silent-logger";
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
   PORT: z.coerce.number().default(5000),
   DATABASE_URL: z.string().min(1),
 
@@ -16,31 +19,57 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().min(1),
   DISCORD_CLIENT_SECRET: z.string().min(1),
   DISCORD_GUILD_ID: z.string().min(1), // Guild ID to verify membership
-  
+
   // App
   FRONTEND_URL: z.string().url(),
-  
+
   // AI
   // Support for Claude via OpenRouter (ANTHROPIC_* vars) or Gemini (GEMINI_API_KEY)
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional().default("gemini-2.5-flash"),
   ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
-  ANTHROPIC_BASE_URL: z.string().url().optional().default("https://api.anthropic.com"),
-  ANTHROPIC_MODEL: z.string().min(1).optional().default("anthropic/claude-3-5-haiku-latest"),
+  ANTHROPIC_BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .default("https://api.anthropic.com"),
+  ANTHROPIC_MODEL: z
+    .string()
+    .min(1)
+    .optional()
+    .default("anthropic/claude-3-5-haiku-latest"),
 
-   // Groq (fallback for free AI)
-   GROQ_API_KEY: z.string().min(1).optional(),
-   GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
-   GROQ_API_URL: z.string().url().default("https://api.groq.com/openai/v1/chat/completions"),
+  // Groq (fallback for free AI)
+  GROQ_API_KEY: z.string().min(1).optional(),
+  GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
+  GROQ_API_URL: z
+    .string()
+    .url()
+    .default("https://api.groq.com/openai/v1/chat/completions"),
 
   // FRED API for Liquidity Flow (ON RRP)
   FRED_API_KEY: z.string().min(1).optional(),
+
+  // Macro Terminal CPI override in percent, e.g. 4.2
+  MACRO_CPI_YOY_OVERRIDE: z.coerce.number().optional(),
+
+  // Trading Economics API for PMI fallback
+  TE_API_KEY: z.string().min(1).optional(),
+
+  // Alpha Vantage for leading economic indicators
+  ALPHA_VANTAGE_API_KEY: z.string().min(1).optional(),
+
+  // Twelve Data for real-time quotes and economic data
+  TWELVE_DATA_API_KEY: z.string().min(1).optional(),
+
+  // Finnhub (already exists but ensure it's required for leading indicator)
+  FINNHUB_API_KEY: z.string().min(1).optional(),
 });
 
 const _env = envSchema.safeParse(process.env);
 
 if (!_env.success) {
-  console.error("❌ Invalid environment variables:", _env.error.format());
+  silentLogger.error("❌ Invalid environment variables:", _env.error.format());
   throw new Error("Invalid environment variables");
 }
 

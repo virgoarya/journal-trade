@@ -50,6 +50,12 @@ export interface RegimeSnapshotData {
     quadrant: string;
   }>;
   fetchedAt: string;
+  // NEW: Source fidelity & momentum indicators
+  source?: string; // "YAHOO" | "FRED" | "FINNHUB"
+  momentum?: {
+    growthStatus: "ACCELERATING" | "DECELERATING" | "NEUTRAL";
+    inflationStatus: "ACCELERATING" | "DECELERATING" | "NEUTRAL";
+  };
 }
 
 export interface MacroRawInputs {
@@ -64,6 +70,59 @@ export interface MacroRawInputs {
   breakeven5y: number[];
   breakeven10y: number[];
 }
+
+// Legacy types for classifiers.ts compatibility
+export type MacroInputs = {
+  growth: number;
+  inflation: number;
+  assetSignals?: {
+    gldUp?: boolean;
+    vixUp?: boolean;
+    iefDown?: boolean;
+    fxyUp?: boolean;
+  };
+};
+
+export type MacroRegime = 'Goldilocks' | 'Reflation' | 'Stagflation' | 'Deflation' | 'Transition';
+
+export type MacroRegimeResult = {
+  regime: MacroRegime;
+  shortReason: string;
+  details: {
+    growth: number;
+    inflation: number;
+    growthCategory: 'low' | 'high' | 'medium';
+    inflationCategory: 'low' | 'high' | 'medium';
+    assetSignals?: MacroInputs['assetSignals'];
+    confidence: number;
+  };
+};
+
+export type OnRrpInputs = {
+  deltaDaily: number;
+  currentBalance: number;
+};
+
+export type OnRrpStatus = 'Neutral' | 'Draining' | 'Refilling';
+
+export type OnRrpResult = {
+  status: OnRrpStatus;
+  shortReason: string;
+  details: {
+    currentBalance: number;
+    deltaDaily: number;
+    thresholdUsed: number;
+  };
+};
+
+export type RegimeTransitionAlert = {
+  type: 'MACRO_REGIME_SHIFT';
+  from: MacroRegime | null;
+  to: MacroRegime;
+  timestamp: string;
+};
+
+export type MarketSentiment = 'RISK-ON' | 'RISK-OFF' | 'NEUTRAL';
 
 export function useMacroTypedData() {
   const { assets, liquidity, regimeData } = useMacroTerminal();

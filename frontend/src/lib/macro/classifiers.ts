@@ -73,7 +73,7 @@ export function classifyMacroRegime(
     // We will consider the non-MEDIUM state if available, otherwise we compare.
 
     let effectiveGrowthCategory = growthCategory;
-    let effectiveInflationCategory = inflationCategory;
+    const effectiveInflationCategory = inflationCategory;
 
     if (growthCategory === 'medium') {
       // If growth is medium, we treat it as the state of inflation? Not exactly.

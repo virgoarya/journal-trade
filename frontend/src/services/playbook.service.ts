@@ -134,6 +134,14 @@ export class PlaybookService {
     }
     return response;
   }
+
+  async archive(id: string): Promise<ApiResponse<Strategy>> {
+    const response = await apiClient.patch<Strategy>(`${this.basePath}/${id}/archive`, {});
+    if (response.success && response.data) {
+      response.data = this.transformBackendStrategy(response.data);
+    }
+    return response;
+  }
 }
 
 export const playbookService = new PlaybookService();

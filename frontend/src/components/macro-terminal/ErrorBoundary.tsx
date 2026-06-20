@@ -12,15 +12,18 @@ type ErrorBoundaryState = {
   error: Error | null;
 };
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error) {
-    console.error("[MacroTerminal]", error);
+  componentDidCatch() {
+    return null;
   }
 
   render() {
@@ -28,8 +31,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       if (this.props.fallback) return this.props.fallback;
       return (
         <div className="rounded-xl border border-red-500/40 bg-red-500/5 p-4">
-          <p className="text-xs font-mono text-red-400">Gagal memuat halaman Macro Terminal.</p>
-          <p className="mt-2 text-[10px] font-mono text-text-muted break-all">{this.state.error?.message}</p>
+          <p className="text-xs font-mono text-red-400">
+            Gagal memuat halaman Macro Terminal.
+          </p>
+          <p className="mt-2 text-[10px] font-mono text-text-muted break-all">
+            {this.state.error?.message}
+          </p>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}

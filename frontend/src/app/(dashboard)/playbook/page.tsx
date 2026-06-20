@@ -123,8 +123,7 @@ export default function PlaybookPage() {
             playbook={strategy}
             onView={() => setViewingStrategy(strategy)}
             onEdit={() => setEditingStrategy(strategy)}
-            onDelete={async (s) => {
-              const strategyId = s.id || (s as any)._id;
+            onDelete={async (strategyId) => {
               if (window.confirm("Delete this strategy from the database?")) {
                 try {
                   const res = await playbookService.delete(strategyId);
@@ -138,8 +137,7 @@ export default function PlaybookPage() {
                 }
               }
             }}
-            onDuplicate={async (s) => {
-              const id = s.id || (s as any)._id;
+            onDuplicate={async (id) => {
               const res = await playbookService.duplicate(id);
               if (res.success && res.data) {
                 setStrategies(prev => [res.data!, ...prev]);

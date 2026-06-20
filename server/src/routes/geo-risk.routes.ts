@@ -1,19 +1,20 @@
 import { Router } from "express";
 import { geoRiskService } from "../services/geo-risk.service";
 import { requireAuth } from "../middleware/auth";
+import { silentLogger } from "../utils/silent-logger";
 
 const router = Router();
 
 /**
  * GET /api/v1/geo-risk
- * Returns latest Geo-Risk scores (from MongoDB cache or fresh FRED fetch).
+ * Returns latest Geo-Risk scores (from MongoDB cache or fresh FRED/Yahoo VIX fetch).
  */
 router.get("/", async (req, res) => {
   try {
     const data = await geoRiskService.getScores();
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error("[GeoRisk Route] getScores failed:", error.message);
+    silentLogger.error("[GeoRisk Route] getScores failed:", error.message);
     res.status(503).json({ success: false, error: error.message });
   }
 });
@@ -34,6 +35,7 @@ router.post("/refresh", requireAuth, async (req, res) => {
           cpi_yoy: snapshot.cpi_yoy ?? null,
           fedfunds_rate: snapshot.fedfunds_rate ?? null,
           vix: snapshot.vix ?? null,
+          vixSource: snapshot.vixSource ?? null,
           globalPmi: snapshot.globalPmi ?? null,
           onRrpBalance: snapshot.onRrpBalance ?? null,
         },
@@ -42,7 +44,7 @@ router.post("/refresh", requireAuth, async (req, res) => {
       },
     });
   } catch (error: any) {
-    console.error("[GeoRisk Route] forceRefresh failed:", error.message);
+    silentLogger.error("[GeoRisk Route] forceRefresh failed:", error.message);
     res.status(503).json({ success: false, error: error.message });
   }
 });

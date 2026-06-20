@@ -3,7 +3,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Send, User, ChevronRight, Terminal as TerminalIcon } from "lucide-react";
+import {
+  Bot,
+  Send,
+  User,
+  ChevronRight,
+  Terminal as TerminalIcon,
+} from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
 interface Message {
@@ -20,7 +26,8 @@ const THINKING_MESSAGES = [
 ];
 
 export function TerminalChatPanel() {
-  const { currentRegime, assets, liquidity, systemAlert, clearSystemAlert } = useMacroTerminal();
+  const { currentRegime, assets, liquidity, systemAlert, clearSystemAlert } =
+    useMacroTerminal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [debouncedInput, setDebouncedInput] = useState("");
@@ -53,7 +60,8 @@ export function TerminalChatPanel() {
     setMessages((prev) => [...prev, { role: "assistant", content: initial }]);
 
     thinkingIntervalRef.current = setInterval(() => {
-      thinkingIndexRef.current = (thinkingIndexRef.current + 1) % THINKING_MESSAGES.length;
+      thinkingIndexRef.current =
+        (thinkingIndexRef.current + 1) % THINKING_MESSAGES.length;
       setMessages((prev) => {
         const updated = [...prev];
         const lastIndex = updated.length - 1;
@@ -89,8 +97,14 @@ export function TerminalChatPanel() {
       try {
         const parsed = JSON.parse(saved) as Message[];
         setMessages(parsed);
-      } catch (e) {
-        console.error("Failed to load chat history", e);
+      } catch {
+        setMessages([
+          {
+            role: "assistant",
+            content:
+              "HUNTER DESK TERMINAL INITIALIZED.\n\nAwaiting macro data, central bank statements, or geopolitical inputs. Provide your inquiry for institutional analysis.",
+          },
+        ]);
       }
     } else {
       setMessages([
@@ -106,7 +120,10 @@ export function TerminalChatPanel() {
   useEffect(() => {
     if (systemAlert) {
       setMessages((prev) => {
-        const newMsgs = [...prev, { role: "assistant", content: systemAlert } as Message];
+        const newMsgs = [
+          ...prev,
+          { role: "assistant", content: systemAlert } as Message,
+        ];
         localStorage.setItem("hunterDeskHistory", JSON.stringify(newMsgs));
         return newMsgs;
       });
@@ -147,7 +164,12 @@ export function TerminalChatPanel() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = debouncedInput.trim();
-    if (!query || thinkingState === "thinking" || thinkingState === "responding") return;
+    if (
+      !query ||
+      thinkingState === "thinking" ||
+      thinkingState === "responding"
+    )
+      return;
 
     const now = Date.now();
     if (now - lastSentAtRef.current < RATE_LIMIT_MS) {
@@ -206,13 +228,13 @@ export function TerminalChatPanel() {
       } else {
         throw new Error("Empty AI response");
       }
-    } catch (error: any) {
-      console.error("Chat error:", error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       setMessages((prev) => [
         ...prev.slice(0, -1),
         {
           role: "assistant",
-          content: `[CONNECTION FAILED]: ${error.message}`,
+          content: `[CONNECTION FAILED]: ${message}`,
         },
       ]);
     } finally {
@@ -250,11 +272,7 @@ export function TerminalChatPanel() {
         </button>
       </div>
 
-      <div
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
         {systemAlert}
       </div>
 
@@ -281,7 +299,11 @@ export function TerminalChatPanel() {
                     : "bg-bg-surface border border-border-subtle text-text-secondary"
                 }`}
               >
-                {msg.role === "assistant" ? <Bot size={14} /> : <User size={14} />}
+                {msg.role === "assistant" ? (
+                  <Bot size={14} />
+                ) : (
+                  <User size={14} />
+                )}
               </div>
 
               <div
@@ -297,7 +319,11 @@ export function TerminalChatPanel() {
                   </span>
                   <span className="text-[9px]">—</span>
                   <span className="text-[9px]">
-                    {new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit" })}
+                    {new Date().toLocaleTimeString([], {
+                      hour12: false,
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
 
@@ -337,15 +363,21 @@ export function TerminalChatPanel() {
               placeholder="Query analysis..."
               className="w-full bg-bg-void border border-border-subtle rounded py-2 pl-8 pr-3 text-text-primary font-mono text-xs focus:outline-none focus:border-accent-gold/50 focus:ring-1 focus:ring-accent-gold/50 resize-none min-h-[38px] max-h-[120px] scrollbar-thin transition-all"
               rows={1}
-              disabled={thinkingState === "thinking" || thinkingState === "responding"}
+              disabled={
+                thinkingState === "thinking" || thinkingState === "responding"
+              }
             />
           </div>
           <button
             type="submit"
-            disabled={!debouncedInput.trim() || thinkingState === "thinking" || thinkingState === "responding"}
+            disabled={
+              !debouncedInput.trim() ||
+              thinkingState === "thinking" ||
+              thinkingState === "responding"
+            }
             className="h-[38px] px-4 bg-accent-gold text-bg-void rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all flex items-center justify-center min-w-[50px]"
           >
-            {(thinkingState === "thinking" || thinkingState === "responding") ? (
+            {thinkingState === "thinking" || thinkingState === "responding" ? (
               <div className="w-4 h-4 border-2 border-bg-void/30 border-t-bg-void rounded-full animate-spin" />
             ) : (
               <Send size={14} />

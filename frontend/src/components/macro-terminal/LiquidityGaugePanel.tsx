@@ -2,51 +2,51 @@
 
 import React from "react";
 import { useMacroTerminal } from "./MacroTerminalContext";
-import { Activity, ArrowDownRight, ArrowUpRight, Droplets } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Droplets } from "lucide-react";
 
 const MAX_RRP_REF = 500;
 const CIRCUMFERENCE = 2 * Math.PI * 34; // r = 34
 
+// Default liquidity state for safe rendering
+const DEFAULT_LIQUIDITY = {
+  value: 0,
+  change: 0,
+  status: "UNKNOWN" as const,
+  trend: [],
+  history: [],
+};
+
 export function LiquidityGaugePanel() {
   const { liquidity, lastUpdated } = useMacroTerminal();
-
-  if (!liquidity) {
-    return (
-      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl p-3 relative overflow-hidden">
-        <div className="flex items-center gap-2 mb-2">
-          <Droplets className="w-3.5 h-3.5 text-accent-gold" />
-          <h2 className="font-semibold text-text-primary uppercase tracking-wider text-xs sm:text-sm">Liquidity Flow</h2>
-          <span className="ml-auto text-[10px] text-text-muted font-mono bg-surface-elevated/50 px-1.5 py-0.5 rounded border border-border-subtle">ON RRP</span>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <Activity className="w-5 h-5 text-text-muted animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  const isInjecting = liquidity.status === "INJECTING";
-  const isDraining = liquidity.status === "DRAINING";
+  
+  // Null safety: use default if liquidity is null
+  const safeLiquidity = liquidity ?? DEFAULT_LIQUIDITY;
+  
+  const isInjecting = safeLiquidity.status === "INJECTING";
+  const isDraining = safeLiquidity.status === "DRAINING";
+  const isUnknown = safeLiquidity.status === "UNKNOWN" || safeLiquidity.status === "NEUTRAL";
 
   const formattedValue =
-    liquidity.value >= 1000
-      ? `$${(liquidity.value / 1000).toFixed(2)}T`
-      : `$${liquidity.value.toFixed(2)}B`;
+    safeLiquidity.value >= 1000
+      ? `$${(safeLiquidity.value / 1000).toFixed(2)}T`
+      : `$${safeLiquidity.value.toFixed(2)}B`;
 
-  const absChange = Math.abs(liquidity.change);
+  const absChange = Math.abs(safeLiquidity.change);
   const changeFormatted =
     absChange >= 1000
-      ? `${(liquidity.change / 1000).toFixed(2)}T`
-      : `${liquidity.change > 0 ? "+" : ""}${liquidity.change.toFixed(2)}B`;
+      ? `${(safeLiquidity.change / 1000).toFixed(2)}T`
+      : `${safeLiquidity.change > 0 ? "+" : ""}${safeLiquidity.change.toFixed(2)}B`;
 
-  const trend = Array.isArray(liquidity.trend) ? liquidity.trend : [];
+  const trend = Array.isArray(safeLiquidity.trend) ? safeLiquidity.trend : [];
   const trendDots = trend.slice(0, 5);
 
-  const curveData = Array.isArray(liquidity.history) ? [...liquidity.history].slice(0, 5).reverse() : [];
+  const curveData = Array.isArray(safeLiquidity.history)
+    ? [...safeLiquidity.history].slice(0, 5).reverse()
+    : [];
   let sparklinePath = "";
   if (curveData.length > 1) {
-    const minVal = Math.min(...curveData.map(d => d.value));
-    const maxVal = Math.max(...curveData.map(d => d.value));
+    const minVal = Math.min(...curveData.map((d) => d.value));
+    const maxVal = Math.max(...curveData.map((d) => d.value));
     const range = maxVal - minVal || 1;
     const w = 48;
     const h = 24;
@@ -57,17 +57,19 @@ export function LiquidityGaugePanel() {
       return `${x},${y}`;
     });
 
-    // Create a smooth curve using cubic bezier approximation or just simple lines
-    // For a sparkline, straight lines with rounded joins usually look good
     sparklinePath = `M ${points.join(" L ")}`;
   }
 
-  const pct = Math.min(Math.max((liquidity.value / MAX_RRP_REF) * 100, 0), 100);
+  const pct = Math.min(Math.max((safeLiquidity.value / MAX_RRP_REF) * 100, 0), 100);
   const strokeOffset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
-  const gaugeColor = isInjecting ? "#22c55e" : "#ef4444";
-  const trackColor = isInjecting ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
+  const gaugeColor = isInjecting ? "#22c55e" : isDraining ? "#ef4444" : "#94a3b8";
+  const trackColor = isInjecting
+    ? "rgba(34,197,94,0.12)"
+    : isDraining
+      ? "rgba(239,68,68,0.12)"
+      : "rgba(148,163,184,0.12)";
 
-return (
+  return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl p-3 relative overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-2 z-10 flex-shrink-0">
@@ -84,13 +86,24 @@ return (
 
       {/* 3-Column Content */}
       <div className="flex-1 flex items-center justify-between gap-2 z-10 min-h-0">
-
         {/* Col 1: Donut with balance inside + "Current Balance" below */}
         <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
           <div className="relative" style={{ width: 84, height: 84 }}>
-            <svg width="84" height="84" viewBox="0 0 84 84" style={{ transform: "rotate(-90deg)" }}>
+            <svg
+              width="84"
+              height="84"
+              viewBox="0 0 84 84"
+              style={{ transform: "rotate(-90deg)" }}
+            >
               {/* Track */}
-              <circle cx="42" cy="42" r="34" fill="none" stroke={trackColor} strokeWidth="9" />
+              <circle
+                cx="42"
+                cy="42"
+                r="34"
+                fill="none"
+                stroke={trackColor}
+                strokeWidth="9"
+              />
               {/* Progress */}
               <circle
                 cx="42"
@@ -102,7 +115,10 @@ return (
                 strokeLinecap="round"
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={strokeOffset}
-                style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" }}
+                style={{
+                  transition:
+                    "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)",
+                }}
               />
             </svg>
             {/* Center: balance value */}
@@ -150,10 +166,12 @@ return (
             className={`mt-1 text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap ${
               isInjecting
                 ? "text-data-profit border-data-profit/30 bg-data-profit/10"
-                : "text-data-loss border-data-loss/30 bg-data-loss/10"
+                : isDraining
+                  ? "text-data-loss border-data-loss/30 bg-data-loss/10"
+                  : "text-text-muted border-text-muted/30 bg-surface-elevated/10"
             }`}
           >
-            {isInjecting ? "⬇ INJECTION" : "⬆ DRAINING"}
+            {isInjecting ? "⬇ INJECTION" : isDraining ? "⬆ DRAINING" : "● NEUTRAL"}
           </span>
         </div>
 
@@ -178,11 +196,19 @@ return (
                   style={{ filter: `drop-shadow(0px 2px 4px ${gaugeColor}40)` }}
                 />
                 {/* Endpoint dot */}
-                <circle 
-                  cx="48" 
-                  cy={2 + (1 - (curveData[curveData.length - 1].value - Math.min(...curveData.map(d => d.value))) / (Math.max(...curveData.map(d => d.value)) - Math.min(...curveData.map(d => d.value)) || 1)) * 20} 
-                  r="2.5" 
-                  fill={gaugeColor} 
+                <circle
+                  cx="48"
+                  cy={
+                    2 +
+                    (1 -
+                      (curveData[curveData.length - 1].value -
+                        Math.min(...curveData.map((d) => d.value))) /
+                        (Math.max(...curveData.map((d) => d.value)) -
+                          Math.min(...curveData.map((d) => d.value)) || 1)) *
+                      20
+                  }
+                  r="2.5"
+                  fill={gaugeColor}
                 />
               </svg>
             ) : trendDots.length === 0 ? (
@@ -206,13 +232,21 @@ return (
       {/* Ambient glow */}
       <div
         className={`absolute top-0 right-0 h-24 w-24 blur-3xl pointer-events-none ${
-          isInjecting ? "bg-data-profit" : isDraining ? "bg-data-loss" : "bg-transparent"
+          isInjecting
+            ? "bg-data-profit"
+            : isDraining
+              ? "bg-data-loss"
+              : "bg-transparent"
         }`}
         style={{ opacity: 0.06, zIndex: 0 }}
       />
       <div
         className={`absolute bottom-0 left-0 h-24 w-24 blur-3xl pointer-events-none ${
-          isInjecting ? "bg-data-profit" : isDraining ? "bg-data-loss" : "bg-transparent"
+          isInjecting
+            ? "bg-data-profit"
+            : isDraining
+              ? "bg-data-loss"
+              : "bg-transparent"
         }`}
         style={{ opacity: 0.06, zIndex: 0 }}
       />

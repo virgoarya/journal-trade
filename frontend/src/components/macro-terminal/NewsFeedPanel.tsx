@@ -2,7 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Clock, ShieldAlert, Brain, X, Zap, TrendingUp, Activity, ShieldCheck } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Clock,
+  ShieldAlert,
+  Brain,
+  X,
+  Zap,
+  TrendingUp,
+  Activity,
+  ShieldCheck,
+} from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
 interface NewsItem {
@@ -12,6 +24,8 @@ interface NewsItem {
   impact: "BULLISH" | "BEARISH" | "NEUTRAL";
   targetAsset: string;
   aiSummary: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  alignment: "REGIME-ALIGNED" | "REGIME-CONFLICT" | "UNVERIFIED";
 }
 
 interface ParsedAnalysis {
@@ -25,7 +39,7 @@ interface ParsedAnalysis {
 
 // Robust JSON extractor: finds first balanced { } block and normalizes legacy keys
 function extractFirstJSON(raw: string): ParsedAnalysis | null {
-  let start = raw.indexOf("{");
+  const start = raw.indexOf("{");
   if (start === -1) return null;
 
   let depth = 0;
@@ -49,11 +63,20 @@ function extractFirstJSON(raw: string): ParsedAnalysis | null {
 
     const normalized: ParsedAnalysis = {
       fakta: typeof obj.fakta === "string" ? obj.fakta : "",
-      dampakMarket: typeof obj.dampakMarket === "string" ? obj.dampakMarket : typeof obj.dampak === "string" ? obj.dampak : "",
+      dampakMarket:
+        typeof obj.dampakMarket === "string"
+          ? obj.dampakMarket
+          : typeof obj.dampak === "string"
+            ? obj.dampak
+            : "",
       logika: typeof obj.logika === "string" ? obj.logika : "",
       contrarian: typeof obj.contrarian === "string" ? obj.contrarian : "",
-      triggerFundamentalNonTeknikal: typeof obj.triggerFundamentalNonTeknikal === "string" ? obj.triggerFundamentalNonTeknikal : "",
-      confidenceScore: typeof obj.confidenceScore === "string" ? obj.confidenceScore : "",
+      triggerFundamentalNonTeknikal:
+        typeof obj.triggerFundamentalNonTeknikal === "string"
+          ? obj.triggerFundamentalNonTeknikal
+          : "",
+      confidenceScore:
+        typeof obj.confidenceScore === "string" ? obj.confidenceScore : "",
     };
 
     if (!normalized.fakta && !normalized.dampakMarket) {
@@ -66,14 +89,15 @@ function extractFirstJSON(raw: string): ParsedAnalysis | null {
   }
 }
 
-const mockNews: NewsItem[] = [
+const mockNews: Array<Omit<NewsItem, "confidence" | "alignment">> = [
   {
     id: "1",
     time: "10:24",
     headline: "US Core PCE Price Index MoM Exceeds Expectations at 0.4%",
     impact: "BULLISH",
     targetAsset: "USD",
-    aiSummary: "Inflasi inti yang membandel memaksa The Fed menahan suku bunga lebih lama (Hawkish). USD menarik likuiditas.",
+    aiSummary:
+      "Inflasi inti yang membandel memaksa The Fed menahan suku bunga lebih lama (Hawkish). USD menarik likuiditas.",
   },
   {
     id: "2",
@@ -81,7 +105,8 @@ const mockNews: NewsItem[] = [
     headline: "ECB President Lagarde Signals Summer Rate Cuts",
     impact: "BEARISH",
     targetAsset: "EUR",
-    aiSummary: "Dovish divergence. ECB memotong suku bunga mendahului Fed, melebarkan yield gap EU-US. Tekanan jual EUR/USD membesar.",
+    aiSummary:
+      "Dovish divergence. ECB memotong suku bunga mendahului Fed, melebarkan yield gap EU-US. Tekanan jual EUR/USD membesar.",
   },
   {
     id: "3",
@@ -89,7 +114,8 @@ const mockNews: NewsItem[] = [
     headline: "Middle East Tensions Escalate: Supply Route Blocked",
     impact: "BULLISH",
     targetAsset: "GOLD",
-    aiSummary: "Lonjakan premi risiko geopolitik (Fear Trade). Emas bertindak sebagai ultimate safe haven meski USD menguat.",
+    aiSummary:
+      "Lonjakan premi risiko geopolitik (Fear Trade). Emas bertindak sebagai ultimate safe haven meski USD menguat.",
   },
   {
     id: "4",
@@ -97,7 +123,8 @@ const mockNews: NewsItem[] = [
     headline: "US 10Y Treasury Yield Breaks Above 4.5%",
     impact: "BEARISH",
     targetAsset: "NASDAQ",
-    aiSummary: "Naiknya yield bebas risiko menghancurkan valuasi aset growth dan saham teknologi (Bear Flattener impact).",
+    aiSummary:
+      "Naiknya yield bebas risiko menghancurkan valuasi aset growth dan saham teknologi (Bear Flattener impact).",
   },
   {
     id: "5",
@@ -105,15 +132,18 @@ const mockNews: NewsItem[] = [
     headline: "Bank of Japan Unexpectedly Intervenes in FX Market",
     impact: "BULLISH",
     targetAsset: "JPY",
-    aiSummary: "Alarm likuiditas menyala! Risiko Carry Trade Unwind tinggi. Ekuitas berpotensi mengalami collateral damage.",
+    aiSummary:
+      "Alarm likuiditas menyala! Risiko Carry Trade Unwind tinggi. Ekuitas berpotensi mengalami collateral damage.",
   },
 ];
 
 // Confidence level color helper
 function getConfidenceColor(conf: string): string {
   const lower = conf.toLowerCase();
-  if (lower.startsWith("tinggi") || lower.startsWith("high")) return "text-data-profit";
-  if (lower.startsWith("rendah") || lower.startsWith("low")) return "text-data-loss";
+  if (lower.startsWith("tinggi") || lower.startsWith("high"))
+    return "text-data-profit";
+  if (lower.startsWith("rendah") || lower.startsWith("low"))
+    return "text-data-loss";
   return "text-accent-gold";
 }
 
@@ -124,15 +154,27 @@ function getConfidenceLabel(conf: string): string {
   return "SEDANG";
 }
 
+function getAlignmentColor(alignment: string) {
+  if (alignment === "REGIME-ALIGNED")
+    return "text-data-profit border-data-profit bg-data-profit/10";
+  if (alignment === "REGIME-CONFLICT")
+    return "text-data-loss border-data-loss bg-data-loss/10";
+  return "text-text-muted border-border-subtle bg-surface-elevated/40";
+}
+
 function getImpactColor(impact: string) {
-  if (impact === "BULLISH") return "text-data-profit border-data-profit bg-data-profit/10";
-  if (impact === "BEARISH") return "text-data-loss border-data-loss bg-data-loss/10";
+  if (impact === "BULLISH")
+    return "text-data-profit border-data-profit bg-data-profit/10";
+  if (impact === "BEARISH")
+    return "text-data-loss border-data-loss bg-data-loss/10";
   return "text-text-muted border-border-subtle bg-bg-void";
 }
 
 function getImpactIcon(impact: string) {
-  if (impact === "BULLISH") return <ArrowUpRight size={14} className="text-data-profit" />;
-  if (impact === "BEARISH") return <ArrowDownRight size={14} className="text-data-loss" />;
+  if (impact === "BULLISH")
+    return <ArrowUpRight size={14} className="text-data-profit" />;
+  if (impact === "BEARISH")
+    return <ArrowDownRight size={14} className="text-data-loss" />;
   return <AlertCircle size={14} className="text-text-muted" />;
 }
 
@@ -152,38 +194,49 @@ function AnalysisModal({
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.92)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]"
         style={{
           backgroundColor: "#0c0c10",
           border: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.8), 0 0 60px rgba(180,152,255,0.05)",
+          boxShadow:
+            "0 25px 50px -12px rgba(0,0,0,0.8), 0 0 60px rgba(180,152,255,0.05)",
         }}
       >
         <div
           className="px-6 py-5 flex justify-between items-start shrink-0"
           style={{
             borderBottom: "1px solid rgba(255,255,255,0.05)",
-            background: "linear-gradient(180deg, rgba(180,152,255,0.03) 0%, transparent 100%)",
+            background:
+              "linear-gradient(180deg, rgba(180,152,255,0.03) 0%, transparent 100%)",
           }}
         >
           <div className="flex items-center gap-4">
             <div
               className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
               style={{
-                background: "linear-gradient(135deg, rgba(180,152,255,0.15) 0%, rgba(180,152,255,0.05) 100%)",
+                background:
+                  "linear-gradient(135deg, rgba(180,152,255,0.15) 0%, rgba(180,152,255,0.05) 100%)",
                 border: "1px solid rgba(180,152,255,0.2)",
               }}
             >
               <Zap className="w-5 h-5" style={{ color: "#b498ff" }} />
             </div>
             <div>
-              <h3 className="font-bold text-lg tracking-wide" style={{ color: "#fff" }}>
+              <h3
+                className="font-bold text-lg tracking-wide"
+                style={{ color: "#fff" }}
+              >
                 Macro Feed Intelligence
               </h3>
-              <p className="text-[10px] uppercase tracking-[0.2em] font-bold mt-0.5" style={{ color: "#b498ff" }}>
+              <p
+                className="text-[10px] uppercase tracking-[0.2em] font-bold mt-0.5"
+                style={{ color: "#b498ff" }}
+              >
                 HUNTER TRADES AI ANALYSIS
               </p>
             </div>
@@ -193,40 +246,76 @@ function AnalysisModal({
             className="p-2 rounded-lg transition-colors"
             style={{ color: "rgba(255,255,255,0.3)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.color = "rgba(255,255,255,0.3)")
+            }
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5" style={{ scrollbarWidth: "thin" }}>
-          <div className="mb-6 pb-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            <p className="text-sm font-medium italic leading-relaxed" style={{ color: "rgba(255,255,255,0.9)" }}>
+        <div
+          className="flex-1 overflow-y-auto px-6 py-5"
+          style={{ scrollbarWidth: "thin" }}
+        >
+          <div
+            className="mb-6 pb-5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+          >
+            <p
+              className="text-sm font-medium italic leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.9)" }}
+            >
               &ldquo;{item.headline}&rdquo;
             </p>
             <div className="flex items-center gap-2 mt-3">
-              <span className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}>
+              <span
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}
+              >
                 {getImpactIcon(item.impact)}
                 {item.impact} {item.targetAsset}
+              </span>
+              <span
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
+              >
+                {item.alignment}
+              </span>
+              <span className="px-2 py-1 rounded text-[10px] font-bold border border-border-subtle text-text-muted">
+                CONF {item.confidence}
               </span>
             </div>
           </div>
 
           {parsed ? (
             <div className="flex flex-col gap-4">
-              <Section title="Fakta" content={parsed.fakta} accent />
+              <Section title="Fakta" content={parsed.fakta} accent="default" />
               <Section title="Dampak Market" content={parsed.dampakMarket} />
               <Section title="Logika" content={parsed.logika} />
-              <Section title="Contrarian" content={parsed.contrarian} accent="contrarian" />
-              <Section title="Trigger Fundamental Non-Teknikal" content={parsed.triggerFundamentalNonTeknikal} />
+              <Section
+                title="Contrarian"
+                content={parsed.contrarian}
+                accent="contrarian"
+              />
+              <Section
+                title="Trigger Fundamental Non-Teknikal"
+                content={parsed.triggerFundamentalNonTeknikal}
+              />
               <div
                 className="p-4 rounded-xl flex items-center justify-between"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
               >
-                <span className="text-[10px] uppercase tracking-[0.15em] font-bold" style={{ color: "rgba(255,255,255,0.5)" }}>
+                <span
+                  className="text-[10px] uppercase tracking-[0.15em] font-bold"
+                  style={{ color: "rgba(255,255,255,0.5)" }}
+                >
                   Confidence Score
                 </span>
-                <span className={`text-lg font-black ${getConfidenceColor(parsed.confidenceScore)}`}>
+                <span
+                  className={`text-lg font-black ${getConfidenceColor(parsed.confidenceScore)}`}
+                >
                   {getConfidenceLabel(parsed.confidenceScore)}
                 </span>
               </div>
@@ -234,9 +323,15 @@ function AnalysisModal({
           ) : (
             <div
               className="p-4 rounded-xl"
-              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
+              style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.05)",
+              }}
             >
-              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "rgba(255,255,255,0.7)" }}>
+              <p
+                className="text-sm leading-relaxed whitespace-pre-wrap"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
                 {rawAnalysis}
               </p>
             </div>
@@ -244,12 +339,15 @@ function AnalysisModal({
         </div>
 
         <div
-          className="px-6 py-4 flex justify-end shrink-0"
+          className="px-6 py-4 flex justify-between items-center shrink-0"
           style={{
             borderTop: "1px solid rgba(255,255,255,0.05)",
             background: "rgba(0,0,0,0.3)",
           }}
         >
+          <p className="text-[9px] text-text-muted font-mono italic max-w-[60%]">
+            Disclaimer: Analisis ini di-generate oleh AI untuk tujuan informasi. Lakukan riset mandiri sebelum mengambil keputusan trading.
+          </p>
           <button
             onClick={onClose}
             className="px-6 py-2.5 font-bold text-xs uppercase tracking-widest rounded-full transition-all"
@@ -258,7 +356,8 @@ function AnalysisModal({
               color: "#0c0c10",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "0 0 20px rgba(180,152,255,0.4)";
+              e.currentTarget.style.boxShadow =
+                "0 0 20px rgba(180,152,255,0.4)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.boxShadow = "none";
@@ -289,7 +388,9 @@ function Section({
     <div
       className="p-4 rounded-xl"
       style={{
-        background: isAccent ? "rgba(248,113,113,0.04)" : "rgba(255,255,255,0.02)",
+        background: isAccent
+          ? "rgba(248,113,113,0.04)"
+          : "rgba(255,255,255,0.02)",
         border: `1px solid ${isAccent ? "rgba(248,113,113,0.15)" : "rgba(255,255,255,0.04)"}`,
       }}
     >
@@ -299,7 +400,10 @@ function Section({
       >
         {title}
       </h4>
-      <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.8)" }}>
+      <p
+        className="text-sm leading-relaxed"
+        style={{ color: "rgba(255,255,255,0.8)" }}
+      >
         {content || "Tidak ada data"}
       </p>
     </div>
@@ -308,18 +412,159 @@ function Section({
 
 // ==================== MAIN COMPONENT ====================
 export function NewsFeedPanel() {
-  const { lastUpdated } = useMacroTerminal();
+  const { lastUpdated, currentRegime, dataStatus } = useMacroTerminal();
   const [feed, setFeed] = useState<NewsItem[]>([]);
   const [isFallback, setIsFallback] = useState(false);
   const [loading, setLoading] = useState(true);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<Record<string, string>>({});
-  const [modalData, setModalData] = useState<{ item: NewsItem; rawAnalysis: string } | null>(null);
+  const [analysis, setAnalysis] = useState<Record<string, any>>({});
+  const [modalData, setModalData] = useState<{
+    item: NewsItem;
+    rawAnalysis: string;
+  } | null>(null);
+
+  const parsedAnalysis = modalData
+    ? extractFirstJSON(modalData.rawAnalysis)
+    : null;
+
+  const inferConfidence = (
+    headline: string,
+    targetAsset: string,
+  ): NewsItem["confidence"] => {
+    const strong = [
+      "fed",
+      "cpi",
+      "pce",
+      "payroll",
+      "inflation",
+      "rate decision",
+      "recession",
+      "default",
+      "war",
+      "sanctions",
+    ];
+    const medium = [
+      "claims",
+      "pmi",
+      "retail",
+      "confidence",
+      "oil",
+      "yield",
+      "dxy",
+    ];
+    const lower = `${headline} ${targetAsset}`.toLowerCase();
+    if (strong.some((term) => lower.includes(term))) return "HIGH";
+    if (medium.some((term) => lower.includes(term))) return "MEDIUM";
+    return "LOW";
+  };
+
+  const inferAlignment = (
+    headline: string,
+    targetAsset: string,
+  ): NewsItem["alignment"] => {
+    const lower = `${headline} ${targetAsset}`.toLowerCase();
+    if (!currentRegime) return "UNVERIFIED";
+    if (
+      (currentRegime === "Stagflation" || currentRegime === "Reflation") &&
+      /(inflation|cpi|pce|oil|commodities|yield)/.test(lower)
+    )
+      return "REGIME-ALIGNED";
+    if (
+      currentRegime === "Deflation" &&
+      /(recession|drop|fall|cut|weak|claims)/.test(lower)
+    )
+      return "REGIME-ALIGNED";
+    if (
+      currentRegime === "Goldilocks" &&
+      /(growth|retail|pmi|confidence|soft landing)/.test(lower)
+    )
+      return "REGIME-ALIGNED";
+    if (/(contrary|unexpected|surprise|shock|anomaly)/.test(lower))
+      return "REGIME-CONFLICT";
+    return "UNVERIFIED";
+  };
+
+  const mapNewsItem = (item: Record<string, unknown>, index: number): NewsItem => {
+    const date = (item.datetime ? new Date((item.datetime as number) * 1000) : new Date());
+    const timeStr = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+
+    let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
+    let asset = "MKT";
+    const headline = typeof item.headline === "string" ? item.headline.toLowerCase() : "";
+
+    if (
+      headline.includes("fed") ||
+      headline.includes("rate") ||
+      headline.includes("inflation") ||
+      headline.includes("cpi") ||
+      headline.includes("pce")
+    ) {
+      impact =
+        headline.includes("cut") || headline.includes("dovish")
+          ? "BULLISH"
+          : "BEARISH";
+      asset = "USD";
+    } else if (headline.includes("ecb")) {
+      impact = headline.includes("cut") || headline.includes("dovish") ? "BULLISH" : "BEARISH";
+      asset = "EUR";
+    } else if (headline.includes("bank of japan") || headline.includes("jpy")) {
+      impact = "BULLISH";
+      asset = "JPY";
+    } else if (headline.includes("gold") || headline.includes("safe haven") || headline.includes("middle east")) {
+      impact = "BULLISH";
+      asset = "GOLD";
+    } else if (
+      headline.includes("war") ||
+      headline.includes("sanctions") ||
+      headline.includes("conflict") ||
+      headline.includes("military") ||
+      headline.includes("defense") ||
+      headline.includes("risk off") ||
+      headline.includes("geopolitical")
+    ) {
+      impact = "BULLISH";
+      asset = "GOLD";
+    } else if (
+      headline.includes("crash") ||
+      headline.includes("drop") ||
+      headline.includes("fall") ||
+      headline.includes("recession")
+    ) {
+      impact = "BEARISH";
+      asset = "EQUITY";
+    } else if (
+      headline.includes("jump") ||
+      headline.includes("rise") ||
+      headline.includes("gain") ||
+      headline.includes("beat")
+    ) {
+      impact = "BULLISH";
+      asset = "EQUITY";
+    }
+
+    const summaryStr = typeof item.summary === "string" ? item.summary : "";
+    return {
+      id: `news-${index}-${(item.headline || item.id || "fallback").toString().slice(0, 24)}`,
+      time: timeStr,
+      headline: typeof item.headline === "string" ? item.headline : "",
+      impact,
+      targetAsset: asset,
+      aiSummary: summaryStr
+        ? summaryStr.substring(0, 120) + "..."
+        : "Analisis makro dalam antrian untuk proses institutional.",
+      confidence: inferConfidence(typeof item.headline === "string" ? item.headline : "", asset),
+      alignment: inferAlignment(typeof item.headline === "string" ? item.headline : "", asset),
+    };
+  };
 
   const analyzeFeedItem = async (item: NewsItem) => {
     // Jika sudah ada cache, langsung buka modal tanpa generate baru
     if (analysis[item.id]) {
-      setModalData({ item, rawAnalysis: analysis[item.id] });
+      const rawAnalysis =
+        typeof analysis[item.id] === "string"
+          ? analysis[item.id]
+          : JSON.stringify(analysis[item.id], null, 2);
+      setModalData({ item, rawAnalysis });
       return;
     }
 
@@ -335,11 +580,15 @@ export function NewsFeedPanel() {
       });
       const data = await res.json();
       if (data.success) {
+        const rawAnalysis =
+          typeof data.analysis === "string"
+            ? data.analysis
+            : JSON.stringify(data.analysis, null, 2);
         setAnalysis((prev) => ({ ...prev, [item.id]: data.analysis }));
-        setModalData({ item, rawAnalysis: data.analysis });
+        setModalData({ item, rawAnalysis });
       }
-    } catch (error) {
-      console.error("Analyze error:", error);
+    } catch {
+      // analyzer failure is surfaced by keeping the button enabled
     } finally {
       setAnalyzingId(null);
     }
@@ -350,58 +599,32 @@ export function NewsFeedPanel() {
       try {
         const res = await fetch("/api/v1/market-data/news");
         const data = await res.json();
-        
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        const mappedNews = data.data.slice(0, 10).map((item: any, index: number) => {
-              const date = item.datetime ? new Date(item.datetime * 1000) : new Date();
-              const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-              
-              let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
-              let asset = "MKT";
-              const headline = item.headline?.toLowerCase() || "";
-              
-              if (headline.includes("fed") || headline.includes("rate") || headline.includes("inflation")) {
-                impact = headline.includes("cut") ? "BEARISH" : "BULLISH";
-                asset = "USD";
-              } else if (headline.includes("gold") || headline.includes("safe haven")) {
-                impact = "BULLISH";
-                asset = "GOLD";
-              } else if (headline.includes("crash") || headline.includes("drop") || headline.includes("fall")) {
-                impact = "BEARISH";
-                asset = "EQUITY";
-              } else if (headline.includes("jump") || headline.includes("rise") || headline.includes("gain")) {
-                impact = "BULLISH";
-                asset = "EQUITY";
-              }
 
-             return {
-                id: `news-${index}-${(item.headline || item.id || Math.random()).toString().slice(0, 24)}`,
-                time: timeStr,
-               headline: item.headline,
-               impact,
-               targetAsset: asset,
-               aiSummary: item.summary ? item.summary.substring(0, 100) + "..." : "Simulated AI macro parsing complete.",
-             };
-          });
-          
-          setFeed(mappedNews);
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const mappedNews = data.data.slice(0, 20).map(mapNewsItem);
+          const filteredNews = mappedNews.filter(
+            (item: NewsItem) => 
+              (item.impact === "BULLISH" || item.impact === "BEARISH") &&
+              (item.confidence === "HIGH" || item.alignment !== "UNVERIFIED")
+          );
+          setFeed(filteredNews);
           setIsFallback(false);
         } else {
           throw new Error("Invalid API response");
         }
-      } catch (error) {
-        console.warn("API Error, falling back to mock news");
+      } catch {
         setIsFallback(true);
-        let i = 0;
-        setFeed([]);
-        const interval = setInterval(() => {
-          if (i < mockNews.length) {
-            setFeed((prev) => [mockNews[i], ...prev]);
-            i++;
-          } else {
-            clearInterval(interval);
-          }
-        }, 1500);
+        const highImpactMock = mockNews
+          .map((item, index) => ({
+            ...item,
+            confidence: inferConfidence(item.headline, item.targetAsset),
+            alignment: inferAlignment(item.headline, item.targetAsset),
+          }))
+          .filter((item: Omit<NewsItem, "confidence" | "alignment"> & { confidence?: string; alignment?: string }) => 
+            (item.impact === "BULLISH" || item.impact === "BEARISH") &&
+            (item.confidence === "HIGH" || item.alignment !== "UNVERIFIED")
+          ) as NewsItem[];
+        setFeed(highImpactMock);
       } finally {
         setLoading(false);
       }
@@ -409,11 +632,7 @@ export function NewsFeedPanel() {
 
     fetchNews();
   }, []);
-
-  // Parse JSON only when modal is open
-  const parsedAnalysis = modalData ? extractFirstJSON(modalData.rawAnalysis) : null;
-
-  return (
+return (
     <>
       <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
         <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
@@ -422,62 +641,93 @@ export function NewsFeedPanel() {
               <AlertCircle size={14} />
               Macro Feed
             </h2>
-{lastUpdated && (
-               <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
-                 {new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(lastUpdated)} WIB
-               </span>
-             )}
+            {lastUpdated && (
+              <span className="text-[9px] text-text-muted font-mono whitespace-nowrap ml-2 hidden sm:inline-block">
+                {new Intl.DateTimeFormat("id-ID", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                }).format(lastUpdated)}{" "}
+                WIB
+              </span>
+            )}
           </div>
-          {isFallback ? (
+          {isFallback || dataStatus.news === "error" ? (
             <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
-              <ShieldAlert size={10} /> MOCK FALLBACK
+              <ShieldAlert size={10} /> {isFallback ? "MOCK FALLBACK" : "ERROR"}
+            </span>
+          ) : dataStatus.news === "cache" ? (
+            <span className="flex items-center gap-1 text-[10px] text-data-warning font-mono bg-data-warning/10 px-2 py-0.5 rounded border border-data-warning/30">
+              <Clock size={10} /> CACHE
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-[10px] text-data-profit font-mono">
+            <span className="flex items-center gap-1 text-[10px] text-data-profit font-mono bg-data-profit/10 px-2 py-0.5 rounded border border-data-profit/30">
               <Clock size={10} /> LIVE API
             </span>
           )}
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-accent-gold/20">
-          {loading || feed.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <span className="text-xs text-text-muted font-mono animate-pulse">
-                {loading ? "Fetching data from Bloomberg proxy..." : "Awaiting data stream..."}
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col divide-y divide-border-subtle">
-              {feed.map((item) => (
-                <div key={item.id} className="p-3 hover:bg-bg-surface/50 transition-colors">
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div className="flex items-start gap-2">
-                      <span className="text-[10px] font-mono text-text-muted mt-0.5 whitespace-nowrap">
-                        [{item.time}]
-                      </span>
-                      <p className="text-sm font-semibold text-text-primary leading-snug">
-                        {item.headline}
-                      </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-accent-gold/20">
+            {loading || feed.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <span className="text-xs text-text-muted font-mono animate-pulse">
+                  {loading
+                    ? "Fetching data from Bloomberg proxy..."
+                    : "Awaiting data stream..."}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y divide-border-subtle">
+                {feed.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 hover:bg-bg-surface/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5 min-w-0">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-[10px] font-mono text-text-muted mt-0.5 whitespace-nowrap flex-shrink-0">
+                          [{item.time}]
+                        </span>
+                        <p className="text-sm font-semibold text-text-primary leading-snug break-words min-w-0">
+                          {item.headline}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => analyzeFeedItem(item)}
+                        disabled={analyzingId === item.id}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-accent-gold border border-accent-gold/30 rounded hover:bg-accent-gold/10 transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        <Brain size={12} />
+                        {analyzingId === item.id
+                          ? "ANALYZING..."
+                          : analysis[item.id]
+                            ? "VIEW"
+                            : "ANALYZER"}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => analyzeFeedItem(item)}
-                      disabled={analyzingId === item.id}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-accent-gold border border-accent-gold/30 rounded hover:bg-accent-gold/10 transition-colors disabled:opacity-50 shrink-0"
-                    >
-                      <Brain size={12} />
-                      {analyzingId === item.id ? "ANALYZING..." : analysis[item.id] ? "VIEW" : "ANALYZER"}
-                    </button>
-                  </div>
-                  
+
                   <div className="pl-10">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}>
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      <div
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}
+                      >
                         {getImpactIcon(item.impact)}
                         {item.impact} {item.targetAsset}
                       </div>
+                      <div
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
+                      >
+                        {item.alignment}
+                      </div>
+                      <div className="px-1.5 py-0.5 rounded text-[10px] font-bold border border-border-subtle text-text-muted bg-surface-elevated/40">
+                        CONF {item.confidence}
+                      </div>
                     </div>
                     <div className="relative pl-3 border-l-2 border-accent-gold/30">
-                      <p className="text-xs text-text-secondary font-mono leading-relaxed">
+                      <p className="text-xs text-text-secondary font-mono leading-relaxed break-words">
                         {item.aiSummary}
                       </p>
                     </div>

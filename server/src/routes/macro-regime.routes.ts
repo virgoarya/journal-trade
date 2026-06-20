@@ -1,49 +1,55 @@
 import { Router } from "express";
 import { macroRegimeService } from "../services/macro-regime.service";
-import { YieldCurveSnapshot } from "../models/YieldCurveSnapshot";
+import { silentLogger } from "../utils/silent-logger";
 
 const router = Router();
 
-// GET /api/v1/macro-regime/snapshot
 router.get("/snapshot", async (req, res) => {
   try {
     const data = await macroRegimeService.getSnapshot();
-    res.json({ success: true, data });
+    res.json({ 
+      success: true, 
+      data: {
+        ...data,
+        source: data.source ?? "YAHOO",
+      },
+      fetchedAt: data.fetchedAt ?? new Date().toISOString(),
+      rateLimited: false,
+    });
   } catch (error: any) {
-    console.error("[MacroRegime Route] Error:", error.message);
-    res.status(503).json({ success: false, error: error.message });
+    silentLogger.error("[MacroRegime Route] Error:", error.message);
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 
-// GET /api/v1/macro-regime/historical?days=30
 router.get("/historical", async (req, res) => {
   try {
     const days = parseInt(req.query.days as string) || 30;
+    const snapshot = await macroRegimeService.getSnapshot();
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
-    const snapshots = await YieldCurveSnapshot.find(
-      { source: "api", fetchedAt: { $gte: cutoff } },
-      {},
-      { sort: { fetchedAt: 1 } }
-    ).lean();
+    const data = snapshot.history
+      .filter((item) => new Date(item.date) >= cutoff)
+      .map((item) => ({
+        date: new Date(item.date).toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+        }),
+        fullDate: item.date,
+        quadrant: item.quadrant,
+        growthRatio: item.growthRatio,
+        growthEma: item.growthEma,
+        inflationRatio: item.inflationRatio,
+        inflationEma: item.inflationEma,
+        liquidityRatio: item.liquidityRatio,
+        liquidityEma: item.liquidityEma,
+      }));
 
-    const data = snapshots.map((s: any) => ({
-      date: new Date(s.fetchedAt).toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "short",
-      }),
-      fullDate: s.fetchedAt,
-      y5: s.y5,
-      y10: s.y10,
-      y30: s.y30,
-      spread5y30y: s.spread5y30y,
-    }));
-
-    res.json({ success: true, data });
+    res.json({ success: true, data, rateLimited: false });
   } catch (error: any) {
-    console.error("[MacroRegime Route] Historical Error:", error.message);
-    res.status(503).json({ success: false, error: error.message });
+    silentLogger.error("[MacroRegime Route] Historical Error:", error.message);
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
   }
 });
 

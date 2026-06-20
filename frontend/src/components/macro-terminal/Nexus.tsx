@@ -42,7 +42,8 @@ interface CrudeOilState {
 }
 
 interface FedPolicyState {
-  status: "Transition" | "Tightening" | "Easing";
+  status: string;
+  rate?: number;
 }
 
 interface InflationProxyState {
@@ -61,7 +62,7 @@ interface RealYieldsState {
 }
 
 interface VixState {
-  value: number;
+  value: number | null;
 }
 
 interface YieldCurveState {
@@ -97,6 +98,7 @@ interface RiskOffFxState {
 interface MacroState {
   rrp: RrpState;
   tga: TgaState;
+  walcl: { value: number; delta: number };
   crude_oil: CrudeOilState;
   fed_policy: FedPolicyState;
   inflation_proxy: InflationProxyState;
@@ -105,6 +107,7 @@ interface MacroState {
   vix: VixState;
   yield_curve: YieldCurveState;
   risk_assets: RiskAssetsState;
+  growth_pmi: { value: number; delta: number };
   commodities: CommoditiesState;
   gold: GoldState;
   em_risk_on: EmRiskOnState;
@@ -125,72 +128,204 @@ interface EdgeConfig {
   to: string;
 }
 
+interface NodeQuality {
+  source: string;
+  freshness: "live" | "cache" | "stale" | "error";
+  confidence: number;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DEFAULT / MOCK STATE (fallback seed + placeholder values)
 // ─────────────────────────────────────────────────────────────────────────────
-const createMockState = (): MacroState => ({
-  rrp: { value: 582.3, delta: -12.4 },
-  tga: { value: 721.5, delta: 34.2 },
-  crude_oil: { value: 78.42, delta: 1.23 },
-  fed_policy: { status: "Transition" },
-  inflation_proxy: { value: 2.31, delta: -0.08 },
-  dxy: { value: 104.18, delta: -0.34 },
-  real_yields: { value: 2.14, delta: -0.05 },
-  vix: { value: 14.8 },
-  yield_curve: { status: "Normal", spread: 28 },
-  risk_assets: { value: 528.7, delta: 1.42 },
-  commodities: { value: 274.5, delta: 0.45 },
-  gold: { value: 2350.4, delta: 0.12 },
-  em_risk_on: { value: 0.32, delta: 0.32 },
-  risk_off_fx: { value: -0.05, delta: -0.05 },
+const createEmptyState = (): MacroState => ({
+  rrp: { value: 0, delta: 0 },
+  tga: { value: 0, delta: 0 },
+  walcl: { value: 0, delta: 0 },
+  crude_oil: { value: 0, delta: 0 },
+  fed_policy: { status: "UNKNOWN" },
+  inflation_proxy: { value: 0, delta: 0 },
+  dxy: { value: 0, delta: 0 },
+  real_yields: { value: 0, delta: 0 },
+  vix: { value: null },
+  yield_curve: { status: "UNKNOWN", spread: 0 },
+  risk_assets: { value: 0, delta: 0 },
+  growth_pmi: { value: 0, delta: 0 },
+  commodities: { value: 0, delta: 0 },
+  gold: { value: 0, delta: 0 },
+  em_risk_on: { value: 0, delta: 0 },
+  risk_off_fx: { value: 0, delta: 0 },
 });
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GLOW LOGIC
 // ─────────────────────────────────────────────────────────────────────────────
-function getNodeColor(state: MacroState, nodeKey: string): string {
+function isNodePulsating(state: MacroState, nodeKey: string): boolean {
+  const netLiqDelta = state.walcl.delta - state.tga.delta - state.rrp.delta;
+  const spyDelta = state.risk_assets.delta;
+
   switch (nodeKey) {
-    case "crb": return "#f59e0b";
-    case "growth": return state.risk_assets.delta > 0 ? "#22c55e" : "#ef4444";
-    case "onrrp": return state.rrp.delta < 0 ? "#22c55e" : state.rrp.delta > 0 ? "#ef4444" : "#64748b";
-    case "liq":
-      return state.rrp.delta < 0 ? "#22c55e" : state.rrp.delta > 0 ? "#ef4444" : "#64748b";
-    case "tga":
-      return state.tga.delta < 0 ? "#22c55e" : state.tga.delta > 0 ? "#ef4444" : "#64748b";
+    case "crb":
+      return Math.abs(state.commodities.delta) > 2.0;
     case "oil":
-      return state.crude_oil.delta > 0 ? "#ef4444" : state.crude_oil.delta < 0 ? "#22c55e" : "#64748b";
+      return Math.abs(state.crude_oil.delta) > 3.0;
+    case "onrrp":
+      return Math.abs(state.rrp.delta) > 20;
+    case "tga":
+      return Math.abs(state.tga.delta) > 50;
+    case "liq":
+      return Math.abs(netLiqDelta) > 50;
+    case "growth":
+      return (
+        (state.growth_pmi?.value ?? 65) > 75 ||
+        (state.growth_pmi?.value ?? 65) < 55
+      );
+    case "inf":
+      return (
+        state.inflation_proxy.value > 3.5 || state.inflation_proxy.value < 1.5
+      );
+    case "fed":
+      return (
+        state.fed_policy.status === "Tightening" ||
+        state.fed_policy.status === "Easing"
+      );
+    case "dxy":
+      return Math.abs(state.dxy.delta) > 0.5;
+    case "yc":
+      return state.yield_curve.spread > 100 || state.yield_curve.spread < -50;
+    case "ry":
+      return state.real_yields.value > 2.0 || state.real_yields.value < 0.0;
+    case "eq":
+      return Math.abs(spyDelta) > 1.5;
+    case "gold":
+      return Math.abs(state.gold.delta) > 1.5;
+    case "vix":
+      return (state.vix.value ?? 0) >= 20;
+    case "commodities":
+      return Math.abs(state.commodities.delta) > 2.0;
+    case "em_risk_on":
+      return Math.abs(state.em_risk_on.delta) > 1.5;
+    case "risk_off_fx":
+      return Math.abs(state.risk_off_fx.delta) > 1.0;
+    default:
+      return false;
+  }
+}
+function getNodeColor(state: MacroState, nodeKey: string): string {
+  const netLiqDelta = state.walcl.delta - state.tga.delta - state.rrp.delta;
+  const ryDelta = state.real_yields.delta;
+  const spyDelta = state.risk_assets.delta;
+  const goldDelta = state.gold.delta;
+
+  switch (nodeKey) {
+    case "crb":
+      return state.commodities.delta > 0
+        ? "#ef4444"
+        : state.commodities.delta < 0
+          ? "#22c55e"
+          : "#64748b";
+    case "oil":
+      return state.crude_oil.delta > 0
+        ? "#ef4444"
+        : state.crude_oil.delta < 0
+          ? "#22c55e"
+          : "#64748b";
+    case "onrrp":
+      return state.rrp.delta < 0
+        ? "#22c55e"
+        : state.rrp.delta > 0
+          ? "#ef4444"
+          : "#64748b";
+    case "tga":
+      return state.tga.delta < 0
+        ? "#22c55e"
+        : state.tga.delta > 0
+          ? "#ef4444"
+          : "#64748b";
+    case "liq":
+      return netLiqDelta > 0
+        ? "#22c55e"
+        : netLiqDelta < 0
+          ? "#ef4444"
+          : "#64748b";
+    case "growth": {
+      const gv = state.growth_pmi?.value ?? 65;
+      return gv > 70
+        ? "#22c55e"
+        : gv > 60
+          ? "#f59e0b"
+          : gv > 50
+            ? "#f97316"
+            : "#ef4444";
+    }
+    case "inf": {
+      const cpi = state.inflation_proxy.value;
+      return cpi > 3.0 ? "#ef4444" : cpi > 2.0 ? "#f59e0b" : "#22c55e";
+    }
     case "fed":
       if (state.fed_policy.status === "Tightening") return "#ef4444";
       if (state.fed_policy.status === "Easing") return "#22c55e";
-      return "#3b82f6";
-    case "inf":
-      if (state.inflation_proxy.value > 2.5 || state.inflation_proxy.delta > 0) return "#ef4444";
-      if (state.inflation_proxy.delta < 0) return "#22c55e";
-      return "#f59e0b";
-    case "dxy":
-      return state.dxy.delta > 0 ? "#ef4444" : state.dxy.delta < 0 ? "#22c55e" : "#64748b";
-    case "ry":
-      if (state.real_yields.value > 0 && state.real_yields.delta > 0) return "#a855f7";
-      if (state.real_yields.delta < 0) return "#f59e0b";
+      if (state.fed_policy.status === "Restrictive Hold") return "#f97316"; // orange - still tight
+      if (state.fed_policy.status === "Pause") return "#3b82f6";
       return "#64748b";
-    case "vix":
-      if (state.vix.value < 15) return "#22c55e";
-      if (state.vix.value <= 25) return "#f97316";
-      return "#ef4444";
+    case "dxy":
+      return state.dxy.delta > 0
+        ? "#ef4444"
+        : state.dxy.delta < 0
+          ? "#22c55e"
+          : "#64748b";
     case "yc":
-      if (state.yield_curve.status.toLowerCase().includes("bull")) return "#22c55e";
-      if (state.yield_curve.status.toLowerCase().includes("bear")) return "#ef4444";
+      if (state.yield_curve.status.toLowerCase().includes("bull"))
+        return "#22c55e";
+      if (state.yield_curve.status.toLowerCase().includes("bear"))
+        return "#ef4444";
       return "#3b82f6";
+    case "ry": {
+      const rv = state.real_yields.value;
+      return rv > 1.5 ? "#ef4444" : rv < 0.5 ? "#22c55e" : "#f59e0b";
+    }
     case "eq":
-      return state.risk_assets.delta > 0 ? "#22c55e" : state.risk_assets.delta < 0 ? "#ef4444" : "#64748b";
-    case "commodities":
-      return state.commodities.delta > 0 ? "#ef4444" : state.commodities.delta < 0 ? "#22c55e" : "#f97316";
+      if (spyDelta > 0 && netLiqDelta > 0) return "#22c55e"; // Liquidity Driven
+      if (spyDelta > 0 && ryDelta > 0) return "#f59e0b"; // Defying Gravity
+      if (spyDelta < 0 && ryDelta > 0) return "#ef4444"; // Yield Pressured
+      if (spyDelta < 0 && netLiqDelta < 0) return "#ef4444"; // Liquidity Drain
+      return spyDelta > 0 ? "#22c55e" : "#ef4444";
     case "gold":
-      return state.gold.delta > 0 ? "#f59e0b" : state.gold.delta < 0 ? "#ef4444" : "#eab308";
+      if (goldDelta > 0 && ryDelta < 0) return "#22c55e"; // Yield Supported
+      if (goldDelta < 0 && ryDelta > 0) return "#ef4444"; // Yield Pressured
+      if (goldDelta > 0 && ryDelta > 0) return "#f59e0b"; // Debasement Fear
+      if (goldDelta < 0 && ryDelta < 0) return "#ef4444"; // Liquidation
+      return goldDelta > 0 ? "#f97316" : "#ef4444";
+    case "vix":
+      if ((state.vix.value ?? 0) >= 20 && spyDelta < 0) return "#ef4444";
+      if ((state.vix.value ?? 0) < 15 && spyDelta > 0) return "#22c55e";
+      if ((state.vix.value ?? 0) >= 15 && spyDelta > 0) return "#f59e0b";
+      return (state.vix.value ?? 0) < 15
+        ? "#22c55e"
+        : (state.vix.value ?? 0) <= 25
+          ? "#f97316"
+          : "#ef4444";
+    case "commodities":
+      return state.commodities.delta > 0
+        ? "#ef4444"
+        : state.commodities.delta < 0
+          ? "#22c55e"
+          : "#64748b";
     case "em_risk_on":
-      return state.em_risk_on.delta > 0 ? "#22c55e" : state.em_risk_on.delta < 0 ? "#ef4444" : "#64748b";
+      return state.em_risk_on.delta > 0
+        ? "#22c55e"
+        : state.em_risk_on.delta < 0
+          ? "#ef4444"
+          : "#64748b";
     case "risk_off_fx":
-      return state.risk_off_fx.delta > 0 ? "#3b82f6" : state.risk_off_fx.delta < 0 ? "#a855f7" : "#6366f1";
+      return state.risk_off_fx.delta > 0
+        ? "#3b82f6"
+        : state.risk_off_fx.delta < 0
+          ? "#a855f7"
+          : "#6366f1";
     default:
       return "#64748b";
   }
@@ -200,23 +335,58 @@ function getNodeColor(state: MacroState, nodeKey: string): string {
 // NODE CONFIG (14 nodes, 5-row × 3-col grid)
 // ─────────────────────────────────────────────────────────────────────────────
 const NODES: NodeConfig[] = [
-  { key: "crb", x: 12, y: 15, label: "CRB COMMODITIES INDEX", icon: LineChart, zone: 1 },
+  {
+    key: "crb",
+    x: 12,
+    y: 15,
+    label: "CRB COMMODITIES INDEX",
+    icon: LineChart,
+    zone: 1,
+  },
   { key: "oil", x: 12, y: 35, label: "ENERGY/OIL", icon: Zap, zone: 1 },
   { key: "onrrp", x: 12, y: 55, label: "ON RRP", icon: Droplets, zone: 1 },
   { key: "tga", x: 12, y: 75, label: "TGA", icon: Building2, zone: 1 },
 
-  { key: "growth", x: 30, y: 20, label: "GROWTH", icon: TrendingUp, zone: 1 },
+  {
+    key: "growth",
+    x: 30,
+    y: 20,
+    label: "GROWTH SENTIMENT",
+    icon: TrendingUp,
+    zone: 1,
+  },
   { key: "inf", x: 30, y: 40, label: "INFLATION", icon: Activity, zone: 2 },
   { key: "liq", x: 30, y: 65, label: "NET LIQUIDITY", icon: Droplets, zone: 2 },
 
-  { key: "fed", x: 50, y: 45, label: "FEDERAL RESERVE", icon: Building2, zone: 2 },
+  {
+    key: "fed",
+    x: 50,
+    y: 45,
+    label: "FEDERAL RESERVE",
+    icon: Building2,
+    zone: 2,
+  },
   { key: "dxy", x: 50, y: 70, label: "DXY", icon: DollarSign, zone: 2 },
 
   { key: "yc", x: 68, y: 35, label: "YIELD CURVE", icon: Activity, zone: 3 },
 
   { key: "ry", x: 88, y: 20, label: "REAL YIELD", icon: TrendingUp, zone: 3 },
-  { key: "eq", x: 88, y: 45, label: "RISK ASSETS SP500", icon: TrendingUp, zone: 3 },
-  { key: "gold", x: 88, y: 65, label: "SAFE HAVEN GOLD", icon: DollarSign, zone: 3 },
+  {
+    key: "eq",
+    x: 88,
+    y: 45,
+    label: "RISK ASSETS SP500",
+    icon: TrendingUp,
+    zone: 3,
+  },
+  {
+    key: "gold",
+    x: 88,
+    y: 65,
+    label: "SAFE HAVEN GOLD",
+    icon: DollarSign,
+    zone: 3,
+  },
   { key: "vix", x: 88, y: 85, label: "VIX", icon: AlertOctagon, zone: 3 },
 ];
 
@@ -233,7 +403,7 @@ const EDGES: EdgeConfig[] = [
   // Inf outputs (SWAPPED: ry first, fed second to prevent crossing)
   { from: "inf", to: "ry" },
   { from: "inf", to: "fed" },
-  
+
   { from: "liq", to: "fed" },
 
   // Liq to Dxy
@@ -248,8 +418,9 @@ const EDGES: EdgeConfig[] = [
 
   // Dxy outputs (4 ports)
   { from: "dxy", to: "fed" },
-  
+
   // Ry outputs (SWAPPED: gold first, eq second to prevent crossing)
+  // [HOT RELOAD FORCED]
   { from: "ry", to: "gold" },
   { from: "ry", to: "eq" },
 
@@ -258,9 +429,9 @@ const EDGES: EdgeConfig[] = [
   { from: "dxy", to: "gold" },
   { from: "dxy", to: "crb" },
 
-  // Vix outputs (SWAPPED: gold first, eq second to prevent crossing)
-  { from: "vix", to: "gold" },
+  // Vix outputs (eq first, gold second)
   { from: "vix", to: "eq" },
+  { from: "vix", to: "gold" },
   { from: "vix", to: "fed" },
 ];
 
@@ -299,14 +470,14 @@ function CableEdge({
   const sy1 = y1 + sourceOffsetY;
   const ty2 = y2 + targetOffsetY;
   const isSameColumn = x1 === x2;
-  
+
   const startX = x1 + nodeHwPct;
   const endX = side === "right" ? x2 + nodeHwPct : x2 - nodeHwPct;
 
   let pathD = "";
 
   // ── CUSTOM ROUTES UNTUK MEMINIMALISIR CROSSING ──
-  
+
   // Col 1 -> Col 2
   if (from === "crb" && to === "inf") {
     pathD = `M ${startX},${sy1} L 22.5,${sy1} L 22.5,${ty2} L ${endX},${ty2}`;
@@ -320,7 +491,7 @@ function CableEdge({
 
   // Col 2 -> Col 3
   else if (from === "inf" && to === "ry") {
-    pathD = `M ${startX},${sy1} L 37,${sy1} L 37,5 L 77,5 L 77,${ty2} L ${endX},${ty2}`;
+    pathD = `M ${startX},${sy1} L 37,${sy1} L 37,12 L 73,12 L 73,${ty2} L ${endX},${ty2}`;
   } else if (from === "inf" && to === "fed") {
     pathD = `M ${startX},${sy1} L 38.5,${sy1} L 38.5,${ty2} L ${endX},${ty2}`;
   } else if (from === "growth" && to === "fed") {
@@ -340,27 +511,27 @@ function CableEdge({
     pathD = `M ${startX},${sy1} L 77,${sy1} L 77,${ty2} L ${endX},${ty2}`;
   }
 
-  // VIX custom routes
-  else if (from === "vix" && to === "fed") {
-    pathD = `M ${startX},${sy1} L 99,${sy1} L 99,98 L 24,98 L 24,${ty2} L ${endX},${ty2}`;
-  } else if (from === "vix" && to === "eq") {
-    pathD = `M ${startX},${sy1} L 97,${sy1} L 97,72 L 80,72 L 80,${ty2} L ${endX},${ty2}`;
-  } else if (from === "vix" && to === "gold") {
-    pathD = `M ${startX},${sy1} L 95,${sy1} L 95,74 L 81,74 L 81,${ty2} L ${endX},${ty2}`;
-  }
-
-  // RY custom routes
-  else if (from === "ry" && to === "eq") {
-    pathD = `M ${startX},${sy1} L 95,${sy1} L 95,32 L 78,32 L 78,${ty2} L ${endX},${ty2}`;
-  } else if (from === "ry" && to === "gold") {
-    pathD = `M ${startX},${sy1} L 97,${sy1} L 97,55 L 79,55 L 79,${ty2} L ${endX},${ty2}`;
-  }
-
   // YC custom routes
   else if (from === "yc" && to === "ry") {
     pathD = `M ${startX},${sy1} L 74,${sy1} L 74,${ty2} L ${endX},${ty2}`;
   } else if (from === "yc" && to === "vix") {
     pathD = `M ${startX},${sy1} L 75,${sy1} L 75,${ty2} L ${endX},${ty2}`;
+  }
+
+  // RY custom routes (Loop around left side)
+  else if (from === "ry" && to === "eq") {
+    pathD = `M ${startX},${sy1} L 95,${sy1} L 95,32 L 78,32 L 78,${ty2} L ${endX},${ty2}`;
+  } else if (from === "ry" && to === "gold") {
+    pathD = `M ${startX},${sy1} L 97,${sy1} L 97,55 L 80,55 L 80,${ty2} L ${endX},${ty2}`;
+  }
+
+  // VIX custom routes (Loop around left side)
+  else if (from === "vix" && to === "fed") {
+    pathD = `M ${startX},${sy1} L 94,${sy1} L 94,98 L 24,98 L 24,${ty2} L ${endX},${ty2}`;
+  } else if (from === "vix" && to === "eq") {
+    pathD = `M ${startX},${sy1} L 95,${sy1} L 95,74 L 79,74 L 79,${ty2} L ${endX},${ty2}`;
+  } else if (from === "vix" && to === "gold") {
+    pathD = `M ${startX},${sy1} L 97,${sy1} L 97,72 L 81,72 L 81,${ty2} L ${endX},${ty2}`;
   } else {
     // ── DEFAULT ROUTES ──
     let midX = x1 + (x2 - x1) / 2;
@@ -368,7 +539,7 @@ function CableEdge({
     else if (x1 === 30 && x2 === 50) midX = 43;
     else if (x1 === 50 && x2 === 68) midX = 59;
     else if (x1 === 68 && x2 === 88) midX = 82;
-    midX += (midXOffset * 1.5);
+    midX += midXOffset * 1.5;
     pathD = `M ${startX},${sy1} L ${midX},${sy1} L ${midX},${ty2} L ${endX},${ty2}`;
   }
 
@@ -418,13 +589,22 @@ function CableEdge({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Nexus() {
   // ── 1. CONTEXT ─────────────────────────────────────────────────────────
-  const { assets, liquidity, currentRegime } = useMacroTerminal();
+  const {
+    assets,
+    liquidity,
+    currentRegime,
+    vix,
+    yieldCurve,
+    geoRisk,
+    nextEvent,
+    dataStatus,
+  } = useMacroTerminal();
 
-  // ── 2. LOCAL STATE ─────────────────────────────────────────────────────
-  const [macroState, setMacroState] = useState<MacroState>(createMockState);
-  const [tgaLoaded, setTgaLoaded] = useState(false);
-  const [oilLoaded, setOilLoaded] = useState(false);
-  const [quantLoaded, setQuantLoaded] = useState(false);
+  const [macroState, setMacroState] = useState<MacroState>(createEmptyState);
+  const [nodeQuality, setNodeQuality] = useState<Record<string, NodeQuality>>(
+    {},
+  );
+  const [nexusLoaded, setNexusLoaded] = useState(false);
   const [nexusReasoning, setNexusReasoning] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [displayedReasoning, setDisplayedReasoning] = useState<string>("");
@@ -437,16 +617,16 @@ export default function Nexus() {
     const observer = new ResizeObserver((entries) => {
       setDim({
         w: entries[0].contentRect.width || 1200,
-        h: entries[0].contentRect.height || 800
+        h: entries[0].contentRect.height || 800,
       });
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
 
-  // ── 3a. FETCH: Quant Snapshot (VIX + Yield Curve + Real Yields) ────────
   useEffect(() => {
     let cancelled = false;
+
     async function fetchQuant() {
       try {
         const res = await fetch("/api/v1/quant/snapshot");
@@ -456,31 +636,63 @@ export default function Nexus() {
           setMacroState((prev) => {
             const nxt = { ...prev };
             if (d.vix != null) nxt.vix = { value: d.vix };
-            if (d.spread10y2y != null) {
+            if (d.spread30y3m != null) {
               nxt.yield_curve = {
-                status: d.inverted ? "Inverted" : "Normal",
-                spread: d.spread10y2y,
+                status:
+                  d.curveRegime && d.curveRegime !== "UNKNOWN"
+                    ? d.curveRegime
+                    : d.inverted
+                      ? "Inverted"
+                      : "Normal",
+                spread: d.spread30y3m,
               };
             }
-            if (d.y10 != null) {
-              const tip = assets.find((a) => a.ticker === "TIP")?.change ?? 0;
-              const gld = assets.find((a) => a.ticker === "GLD")?.change ?? 0;
-              const infDelta = (tip + gld) / 2;
-              nxt.real_yields = { value: d.y10 - infDelta, delta: prev.real_yields.delta };
+            if (d.spread10y2y != null && nxt.yield_curve.status === "Normal") {
+              nxt.yield_curve.status = d.inverted
+                ? "Inverted"
+                : nxt.yield_curve.status;
             }
             return nxt;
           });
-          setQuantLoaded(true);
+          setNodeQuality((prev) => ({
+            ...prev,
+            vix: {
+              source: d.vixSource ?? "quant",
+              freshness: json.fromCache ? "cache" : "live",
+              confidence: 82,
+            },
+            yc: {
+              source: d.vixSource ? "quant+yield" : "quant",
+              freshness: json.fromCache ? "cache" : "live",
+              confidence: 82,
+            },
+            ry: {
+              source: "fred:DFII10",
+              freshness: json.fromCache ? "cache" : "live",
+              confidence: 78,
+            },
+          }));
         }
       } catch {
-        if (!cancelled) setQuantLoaded(true);
+        if (!cancelled) {
+          setNodeQuality((prev) => ({
+            ...prev,
+            vix: { source: "unavailable", freshness: "error", confidence: 0 },
+            yc: { source: "unavailable", freshness: "error", confidence: 0 },
+            ry: { source: "unavailable", freshness: "error", confidence: 0 },
+          }));
+        }
       }
     }
+
     fetchQuant();
+    const interval = setInterval(fetchQuant, 3 * 60 * 1000);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, [assets]);
+  }, []);
 
   // ── Typing animation effect ──────────────────────────────────────────
   useEffect(() => {
@@ -507,21 +719,55 @@ export default function Nexus() {
       const res = await fetch("/api/v1/macro-ai/analyze-nexus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodesData: nodeMap }),
+        body: JSON.stringify({
+          nodesData: nodeMap,
+          context: {
+            currentRegime,
+            liquidityStatus: liquidity?.status,
+            vixRegime: vix.regime,
+            yieldCurveRegime: yieldCurve.curveRegime,
+            geoRiskTopDriver: geoRisk.topDriver,
+            nextHighImpactEvent: nextEvent,
+          },
+        }),
       });
       const data = await res.json();
       if (data.success) setNexusReasoning(data.reasoning);
       else setNexusReasoning("Gagal mendapatkan analisis: " + data.error);
-    } catch (err: any) {
-      setNexusReasoning("Terjadi kesalahan saat memanggil AI: " + err.message);
+    } catch (err: unknown) {
+      setNexusReasoning(
+        "Terjadi kesalahan saat memanggil AI: " + getErrorMessage(err),
+      );
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // ── 3b. FETCH: TGA (Treasury General Account) ──────────────────────────
+  const exportDeskBrief = () => {
+    const brief = {
+      generatedAt: new Date().toISOString(),
+      regime: currentRegime,
+      liquidity: liquidity?.status,
+      vix,
+      yieldCurve,
+      geoRiskTopDriver: geoRisk.topDriver,
+      nextEvent,
+      reasoning: nexusReasoning,
+      nodes: nodeMap,
+    };
+    const blob = new Blob([JSON.stringify(brief, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `macro-nexus-desk-brief-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
-    let cancelled = false;
+    const cancelled = false;
     async function fetchTga() {
       try {
         const res = await fetch("/api/v1/market-data/tga");
@@ -531,45 +777,171 @@ export default function Nexus() {
             ...prev,
             tga: { value: json.data.value, delta: json.data.delta },
           }));
-          setTgaLoaded(true);
+          setNodeQuality((prev) => ({
+            ...prev,
+            tga: {
+              source: "treasury.gov",
+              freshness: "live",
+              confidence: 86,
+            },
+          }));
         }
       } catch {
-        if (!cancelled) setTgaLoaded(true);
+        setNodeQuality((prev) => ({
+          ...prev,
+          tga: { source: "unavailable", freshness: "error", confidence: 0 },
+        }));
       }
     }
     fetchTga();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  // ── 3c. FETCH: Crude Oil (CL=F via Finnhub quotes) ─────────────────────
   useEffect(() => {
-    let cancelled = false;
+    const cancelled = false;
     async function fetchOil() {
       try {
         const res = await fetch("/api/v1/market-data/quotes?symbols=CL=F");
         const json = await res.json();
-        if (!cancelled) {
-          if (res.ok && json.success && json.data?.[0]?.data?.dp != null) {
-            const dp = json.data[0].data.dp;
+        if (!cancelled && res.ok && json.success && json.data?.[0]?.data) {
+          const quote = json.data[0].data;
+          if (quote.dp != null && quote.c != null) {
             setMacroState((prev) => ({
               ...prev,
               crude_oil: {
-                value: prev.crude_oil.value,
-                delta: dp,
+                value: quote.c,
+                delta: quote.dp,
+              },
+            }));
+            setNodeQuality((prev) => ({
+              ...prev,
+              oil: {
+                source: "finnhub:CL=F",
+                freshness: "live",
+                confidence: 74,
               },
             }));
           }
-          setOilLoaded(true);
         }
       } catch {
-        if (!cancelled) setOilLoaded(true);
+        setNodeQuality((prev) => ({
+          ...prev,
+          oil: { source: "unavailable", freshness: "error", confidence: 0 },
+        }));
       }
     }
     fetchOil();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchNexusSnapshot() {
+      try {
+        const res = await fetch("/api/v1/nexus/snapshot");
+        const json = await res.json();
+        if (!cancelled && res.ok && json.success && json.data) {
+          const d = json.data;
+          setMacroState((prev) => {
+            const nxt = { ...prev };
+            if (d.dxy) nxt.dxy = { value: d.dxy.value, delta: d.dxy.delta };
+            if (d.crb)
+              nxt.commodities = { value: d.crb.value, delta: d.crb.delta };
+            if (d.gold) nxt.gold = { value: d.gold.value, delta: d.gold.delta };
+            if (d.cpiYoY != null)
+              nxt.inflation_proxy = {
+                value: d.cpiYoY,
+                delta: prev.inflation_proxy.delta,
+              };
+            if (d.growthSentiment != null)
+              nxt.growth_pmi = {
+                value: d.growthSentiment,
+                delta: prev.growth_pmi?.delta || 0,
+              };
+            if (d.walcl)
+              nxt.walcl = { value: d.walcl.value, delta: d.walcl.delta };
+            if (d.realYields)
+              nxt.real_yields = {
+                value: d.realYields.value,
+                delta: d.realYields.delta,
+              };
+            if (d.fedFundsRate) {
+              const rate = d.fedFundsRate.value;
+              const delta = d.fedFundsRate.delta;
+              let fedStatus: string;
+              if (Math.abs(delta) < 0.01)
+                fedStatus =
+                  rate >= 3.0
+                    ? "Restrictive Hold"
+                    : rate <= 1.0
+                      ? "Accommodative"
+                      : "Pause";
+              else fedStatus = delta > 0 ? "Tightening" : "Easing";
+              nxt.fed_policy = { status: fedStatus, rate: rate };
+            }
+            return nxt;
+          });
+          setNodeQuality((prev) => ({
+            ...prev,
+            dxy: {
+              source: "yahoo:DX-Y.NYB",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 76,
+            },
+            crb: {
+              source: "finnhub:DBC",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 72,
+            },
+            gold: {
+              source: "yahoo:GC=F",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 78,
+            },
+            fed: {
+              source: "fred:DFEDTARU",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 90,
+            },
+            inf: {
+              source: "fred:CPIAUCSL",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 82,
+            },
+            growth: {
+              source: "fred:UMCSENT",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 76,
+            },
+            walcl: {
+              source: "fred:WALCL",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 84,
+            },
+            ry: {
+              source: "fred:DFII10",
+              freshness: json.data.fromCache ? "cache" : "live",
+              confidence: 78,
+            },
+          }));
+          setNexusLoaded(true);
+        }
+      } catch {
+        setNodeQuality((prev) => ({
+          ...prev,
+          dxy: { source: "unavailable", freshness: "error", confidence: 0 },
+          crb: { source: "unavailable", freshness: "error", confidence: 0 },
+          gold: { source: "unavailable", freshness: "error", confidence: 0 },
+          fed: { source: "unavailable", freshness: "error", confidence: 0 },
+          inf: { source: "unavailable", freshness: "error", confidence: 0 },
+          growth: { source: "unavailable", freshness: "error", confidence: 0 },
+          walcl: { source: "unavailable", freshness: "error", confidence: 0 },
+        }));
+      }
+    }
+    fetchNexusSnapshot();
+    const interval = setInterval(fetchNexusSnapshot, 3 * 60 * 1000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
@@ -583,26 +955,38 @@ export default function Nexus() {
     const gld = assets.find((a) => a.ticker === "GLD")?.change ?? 0;
     const inflationProxy = (tip + gld) / 2;
 
-    const regimeMap: Record<string, "Transition" | "Tightening" | "Easing"> = {
-      Goldilocks: "Transition",
-      Reflation: "Easing",
-      Stagflation: "Tightening",
-      Deflation: "Transition",
-      Transition: "Transition",
+    const regimeMap: Record<
+      string,
+      "Restrictive Hold" | "Pause" | "Accommodative"
+    > = {
+      Goldilocks: "Pause",
+      Reflation: "Restrictive Hold",
+      Stagflation: "Restrictive Hold",
+      Deflation: "Accommodative",
+      Transition: "Pause",
     };
-    const fedStatus = currentRegime ? regimeMap[currentRegime] || "Transition" : "Transition";
-
+    const impliedFedStatus = currentRegime
+      ? regimeMap[currentRegime] || "Pause"
+      : "Pause";
     setMacroState((prev) => ({
       ...prev,
+      fed_policy:
+        prev.fed_policy.status === "UNKNOWN"
+          ? { status: impliedFedStatus, rate: prev.fed_policy.rate }
+          : prev.fed_policy,
       rrp: {
         value: liquidity.value,
         delta: liquidity.change,
       },
-      fed_policy: { status: fedStatus },
-      inflation_proxy: {
-        value: inflationProxy,
-        delta: inflationProxy,
-      },
+      // Only use ETF proxy if CPI data hasn't been loaded from Nexus yet
+      ...(prev.inflation_proxy.value < 1
+        ? {
+            inflation_proxy: {
+              value: inflationProxy,
+              delta: inflationProxy,
+            },
+          }
+        : {}),
       dxy: {
         value: prev.dxy.value,
         delta: uup,
@@ -614,60 +998,10 @@ export default function Nexus() {
     }));
   }, [liquidity, assets, currentRegime]);
 
-  // ── 4. FALLBACK SIMULATION (auto-terminates when API ready) ────────────
-  const isApiReady = tgaLoaded && oilLoaded && quantLoaded;
-
-  useEffect(() => {
-    console.log("🔍 API Loading Status:", { tgaLoaded, oilLoaded, quantLoaded, isApiReady });
-  }, [tgaLoaded, oilLoaded, quantLoaded, isApiReady]);
-
-  useEffect(() => {
-    // GUARD UTAMA: Jika semua API sudah ready, matikan interval & jangan jalankan lagi!
-    if (isApiReady) {
-      return;
-    }
-
-    const placeholderInterval = setInterval(() => {
-      // DOUBLE CHECK GUARD: Cegah mutasi jika di tengah jalan API mendadak ready
-      if (tgaLoaded && oilLoaded && quantLoaded) {
-        clearInterval(placeholderInterval);
-        return;
-      }
-
-      // Jalankan simulasi hanya pada node yang belum loaded
-      setMacroState((prev) => ({
-        ...prev,
-        crude_oil: oilLoaded ? prev.crude_oil : {
-          value: prev.crude_oil.value + (Math.random() - 0.5) * 0.2,
-          delta: prev.crude_oil.delta,
-        },
-        tga: tgaLoaded ? prev.tga : {
-          value: prev.tga.value + (Math.random() - 0.5) * 5,
-          delta: prev.tga.delta,
-        },
-        vix: quantLoaded ? prev.vix : {
-          value: Math.max(9, Math.min(45, prev.vix.value + (Math.random() - 0.5) * 0.8)),
-        },
-        yield_curve: quantLoaded ? prev.yield_curve : prev.yield_curve,
-        real_yields: quantLoaded ? prev.real_yields : {
-          value: Math.max(-0.5, Math.min(3.5, prev.real_yields.value + (Math.random() - 0.5) * 0.1)),
-          delta: prev.real_yields.delta,
-        },
-        dxy: { ...prev.dxy, delta: prev.dxy.delta + (Math.random() - 0.5) * 0.2 },
-        risk_assets: { ...prev.risk_assets, delta: prev.risk_assets.delta + (Math.random() - 0.5) * 0.3 },
-        rrp: {
-          value: prev.rrp.value + (Math.random() - 0.58) * 5,
-          delta: prev.rrp.delta,
-        },
-        inflation_proxy: {
-          value: Math.max(0.8, Math.min(4.5, prev.inflation_proxy.value + (Math.random() - 0.55) * 0.08)),
-          delta: prev.inflation_proxy.delta,
-        },
-      }));
-    }, 1500);
-
-    return () => clearInterval(placeholderInterval);
-  }, [tgaLoaded, oilLoaded, quantLoaded, isApiReady]);
+  const isApiReady = nexusLoaded;
+  const hasAnyError = Object.values(nodeQuality).some(
+    (q) => q.freshness === "error",
+  );
 
   // ── 5. DERIVED DATA ────────────────────────────────────────────────────
   const tf: Record<string, number> = {};
@@ -678,8 +1012,194 @@ export default function Nexus() {
   });
 
   const nodeMap = useMemo(() => {
-    const map: Record<string, { x: number; y: number; color: string; icon: React.ElementType; label: string; inPorts: number; outPorts: number }> = {};
+    const map: Record<
+      string,
+      {
+        x: number;
+        y: number;
+        color: string;
+        icon: React.ElementType;
+        label: string;
+        inPorts: number;
+        outPorts: number;
+        value: string;
+        status: string;
+        quality: NodeQuality;
+      }
+    > = {};
     NODES.forEach((n) => {
+      const netLiqValue =
+        macroState.walcl.value - macroState.tga.value - macroState.rrp.value;
+      const netLiqDelta =
+        macroState.walcl.delta - macroState.tga.delta - macroState.rrp.delta;
+
+      const ryDelta = macroState.real_yields.delta;
+      const spyDelta = macroState.risk_assets.delta;
+      const goldDelta = macroState.gold.delta;
+      const quality = nodeQuality[n.key] ?? {
+        source: "computed",
+        freshness: hasAnyError ? "stale" : "live",
+        confidence: hasAnyError ? 40 : 70,
+      };
+
+      let statusLabel = "";
+      switch (n.key) {
+        case "crb":
+        case "commodities":
+          statusLabel =
+            macroState.commodities.delta > 0
+              ? "Inflationary"
+              : "Disinflationary";
+          break;
+        case "oil":
+        case "crude_oil":
+          statusLabel =
+            macroState.crude_oil.delta > 0 ? "Energy Risk" : "Benign";
+          break;
+        case "onrrp":
+          statusLabel =
+            macroState.rrp.delta < 0
+              ? "Releasing Liquidity"
+              : "Absorbing Liquidity";
+          break;
+        case "tga":
+          statusLabel = macroState.tga.delta < 0 ? "Yellen Put" : "Tax Drain";
+          break;
+        case "liq":
+          statusLabel =
+            netLiqDelta > 0 ? "Liquidity Expansion" : "Liquidity Contraction";
+          break;
+        case "growth":
+          if (quality.freshness === "error") {
+            statusLabel = "Data Unavailable";
+            break;
+          }
+          const sent = macroState.growth_pmi?.value || 65;
+          statusLabel =
+            sent > 70
+              ? "Optimistic"
+              : sent > 60
+                ? "Cautious"
+                : sent > 50
+                  ? "Pessimistic"
+                  : "Recession Alert";
+          break;
+        case "inf": {
+          const cpiVal = macroState.inflation_proxy.value;
+          statusLabel =
+            cpiVal > 3.0
+              ? "Sticky / Hot"
+              : cpiVal > 2.0
+                ? "Moderate"
+                : "Cooling";
+          break;
+        }
+        case "fed":
+          statusLabel = macroState.fed_policy.status;
+          break;
+        case "dxy":
+          statusLabel =
+            macroState.dxy.delta > 0 ? "Wrecking Ball" : "Depreciating";
+          break;
+        case "yc":
+          statusLabel = macroState.yield_curve.status;
+          break;
+        case "ry":
+          const ryVal = macroState.real_yields.value;
+          statusLabel =
+            ryVal > 1.5
+              ? "Restrictive"
+              : ryVal < 0.5
+                ? "Accommodative"
+                : "Neutral";
+          break;
+        case "eq":
+          if (spyDelta > 0 && netLiqDelta > 0)
+            statusLabel = "Liquidity Driven Rally";
+          else if (spyDelta > 0 && ryDelta > 0) statusLabel = "Defying Gravity";
+          else if (spyDelta < 0 && ryDelta > 0) statusLabel = "Yield Pressured";
+          else if (spyDelta < 0 && netLiqDelta < 0)
+            statusLabel = "Liquidity Drain";
+          else statusLabel = spyDelta > 0 ? "Bullish" : "Bearish";
+          break;
+        case "gold":
+          if (goldDelta > 0 && ryDelta < 0) statusLabel = "Yield Supported";
+          else if (goldDelta < 0 && ryDelta > 0)
+            statusLabel = "Yield Pressured";
+          else if (goldDelta > 0 && ryDelta > 0)
+            statusLabel = "Debasement Fear";
+          else if (goldDelta < 0 && ryDelta < 0) statusLabel = "Liquidation";
+          else
+            statusLabel = goldDelta > 0 ? "Safe Haven Up" : "Safe Haven Down";
+          break;
+        case "vix":
+          if (quality.freshness === "error") statusLabel = "DATA UNAVAILABLE";
+          else if ((macroState.vix.value ?? 0) >= 20 && spyDelta < 0)
+            statusLabel = "Panic / Hedging";
+          else if ((macroState.vix.value ?? 0) < 15 && spyDelta > 0)
+            statusLabel = "Complacency";
+          else if ((macroState.vix.value ?? 0) >= 15 && spyDelta > 0)
+            statusLabel = "Nervous Bull";
+          else
+            statusLabel =
+              (macroState.vix.value ?? 0) < 15
+                ? "Calm"
+                : (macroState.vix.value ?? 0) <= 25
+                  ? "Elevated"
+                  : "Panic";
+          break;
+        case "em_risk_on":
+          statusLabel =
+            macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow";
+          break;
+        case "risk_off_fx":
+          statusLabel =
+            macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge";
+          break;
+        default:
+          statusLabel = "";
+          break;
+      }
+
+      const displayValue =
+        n.key === "vix"
+          ? macroState.vix.value === null
+            ? "DATA UNAVAILABLE"
+            : macroState.vix.value.toFixed(1)
+          : n.key === "tga"
+            ? `$${macroState.tga.value.toFixed(0)}B`
+            : n.key === "oil" || n.key === "crude_oil"
+              ? `${macroState.crude_oil.delta > 0 ? "+" : ""}${macroState.crude_oil.delta.toFixed(2)}%`
+              : n.key === "ry"
+                ? `${macroState.real_yields.value.toFixed(2)}%`
+                : n.key === "liq"
+                  ? `$${netLiqValue.toFixed(1)}B`
+                  : n.key === "onrrp"
+                    ? `$${macroState.rrp.value.toFixed(1)}B`
+                    : n.key === "fed"
+                      ? `${(macroState.fed_policy.rate || 0).toFixed(2)}%`
+                      : n.key === "inf"
+                        ? `${macroState.inflation_proxy.value.toFixed(2)}%`
+                        : n.key === "dxy"
+                          ? macroState.dxy.value.toFixed(2)
+                          : n.key === "yc"
+                            ? `${macroState.yield_curve.spread} bps`
+                            : n.key === "eq"
+                              ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
+                              : n.key === "growth"
+                                ? quality.freshness === "error"
+                                  ? "DATA UNAVAILABLE"
+                                  : `${(macroState.growth_pmi?.value || 0).toFixed(1)}`
+                                : n.key === "commodities" || n.key === "crb"
+                                  ? `${macroState.commodities.value.toFixed(2)}`
+                                  : n.key === "gold"
+                                    ? `${macroState.gold.delta > 0 ? "+" : ""}${macroState.gold.delta.toFixed(2)}%`
+                                    : n.key === "em_risk_on"
+                                      ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
+                                      : n.key === "risk_off_fx"
+                                        ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
+                                        : "—";
+
       map[n.key] = {
         x: n.x,
         y: n.y,
@@ -688,6 +1208,9 @@ export default function Nexus() {
         label: n.label,
         inPorts: tf[n.key] || 0,
         outPorts: sf[n.key] || 0,
+        value: displayValue,
+        status: statusLabel,
+        quality,
       };
     });
     return map;
@@ -740,11 +1263,11 @@ export default function Nexus() {
       const tf = targetFan[e.to];
       const sf = sourceFan[e.from];
       const tIdx = tf.index++;
-      let sIdx = sf.index++;
-      let sourceCount = sf.count;
+      const sIdx = sf.index++;
+      const sourceCount = sf.count;
 
       // Hitung offset persentase yang presisi secara matematis berdasarkan dimensi piksel
-      const spreadYPct = (16 / dim.h) * 100; 
+      const spreadYPct = (16 / dim.h) * 100;
       const targetOffsetY = (tIdx - (tf.count - 1) / 2) * spreadYPct;
       const sourceOffsetY = (sIdx - (sourceCount - 1) / 2) * spreadYPct;
 
@@ -765,13 +1288,11 @@ export default function Nexus() {
 
   // ── 6. RENDER ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-2">
-      {/* ── DIAGRAM CONTAINER ───────────────────────────────────── */}
-      <div 
+    <div className="flex flex-col gap-3">
+      <div
         ref={containerRef}
         className="relative w-full aspect-[16/10] min-h-[500px] max-h-[850px] glass border border-border-subtle rounded-2xl bg-bg-void overflow-hidden"
       >
-        {/* dot grid */}
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.06]"
           style={{
@@ -781,7 +1302,6 @@ export default function Nexus() {
           }}
         />
 
-        {/* Header */}
         <div className="absolute top-3 left-4 right-4 z-20 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-[0.2em] flex items-center gap-2">
@@ -791,47 +1311,87 @@ export default function Nexus() {
             <p className="text-[9px] font-mono text-text-muted mt-1 max-w-md leading-relaxed">
               Institutional flow: Liquidity → Policy → Yield → Risk Assets
             </p>
-            <span className={`text-[9px] font-mono font-bold ${isApiReady ? "text-emerald-400" : "text-amber-500 animate-pulse"}`}>
-              SOURCES: {isApiReady ? "LIVE MACRO TERMINAL API" : "SIMULATED FALLBACK"}
+            <span
+              className={`text-[9px] font-mono font-bold ${hasAnyError ? "text-amber-500" : isApiReady ? "text-emerald-400" : "text-text-muted animate-pulse"}`}
+            >
+              SOURCES:{" "}
+              {hasAnyError
+                ? "STALE / PARTIAL DATA"
+                : isApiReady
+                  ? "LIVE MACRO TERMINAL API"
+                  : "LOADING SNAPSHOT"}
             </span>
           </div>
-          <button
-            onClick={fetchNexusAnalysis}
-            disabled={isAnalyzing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-accent-gold/40 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)] shrink-0"
-          >
-            {isAnalyzing ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : (
-              <Cpu className="w-3 h-3" />
-            )}
-            Analyze Flow
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportDeskBrief}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-border-subtle bg-surface-elevated/40 text-text-muted hover:text-accent-gold hover:border-accent-gold/40 transition-all shrink-0"
+            >
+              <Layers className="w-3 h-3" />
+              Export Desk Brief
+            </button>
+            <button
+              onClick={fetchNexusAnalysis}
+              disabled={isAnalyzing}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-accent-gold/40 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(245,158,11,0.1)] shrink-0"
+            >
+              {isAnalyzing ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <Cpu className="w-3 h-3" />
+              )}
+              Analyze Flow
+            </button>
+          </div>
         </div>
 
-        {/* Zone Bottom Labels */}
-        <div className="absolute bottom-4 left-0 right-0 z-10 flex justify-around pointer-events-none px-8">
+        <div className="absolute top-0 left-0 right-0 z-10 flex justify-around pointer-events-none px-8">
           {[
-            { label: "ZONA 1 // LIQUIDITY DRIVERS", x: "25%" },
-            { label: "ZONA 2 // POLICY TRANSFORMERS", x: "50%" },
-            { label: "ZONA 3 // CAPITAL DESTINATION", x: "75%" },
-          ].map(({ label, x }) => (
+            "ZONA 1 // LIQUIDITY DRIVERS",
+            "ZONA 2 // POLICY TRANSFORMERS",
+            "ZONA 3 // CAPITAL DESTINATION",
+          ].map((label, index) => (
             <div
               key={label}
               className="flex flex-col items-center"
-              style={{ position: "absolute", left: x, bottom: "2rem", transform: "translateX(-50%)" }}
+              style={{
+                position: "absolute",
+                left: 25 + index * 25 + "%",
+                top: "3.5rem",
+                transform: "translateX(-50%)",
+              }}
             >
-              <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">{label}</span>
-              <div className="mt-0.5 flex items-center gap-1">
+              <div className="mb-1 flex items-center gap-1">
                 <span className="inline-block w-3 h-px bg-zinc-700" />
                 <span className="inline-block w-1.5 h-1.5 border border-zinc-600 rotate-45" />
                 <span className="inline-block w-3 h-px bg-zinc-700" />
               </div>
+              <span className="text-zinc-500 text-[8px] font-mono tracking-[0.25em] uppercase">
+                {label}
+              </span>
             </div>
           ))}
         </div>
 
-        {/* SVG Edges Layer */}
+        <div className="absolute left-4 bottom-4 z-20 flex flex-wrap items-center gap-2 text-[8px] font-mono text-text-muted">
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-0.5 bg-emerald-500/70" />
+            LIQ EXPANSION
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-0.5 bg-red-500/70" />
+            LIQ DRAIN
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-0.5 bg-amber-500/70" />
+            STICKY / WARNING
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-0.5 bg-blue-500/70" />
+            POLICY / FX
+          </span>
+        </div>
+
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none overflow-visible relative z-10"
           viewBox="0 0 100 100"
@@ -852,96 +1412,37 @@ export default function Nexus() {
               side={edge.side}
               from={edge.from}
               to={edge.to}
-              nodeHwPct={(62 / dim.w) * 100} // 56px setengah node + 6px pendaran/margin dot
+              nodeHwPct={(62 / dim.w) * 100}
             />
           ))}
         </svg>
 
-        {/* Nodes Layer */}
         {NODES.map((node) => {
           const data = nodeMap[node.key];
           if (!data) return null;
           const Icon = data.icon;
-          const statusLabel = node.key === "liq" || node.key === "onrrp"
-            ? macroState.rrp.delta < 0 ? "Injecting" : "Draining"
-            : node.key === "tga"
-              ? macroState.tga.delta < 0 ? "Yellen Drain" : "Cash Absorbed"
-            : node.key === "oil" || node.key === "crude_oil" 
-              ? macroState.crude_oil.delta > 0 ? "Inflation Risk" : "Disinflation Tailwind"
-            : node.key === "fed"
-              ? macroState.fed_policy.status
-            : node.key === "inf"
-              ? macroState.inflation_proxy.value > 2.5 || macroState.inflation_proxy.delta > 0 ? "Hot" : "Cooling"
-            : node.key === "dxy"
-              ? macroState.dxy.delta > 0 ? "Risk-Off" : "Risk-On"
-            : node.key === "ry"
-              ? macroState.real_yields.value > 0 && macroState.real_yields.delta > 0 ? "Restrictive" : "Accommodative"
-            : node.key === "vix"
-              ? macroState.vix.value < 15 ? "Calm" : macroState.vix.value <= 25 ? "Elevated" : "Panic"
-            : node.key === "yc"
-              ? macroState.yield_curve.status
-            : node.key === "eq" || node.key === "growth"
-              ? macroState.risk_assets.delta > 0 ? "Bull" : "Bear"
-            : node.key === "commodities" || node.key === "crb"
-              ? macroState.commodities.delta > 0 ? "Inflation Risk" : "Disinflation"
-            : node.key === "gold"
-              ? macroState.gold.delta > 0 ? "Safe Haven Up" : "Safe Haven Down"
-            : node.key === "em_risk_on"
-              ? macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow"
-            : node.key === "risk_off_fx"
-              ? macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge"
-            : "";
-
-          const displayValue = node.key === "fed"
-                ? macroState.fed_policy.status.toUpperCase()
-                : node.key === "vix"
-                  ? macroState.vix.value.toFixed(1)
-                  : node.key === "tga"
-                    ? `$${macroState.tga.value.toFixed(0)}B`
-                    : node.key === "oil" || node.key === "crude_oil"
-                      ? `${macroState.crude_oil.delta > 0 ? "+" : ""}${macroState.crude_oil.delta.toFixed(2)}%`
-                    : node.key === "ry"
-                      ? `${macroState.real_yields.value.toFixed(2)}%`
-                    : node.key === "liq" || node.key === "onrrp"
-                      ? `$${macroState.rrp.value.toFixed(1)}B`
-                    : node.key === "inf"
-                      ? `${macroState.inflation_proxy.value.toFixed(2)}%`
-                    : node.key === "dxy"
-                      ? macroState.dxy.value.toFixed(2)
-                    : node.key === "yc"
-                      ? `${macroState.yield_curve.spread} bps`
-                    : node.key === "eq" || node.key === "growth"
-                      ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
-                    : node.key === "commodities" || node.key === "crb"
-                      ? `${macroState.commodities.value.toFixed(2)}`
-                    : node.key === "gold"
-                      ? `$${macroState.gold.value.toFixed(2)}`
-                    : node.key === "em_risk_on"
-                      ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
-                    : node.key === "risk_off_fx"
-                      ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
-                    : "—";
 
           return (
             <NexusNode
               key={node.key}
               id={node.key}
-              label={`${node.label}${statusLabel ? ` · ${statusLabel}` : ""}`}
-              value={displayValue}
-              icon={Icon as any}
+              label={node.label}
+              statusText={data.status || undefined}
+              value={data.value}
+              icon={Icon}
               statusColor={data.color}
               glowColor={data.color}
               x={node.x}
               y={node.y}
               inputs={data.inPorts}
               outputs={data.outPorts}
-              pulsate={node.key === "fed" || (node.key === "liq" && !(macroState.rrp.delta < 0)) || (node.key === "vix" && macroState.vix.value >= 20)}
+              pulsate={isNodePulsating(macroState, node.key)}
+              quality={data.quality}
             />
           );
         })}
       </div>
 
-      {/* ── AI REASONING PANEL ──────────────────────────────────── */}
       <div className="glass border border-border-subtle rounded-2xl bg-bg-void p-5">
         <div className="flex items-center gap-2 mb-3">
           <Terminal className="w-4 h-4 text-accent-gold" />
@@ -966,7 +1467,8 @@ export default function Nexus() {
             </span>
           ) : (
             <span className="text-text-muted italic">
-              Tekan "Analyze Flow" untuk narasi aliran modal berbasis Causal Loop saat ini.
+              Tekan &quot;Analyze Flow&quot; untuk narasi aliran modal berbasis
+              Causal Loop saat ini.
             </span>
           )}
         </div>

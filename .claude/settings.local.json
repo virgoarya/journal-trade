@@ -23,7 +23,8 @@
       "Bash(npx tsc:*)",
       "Bash(pkill -9 -f \"next\")",
       "Bash(pkill -9 -f \"node\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(powershell -Command \"curl http://localhost:3000/api/calendar\")"
     ]
   }
 }

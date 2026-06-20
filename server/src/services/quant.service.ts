@@ -1,7 +1,76 @@
-import { YieldCurveSnapshot, IYieldCurveSnapshot } from "../models/YieldCurveSnapshot";
-import { fredLatest } from "../utils/fred-api.helper";
+import {
+  YieldCurveSnapshot,
+  IYieldCurveSnapshot,
+} from "../models/YieldCurveSnapshot";
+import { fredLatest, fredHistorical } from "../utils/fred-api.helper";
+import { silentLogger } from "../utils/silent-logger";
+import { broadcast } from "../ws-server";
 
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+const VIX_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const YIELD_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const FETCH_TIMEOUT_MS = 8000;
+const YAHOO_RETRY_DELAY_MS = 1200;
+const YAHOO_STAGGER_MS = 350;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const inMemoryCache: Record<string, { value: any; fetchedAt: number }> = {};
+
+function getCache<T>(key: string, ttlMs: number): T | null {
+  const cached = inMemoryCache[key];
+  if (!cached) return null;
+  if (Date.now() - cached.fetchedAt > ttlMs) return null;
+  return cached.value as T;
+}
+
+function setCache<T>(key: string, value: T): void {
+  inMemoryCache[key] = { value, fetchedAt: Date.now() };
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!));
+}
+
+async function fetchJsonWithRetry<T>(
+  url: string,
+  label: string,
+  retries = 1,
+): Promise<T> {
+  let lastError: any = new Error("No fetch attempts made");
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await withTimeout(fetch(url), FETCH_TIMEOUT_MS, label);
+      if (!res.ok) throw new Error(`${label} HTTP ${res.status}`);
+      return (await withTimeout(
+        res.json(),
+        FETCH_TIMEOUT_MS,
+        `${label} json`,
+      )) as T;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, YAHOO_RETRY_DELAY_MS),
+        );
+      }
+    }
+  }
+  throw lastError;
+}
+
+function extractYahooPrice(data: any): number | null {
+  const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+  return typeof price === "number" ? price : null;
+}
 
 const FRED_SERIES = {
   DGS2: "DGS2",
@@ -13,64 +82,143 @@ const FRED_SERIES = {
 function classifyRegime(vix: number | null): IYieldCurveSnapshot["regime"] {
   if (vix === null) return "UNKNOWN";
   if (vix < 15) return "CALM";
-  if (vix >= 15 && vix < 20) return "NORMAL";
+  if (vix >= 15 && vix < 20) return "NORMAL-CAUTIOUS";
   if (vix >= 20 && vix < 30) return "ELEVATED";
   if (vix >= 30) return "FEAR";
   return "UNKNOWN";
 }
 
 async function fetchYahooYield(symbol: string): Promise<number | null> {
-  const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`);
-  if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
-  const data = (await res.json()) as any;
-  return data?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+  const cached = getCache<number>(`yield:${symbol}`, YIELD_CACHE_TTL_MS);
+  if (cached != null) return cached;
+
+  const data = await fetchJsonWithRetry<any>(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`,
+    `Yahoo Yield ${symbol}`,
+  );
+  const price = extractYahooPrice(data);
+  if (price != null) setCache(`yield:${symbol}`, price);
+  return price;
 }
 
 async function fetchYahooHistorical(symbol: string): Promise<number | null> {
-  const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1mo&interval=1d`);
-  if (!res.ok) throw new Error(`Yahoo Historical HTTP ${res.status}`);
-  const data = (await res.json()) as any;
+  const cached = getCache<number>(`yield-hist:${symbol}`, 30 * 60 * 1000);
+  if (cached != null) return cached;
+
+  const data = await fetchJsonWithRetry<any>(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1mo&interval=1d`,
+    `Yahoo Historical ${symbol}`,
+  );
   const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-  const validCloses = closes.filter((v: any) => typeof v === "number" && !Number.isNaN(v));
+  const validCloses = closes.filter(
+    (v: any) => typeof v === "number" && !Number.isNaN(v),
+  );
   if (validCloses.length === 0) return null;
-  return validCloses[0]; // oldest close (1 month ago)
+  const oldest = validCloses[0];
+  setCache(`yield-hist:${symbol}`, oldest);
+  return oldest;
+}
+
+async function fetchYahooVix(): Promise<number | null> {
+  const cached = getCache<number>("vix:yahoo", VIX_CACHE_TTL_MS);
+  if (cached != null) return cached;
+
+  const data = await fetchJsonWithRetry<any>(
+    "https://query1.finance.yahoo.com/v8/finance/chart/^VIX",
+    "Yahoo VIX",
+    2,
+  );
+  const price = extractYahooPrice(data);
+  if (price == null) throw new Error("Invalid Yahoo VIX format");
+  setCache("vix:yahoo", price);
+  broadcast("vix_update", { value: price, source: "yahoo" });
+  return price;
 }
 
 async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
-  console.log("[QuantLab] Fetching fresh data from Yahoo Finance…");
+  const y3m = await fetchYahooYield("^IRX");
+  await sleep(YAHOO_STAGGER_MS);
+  const y5 = await fetchYahooYield("^FVX");
+  await sleep(YAHOO_STAGGER_MS);
+  const y10 = await fetchYahooYield("^TNX");
+  await sleep(YAHOO_STAGGER_MS);
+  const y30 = await fetchYahooYield("^TYX");
 
-  const [y3m, y5, y10, y30] = await Promise.all([
-    fetchYahooYield("^IRX"),
-    fetchYahooYield("^FVX"),
-    fetchYahooYield("^TNX"),
-    fetchYahooYield("^TYX"),
-  ]);
+  await sleep(YAHOO_STAGGER_MS);
+
+  const histY3m = await fetchYahooHistorical("^IRX");
+  await sleep(YAHOO_STAGGER_MS);
+  const histY5 = await fetchYahooHistorical("^FVX");
+  await sleep(YAHOO_STAGGER_MS);
+  const histY10 = await fetchYahooHistorical("^TNX");
+  await sleep(YAHOO_STAGGER_MS);
+  const histY30 = await fetchYahooHistorical("^TYX");
 
   let y2y: number | null = null;
+  let histY2y: number | null = null;
   try {
     y2y = await fredLatest("DGS2", 6);
+    histY2y = await fredHistorical("DGS2", 22);
   } catch (err) {
-    console.warn("[QuantLab] FRED 2Y fetch failed:", err);
+    silentLogger.warn("[QuantLab] FRED 2Y fetch failed:", err);
   }
+
+  await sleep(YAHOO_STAGGER_MS);
 
   let vix: number | null = null;
+  let vixSource: "yahoo" | "fred" | null = null;
+
   try {
-    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/^VIX');
-    if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
-    const data = (await res.json()) as any;
-    vix = data?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
-    if (typeof vix !== 'number') throw new Error('Invalid VIX format');
+    vix = await fetchYahooVix();
+    vixSource = "yahoo";
   } catch (err: any) {
-    console.warn("[QuantLab] Failed to fetch live VIX from Yahoo Finance, falling back to FRED:", err.message);
+    silentLogger.warn(
+      "[QuantLab] Yahoo VIX failed, falling back to FRED:",
+      err.message,
+    );
     vix = await fredLatest(FRED_SERIES.VIX, 6);
+    vixSource = "fred";
+    broadcast("vix_update", { value: vix, source: "fred" });
   }
 
-  const spread10y3m = y10 != null && y3m != null ? Math.round((y10 - y3m) * 100) : null;
-  const spread10y2y = y10 != null && y2y != null ? Math.round((y10 - y2y) * 100) : null;
-  const spread30y5y = y30 != null && y5 != null ? Math.round((y30 - y5) * 100) : null;
+  const spread10y3m =
+    y10 != null && y3m != null ? Math.round((y10 - y3m) * 100) : null;
+  const spread10y2y =
+    y10 != null && y2y != null ? Math.round((y10 - y2y) * 100) : null;
+  const spread30y5y =
+    y30 != null && y5 != null ? Math.round((y30 - y5) * 100) : null;
+  const spread30y3m =
+    y30 != null && y3m != null ? Math.round((y30 - y3m) * 100) : null;
   const inverted = spread10y2y != null && spread10y2y < 0;
 
   const regime = classifyRegime(vix);
+
+  let curveRegime: IYieldCurveSnapshot["curveRegime"] = "UNKNOWN";
+  if (y30 != null && y3m != null && histY30 != null && histY3m != null) {
+    const delta30 = y30 - histY30;
+    const delta3m = y3m - histY3m;
+    const currentSpread = y30 - y3m;
+    const histSpread = histY30 - histY3m;
+    const spreadDelta = currentSpread - histSpread;
+
+    // Inverted overlay is exposed separately as `inverted`; keep curve move label for flow interpretation.
+
+    if (spreadDelta > 0) {
+      // Steepening (spread widening)
+      if (delta30 > 0) {
+        curveRegime = "Bear Steepener"; // Long rates rising → bearish for bonds
+      } else {
+        curveRegime = "Bull Steepener"; // Short rates falling faster → bullish (Fed cutting)
+      }
+    } else {
+      // Flattening (spread narrowing)
+      if (delta3m > 0 && delta3m > delta30) {
+        curveRegime = "Bear Flattener"; // Short rates rising faster → bearish (Fed hiking)
+      } else {
+        curveRegime = "Bull Flattener"; // Long rates falling faster → bullish (flight to safety)
+      }
+    }
+  }
 
   const snapshot = await YieldCurveSnapshot.create({
     fetchedAt: new Date(),
@@ -80,29 +228,40 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
     y5,
     y10,
     y30,
+    histY3m,
+    histY2y,
+    histY5,
+    histY10,
+    histY30,
     spread10y3m,
     spread10y2y,
     spread30y5y,
+    spread30y3m,
     inverted,
     vix,
+    vixSource,
     regime,
+    curveRegime,
+    aiExplainer: null,
   });
 
   return snapshot;
 }
+
+import { aiQuantService } from "./ai-quant.service";
 
 export const quantService = {
   async getSnapshot() {
     const recent = await YieldCurveSnapshot.findOne(
       { source: "api" },
       {},
-      { sort: { fetchedAt: -1 } }
+      { sort: { fetchedAt: -1 } },
     ).lean();
 
     const prevCursor = await YieldCurveSnapshot.find(
       { source: "api" },
       {},
-      { sort: { fetchedAt: -1 }, limit: 2 }
+      { sort: { fetchedAt: -1 }, limit: 2 },
     ).lean();
     const prev = prevCursor.length >= 2 ? prevCursor[1] : null;
     const now = Date.now();
@@ -114,36 +273,99 @@ export const quantService = {
     if (isStale || !recent) {
       try {
         snapshot = await fetchFreshQuantSnapshot();
+        
+        let aiExplainer = recent?.aiExplainer;
+        if (!recent || recent.curveRegime !== snapshot.curveRegime || !aiExplainer) {
+          try {
+            const { macroRegimeService } = await import("./macro-regime.service");
+            const macroRegime = await macroRegimeService.getSnapshot();
+            aiExplainer = await aiQuantService.generateYieldCurveExplainer(snapshot.curveRegime, snapshot, macroRegime);
+          } catch(e: any) {
+            silentLogger.warn("[QuantLab] AI Explainer generation failed:", e.message);
+          }
+        }
+        
+        if (aiExplainer) {
+          (snapshot as any).aiExplainer = aiExplainer;
+          await YieldCurveSnapshot.updateOne({ _id: (snapshot as any)._id }, { $set: { aiExplainer } });
+        }
       } catch (err: any) {
-        console.error("[QuantLab] Fresh fetch failed:", err.message);
+        silentLogger.error("[QuantLab] Fresh fetch failed:", err.message);
         if (recent) {
           snapshot = recent;
         } else {
-          throw new Error("Quant data unavailable: no cache and API fetch failed.");
+          throw new Error(
+            "Quant data unavailable: no cache and API fetch failed.",
+          );
         }
       }
     }
 
+    const s = snapshot as any;
+    // Fallback: compute spread30y3m if old cache entry lacks it
+    const spread30y3m =
+      s.spread30y3m ??
+      (s.y30 != null && s.y3m != null
+        ? Math.round((s.y30 - s.y3m) * 100)
+        : null);
+    const curveRegime = s.curveRegime ?? "UNKNOWN";
+
     return {
       data: {
-        y3m: (snapshot as any).y3m,
-        y2y: (snapshot as any).y2y,
-        y5: (snapshot as any).y5,
-        y10: (snapshot as any).y10,
-        y30: (snapshot as any).y30,
-        spread10y3m: (snapshot as any).spread10y3m,
-        spread10y2y: (snapshot as any).spread10y2y,
-        spread30y5y: (snapshot as any).spread30y5y,
-        inverted: (snapshot as any).inverted,
-        vix: (snapshot as any).vix,
-        regime: (snapshot as any).regime,
+        y3m: s.y3m,
+        y2y: s.y2y,
+        y5: s.y5,
+        y10: s.y10,
+        y30: s.y30,
+        histY3m: s.histY3m,
+        histY2y: s.histY2y,
+        histY5: s.histY5,
+        histY10: s.histY10,
+        histY30: s.histY30,
+        spread10y3m: s.spread10y3m,
+        spread10y2y: s.spread10y2y,
+        spread30y5y: s.spread30y5y,
+        spread30y3m,
+        inverted: s.inverted,
+        vix: s.vix,
+        vixSource: s.vixSource,
+        regime: s.regime,
+        curveRegime,
+        aiExplainer: s.aiExplainer,
       },
-      fetchedAt: new Date((snapshot as any).fetchedAt),
-      fromCache: !isStale && !!recent,
+      fetchedAt: new Date(s.fetchedAt),
+      fromCache: snapshot === recent && !!recent,
     };
   },
 
   async forceRefresh() {
     return fetchFreshQuantSnapshot();
+  },
+
+  async refreshVix() {
+    let vix: number | null = null;
+    let vixSource: "yahoo" | "fred" | null = null;
+
+    try {
+      vix = await fetchYahooVix();
+      vixSource = "yahoo";
+    } catch (err: any) {
+      silentLogger.warn(
+        "[QuantLab] Yahoo VIX refresh failed, falling back to FRED:",
+        err.message,
+      );
+      vix = await fredLatest(FRED_SERIES.VIX, 6);
+      vixSource = "fred";
+    }
+
+    if (vix !== null) {
+      broadcast("vix_update", { value: vix, source: vixSource ?? "yahoo" });
+    }
+
+    return {
+      vix,
+      vixSource,
+      fetchedAt: new Date().toISOString(),
+    };
   },
 };
