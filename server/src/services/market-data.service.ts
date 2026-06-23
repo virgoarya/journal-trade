@@ -141,10 +141,9 @@ export const marketDataService = {
     }
 
     const response = await axios.get(
-      "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/dts_table_2",
+      "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/operating_cash_balance",
       {
         params: {
-          filter: 'account_type:"Treasury General Account"',
           sort: "-record_date",
           "page[size]": 100,
         },
@@ -152,14 +151,13 @@ export const marketDataService = {
       },
     );
 
-    const records: any[] = response.data?.data?.records ?? [];
+    const records: any[] = response.data?.data ?? [];
     if (!records.length) {
       throw new Error("Empty records from Fiscal Data API");
     }
 
     const tgaRows = records.filter((r) => {
-      const at = (r.account_type || "").toLowerCase();
-      return at.includes("treasury general account");
+      return r.account_type === "Treasury General Account (TGA) Closing Balance";
     });
 
     if (!tgaRows.length) {
@@ -173,7 +171,9 @@ export const marketDataService = {
     });
 
     const pickBalance = (row: any): number => {
-      const raw = row.close_today_bal ?? row.open_today_bal ?? "0";
+      const raw = (row.close_today_bal && row.close_today_bal !== "null") 
+        ? row.close_today_bal 
+        : row.open_today_bal;
       const parsed = parseFloat(String(raw).replace(/,/g, ""));
       return Number.isFinite(parsed) ? parsed / 1000 : 0;
     };

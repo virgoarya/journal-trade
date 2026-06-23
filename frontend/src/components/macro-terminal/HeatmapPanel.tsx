@@ -165,8 +165,8 @@ export function HeatmapPanel() {
         })}
       </div>
 
-      <div className="flex-1 border-t border-border-subtle p-3 flex flex-col min-h-0 overflow-y-auto">
-        <div className="flex items-center justify-between mb-2">
+      <div className="flex-1 border-t border-border-subtle flex flex-col min-h-0">
+        <div className="flex items-center justify-between p-3 pb-1.5 shrink-0">
           <div className="flex items-center gap-2 text-accent-gold text-[10px] font-mono tracking-widest uppercase">
             <BrainCircuit size={12} aria-hidden />
             <span>Hunter AI Reasoning</span>
@@ -185,21 +185,23 @@ export function HeatmapPanel() {
             {isAnalyzing ? "ANALYZING..." : "RE-ANALYZE"}
           </button>
         </div>
-        <div className="text-xs text-text-secondary leading-relaxed font-mono break-words">
-          {aiReasoning ? (
-            <div className="animate-in fade-in duration-500">{aiReasoning}</div>
-          ) : isAnalyzing ? (
-            <div className="text-accent-gold animate-pulse">
-              Connecting to Hunter Desk Terminal...
-            </div>
-          ) : (
-            <div className="text-text-muted">
-              Menunggu pergerakan pasar untuk dianalisis...
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto px-3 pb-2 min-h-0">
+          <div className="text-[10px] text-text-secondary leading-relaxed font-mono break-words whitespace-pre-wrap">
+            {aiReasoning ? (
+              <div className="animate-in fade-in duration-500">{aiReasoning}</div>
+            ) : isAnalyzing ? (
+              <div className="text-accent-gold animate-pulse">
+                Connecting to Hunter Desk Terminal...
+              </div>
+            ) : (
+              <div className="text-text-muted">
+                Menunggu pergerakan pasar untuk dianalisis...
+              </div>
+            )}
+          </div>
         </div>
         {lastUpdated && (
-          <div className="mt-auto pt-2 text-[9px] text-text-muted text-right">
+          <div className="shrink-0 px-3 pb-2 text-[9px] text-text-muted text-right">
             Last Sync:{" "}
             {new Intl.DateTimeFormat("id-ID", {
               day: "2-digit",

@@ -103,31 +103,6 @@ export const macroDataService = {
     const finnhubKey = env.FINNHUB_API_KEY;
     const twelveDataKey = env.TWELVE_DATA_API_KEY;
 
-    if (!finnhubKey && !twelveDataKey) {
-      // Return mock data for development
-      const mockData: MarketQuote[] = symbols.map((symbol) => {
-        const mockPrices: Record<string, number> = {
-          SPY: 475.50,
-          QQQ: 395.25,
-          GLD: 185.30,
-          VIXY: 22.50,
-          IEF: 108.75,
-          UUP: 102.35,
-          FXY: 142.80,
-          TIP: 98.45,
-        };
-        return {
-          symbol,
-          price: mockPrices[symbol] ?? null,
-          change: mockPrices[symbol] ? (Math.random() * 2 - 1) : null,
-          changePercent: mockPrices[symbol] ? (Math.random() * 2 - 1) : null,
-          timestamp: Date.now(),
-        };
-      });
-      return { data: mockData, fromCache: false, rateLimited: false };
-    }
-
-    // Attempt Yahoo Finance for specific symbols (like CL=F) or all if finnhub fails
     const fetchYahoo = async (syms: string[]) => {
       const results: MarketQuote[] = [];
       for (const symbol of syms) {
@@ -149,6 +124,14 @@ export const macroDataService = {
       }
       return results;
     };
+
+    if (!finnhubKey && !twelveDataKey) {
+      const data = await fetchYahoo(symbols);
+      if (data.length > 0) {
+        setCache(cacheKey, data, 60000);
+      }
+      return { data, fromCache: false, rateLimited: false };
+    }
 
     if (finnhubKey) {
       const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.FINNHUB, async () => {

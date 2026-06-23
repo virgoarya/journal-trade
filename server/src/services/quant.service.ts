@@ -141,8 +141,6 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
   const y5 = await fetchYahooYield("^FVX");
   await sleep(YAHOO_STAGGER_MS);
   const y10 = await fetchYahooYield("^TNX");
-  await sleep(YAHOO_STAGGER_MS);
-  const y30 = await fetchYahooYield("^TYX");
 
   await sleep(YAHOO_STAGGER_MS);
 
@@ -151,8 +149,6 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
   const histY5 = await fetchYahooHistorical("^FVX");
   await sleep(YAHOO_STAGGER_MS);
   const histY10 = await fetchYahooHistorical("^TNX");
-  await sleep(YAHOO_STAGGER_MS);
-  const histY30 = await fetchYahooHistorical("^TYX");
 
   let y2y: number | null = null;
   let histY2y: number | null = null;
@@ -185,34 +181,30 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
     y10 != null && y3m != null ? Math.round((y10 - y3m) * 100) : null;
   const spread10y2y =
     y10 != null && y2y != null ? Math.round((y10 - y2y) * 100) : null;
-  const spread30y5y =
-    y30 != null && y5 != null ? Math.round((y30 - y5) * 100) : null;
-  const spread30y3m =
-    y30 != null && y3m != null ? Math.round((y30 - y3m) * 100) : null;
   const inverted = spread10y2y != null && spread10y2y < 0;
 
   const regime = classifyRegime(vix);
 
   let curveRegime: IYieldCurveSnapshot["curveRegime"] = "UNKNOWN";
-  if (y30 != null && y3m != null && histY30 != null && histY3m != null) {
-    const delta30 = y30 - histY30;
+  if (y10 != null && y3m != null && histY10 != null && histY3m != null) {
+    const delta10 = y10 - histY10;
     const delta3m = y3m - histY3m;
-    const currentSpread = y30 - y3m;
-    const histSpread = histY30 - histY3m;
+    const currentSpread = y10 - y3m;
+    const histSpread = histY10 - histY3m;
     const spreadDelta = currentSpread - histSpread;
 
     // Inverted overlay is exposed separately as `inverted`; keep curve move label for flow interpretation.
 
     if (spreadDelta > 0) {
       // Steepening (spread widening)
-      if (delta30 > 0) {
+      if (delta10 > 0) {
         curveRegime = "Bear Steepener"; // Long rates rising → bearish for bonds
       } else {
         curveRegime = "Bull Steepener"; // Short rates falling faster → bullish (Fed cutting)
       }
     } else {
       // Flattening (spread narrowing)
-      if (delta3m > 0 && delta3m > delta30) {
+      if (delta3m > 0 && delta3m > delta10) {
         curveRegime = "Bear Flattener"; // Short rates rising faster → bearish (Fed hiking)
       } else {
         curveRegime = "Bull Flattener"; // Long rates falling faster → bullish (flight to safety)
@@ -227,16 +219,12 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
     y2y,
     y5,
     y10,
-    y30,
     histY3m,
     histY2y,
     histY5,
     histY10,
-    histY30,
     spread10y3m,
     spread10y2y,
-    spread30y5y,
-    spread30y3m,
     inverted,
     vix,
     vixSource,
@@ -265,16 +253,31 @@ export const quantService = {
     ).lean();
     const prev = prevCursor.length >= 2 ? prevCursor[1] : null;
     const now = Date.now();
-    const isStale =
+    let isStale =
       !recent || now - new Date(recent.fetchedAt).getTime() > CACHE_TTL_MS;
+
+    const isOutdatedAnalysis = recent?.aiExplainer && (
+      !recent.aiExplainer.includes("rug pull") ||
+      !recent.aiExplainer.includes("DIVERGENCE TOTAL") ||
+      recent.aiExplainer.includes("Analisis Regime Yield")
+    );
+
+    if (isOutdatedAnalysis) {
+      console.log("[QuantLab] Stale AI explainer detected (old prompt). Forcing regeneration.");
+      isStale = true;
+    }
 
     let snapshot: IYieldCurveSnapshot | (typeof recent & {}) = recent as any;
 
-    if (isStale || !recent) {
+    if (isStale) {
       try {
         snapshot = await fetchFreshQuantSnapshot();
         
         let aiExplainer = recent?.aiExplainer;
+        if (isOutdatedAnalysis) {
+          aiExplainer = null;
+        }
+
         if (!recent || recent.curveRegime !== snapshot.curveRegime || !aiExplainer) {
           try {
             const { macroRegimeService } = await import("./macro-regime.service");
@@ -302,12 +305,6 @@ export const quantService = {
     }
 
     const s = snapshot as any;
-    // Fallback: compute spread30y3m if old cache entry lacks it
-    const spread30y3m =
-      s.spread30y3m ??
-      (s.y30 != null && s.y3m != null
-        ? Math.round((s.y30 - s.y3m) * 100)
-        : null);
     const curveRegime = s.curveRegime ?? "UNKNOWN";
 
     return {
@@ -316,16 +313,12 @@ export const quantService = {
         y2y: s.y2y,
         y5: s.y5,
         y10: s.y10,
-        y30: s.y30,
         histY3m: s.histY3m,
         histY2y: s.histY2y,
         histY5: s.histY5,
         histY10: s.histY10,
-        histY30: s.histY30,
         spread10y3m: s.spread10y3m,
         spread10y2y: s.spread10y2y,
-        spread30y5y: s.spread30y5y,
-        spread30y3m,
         inverted: s.inverted,
         vix: s.vix,
         vixSource: s.vixSource,

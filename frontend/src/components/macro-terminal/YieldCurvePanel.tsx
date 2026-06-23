@@ -52,21 +52,19 @@ interface YieldPoint {
 }
 
 function buildHistoricalCurve(data: QuantData): YieldPoint[] {
-  const tenors: Array<keyof Pick<QuantData, "y3m" | "y2y" | "y5" | "y10" | "y30">> = [
+  const tenors: Array<keyof Pick<QuantData, "y3m" | "y2y" | "y5" | "y10">> = [
     "y3m",
     "y2y",
     "y5",
     "y10",
-    "y30",
   ];
-  const histKeys: Array<keyof Pick<QuantData, "histY3m" | "histY2y" | "histY5" | "histY10" | "histY30">> = [
+  const histKeys: Array<keyof Pick<QuantData, "histY3m" | "histY2y" | "histY5" | "histY10">> = [
     "histY3m",
     "histY2y",
     "histY5",
     "histY10",
-    "histY30",
   ];
-  const labels = ["3M", "2Y", "5Y", "10Y", "30Y"];
+  const labels = ["3M", "2Y", "5Y", "10Y"];
 
   const points: YieldPoint[] = [];
   tenors.forEach((tenor, index) => {
@@ -264,7 +262,7 @@ export function YieldCurvePanel() {
   }
 
   const chartData: YieldPoint[] =
-    data && data.y5 != null && data.y10 != null && data.y30 != null
+    data && data.y3m != null && data.y5 != null && data.y10 != null
       ? buildHistoricalCurve(data)
       : [];
 
@@ -344,7 +342,8 @@ export function YieldCurvePanel() {
               ? `${spread10y3m > 0 ? "+" : ""}${spread10y3m} bps`
               : "—"
           }
-          tone={spreadColor}
+          sub={`Fed's Recession Gauge · ${spread10y3m != null ? (spread10y3m < 0 ? "Perlambatan" : "Pertumbuhan") : ""}`}
+          tone={spread10y3m != null && spread10y3m < 0 ? "#ef4444" : "#22c55e"}
         />
         <StatCard
           label="10Y - 2Y Spread"
@@ -353,7 +352,8 @@ export function YieldCurvePanel() {
               ? `${spread10y2y > 0 ? "+" : ""}${spread10y2y} bps`
               : "—"
           }
-          tone={data?.inverted ? "#ef4444" : "#22c55e"}
+          sub={`Market Leading Indicator · ${spread10y2y != null ? (spread10y2y < 0 ? "Perlambatan" : "Pertumbuhan") : ""}`}
+          tone={spread10y2y != null && spread10y2y < 0 ? "#ef4444" : "#22c55e"}
         />
         <StatCard
           label="VIX Source"
@@ -380,6 +380,14 @@ export function YieldCurvePanel() {
       <div className="grid grid-cols-4 gap-2 mb-3 shrink-0">
         <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
+            3M
+          </div>
+          <div className="text-xs font-mono font-bold text-text-primary">
+            {data?.y3m != null ? `${data.y3m.toFixed(2)}%` : "—"}
+          </div>
+        </div>
+        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+          <div className="text-[8px] text-text-muted font-mono uppercase">
             2Y
           </div>
           <div className="text-xs font-mono font-bold text-text-primary">
@@ -400,14 +408,6 @@ export function YieldCurvePanel() {
           </div>
           <div className="text-xs font-mono font-bold text-text-primary">
             {data?.y10 != null ? `${data.y10.toFixed(2)}%` : "—"}
-          </div>
-        </div>
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
-          <div className="text-[8px] text-text-muted font-mono uppercase">
-            30Y
-          </div>
-          <div className="text-xs font-mono font-bold text-text-primary">
-            {data?.y30 != null ? `${data.y30.toFixed(2)}%` : "—"}
           </div>
         </div>
       </div>

@@ -26,9 +26,21 @@ export interface NewsApiResponse {
 
 export interface RegimeMetricData {
   current: number;
+  ema10: number;
   ema50: number;
-  status: "ACCELERATING" | "DECELERATING";
+  roc5d: number;
+  status: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
+  pressure?: "HOT" | "NORMAL" | "COLD";
   label: string;
+  subScores?: Record<string, { ratio?: number; value?: number | null; status: string }>;
+}
+
+export interface RegimeConfidenceData {
+  score: number;
+  conviction: number;
+  agreement: number;
+  persistence: number;
+  label: "LOW" | "MODERATE" | "HIGH" | "VERY HIGH";
 }
 
 export interface RegimeSnapshotData {
@@ -38,6 +50,7 @@ export interface RegimeSnapshotData {
   growth: RegimeMetricData;
   inflation: RegimeMetricData;
   liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
+  confidence: RegimeConfidenceData;
   position: { x: number; y: number };
   history: Array<{
     date: string;
@@ -50,13 +63,16 @@ export interface RegimeSnapshotData {
     quadrant: string;
   }>;
   fetchedAt: string;
-  // NEW: Source fidelity & momentum indicators
-  source?: string; // "YAHOO" | "FRED" | "FINNHUB"
+  // Source fidelity & momentum indicators
+  source?: string; // "YAHOO" | "CACHE"
+  inflationSource?: string; // "FRED_CPI" | "TIP_IEF" | "UNKNOWN"
+  cpiYoY?: number | null;
   momentum?: {
-    growthStatus: "ACCELERATING" | "DECELERATING" | "NEUTRAL";
-    inflationStatus: "ACCELERATING" | "DECELERATING" | "NEUTRAL";
+    growthStatus: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
+    inflationStatus: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
   };
 }
+
 
 export interface MacroRawInputs {
   ismPmi: number[];

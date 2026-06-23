@@ -15,9 +15,9 @@ import { ErrorBoundary } from "@/components/macro-terminal/ErrorBoundary";
 
 const TABS = [
   { name: "Overview", path: "/macro-terminal/overview" },
-  { name: "Intelligence", path: "/macro-terminal/intelligence" },
   { name: "Quant Lab", path: "/macro-terminal/quant-lab" },
   { name: "Nexus", path: "/macro-terminal/nexus" },
+  { name: "Intelligence", path: "/macro-terminal/intelligence" },
 ];
 
 function StatusDot({ status }: { status: string }) {

@@ -40,10 +40,21 @@ export interface Asset {
 
 export interface RegimeMetricData {
   current: number;
+  ema10: number;
   ema50: number;
-  status: "ACCELERATING" | "DECELERATING" | "NEUTRAL";
+  roc5d: number;
+  status: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
   pressure?: "HOT" | "NORMAL" | "COLD";
   label: string;
+  subScores?: Record<string, { ratio?: number; value?: number | null; status: string }>;
+}
+
+export interface RegimeConfidenceData {
+  score: number;
+  conviction: number;
+  agreement: number;
+  persistence: number;
+  label: "LOW" | "MODERATE" | "HIGH" | "VERY HIGH";
 }
 
 export interface RegimeSnapshotData {
@@ -51,11 +62,12 @@ export interface RegimeSnapshotData {
   quadNumber: number;
   description: string;
   source?: "YAHOO" | "CACHE" | "FRED";
-  inflationSource?: "FRED_CPI" | "TIP_TLT" | "UNKNOWN";
+  inflationSource?: "FRED_CPI" | "TIP_IEF" | "UNKNOWN";
   cpiYoY?: number | null;
   growth: RegimeMetricData;
   inflation: RegimeMetricData;
   liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
+  confidence: RegimeConfidenceData;
   position: { x: number; y: number };
   history: Array<{
     date: string;
@@ -231,7 +243,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       regime: regime,
       liquidityStatus,
       sentiment,
-      context: { growth: regimeData.growth, inflation: regimeData.inflation, liquidity: regimeData.liquidity, vix, yieldCurve, geoRisk },
+      context: { growth: regimeData.growth, inflation: regimeData.inflation, liquidity: regimeData.liquidity, confidence: regimeData.confidence, vix, yieldCurve, geoRisk },
     });
   }, [regimeData, liquidity, assets, vix, yieldCurve, geoRisk, analyzeRegime]);
 
@@ -361,6 +373,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
                   growth: regimeData.growth,
                   inflation: regimeData.inflation,
                   liquidity: regimeData.liquidity,
+                  confidence: regimeData.confidence,
                   vix,
                   yieldCurve,
                   geoRisk,

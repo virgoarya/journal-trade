@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useMacroTerminal } from "./MacroTerminalContext";
-import { X, Activity, Shield, TrendingUp, Clock, Database } from "lucide-react";
+import { X, Activity, Shield, TrendingUp, Clock } from "lucide-react";
 
 const QUADRANT_CONFIG: Record<
   string,
@@ -198,57 +198,93 @@ function MetricStrip({
   value,
   status,
   color,
+  roc5d,
+  subScores,
+  pressure,
 }: {
   label: string;
   value: string;
   status: string;
   color: string;
+  roc5d?: number;
+  subScores?: Record<string, { ratio?: number; value?: number | null; status: string }>;
+  pressure?: string;
 }) {
-  return (
-    <div className="rounded border border-border-subtle bg-surface-elevated/35 p-2 min-w-0">
-      <div className="text-[8px] text-text-muted font-mono uppercase tracking-widest">
-        {label}
-      </div>
-      <div className="flex items-center justify-between gap-2 mt-1">
-        <span className="text-xs font-mono font-bold text-text-primary truncate max-w-[92px]">
-          {value}
-        </span>
-        <span
-          className="text-[8px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap"
-          style={{
-            color,
-            borderColor: `${color}40`,
-            backgroundColor: `${color}12`,
-          }}
-        >
-          {status}
-        </span>
-      </div>
-    </div>
-  );
-}
+  const [expanded, setExpanded] = useState(false);
+  const hasSubScores = subScores && Object.keys(subScores).length > 0;
 
-function confidence(
-  regimeData: {
-    growth: { current: number; ema50: number };
-    inflation: { current: number; ema50: number };
-  } | null,
-) {
-  if (!regimeData) return 0;
-  const growth = regimeData.growth.ema50
-    ? Math.abs(
-        (regimeData.growth.current - regimeData.growth.ema50) /
-          regimeData.growth.ema50,
-      )
-    : 0;
-  const inflation = regimeData.inflation.ema50
-    ? Math.abs(
-        (regimeData.inflation.current - regimeData.inflation.ema50) /
-          regimeData.inflation.ema50,
-      )
-    : 0;
-  return Math.round(
-    Math.min(99, Math.max(12, ((growth + inflation) / 2) * 1000)),
+  const getStatusColor = (s: string) => {
+    if (s.includes("ACCELERATING")) return "#22c55e";
+    if (s.includes("DECELERATING")) return "#ef4444";
+    if (s.includes("TURNING")) return "#eab308";
+    if (s.includes("HOT")) return "#ef4444";
+    if (s.includes("COLD")) return "#22c55e";
+    return "#94a3b8";
+  };
+
+  return (
+    <div className="rounded border border-border-subtle bg-surface-elevated/35 min-w-0 flex flex-col transition-all">
+      <div
+        className={`p-2 flex-1 ${hasSubScores ? 'cursor-pointer hover:bg-surface-elevated/50' : ''}`}
+        onClick={() => hasSubScores && setExpanded(!expanded)}
+      >
+        {/* Row 1: Label + ROC */}
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[8px] text-text-muted font-mono uppercase tracking-widest">
+            {label}
+          </span>
+          {roc5d !== undefined && (
+            <span className={`text-[8px] font-mono font-bold ${roc5d > 0 ? 'text-green-500' : roc5d < 0 ? 'text-red-500' : 'text-text-muted'}`}>
+              {roc5d > 0 ? '▲' : roc5d < 0 ? '▼' : '·'}{Math.abs(roc5d).toFixed(2)}%
+            </span>
+          )}
+          {hasSubScores && (
+            <span className="text-[8px] text-text-muted ml-auto">{expanded ? '▾' : '▸'}</span>
+          )}
+        </div>
+        {/* Row 2: Value */}
+        <div className="text-xs font-mono font-bold text-text-primary leading-tight break-all" title={value}>
+          {value}
+        </div>
+        {/* Row 3: Status badge */}
+        <div className="mt-1">
+          <span
+            className={`text-[8px] font-mono px-1.5 py-0.5 rounded border inline-block ${status === 'TURNING' ? 'animate-pulse' : ''}`}
+            style={{
+              color,
+              borderColor: `${color}40`,
+              backgroundColor: `${color}12`,
+            }}
+          >
+            {status}{pressure ? ` · ${pressure}` : ''}
+          </span>
+        </div>
+      </div>
+
+      {expanded && hasSubScores && (
+        <div className="px-2 pb-2 pt-1 border-t border-border-subtle bg-black/20 text-[9px] font-mono space-y-1">
+          {Object.entries(subScores).map(([key, data]) => (
+            <div key={key} className="flex justify-between items-center text-text-secondary gap-1">
+              <span className="truncate max-w-[70px]">{key.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-text-muted">
+                  {data.ratio !== undefined ? data.ratio.toFixed(4) : data.value !== null && data.value !== undefined ? data.value.toFixed(2) + '%' : 'N/A'}
+                </span>
+                <span
+                  className="px-1 rounded"
+                  style={{
+                    color: getStatusColor(data.status),
+                    backgroundColor: `${getStatusColor(data.status)}15`
+                  }}
+                >
+                  {data.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -305,7 +341,7 @@ export function MacroRegimePanel() {
   const hasRegime = !!activeQuadrant && activeQuadrant !== "transition";
   const cfg = activeQuadrant ? QUADRANT_CONFIG[activeQuadrant] : null;
   const shift = lastShift(regimeData?.history, currentRegime ?? "");
-  const confidenceScore = confidence(regimeData);
+  const confidenceScore = regimeData?.confidence?.score ?? 0;
 
   const inferBias = (
     asset: string,
@@ -413,14 +449,9 @@ export function MacroRegimePanel() {
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border-subtle bg-surface-elevated/50 text-text-muted whitespace-nowrap">
+          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border whitespace-nowrap ${regimeData ? 'text-data-profit border-data-profit/30 bg-data-profit/10' : 'border-border-subtle bg-surface-elevated/50 text-text-muted'}`}>
             {regimeData ? "LIVE" : "LOADING..."}
           </span>
-          {regimeData?.source && (
-            <span className="text-[9px] text-text-muted font-mono bg-surface-elevated/50 px-1.5 py-0.5 rounded border border-border-subtle whitespace-nowrap">
-              {regimeData.source}
-            </span>
-          )}
         </div>
       </div>
 
@@ -470,30 +501,32 @@ export function MacroRegimePanel() {
 
         <div className="flex flex-col justify-center w-1/2 p-2 mt-1 gap-2">
           <div className="flex items-baseline justify-between mb-1">
-            <span className="text-text-muted font-mono text-[9px] tracking-widest uppercase">
+            <span className="text-text-muted font-mono text-[10px] tracking-widest uppercase">
               Active Regime
             </span>
           </div>
           {cfg && (
             <>
               <span
-                className="text-2xl font-black font-mono uppercase tracking-tight"
+                className="text-3xl font-black font-mono uppercase tracking-tight"
                 style={{ color: cfg.color }}
               >
                 {cfg.title}
               </span>
-              <p className="text-[10px] text-text-secondary leading-relaxed font-mono">
+              <p className="text-xs text-text-secondary leading-relaxed font-mono">
                 {regimeData?.description || `${cfg.title} — Loading...`}
               </p>
             </>
           )}
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             <MetricStrip
               label="Growth"
               value={`${regimeData?.growth.current.toFixed(4) ?? "—"} / ${regimeData?.growth.ema50.toFixed(4) ?? "EMA"}`}
               status={regimeData?.growth.status ?? "N/A"}
+              roc5d={regimeData?.growth.roc5d}
+              subScores={regimeData?.growth.subScores}
               color={
-                regimeData?.growth.status === "ACCELERATING"
+                regimeData?.growth.status === "ACCELERATING" || regimeData?.growth.status === "TURNING"
                   ? "#22c55e"
                   : regimeData?.growth.status === "DECELERATING"
                     ? "#ef4444"
@@ -503,13 +536,16 @@ export function MacroRegimePanel() {
             <MetricStrip
               label="Inflation"
               value={`${regimeData?.inflation.current.toFixed(4) ?? "—"} / ${regimeData?.inflation.ema50.toFixed(4) ?? "EMA"}`}
-              status={`${regimeData?.inflation.status ?? "N/A"} · ${regimeData?.inflation.pressure ?? "N/A"}`}
+              status={`${regimeData?.inflation.status ?? "N/A"}`}
+              pressure={regimeData?.inflation.pressure ?? "N/A"}
+              roc5d={regimeData?.inflation.roc5d}
+              subScores={regimeData?.inflation.subScores}
               color={
                 regimeData?.inflation.pressure === "HOT"
                   ? "#ef4444"
                   : regimeData?.inflation.pressure === "COLD"
                     ? "#22c55e"
-                    : regimeData?.inflation.status === "ACCELERATING"
+                    : regimeData?.inflation.status === "ACCELERATING" || regimeData?.inflation.status === "TURNING"
                       ? "#ef4444"
                       : regimeData?.inflation.status === "DECELERATING"
                         ? "#22c55e"
@@ -522,6 +558,7 @@ export function MacroRegimePanel() {
                 regimeData?.liquidity.riskState ?? liquidity?.status ?? "N/A"
               }
               status={regimeData?.liquidity.status ?? "N/A"}
+              roc5d={regimeData?.liquidity.roc5d}
               color={
                 regimeData?.liquidity.riskState === "STRESSED"
                   ? "#ef4444"
@@ -531,20 +568,21 @@ export function MacroRegimePanel() {
             <MetricStrip
               label="Confidence"
               value={`${confidenceScore}%`}
-              status={shift ? "SHIFTED" : "STABLE"}
-              color={shift ? "#f59e0b" : "#3b82f6"}
+              status={regimeData?.confidence?.label ?? (shift ? "SHIFTED" : "STABLE")}
+              color={
+                regimeData?.confidence?.label === "VERY HIGH" ? "#f59e0b" :
+                regimeData?.confidence?.label === "HIGH" ? "#22c55e" :
+                regimeData?.confidence?.label === "MODERATE" ? "#eab308" :
+                "#ef4444"
+              }
             />
           </div>
           {shift && (
-            <div className="flex items-center gap-2 rounded border border-accent-gold/20 bg-accent-gold/5 p-2 text-[9px] font-mono text-text-muted">
+            <div className="flex items-center gap-2 rounded border border-accent-gold/20 bg-accent-gold/5 p-2 text-[10px] font-mono text-text-muted">
               <Shield className="w-3 h-3 text-accent-gold" />
               Last shift: {shift.from} → {shift.to} · {shift.date}
             </div>
           )}
-          <div className="flex items-center gap-2 text-[9px] text-text-muted font-mono break-words">
-            <Database className="w-3 h-3 text-accent-gold" />
-            Source: XLY/XLP, TIP/TLT, HYG/SHY · Yahoo 6M · Inflation pressure = {regimeData?.inflation.pressure ?? "N/A"}{regimeData?.cpiYoY !== undefined && regimeData?.cpiYoY !== null ? ` · CPI YoY ${regimeData.cpiYoY.toFixed(2)}%` : ""}{regimeData?.inflationSource ? ` · ${regimeData.inflationSource}` : ""}
-          </div>
         </div>
       </div>
 

@@ -32,7 +32,7 @@ export function CurveExplainerPanel() {
               <span className="text-text-muted mr-2">CURRENT REGIME:</span> 
               <span className="text-accent-gold">{yieldCurve.curveRegime}</span>
             </div>
-            <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-p:mb-4 prose-li:mb-2 text-text-secondary font-mono text-[13px]">
+            <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-p:mb-4 prose-li:mb-2 text-text-secondary font-mono text-[13px] whitespace-pre-wrap">
               <ReactMarkdown>{yieldCurve.aiExplainer}</ReactMarkdown>
             </div>
           </div>

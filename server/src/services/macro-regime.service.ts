@@ -9,17 +9,33 @@ export type MacroQuadrant =
   | "Stagflation"
   | "Deflation"
   | "Transition";
-export type MomentumStatus = "ACCELERATING" | "DECELERATING" | "NEUTRAL";
+export type MomentumStatus = "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
 export type LiquidityRisk = "HEALTHY" | "STRESSED";
-
 export type InflationPressure = "HOT" | "NORMAL" | "COLD";
+export type ConfidenceLabel = "LOW" | "MODERATE" | "HIGH" | "VERY HIGH";
+
+export interface SubScore {
+  ratio: number;
+  status: MomentumStatus;
+}
 
 export interface RatioMetric {
   current: number;
+  ema10: number;
   ema50: number;
+  roc5d: number;
   status: MomentumStatus;
   pressure?: InflationPressure;
   label: string;
+  subScores?: Record<string, SubScore | { value: number | null; status: string }>;
+}
+
+export interface ConfidenceMetric {
+  score: number;
+  conviction: number;
+  agreement: number;
+  persistence: number;
+  label: ConfidenceLabel;
 }
 
 export interface MacroRegimeSnapshot {
@@ -27,11 +43,12 @@ export interface MacroRegimeSnapshot {
   quadNumber: number;
   description: string;
   source: "YAHOO" | "CACHE";
-  inflationSource: "FRED_CPI" | "TIP_TLT" | "UNKNOWN";
+  inflationSource: "FRED_CPI" | "TIP_IEF" | "UNKNOWN";
   cpiYoY: number | null;
   growth: RatioMetric;
   inflation: RatioMetric;
   liquidity: RatioMetric & { riskState: LiquidityRisk };
+  confidence: ConfidenceMetric;
   position: { x: number; y: number };
   history: Array<{
     date: string;
@@ -47,11 +64,17 @@ export interface MacroRegimeSnapshot {
   fetchedAt: string;
 }
 
+// ─── Quadrant Classifier ────────────────────────────────────────
 function classifyQuadrant(
   growth: MomentumStatus,
   inflation: MomentumStatus,
 ): { quadrant: MacroQuadrant; quadNumber: number; description: string } {
-  if (growth === "ACCELERATING" && inflation === "ACCELERATING") {
+  // TURNING is treated as the direction it's turning towards
+  // For classification, TURNING counts as the emerging direction
+  const effectiveGrowth = growth === "TURNING" ? "NEUTRAL" : growth;
+  const effectiveInflation = inflation === "TURNING" ? "NEUTRAL" : inflation;
+
+  if (effectiveGrowth === "ACCELERATING" && effectiveInflation === "ACCELERATING") {
     return {
       quadrant: "Reflation",
       quadNumber: 1,
@@ -59,7 +82,7 @@ function classifyQuadrant(
     };
   }
 
-  if (growth === "ACCELERATING" && inflation === "DECELERATING") {
+  if (effectiveGrowth === "ACCELERATING" && effectiveInflation === "DECELERATING") {
     return {
       quadrant: "Goldilocks",
       quadNumber: 2,
@@ -67,7 +90,7 @@ function classifyQuadrant(
     };
   }
 
-  if (growth === "DECELERATING" && inflation === "ACCELERATING") {
+  if (effectiveGrowth === "DECELERATING" && effectiveInflation === "ACCELERATING") {
     return {
       quadrant: "Stagflation",
       quadNumber: 3,
@@ -75,7 +98,7 @@ function classifyQuadrant(
     };
   }
 
-  if (growth === "DECELERATING" && inflation === "DECELERATING") {
+  if (effectiveGrowth === "DECELERATING" && effectiveInflation === "DECELERATING") {
     return {
       quadrant: "Deflation",
       quadNumber: 4,
@@ -90,12 +113,45 @@ function classifyQuadrant(
   };
 }
 
-function classifyMomentum(deltaRelative: number): MomentumStatus {
-  const ZSCORE_THRESHOLD = 0.0015;
-  if (Math.abs(deltaRelative) < ZSCORE_THRESHOLD) return "NEUTRAL";
-  return deltaRelative > 0 ? "ACCELERATING" : "DECELERATING";
+// ─── Momentum Classification (Dual-EMA + ROC) ──────────────────
+// Uses EMA-10 vs EMA-50 crossover + ROC direction for leading detection
+function classifyMomentumDualEMA(
+  current: number,
+  ema10: number,
+  ema50: number,
+  roc5d: number,
+): MomentumStatus {
+  const CROSS_THRESHOLD = 0.0008; // 0.08% dead zone to filter noise
+  const ROC_THRESHOLD = 0.05; // 0.05% minimum ROC to count
+
+  const deltaFastSlow = ema50 !== 0 ? (ema10 - ema50) / ema50 : 0;
+  const absDelta = Math.abs(deltaFastSlow);
+
+  // Dead zone — no clear signal
+  if (absDelta < CROSS_THRESHOLD && Math.abs(roc5d) < ROC_THRESHOLD) {
+    return "NEUTRAL";
+  }
+
+  // TURNING: EMA-10 just crossed EMA-50 but not yet established
+  // Detected when: delta is small (near crossover) but ROC shows directional momentum
+  if (absDelta < CROSS_THRESHOLD * 3 && Math.abs(roc5d) >= ROC_THRESHOLD) {
+    return "TURNING";
+  }
+
+  // ACCELERATING: EMA-10 above EMA-50 (upward momentum)
+  if (deltaFastSlow > CROSS_THRESHOLD) {
+    return "ACCELERATING";
+  }
+
+  // DECELERATING: EMA-10 below EMA-50 (downward momentum)
+  if (deltaFastSlow < -CROSS_THRESHOLD) {
+    return "DECELERATING";
+  }
+
+  return "NEUTRAL";
 }
 
+// ─── Percentile Calculation ─────────────────────────────────────
 function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
   const index = Math.min(
@@ -115,6 +171,57 @@ function classifyInflationPressure(
   if (current >= p70) return "HOT";
   if (current <= p30) return "COLD";
   return "NORMAL";
+}
+
+// ─── Confidence Score Calculator ────────────────────────────────
+function calculateConfidence(
+  growthSubStatuses: MomentumStatus[],
+  inflationSubStatuses: MomentumStatus[],
+  growthDelta: number,
+  inflationDelta: number,
+  history: Array<{ quadrant: MacroQuadrant }>,
+  currentQuadrant: MacroQuadrant,
+): ConfidenceMetric {
+  // 1. CONVICTION (0-40): Distance from neutral zone (Z-Score magnitude)
+  const avgDelta = (Math.abs(growthDelta) + Math.abs(inflationDelta)) / 2;
+  // Scale: 0.001 = 10pts, 0.005 = 40pts (max)
+  const conviction = Math.min(40, Math.round(avgDelta * 8000));
+
+  // 2. AGREEMENT (0-30): How many sub-indicators agree on direction
+  const allStatuses = [...growthSubStatuses, ...inflationSubStatuses];
+  const totalIndicators = allStatuses.length;
+  const dominantDirection = allStatuses.filter(
+    (s) => s === "ACCELERATING" || s === "DECELERATING",
+  ).length;
+  // If most indicators have a clear direction (not NEUTRAL/TURNING), agreement is high
+  const directedCount = allStatuses.filter(
+    (s) => s !== "NEUTRAL",
+  ).length;
+  const agreement = totalIndicators > 0
+    ? Math.round((directedCount / totalIndicators) * 30)
+    : 0;
+
+  // 3. PERSISTENCE (0-30): Consecutive days current regime has held in history
+  let consecutiveDays = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].quadrant === currentQuadrant) {
+      consecutiveDays++;
+    } else {
+      break;
+    }
+  }
+  // Scale: 5 days = 10pts, 15 days = 20pts, 25+ days = 30pts (max)
+  const persistence = Math.min(30, Math.round((consecutiveDays / 25) * 30));
+
+  const score = conviction + agreement + persistence;
+
+  let label: ConfidenceLabel;
+  if (score < 30) label = "LOW";
+  else if (score < 55) label = "MODERATE";
+  else if (score < 75) label = "HIGH";
+  else label = "VERY HIGH";
+
+  return { score, conviction, agreement, persistence, label };
 }
 
 // ─── EMA Calculation ─────────────────────────────────────────────
@@ -138,6 +245,42 @@ function calculateEMA(data: number[], period: number): number[] {
   }
 
   return ema;
+}
+
+// ─── Rate of Change (5-day) ─────────────────────────────────────
+function calculateROC(data: number[], period: number = 5): number[] {
+  const roc: number[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period || data[i - period] === 0) {
+      roc.push(0);
+    } else {
+      roc.push(((data[i] / data[i - period]) - 1) * 100);
+    }
+  }
+  return roc;
+}
+
+// ─── Composite Score Calculator ─────────────────────────────────
+function calculateComposite(
+  ratios: { values: number[]; weight: number }[],
+): number[] {
+  if (ratios.length === 0) return [];
+  const len = Math.min(...ratios.map((r) => r.values.length));
+  const composite: number[] = [];
+
+  for (let i = 0; i < len; i++) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    for (const r of ratios) {
+      if (i < r.values.length && r.values[i] !== 0) {
+        weightedSum += r.values[i] * r.weight;
+        totalWeight += r.weight;
+      }
+    }
+    composite.push(totalWeight > 0 ? weightedSum / totalWeight : 0);
+  }
+
+  return composite;
 }
 
 // ─── Yahoo Finance Historical Data Fetcher ───────────────────────
@@ -218,12 +361,10 @@ async function fetchLatestCpiYoY(): Promise<number | null> {
   }
 }
 
-// ─── Quadrant Classifier ────────────────────────────────────────
-
 // ─── Cache ──────────────────────────────────────────────────────
 let cachedSnapshot: MacroRegimeSnapshot | null = null;
 let cachedAt: number = 0;
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 menit — structural regime tidak perlu hit API tiap menit
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 // ─── Main Service ───────────────────────────────────────────────
 export const macroRegimeService = {
@@ -232,8 +373,19 @@ export const macroRegimeService = {
       return cachedSnapshot;
     }
 
-    const tickers = ["XLY", "XLP", "TIP", "TLT", "HYG", "SHY"];
-    
+    // ── Fetch all required ETFs ──────────────────────────────────
+    // Growth composite: XLY/XLP (40%), IWM/TLT (30%), XLI/XLU (30%)
+    // Inflation composite: TIP/IEF (50%), GLD/UUP (20%), CPI YoY (30%) from FRED
+    // Liquidity: HYG/SHY
+    const tickers = [
+      "XLY", "XLP",   // Growth primary
+      "IWM", "TLT",   // Growth secondary
+      "XLI", "XLU",   // Growth tertiary
+      "TIP", "IEF",   // Inflation primary
+      "GLD", "UUP",   // Inflation tertiary
+      "HYG", "SHY",   // Liquidity
+    ];
+
     const fetchWithRetry = async (ticker: string, retries = 3): Promise<{ dates: string[]; closes: number[] }> => {
       try {
         return await fetchHistoricalClosePrices(ticker);
@@ -243,7 +395,6 @@ export const macroRegimeService = {
           await new Promise(resolve => setTimeout(resolve, 2000));
           return fetchWithRetry(ticker, retries - 1);
         }
-        // Return empty data instead of throwing
         return { dates: [], closes: [] };
       }
     };
@@ -252,12 +403,21 @@ export const macroRegimeService = {
       tickers.map((t) => fetchWithRetry(t)),
     );
 
-    const [xlyData, xlpData, tipData, tltData, hygData, shyData] = results;
+    const [
+      xlyData, xlpData,
+      iwmData, tltData,
+      xliData, xluData,
+      tipData, iefData,
+      gldData, uupData,
+      hygData, shyData,
+    ] = results;
 
-    const allSeries = [xlyData, xlpData, tipData, tltData, hygData, shyData];
+    // ── Align all series by date ─────────────────────────────────
+    const allSeries = results;
     const alignedDates = [...new Set(allSeries.flatMap((item) => item.dates))]
       .sort()
       .slice(-150);
+
     const alignedIndex = (item: { dates: string[]; closes: number[] }, date: string) => {
       const idx = item.dates.indexOf(date);
       return idx >= 0 ? item.closes[idx] : null;
@@ -268,8 +428,14 @@ export const macroRegimeService = {
         date,
         xly: alignedIndex(xlyData, date),
         xlp: alignedIndex(xlpData, date),
-        tip: alignedIndex(tipData, date),
+        iwm: alignedIndex(iwmData, date),
         tlt: alignedIndex(tltData, date),
+        xli: alignedIndex(xliData, date),
+        xlu: alignedIndex(xluData, date),
+        tip: alignedIndex(tipData, date),
+        ief: alignedIndex(iefData, date),
+        gld: alignedIndex(gldData, date),
+        uup: alignedIndex(uupData, date),
         hyg: alignedIndex(hygData, date),
         shy: alignedIndex(shyData, date),
       }))
@@ -278,7 +444,7 @@ export const macroRegimeService = {
           typeof item.xly === "number" &&
           typeof item.xlp === "number" &&
           typeof item.tip === "number" &&
-          typeof item.tlt === "number" &&
+          typeof item.ief === "number" &&
           typeof item.hyg === "number" &&
           typeof item.shy === "number",
       );
@@ -286,7 +452,6 @@ export const macroRegimeService = {
     const minLen = aligned.length;
     if (minLen < 30) {
       silentLogger.warn("[MacroRegime] Insufficient ETF data, using fallback values");
-      // Return fallback snapshot instead of throwing
       const fallback: MacroRegimeSnapshot = {
         quadrant: "Transition",
         quadNumber: 0,
@@ -294,9 +459,10 @@ export const macroRegimeService = {
         source: "CACHE",
         inflationSource: "UNKNOWN",
         cpiYoY: null,
-        growth: { current: 1.0, ema50: 1.0, status: "NEUTRAL", label: "XLY/XLP" },
-        inflation: { current: 1.0, ema50: 1.0, status: "NEUTRAL", pressure: "NORMAL", label: "TIP/TLT" },
-        liquidity: { current: 1.0, ema50: 1.0, status: "NEUTRAL", riskState: "HEALTHY", label: "HYG/SHY" },
+        growth: { current: 1.0, ema10: 1.0, ema50: 1.0, roc5d: 0, status: "NEUTRAL", label: "Composite (XLY/XLP · IWM/TLT · XLI/XLU)" },
+        inflation: { current: 1.0, ema10: 1.0, ema50: 1.0, roc5d: 0, status: "NEUTRAL", pressure: "NORMAL", label: "Composite (TIP/IEF · CPI · GLD/UUP)" },
+        liquidity: { current: 1.0, ema10: 1.0, ema50: 1.0, roc5d: 0, status: "NEUTRAL", riskState: "HEALTHY", label: "HYG/SHY" },
+        confidence: { score: 0, conviction: 0, agreement: 0, persistence: 0, label: "LOW" },
         position: { x: 0.5, y: 0.5 },
         history: [],
         fetchedAt: new Date().toISOString(),
@@ -306,120 +472,259 @@ export const macroRegimeService = {
       return fallback;
     }
 
-    const xly = aligned.map((item) => item.xly as number);
-    const xlp = aligned.map((item) => item.xlp as number);
-    const tip = aligned.map((item) => item.tip as number);
-    const tlt = aligned.map((item) => item.tlt as number);
-    const hyg = aligned.map((item) => item.hyg as number);
-    const shy = aligned.map((item) => item.shy as number);
+    // ── Calculate individual ratios ──────────────────────────────
+    const xlyXlpRatios: number[] = [];
+    const iwmTltRatios: number[] = [];
+    const xliXluRatios: number[] = [];
+    const tipIefRatios: number[] = [];
+    const gldUupRatios: number[] = [];
+    const hygShyRatios: number[] = [];
     const dates = aligned.map((item) => item.date);
 
-    // 3. Calculate ratios on trimmed data
-    const growthRatios: number[] = [];
-    const inflationRatios: number[] = [];
-    const liquidityRatios: number[] = [];
-
     for (let i = 0; i < minLen; i++) {
-      growthRatios.push(xlp[i] !== 0 ? xly[i] / xlp[i] : 0);
-      inflationRatios.push(tlt[i] !== 0 ? tip[i] / tlt[i] : 0);
-      liquidityRatios.push(shy[i] !== 0 ? hyg[i] / shy[i] : 0);
+      const item = aligned[i];
+      xlyXlpRatios.push(item.xlp !== 0 ? (item.xly as number) / (item.xlp as number) : 0);
+
+      // Secondary growth: IWM/TLT — fallback to 0 if either is missing
+      if (typeof item.iwm === "number" && typeof item.tlt === "number" && item.tlt !== 0) {
+        iwmTltRatios.push(item.iwm / item.tlt);
+      } else {
+        iwmTltRatios.push(0);
+      }
+
+      // Tertiary growth: XLI/XLU — fallback to 0 if either is missing
+      if (typeof item.xli === "number" && typeof item.xlu === "number" && item.xlu !== 0) {
+        xliXluRatios.push(item.xli / item.xlu);
+      } else {
+        xliXluRatios.push(0);
+      }
+
+      tipIefRatios.push(item.ief !== 0 ? (item.tip as number) / (item.ief as number) : 0);
+
+      // Inflation tertiary: GLD/UUP — fallback to 0 if either is missing
+      if (typeof item.gld === "number" && typeof item.uup === "number" && item.uup !== 0) {
+        gldUupRatios.push(item.gld / item.uup);
+      } else {
+        gldUupRatios.push(0);
+      }
+
+      hygShyRatios.push(item.shy !== 0 ? (item.hyg as number) / (item.shy as number) : 0);
     }
 
-    // 4. Calculate EMA-50 for each ratio (seed with SMA of first 50, then EMA)
-    const EMA_PERIOD = 50;
-    const growthEma = calculateEMA(growthRatios, EMA_PERIOD);
-    const inflationEma = calculateEMA(inflationRatios, EMA_PERIOD);
-    const liquidityEma = calculateEMA(liquidityRatios, EMA_PERIOD);
+    // ── Build composite ratios ───────────────────────────────────
+    // Growth: XLY/XLP (40%) + IWM/TLT (30%) + XLI/XLU (30%)
+    const hasIwmTlt = iwmTltRatios.some((v) => v !== 0);
+    const hasXliXlu = xliXluRatios.some((v) => v !== 0);
 
-    // 5. Get current values (last data point)
+    const growthComponents: { values: number[]; weight: number }[] = [
+      { values: xlyXlpRatios, weight: 0.4 },
+    ];
+    if (hasIwmTlt) growthComponents.push({ values: iwmTltRatios, weight: 0.3 });
+    if (hasXliXlu) growthComponents.push({ values: xliXluRatios, weight: 0.3 });
+
+    // If secondary/tertiary are missing, normalize weights to primary only
+    const growthCompositeRatios = growthComponents.length > 1
+      ? calculateComposite(growthComponents)
+      : xlyXlpRatios;
+
+    // Inflation: TIP/IEF (50%) + GLD/UUP (20%) — CPI handled separately
+    const hasGldUup = gldUupRatios.some((v) => v !== 0);
+    const inflationComponents: { values: number[]; weight: number }[] = [
+      { values: tipIefRatios, weight: hasGldUup ? 0.7 : 1.0 },
+    ];
+    if (hasGldUup) inflationComponents.push({ values: gldUupRatios, weight: 0.3 });
+
+    const inflationCompositeRatios = inflationComponents.length > 1
+      ? calculateComposite(inflationComponents)
+      : tipIefRatios;
+
+    // Liquidity: HYG/SHY (single ratio)
+    const liquidityRatios = hygShyRatios;
+
+    // ── Calculate EMAs (Dual: EMA-10 + EMA-50) ──────────────────
+    const EMA_FAST = 10;
+    const EMA_SLOW = 50;
+
+    const growthEma10 = calculateEMA(growthCompositeRatios, EMA_FAST);
+    const growthEma50 = calculateEMA(growthCompositeRatios, EMA_SLOW);
+    const inflationEma10 = calculateEMA(inflationCompositeRatios, EMA_FAST);
+    const inflationEma50 = calculateEMA(inflationCompositeRatios, EMA_SLOW);
+    const liquidityEma10 = calculateEMA(liquidityRatios, EMA_FAST);
+    const liquidityEma50 = calculateEMA(liquidityRatios, EMA_SLOW);
+
+    // ── Calculate ROC-5d ─────────────────────────────────────────
+    const growthRoc = calculateROC(growthCompositeRatios, 5);
+    const inflationRoc = calculateROC(inflationCompositeRatios, 5);
+    const liquidityRoc = calculateROC(liquidityRatios, 5);
+
+    // ── Get current values (last data point) ─────────────────────
     const lastIdx = minLen - 1;
-    const currentGrowth = growthRatios[lastIdx];
-    const currentInflation = inflationRatios[lastIdx];
+    const currentGrowth = growthCompositeRatios[lastIdx];
+    const currentInflation = inflationCompositeRatios[lastIdx];
     const currentLiquidity = liquidityRatios[lastIdx];
 
-    const currentGrowthEma = growthEma[lastIdx];
-    const currentInflationEma = inflationEma[lastIdx];
-    const currentLiquidityEma = liquidityEma[lastIdx];
+    const currentGrowthEma10 = growthEma10[lastIdx];
+    const currentGrowthEma50 = growthEma50[lastIdx];
+    const currentInflationEma10 = inflationEma10[lastIdx];
+    const currentInflationEma50 = inflationEma50[lastIdx];
+    const currentLiquidityEma10 = liquidityEma10[lastIdx];
+    const currentLiquidityEma50 = liquidityEma50[lastIdx];
 
-    // 6. Determine statuses using 0.15% threshold relative to EMA-50
-    const growthDeltaRelative =
-      currentGrowthEma !== 0
-        ? (currentGrowth - currentGrowthEma) / currentGrowthEma
-        : 0;
-    const inflationDeltaRelative =
-      currentInflationEma !== 0
-        ? (currentInflation - currentInflationEma) / currentInflationEma
-        : 0;
+    const currentGrowthRoc = growthRoc[lastIdx];
+    const currentInflationRoc = inflationRoc[lastIdx];
+    const currentLiquidityRoc = liquidityRoc[lastIdx];
 
-    const growthStatus = classifyMomentum(growthDeltaRelative);
-    const inflationStatus = classifyMomentum(inflationDeltaRelative);
-    const liquidityStatus: MomentumStatus =
-      currentLiquidity > currentLiquidityEma ? "ACCELERATING" : "DECELERATING";
+    // ── Classify momentum with Dual-EMA + ROC ────────────────────
+    const growthStatus = classifyMomentumDualEMA(
+      currentGrowth, currentGrowthEma10, currentGrowthEma50, currentGrowthRoc,
+    );
+    const inflationStatus = classifyMomentumDualEMA(
+      currentInflation, currentInflationEma10, currentInflationEma50, currentInflationRoc,
+    );
+    const liquidityStatus = classifyMomentumDualEMA(
+      currentLiquidity, currentLiquidityEma10, currentLiquidityEma50, currentLiquidityRoc,
+    );
     const liquidityRisk: LiquidityRisk =
-      currentLiquidity > currentLiquidityEma ? "HEALTHY" : "STRESSED";
+      currentLiquidity > currentLiquidityEma50 ? "HEALTHY" : "STRESSED";
 
+    // ── Sub-score statuses (for each individual ratio) ───────────
+    const lastXlyXlpEma10 = calculateEMA(xlyXlpRatios, EMA_FAST);
+    const lastXlyXlpEma50 = calculateEMA(xlyXlpRatios, EMA_SLOW);
+    const xlyXlpRoc = calculateROC(xlyXlpRatios, 5);
+    const xlyXlpStatus = classifyMomentumDualEMA(
+      xlyXlpRatios[lastIdx], lastXlyXlpEma10[lastIdx], lastXlyXlpEma50[lastIdx], xlyXlpRoc[lastIdx],
+    );
+
+    let iwmTltStatus: MomentumStatus = "NEUTRAL";
+    if (hasIwmTlt) {
+      const iwmTltEma10 = calculateEMA(iwmTltRatios, EMA_FAST);
+      const iwmTltEma50 = calculateEMA(iwmTltRatios, EMA_SLOW);
+      const iwmTltRoc = calculateROC(iwmTltRatios, 5);
+      iwmTltStatus = classifyMomentumDualEMA(
+        iwmTltRatios[lastIdx], iwmTltEma10[lastIdx], iwmTltEma50[lastIdx], iwmTltRoc[lastIdx],
+      );
+    }
+
+    let xliXluStatus: MomentumStatus = "NEUTRAL";
+    if (hasXliXlu) {
+      const xliXluEma10 = calculateEMA(xliXluRatios, EMA_FAST);
+      const xliXluEma50 = calculateEMA(xliXluRatios, EMA_SLOW);
+      const xliXluRoc = calculateROC(xliXluRatios, 5);
+      xliXluStatus = classifyMomentumDualEMA(
+        xliXluRatios[lastIdx], xliXluEma10[lastIdx], xliXluEma50[lastIdx], xliXluRoc[lastIdx],
+      );
+    }
+
+    const tipIefEma10 = calculateEMA(tipIefRatios, EMA_FAST);
+    const tipIefEma50 = calculateEMA(tipIefRatios, EMA_SLOW);
+    const tipIefRoc = calculateROC(tipIefRatios, 5);
+    const tipIefStatus = classifyMomentumDualEMA(
+      tipIefRatios[lastIdx], tipIefEma10[lastIdx], tipIefEma50[lastIdx], tipIefRoc[lastIdx],
+    );
+
+    let gldUupStatus: MomentumStatus = "NEUTRAL";
+    if (hasGldUup) {
+      const gldUupEma10 = calculateEMA(gldUupRatios, EMA_FAST);
+      const gldUupEma50 = calculateEMA(gldUupRatios, EMA_SLOW);
+      const gldUupRoc = calculateROC(gldUupRatios, 5);
+      gldUupStatus = classifyMomentumDualEMA(
+        gldUupRatios[lastIdx], gldUupEma10[lastIdx], gldUupEma50[lastIdx], gldUupRoc[lastIdx],
+      );
+    }
+
+    // ── CPI YoY + Inflation Pressure ─────────────────────────────
     const cpiYoY = await fetchLatestCpiYoY();
     const inflationPressure =
       cpiYoY === null
-        ? classifyInflationPressure(inflationRatios, currentInflation)
+        ? classifyInflationPressure(inflationCompositeRatios, currentInflation)
         : cpiYoY >= 3.5
           ? "HOT"
           : cpiYoY <= 2
             ? "COLD"
             : "NORMAL";
-    const inflationSource = cpiYoY === null ? "TIP_TLT" : "FRED_CPI";
+    const inflationSource = cpiYoY === null ? "TIP_IEF" : "FRED_CPI";
 
+    // CPI status for sub-score
+    let cpiStatus = "NEUTRAL";
+    if (cpiYoY !== null) {
+      cpiStatus = cpiYoY >= 3.5 ? "HOT" : cpiYoY <= 2 ? "COLD" : "NORMAL";
+    }
+
+    // ── Classify Quadrant ────────────────────────────────────────
     const { quadrant, quadNumber, description } = classifyQuadrant(
       growthStatus,
-      inflationStatus
+      inflationStatus,
     );
 
-    // 8. Calculate position for visual dot
-    // Normalize: how far above/below EMA as percentage of EMA
-    const growthDelta =
-      currentGrowthEma !== 0
-        ? (currentGrowth - currentGrowthEma) / currentGrowthEma
-        : 0;
-    const inflationDelta =
-      currentInflationEma !== 0
-        ? (currentInflation - currentInflationEma) / currentInflationEma
-        : 0;
-
-    // Clamp to -1..+1 range, scale by 100 for visibility
-    const clamp = (v: number, min: number, max: number) =>
-      Math.max(min, Math.min(max, v));
-    const posX = clamp(growthDelta * 100, -1, 1); // positive = right (growth up)
-    const posY = clamp(inflationDelta * 100, -1, 1); // positive = up (inflation up)
-
-    // 9. Build historical array (last 30 trading days)
+    // ── Build history (last 30 days) ─────────────────────────────
     const historyStart = Math.max(0, minLen - 30);
     const history: MacroRegimeSnapshot["history"] = [];
     for (let i = historyStart; i < minLen; i++) {
-      const growthDeltaHistory =
-        growthEma[i] !== 0
-          ? (growthRatios[i] - growthEma[i]) / growthEma[i]
-          : 0;
-      const inflationDeltaHistory =
-        inflationEma[i] !== 0
-          ? (inflationRatios[i] - inflationEma[i]) / inflationEma[i]
-          : 0;
-      const gs = classifyMomentum(growthDeltaHistory);
-      const is = classifyMomentum(inflationDeltaHistory);
+      const gDelta = growthEma50[i] !== 0
+        ? (growthEma10[i] - growthEma50[i]) / growthEma50[i]
+        : 0;
+      const iDelta = inflationEma50[i] !== 0
+        ? (inflationEma10[i] - inflationEma50[i]) / inflationEma50[i]
+        : 0;
+      const gs = classifyMomentumDualEMA(
+        growthCompositeRatios[i], growthEma10[i], growthEma50[i], growthRoc[i],
+      );
+      const is = classifyMomentumDualEMA(
+        inflationCompositeRatios[i], inflationEma10[i], inflationEma50[i], inflationRoc[i],
+      );
       const { quadrant: hq } = classifyQuadrant(gs, is);
       history.push({
         date: dates[i],
-        growthRatio: parseFloat(growthRatios[i].toFixed(6)),
-        growthEma: parseFloat(growthEma[i].toFixed(6)),
-        inflationRatio: parseFloat(inflationRatios[i].toFixed(6)),
-        inflationEma: parseFloat(inflationEma[i].toFixed(6)),
-        inflationPressure: classifyInflationPressure(inflationRatios, inflationRatios[i]),
+        growthRatio: parseFloat(growthCompositeRatios[i].toFixed(6)),
+        growthEma: parseFloat(growthEma50[i].toFixed(6)),
+        inflationRatio: parseFloat(inflationCompositeRatios[i].toFixed(6)),
+        inflationEma: parseFloat(inflationEma50[i].toFixed(6)),
+        inflationPressure: classifyInflationPressure(inflationCompositeRatios, inflationCompositeRatios[i]),
         liquidityRatio: parseFloat(liquidityRatios[i].toFixed(6)),
-        liquidityEma: parseFloat(liquidityEma[i].toFixed(6)),
+        liquidityEma: parseFloat(liquidityEma50[i].toFixed(6)),
         quadrant: hq,
       });
     }
 
-    // 10. Assemble snapshot
+    // ── Calculate Confidence ─────────────────────────────────────
+    const growthDeltaAbs = currentGrowthEma50 !== 0
+      ? Math.abs((currentGrowthEma10 - currentGrowthEma50) / currentGrowthEma50)
+      : 0;
+    const inflationDeltaAbs = currentInflationEma50 !== 0
+      ? Math.abs((currentInflationEma10 - currentInflationEma50) / currentInflationEma50)
+      : 0;
+
+    // Map CPI status to MomentumStatus for agreement calculation
+    const cpiMomentumStatus: MomentumStatus =
+      cpiStatus === "HOT" ? "ACCELERATING"
+        : cpiStatus === "COLD" ? "DECELERATING"
+          : "NEUTRAL";
+
+    const confidence = calculateConfidence(
+      [xlyXlpStatus, iwmTltStatus, xliXluStatus],
+      [tipIefStatus, cpiMomentumStatus, gldUupStatus],
+      growthDeltaAbs,
+      inflationDeltaAbs,
+      history,
+      quadrant,
+    );
+
+    // ── Calculate position for visual dot ────────────────────────
+    const growthDelta =
+      currentGrowthEma50 !== 0
+        ? (currentGrowth - currentGrowthEma50) / currentGrowthEma50
+        : 0;
+    const inflationDelta =
+      currentInflationEma50 !== 0
+        ? (currentInflation - currentInflationEma50) / currentInflationEma50
+        : 0;
+
+    const clamp = (v: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, v));
+    const posX = clamp(growthDelta * 100, -1, 1);
+    const posY = clamp(inflationDelta * 100, -1, 1);
+
+    // ── Assemble snapshot ────────────────────────────────────────
     const snapshot: MacroRegimeSnapshot = {
       quadrant,
       quadNumber,
@@ -429,24 +734,41 @@ export const macroRegimeService = {
       cpiYoY,
       growth: {
         current: parseFloat(currentGrowth.toFixed(6)),
-        ema50: parseFloat(currentGrowthEma.toFixed(6)),
+        ema10: parseFloat(currentGrowthEma10.toFixed(6)),
+        ema50: parseFloat(currentGrowthEma50.toFixed(6)),
+        roc5d: parseFloat(currentGrowthRoc.toFixed(4)),
         status: growthStatus,
-        label: "XLY / XLP",
+        label: "Composite (XLY/XLP · IWM/TLT · XLI/XLU)",
+        subScores: {
+          xlyXlp: { ratio: parseFloat(xlyXlpRatios[lastIdx].toFixed(6)), status: xlyXlpStatus },
+          iwmTlt: { ratio: hasIwmTlt ? parseFloat(iwmTltRatios[lastIdx].toFixed(6)) : 0, status: iwmTltStatus },
+          xliXlu: { ratio: hasXliXlu ? parseFloat(xliXluRatios[lastIdx].toFixed(6)) : 0, status: xliXluStatus },
+        },
       },
       inflation: {
         current: parseFloat(currentInflation.toFixed(6)),
-        ema50: parseFloat(currentInflationEma.toFixed(6)),
+        ema10: parseFloat(currentInflationEma10.toFixed(6)),
+        ema50: parseFloat(currentInflationEma50.toFixed(6)),
+        roc5d: parseFloat(currentInflationRoc.toFixed(4)),
         status: inflationStatus,
         pressure: inflationPressure,
-        label: "TIP / TLT",
+        label: "Composite (TIP/IEF · CPI · GLD/UUP)",
+        subScores: {
+          tipIef: { ratio: parseFloat(tipIefRatios[lastIdx].toFixed(6)), status: tipIefStatus },
+          cpiYoY: { value: cpiYoY, status: cpiStatus },
+          gldUup: { ratio: hasGldUup ? parseFloat(gldUupRatios[lastIdx].toFixed(6)) : 0, status: gldUupStatus },
+        },
       },
       liquidity: {
         current: parseFloat(currentLiquidity.toFixed(6)),
-        ema50: parseFloat(currentLiquidityEma.toFixed(6)),
+        ema10: parseFloat(currentLiquidityEma10.toFixed(6)),
+        ema50: parseFloat(currentLiquidityEma50.toFixed(6)),
+        roc5d: parseFloat(currentLiquidityRoc.toFixed(4)),
         status: liquidityStatus,
         label: "HYG / SHY",
         riskState: liquidityRisk,
       },
+      confidence,
       position: {
         x: parseFloat(posX.toFixed(4)),
         y: parseFloat(posY.toFixed(4)),
@@ -455,7 +777,6 @@ export const macroRegimeService = {
       fetchedAt: new Date().toISOString(),
     };
 
-    // Cache it
     cachedSnapshot = snapshot;
     cachedAt = Date.now();
 

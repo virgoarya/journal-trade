@@ -351,13 +351,37 @@ export const macroAiService = {
     calculatedRegime?: string,
     liquidityStatus?: string,
     context?: {
-      growth?: { current?: number; ema50?: number; status?: string };
-      inflation?: { current?: number; ema50?: number; status?: string };
+      growth?: {
+        current?: number;
+        ema10?: number;
+        ema50?: number;
+        roc5d?: number;
+        status?: string;
+        subScores?: Record<string, any>;
+      };
+      inflation?: {
+        current?: number;
+        ema10?: number;
+        ema50?: number;
+        roc5d?: number;
+        status?: string;
+        pressure?: string;
+        subScores?: Record<string, any>;
+      };
       liquidity?: {
         current?: number;
+        ema10?: number;
         ema50?: number;
+        roc5d?: number;
         status?: string;
         riskState?: string;
+      };
+      confidence?: {
+        score?: number;
+        conviction?: number;
+        agreement?: number;
+        persistence?: number;
+        label?: string;
       };
       vix?: { value?: number | null; regime?: string; source?: string | null };
       yieldCurve?: {
@@ -368,22 +392,7 @@ export const macroAiService = {
       geoRisk?: { scores?: Record<string, number>; topDriver?: string };
     },
   ) {
-    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
-
-    const spy = assets.find((a) => a.ticker === "SPY")?.change ?? 0;
-    const ief = assets.find((a) => a.ticker === "IEF")?.change ?? 0;
-    const tip = assets.find((a) => a.ticker === "TIP")?.change ?? 0;
-    const gld = assets.find((a) => a.ticker === "GLD")?.change ?? 0;
-    const vix = assets.find((a) => a.ticker === "VIXY")?.change ?? 0;
-    const uup = assets.find((a) => a.ticker === "UUP")?.change ?? 0;
-    const fxy = assets.find((a) => a.ticker === "FXY")?.change ?? 0;
-
-    const growth = spy - ief;
-    const inflation = (tip + gld) / 2 - ief;
-
-    const growthStatus = growth > 0 ? "high" : "low";
-    const inflationStatus = inflation > 0 ? "high" : "low";
-
+    // ── Derive sentiment from regime + liquidity (deterministic, not AI) ──
     let sentiment: "RISK-ON" | "RISK-OFF" | "NEUTRAL" = "NEUTRAL";
     if (calculatedRegime === "Reflation" || calculatedRegime === "Goldilocks") {
       sentiment = liquidityStatus === "Draining" ? "NEUTRAL" : "RISK-ON";
@@ -395,42 +404,73 @@ export const macroAiService = {
       sentiment = liquidityStatus === "Refilling" ? "NEUTRAL" : "RISK-OFF";
     }
 
-    const keyAssets = {
-      SPY: spy,
-      QQQ: assets.find((a) => a.ticker === "QQQ")?.change ?? 0,
-      GLD: gld,
-      UUP: uup,
-      VIX: vix,
-      IEF: ief,
-      FXY: fxy,
-      TIP: tip,
-    };
+    // ── Build key assets map from heatmap data ──
+    const keyAssets: Record<string, number> = {};
+    for (const a of assets) {
+      keyAssets[a.ticker] = a.change ?? 0;
+    }
 
+    // ── Build unified state JSON using SAME data as classifier (SSOT) ──
     const stateJson = {
       regime: calculatedRegime ?? "unknown",
-      growthStatus: context?.growth?.status ?? growthStatus,
-      growth: context?.growth ?? null,
-      inflationStatus: context?.inflation?.status ?? inflationStatus,
-      inflation: context?.inflation ?? null,
-      liquidityStatus: liquidityStatus ?? "unknown",
-      liquidity: context?.liquidity ?? null,
+      confidence: context?.confidence ?? null,
       sentiment,
+      growth: context?.growth
+        ? {
+            composite: context.growth.current,
+            ema10: context.growth.ema10,
+            ema50: context.growth.ema50,
+            roc5d: context.growth.roc5d,
+            status: context.growth.status,
+            breakdown: context.growth.subScores ?? null,
+          }
+        : null,
+      inflation: context?.inflation
+        ? {
+            composite: context.inflation.current,
+            ema10: context.inflation.ema10,
+            ema50: context.inflation.ema50,
+            roc5d: context.inflation.roc5d,
+            status: context.inflation.status,
+            pressure: context.inflation.pressure,
+            breakdown: context.inflation.subScores ?? null,
+          }
+        : null,
+      liquidity: context?.liquidity
+        ? {
+            current: context.liquidity.current,
+            ema10: context.liquidity.ema10,
+            ema50: context.liquidity.ema50,
+            roc5d: context.liquidity.roc5d,
+            status: context.liquidity.status,
+            riskState: context.liquidity.riskState,
+          }
+        : null,
+      liquidityStatus: liquidityStatus ?? "unknown",
       vix: context?.vix ?? null,
       yieldCurve: context?.yieldCurve ?? null,
       geoRisk: context?.geoRisk ?? null,
       keyAssets,
     };
 
-    const prompt = `Anda adalah analis makro institusional. Gunakan state berikut sebagai SSOT Macro Terminal, bukan data retail.
+    const prompt = `Anda adalah analis makro institusional. Gunakan state berikut sebagai SSOT Macro Terminal. Data ini identik dengan yang digunakan oleh Regime Classifier (Dual-EMA Crossover + ROC + Composite Score).
 
 ${JSON.stringify(stateJson, null, 2)}
 
-Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja. KALIMAT PERTAMA WAJIB menyebut fase makro yang sedang terjadi (${calculatedRegime || "Stagflasi/Reflasi/dsb"}) agar user langsung tahu posisi regime kita. Kalimat kedua harus menyebut likuiditas, VIX/yield curve, atau risk appetite. Kalimat ketiga harus menyebut trigger yang dapat membatalkan tesis regime. JANGAN mengulang penjelasan yang sudah tersirat dalam data. Setiap kalimat diakhiri titik. Tanpa meta-language.`;
+INSTRUKSI ANALISIS (4 kalimat, lugas, tanpa meta-language):
+
+KALIMAT 1 — APA YANG TERJADI: Sebut regime aktif (${calculatedRegime || "unknown"}) dan confidence level (${context?.confidence?.label ?? "N/A"}, skor ${context?.confidence?.score ?? "?"}/100). Jelaskan singkat posisi growth vs inflation.
+
+KALIMAT 2 — APA YANG AKAN DATANG: Baca ROC-5d growth (${context?.growth?.roc5d ?? "N/A"}%) dan ROC-5d inflation (${context?.inflation?.roc5d ?? "N/A"}%). Jika ada status TURNING di sub-score, sebutkan sebagai early warning shift. Jika ROC berlawanan arah dari EMA, sebutkan potensi divergence.
+
+KALIMAT 3 — LIKUIDITAS & RISK: Sebutkan kondisi likuiditas (${context?.liquidity?.riskState ?? "N/A"}) dan hubungkan dengan VIX/yield curve jika relevan.
+
+KALIMAT 4 — INVALIDATION: Sebutkan sub-indikator terlemah (paling dekat TURNING/NEUTRAL) yang bisa membatalkan tesis regime jika berbalik arah. Setiap kalimat diakhiri titik.`;
 
     const text = await callDualEngine(
       prompt,
-      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. DEFINISI: Stagflasi = Pertumbuhan RENDAH + Inflasi TINGGI. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia.",
-      { max_output_tokens: 150, temperature: 0.2 },
+      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. Anda menganalisis data Dual-EMA Crossover (EMA-10 vs EMA-50) dan ROC-5d sebagai leading indicator. DEFINISI: TURNING = EMA-10 baru saja cross EMA-50 (sinyal dini). ACCELERATING = EMA-10 di atas EMA-50. DECELERATING = EMA-10 di bawah EMA-50. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Gunakan istilah ROC, EMA crossover, sub-score saat relevan. Balas dalam Bahasa Indonesia.",
+      { max_output_tokens: 500, temperature: 0.2 },
     );
 
     if (text) {
@@ -495,13 +535,13 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
       "Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.";
     if (personaId === "hawk") {
       personaDescription =
-        "Anda adalah Hawkish Quant Analyst yang sangat berhati-hati terhadap inflasi, sangat memperhatikan pengetatan likuiditas (draining), dan pesimis terhadap aset berisiko tinggi saat yield naik. Gunakan bahasa yang teknis dan waspada.";
+        "Anda adalah Hawkish Quant Analyst (The Hawk). Fokus utama Anda adalah BAHAYA inflasi lengket, pengetatan likuiditas dari Nexus (TGA/RRP), dan lonjakan Real Yields. Anda selalu melihat anomali di Yield Curve (Bear Flattener/Steepener) sebagai sinyal bahwa suku bunga akan menekan valuasi saham. Anda pesimis terhadap narasi 'soft landing'.";
     } else if (personaId === "dove") {
       personaDescription =
-        "Anda adalah Dovish Economic Strategist yang optimis terhadap pemangkasan suku bunga, pelonggaran likuiditas, dan pertumbuhan ekuitas. Anda selalu mencari peluang 'buy the dip' di aset berisiko.";
+        "Anda adalah Dovish Economic Strategist (The Dove). Fokus utama Anda adalah PERTUMBUHAN dan pelonggaran kebijakan. Anda mencari sinyal di Nexus (Net Liquidity naik) dan Quant Lab (Bull Steepener) yang mengindikasikan Fed akan pivot atau mencetak uang. Anda selalu mencari setup 'buy the dip' di aset berisiko saat data inflasi mendingin.";
     } else if (personaId === "contrarian") {
       personaDescription =
-        "Anda adalah Contrarian Hedge Fund Manager. Anda selalu skeptis terhadap konsensus pasar (herd mentality), suka mencari anomali data, dan merekomendasikan posisi melawan arus ketika pasar terlalu serakah atau terlalu takut.";
+        "Anda adalah Contrarian Hedge Fund Manager (The Maverick). Fokus utama Anda adalah MISPRICING dan anomali pasar. Anda menggabungkan data Quant Lab (VIX complacency vs Yield Curve Inversion) dan Nexus (DXY/Gold divergence) untuk membongkar narasi konsensus yang salah. Jika semua serakah, Anda mencari alasan untuk short, dan sebaliknya.";
     }
 
     const geoRiskContext =
@@ -555,7 +595,13 @@ Tuliskan narasi analisis makro yang ringkas dan profesional dalam 3 kalimat saja
 
     const systemPrompt = `ROLE & PERSONA: ${personaDescription}
     
-KONTEKS PASAR SAAT INI (BERDASARKAN DATA REAL-TIME TERMINAL):
+TUGAS UTAMA: Analisis kondisi pasar secara HOLISTIK dengan menyatukan kepingan puzzle dari 3 dimensi:
+1. Overview (Macro Regime, Liquidity, Assets)
+2. Quant Lab (VIX, Yield Curve Regime)
+3. Nexus (Real Yields, Fed Funds, DXY, Net Liquidity)
+JANGAN pernah membatasi argumen Anda hanya pada satu sumber (seperti GeoRisk). Buat kesimpulan kausalitas (sebab-akibat) lintas-tab yang tajam sesuai persona Anda.
+
+KONTEKS PASAR SAAT INI (DATA TERMINAL REAL-TIME):
 ${regimeContext}${liquidityContext}
 ${assetContext}
 ${vixContext}
@@ -564,9 +610,9 @@ ${resolvedGeoRiskContext}
 ${nextEventContext}
 ${nexusContext}
 
-Gunakan konteks di atas sebagai fakta dasar untuk semua jawaban Anda. Jika ditanya tentang kondisi makro saat ini, sebutkan regime dan data di atas.
+Gunakan data lintas-dimensi di atas sebagai satu-satunya landasan argumen Anda. Jika ditanya, sebutkan dan kaitkan metrik-metrik dari Nexus, Quant Lab, dan Overview untuk mendukung tesis Anda.
 
-RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. Balas dalam Bahasa Indonesia.`;
+RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdampak. Balas dalam Bahasa Indonesia institusional.`;
 
     try {
       return await callDualEngineStream(

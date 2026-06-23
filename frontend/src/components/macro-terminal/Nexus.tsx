@@ -636,7 +636,7 @@ export default function Nexus() {
           setMacroState((prev) => {
             const nxt = { ...prev };
             if (d.vix != null) nxt.vix = { value: d.vix };
-            if (d.spread30y3m != null) {
+            if (d.spread10y3m != null) {
               nxt.yield_curve = {
                 status:
                   d.curveRegime && d.curveRegime !== "UNKNOWN"
@@ -644,7 +644,7 @@ export default function Nexus() {
                     : d.inverted
                       ? "Inverted"
                       : "Normal",
-                spread: d.spread30y3m,
+                spread: d.spread10y3m,
               };
             }
             if (d.spread10y2y != null && nxt.yield_curve.status === "Normal") {
@@ -773,9 +773,12 @@ export default function Nexus() {
         const res = await fetch("/api/v1/market-data/tga");
         const json = await res.json();
         if (!cancelled && res.ok && json.success && json.data) {
+          const rawValueStr = json.data.displayValue?.replace(/[^0-9.]/g, "") || "0";
+          const parsedValue = parseFloat(rawValueStr);
+          
           setMacroState((prev) => ({
             ...prev,
-            tga: { value: json.data.value, delta: json.data.delta },
+            tga: { value: json.data.value ?? parsedValue, delta: json.data.delta },
           }));
           setNodeQuality((prev) => ({
             ...prev,
@@ -802,14 +805,21 @@ export default function Nexus() {
       try {
         const res = await fetch("/api/v1/market-data/quotes?symbols=CL=F");
         const json = await res.json();
-        if (!cancelled && res.ok && json.success && json.data?.[0]?.data) {
-          const quote = json.data[0].data;
-          if (quote.dp != null && quote.c != null) {
+        
+        // Cek struktur response (bisa data[0].data atau langsung data[0])
+        const quoteObj = json.data?.[0]?.data || json.data?.[0];
+        
+        if (!cancelled && res.ok && quoteObj) {
+          // Dukung format finnhub (c, dp) atau format internal (price, changePercent)
+          const value = quoteObj.c ?? quoteObj.price;
+          const delta = quoteObj.dp ?? quoteObj.changePercent;
+          
+          if (value != null && delta != null) {
             setMacroState((prev) => ({
               ...prev,
               crude_oil: {
-                value: quote.c,
-                delta: quote.dp,
+                value: value,
+                delta: delta,
               },
             }));
             setNodeQuality((prev) => ({
@@ -1029,13 +1039,13 @@ export default function Nexus() {
     > = {};
     NODES.forEach((n) => {
       const netLiqValue =
-        macroState.walcl.value - macroState.tga.value - macroState.rrp.value;
+        (macroState.walcl?.value || 0) - (macroState.tga?.value || 0) - (macroState.rrp?.value || 0);
       const netLiqDelta =
-        macroState.walcl.delta - macroState.tga.delta - macroState.rrp.delta;
+        (macroState.walcl?.delta || 0) - (macroState.tga?.delta || 0) - (macroState.rrp?.delta || 0);
 
-      const ryDelta = macroState.real_yields.delta;
-      const spyDelta = macroState.risk_assets.delta;
-      const goldDelta = macroState.gold.delta;
+      const ryDelta = macroState.real_yields?.delta || 0;
+      const spyDelta = macroState.risk_assets?.delta || 0;
+      const goldDelta = macroState.gold?.delta || 0;
       const quality = nodeQuality[n.key] ?? {
         source: "computed",
         freshness: hasAnyError ? "stale" : "live",
@@ -1047,23 +1057,23 @@ export default function Nexus() {
         case "crb":
         case "commodities":
           statusLabel =
-            macroState.commodities.delta > 0
+            (macroState.commodities?.delta || 0) > 0
               ? "Inflationary"
               : "Disinflationary";
           break;
         case "oil":
         case "crude_oil":
           statusLabel =
-            macroState.crude_oil.delta > 0 ? "Energy Risk" : "Benign";
+            (macroState.crude_oil?.delta || 0) > 0 ? "Energy Risk" : "Benign";
           break;
         case "onrrp":
           statusLabel =
-            macroState.rrp.delta < 0
+            (macroState.rrp?.delta || 0) < 0
               ? "Releasing Liquidity"
               : "Absorbing Liquidity";
           break;
         case "tga":
-          statusLabel = macroState.tga.delta < 0 ? "Yellen Put" : "Tax Drain";
+          statusLabel = (macroState.tga?.delta || 0) < 0 ? "Yellen Put" : "Tax Drain";
           break;
         case "liq":
           statusLabel =
@@ -1085,7 +1095,7 @@ export default function Nexus() {
                   : "Recession Alert";
           break;
         case "inf": {
-          const cpiVal = macroState.inflation_proxy.value;
+          const cpiVal = macroState.inflation_proxy?.value || 0;
           statusLabel =
             cpiVal > 3.0
               ? "Sticky / Hot"
@@ -1095,17 +1105,17 @@ export default function Nexus() {
           break;
         }
         case "fed":
-          statusLabel = macroState.fed_policy.status;
+          statusLabel = macroState.fed_policy?.status || "UNKNOWN";
           break;
         case "dxy":
           statusLabel =
-            macroState.dxy.delta > 0 ? "Wrecking Ball" : "Depreciating";
+            (macroState.dxy?.delta || 0) > 0 ? "Wrecking Ball" : "Depreciating";
           break;
         case "yc":
-          statusLabel = macroState.yield_curve.status;
+          statusLabel = macroState.yield_curve?.status || "UNKNOWN";
           break;
         case "ry":
-          const ryVal = macroState.real_yields.value;
+          const ryVal = macroState.real_yields?.value || 0;
           statusLabel =
             ryVal > 1.5
               ? "Restrictive"
@@ -1134,27 +1144,27 @@ export default function Nexus() {
           break;
         case "vix":
           if (quality.freshness === "error") statusLabel = "DATA UNAVAILABLE";
-          else if ((macroState.vix.value ?? 0) >= 20 && spyDelta < 0)
+          else if ((macroState.vix?.value ?? 0) >= 20 && spyDelta < 0)
             statusLabel = "Panic / Hedging";
-          else if ((macroState.vix.value ?? 0) < 15 && spyDelta > 0)
+          else if ((macroState.vix?.value ?? 0) < 15 && spyDelta > 0)
             statusLabel = "Complacency";
-          else if ((macroState.vix.value ?? 0) >= 15 && spyDelta > 0)
+          else if ((macroState.vix?.value ?? 0) >= 15 && spyDelta > 0)
             statusLabel = "Nervous Bull";
           else
             statusLabel =
-              (macroState.vix.value ?? 0) < 15
+              (macroState.vix?.value ?? 0) < 15
                 ? "Calm"
-                : (macroState.vix.value ?? 0) <= 25
+                : (macroState.vix?.value ?? 0) <= 25
                   ? "Elevated"
                   : "Panic";
           break;
         case "em_risk_on":
           statusLabel =
-            macroState.em_risk_on.delta > 0 ? "Risk-On Flow" : "Risk-Off Flow";
+            (macroState.em_risk_on?.delta || 0) > 0 ? "Risk-On Flow" : "Risk-Off Flow";
           break;
         case "risk_off_fx":
           statusLabel =
-            macroState.risk_off_fx.delta > 0 ? "Defensive" : "Weak Hedge";
+            (macroState.risk_off_fx?.delta || 0) > 0 ? "Defensive" : "Weak Hedge";
           break;
         default:
           statusLabel = "";
@@ -1163,41 +1173,41 @@ export default function Nexus() {
 
       const displayValue =
         n.key === "vix"
-          ? macroState.vix.value === null
+          ? macroState.vix?.value == null
             ? "DATA UNAVAILABLE"
-            : macroState.vix.value.toFixed(1)
+            : (macroState.vix.value || 0).toFixed(1)
           : n.key === "tga"
-            ? `$${macroState.tga.value.toFixed(0)}B`
+            ? `$${(macroState.tga?.value || 0).toFixed(0)}B`
             : n.key === "oil" || n.key === "crude_oil"
-              ? `${macroState.crude_oil.delta > 0 ? "+" : ""}${macroState.crude_oil.delta.toFixed(2)}%`
+              ? `${(macroState.crude_oil?.delta || 0) > 0 ? "+" : ""}${(macroState.crude_oil?.delta || 0).toFixed(2)}%`
               : n.key === "ry"
-                ? `${macroState.real_yields.value.toFixed(2)}%`
+                ? `${(macroState.real_yields?.value || 0).toFixed(2)}%`
                 : n.key === "liq"
-                  ? `$${netLiqValue.toFixed(1)}B`
+                  ? `$${(netLiqValue || 0).toFixed(1)}B`
                   : n.key === "onrrp"
-                    ? `$${macroState.rrp.value.toFixed(1)}B`
+                    ? `$${(macroState.rrp?.value || 0).toFixed(1)}B`
                     : n.key === "fed"
-                      ? `${(macroState.fed_policy.rate || 0).toFixed(2)}%`
+                      ? `${(macroState.fed_policy?.rate || 0).toFixed(2)}%`
                       : n.key === "inf"
-                        ? `${macroState.inflation_proxy.value.toFixed(2)}%`
+                        ? `${(macroState.inflation_proxy?.value || 0).toFixed(2)}%`
                         : n.key === "dxy"
-                          ? macroState.dxy.value.toFixed(2)
+                          ? (macroState.dxy?.value || 0).toFixed(2)
                           : n.key === "yc"
-                            ? `${macroState.yield_curve.spread} bps`
+                            ? `${macroState.yield_curve?.spread || 0} bps`
                             : n.key === "eq"
-                              ? `${macroState.risk_assets.delta > 0 ? "+" : ""}${macroState.risk_assets.delta.toFixed(2)}%`
+                              ? `${(macroState.risk_assets?.delta || 0) > 0 ? "+" : ""}${(macroState.risk_assets?.delta || 0).toFixed(2)}%`
                               : n.key === "growth"
                                 ? quality.freshness === "error"
                                   ? "DATA UNAVAILABLE"
                                   : `${(macroState.growth_pmi?.value || 0).toFixed(1)}`
                                 : n.key === "commodities" || n.key === "crb"
-                                  ? `${macroState.commodities.value.toFixed(2)}`
+                                  ? `${(macroState.commodities?.value || 0).toFixed(2)}`
                                   : n.key === "gold"
-                                    ? `${macroState.gold.delta > 0 ? "+" : ""}${macroState.gold.delta.toFixed(2)}%`
+                                    ? `${(macroState.gold?.delta || 0) > 0 ? "+" : ""}${(macroState.gold?.delta || 0).toFixed(2)}%`
                                     : n.key === "em_risk_on"
-                                      ? `${macroState.em_risk_on.delta > 0 ? "+" : ""}${macroState.em_risk_on.delta.toFixed(2)}%`
+                                      ? `${(macroState.em_risk_on?.delta || 0) > 0 ? "+" : ""}${(macroState.em_risk_on?.delta || 0).toFixed(2)}%`
                                       : n.key === "risk_off_fx"
-                                        ? `${macroState.risk_off_fx.delta > 0 ? "+" : ""}${macroState.risk_off_fx.delta.toFixed(2)}%`
+                                        ? `${(macroState.risk_off_fx?.delta || 0) > 0 ? "+" : ""}${(macroState.risk_off_fx?.delta || 0).toFixed(2)}%`
                                         : "—";
 
       map[n.key] = {
