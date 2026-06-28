@@ -288,11 +288,10 @@ export function useDataFetching() {
         setLastUpdated(new Date());
       }
 
-      if (cotDataRes?.success && Array.isArray(cotDataRes.data)) {
-        const dataToUse = cotDataRes.data.length > 0 ? cotDataRes.data : getMockCotData();
-        setCotData(dataToUse);
+      if (cotDataRes?.success && Array.isArray(cotDataRes.data) && cotDataRes.data.length > 0) {
+        setCotData(cotDataRes.data);
         setStatus("cot", cotDataRes.rateLimited ? "stale" : "live");
-      } else if (cotDataRes?.success === false || !cotDataRes) {
+      } else {
         setCotData(getMockCotData());
         setStatus("cot", "cache");
       }
