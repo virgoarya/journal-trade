@@ -1,38 +1,41 @@
-"use client";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import React from "react";
 import { ShieldAlert, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { useMacroTerminal } from "./MacroTerminalContext";
+import type { TransformedCotData } from "@/types/cot";
 
-export function CotPanel() {
-  const { cotData, dataStatus } = useMacroTerminal();
+async function fetchCotData(): Promise<TransformedCotData[]> {
+  try {
+    const res = await fetch("https://hunter-trades.com/api/macro/cot", {
+      cache: "no-store",
+    });
 
-  const getSentimentIcon = (sentiment: "BULLISH" | "BEARISH" | "NEUTRAL") => {
-    if (sentiment === "BULLISH") return <TrendingUp className="w-4 h-4 text-data-profit" />;
-    if (sentiment === "BEARISH") return <TrendingDown className="w-4 h-4 text-data-loss" />;
-    return <Minus className="w-4 h-4 text-text-muted" />;
-  };
+    if (!res.ok) {
+      return [];
+    }
 
-  const getSentimentColor = (sentiment: "BULLISH" | "BEARISH" | "NEUTRAL") => {
-    if (sentiment === "BULLISH") return "text-data-profit";
-    if (sentiment === "BEARISH") return "text-data-loss";
-    return "text-text-muted";
-  };
+    const data = await res.json();
+    return data.data || [];
+  } catch {
+    return [];
+  }
+}
 
-  const renderSpread = (commercial: number, nonCommercial: number) => {
-    const diff = Math.abs(commercial - nonCommercial);
-    const isLarger = commercial > nonCommercial;
-    return (
-      <div className="flex items-center gap-1">
-        <span>{isLarger ? "C" : "NC"}: {diff.toFixed(0)}</span>
-        {isLarger ? (
-          <ShieldAlert className="w-3 h-3 text-accent-gold" />
-        ) : (
-          <ShieldAlert className="w-3 h-3 text-text-muted" />
-        )}
-      </div>
-    );
-  };
+function getSentimentIcon(sentiment: "BULLISH" | "BEARISH" | "NEUTRAL") {
+  if (sentiment === "BULLISH") return <TrendingUp className="w-4 h-4 text-data-profit" />;
+  if (sentiment === "BEARISH") return <TrendingDown className="w-4 h-4 text-data-loss" />;
+  return <Minus className="w-4 h-4 text-text-muted" />;
+}
+
+function getSentimentColor(sentiment: "BULLISH" | "BEARISH" | "NEUTRAL") {
+  if (sentiment === "BULLISH") return "text-data-profit";
+  if (sentiment === "BEARISH") return "text-data-loss";
+  return "text-text-muted";
+}
+
+export default async function CotPanel() {
+  const cotData = await fetchCotData();
 
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
@@ -40,15 +43,6 @@ export function CotPanel() {
         <h2 className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs">
           Commitment of Traders (COT)
         </h2>
-        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-          dataStatus.cot === "live"
-            ? "text-data-profit border-data-profit/30 bg-data-profit/10"
-            : dataStatus.cot === "cache"
-              ? "text-data-warning border-data-warning/30 bg-data-warning/10"
-              : "text-text-muted border-border-subtle bg-surface-elevated/50"
-        }`}>
-          {dataStatus.cot.toUpperCase()}
-        </span>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -67,24 +61,24 @@ export function CotPanel() {
               </tr>
             </thead>
             <tbody>
-              {cotData.map((position) => (
-                <tr key={position.symbol} className="border-b border-border-subtle/50 hover:bg-white/5">
+              {cotData.map((item) => (
+                <tr key={item.symbol} className="border-b border-border-subtle/50 hover:bg-white/5">
                   <td className="p-2">
-                    <div className="font-mono font-bold">{position.symbol}</div>
-                    <div className="text-text-muted text-[10px]">{position.name}</div>
+                    <div className="font-mono font-bold">{item.symbol}</div>
+                    <div className="text-text-muted text-[10px]">{item.name}</div>
                   </td>
                   <td className="p-2">
-                    <div className={`flex items-center gap-1 ${getSentimentColor(position.sentiment)}`}>
-                      {getSentimentIcon(position.sentiment)}
-                      <span className="uppercase text-[10px]">{position.sentiment}</span>
+                    <div className={`flex items-center gap-1 ${getSentimentColor(item.sentiment)}`}>
+                      {getSentimentIcon(item.sentiment)}
+                      <span className="uppercase text-[10px]">{item.sentiment}</span>
                     </div>
                   </td>
                   <td className="p-2 text-center">
-                    <div>{position.commercialLong} / {position.commercialShort}</div>
+                    <div>{item.commercialLong} / {item.commercialShort}</div>
                     <div className="text-text-muted text-[10px]">Long / Short</div>
                   </td>
                   <td className="p-2 text-center">
-                    <div>{position.nonCommercialLong} / {position.nonCommercialShort}</div>
+                    <div>{item.nonCommercialLong} / {item.nonCommercialShort}</div>
                     <div className="text-text-muted text-[10px]">Long / Short</div>
                   </td>
                 </tr>
@@ -95,7 +89,10 @@ export function CotPanel() {
       </div>
 
       <div className="shrink-0 p-2 text-[9px] text-text-muted border-t border-border-subtle">
-        Data: CFTC Commitments of Traders Report | Last Update: {cotData[0]?.lastUpdate ? new Date(cotData[0].lastUpdate).toLocaleDateString("id-ID") : "-"}
+        Data: CFTC Commitments of Traders Report | Last Update:{" "}
+        {cotData[0]?.lastUpdate
+          ? new Date(cotData[0].lastUpdate).toLocaleDateString("id-ID")
+          : "-"}
       </div>
     </div>
   );

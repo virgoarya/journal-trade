@@ -10,20 +10,6 @@ import type {
   DataStatus,
 } from "@/components/macro-terminal/MacroTerminalContext";
 
-export interface CotPosition {
-  symbol: string;
-  name: string;
-  type: "commodity" | "currency" | "index" | "bond";
-  commercialLong: number;
-  commercialShort: number;
-  commercialSpread: number;
-  nonCommercialLong: number;
-  nonCommercialShort: number;
-  nonCommercialSpread: number;
-  sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
-  lastUpdate: string;
-}
-
 export type DataStatusState = {
   quotes: DataStatus;
   liquidity: DataStatus;
@@ -79,7 +65,6 @@ export function useDataFetching() {
     scores: {},
     fetchedAt: null,
   });
-  const [cotData, setCotData] = useState<CotPosition[]>([]);
   const [dataStatus, setDataStatus] = useState<DataStatusState>({
     quotes: "stale",
     liquidity: "stale",
@@ -142,7 +127,6 @@ export function useDataFetching() {
         fetchWithRetry(`/api/v1/quant/snapshot`, "quant"),
         fetchWithRetry(`/api/v1/geo-risk`, "geoRisk"),
         fetchWithRetry(`/api/v1/market-data/tga`, "tga"),
-        fetchWithRetry(`/api/macro/cot`, "cot"),
       ]);
 
       const [
@@ -314,8 +298,6 @@ export function useDataFetching() {
     setNextEvent,
     geoRisk,
     setGeoRisk,
-    cotData,
-    setCotData,
     dataStatus,
     setDataStatus,
     lastUpdated,
@@ -342,113 +324,4 @@ function getTopGeoDriver(scores: Record<string, number>): string {
   const entries = Object.entries(scores);
   if (!entries.length) return "UNKNOWN";
   return entries.sort((a, b) => b[1] - a[1])[0][0];
-}
-
-function getMockCotData(): CotPosition[] {
-  return [
-    {
-      symbol: "CL=F",
-      name: "Crude Oil",
-      type: "commodity",
-      commercialLong: 245678,
-      commercialShort: 189012,
-      commercialSpread: 56666,
-      nonCommercialLong: 412345,
-      nonCommercialShort: 387654,
-      nonCommercialSpread: 24691,
-      sentiment: "BULLISH",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "GC=F",
-      name: "Gold",
-      type: "commodity",
-      commercialLong: 112345,
-      commercialShort: 98765,
-      commercialSpread: 13580,
-      nonCommercialLong: 234567,
-      nonCommercialShort: 198765,
-      nonCommercialSpread: 35802,
-      sentiment: "BULLISH",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "SI=F",
-      name: "Silver",
-      type: "commodity",
-      commercialLong: 45678,
-      commercialShort: 52345,
-      commercialSpread: -6667,
-      nonCommercialLong: 123456,
-      nonCommercialShort: 112345,
-      nonCommercialSpread: 11111,
-      sentiment: "NEUTRAL",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "EUR/USD",
-      name: "Euro vs USD",
-      type: "currency",
-      commercialLong: 156789,
-      commercialShort: 178901,
-      commercialSpread: -22112,
-      nonCommercialLong: 345678,
-      nonCommercialShort: 321098,
-      nonCommercialSpread: 24580,
-      sentiment: "NEUTRAL",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "GBP/USD",
-      name: "British Pound vs USD",
-      type: "currency",
-      commercialLong: 98765,
-      commercialShort: 112345,
-      commercialSpread: -13580,
-      nonCommercialLong: 212345,
-      nonCommercialShort: 198765,
-      nonCommercialSpread: 13580,
-      sentiment: "BEARISH",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "USD/JPY",
-      name: "USD vs Japanese Yen",
-      type: "currency",
-      commercialLong: 189012,
-      commercialShort: 167890,
-      commercialSpread: 21122,
-      nonCommercialLong: 298765,
-      nonCommercialShort: 276543,
-      nonCommercialSpread: 22222,
-      sentiment: "BULLISH",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "NAS100",
-      name: "Nasdaq 100",
-      type: "index",
-      commercialLong: 312456,
-      commercialShort: 287654,
-      commercialSpread: 24802,
-      nonCommercialLong: 512345,
-      nonCommercialShort: 487654,
-      nonCommercialSpread: 24691,
-      sentiment: "BULLISH",
-      lastUpdate: new Date().toISOString(),
-    },
-    {
-      symbol: "SPX500",
-      name: "S&P 500",
-      type: "index",
-      commercialLong: 412345,
-      commercialShort: 387654,
-      commercialSpread: 24691,
-      nonCommercialLong: 612345,
-      nonCommercialShort: 587654,
-      nonCommercialSpread: 24691,
-      sentiment: "BULLISH",
-      lastUpdate: new Date().toISOString(),
-    },
-  ];
 }

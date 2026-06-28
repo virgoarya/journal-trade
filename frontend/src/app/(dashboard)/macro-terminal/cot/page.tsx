@@ -1,7 +1,4 @@
-"use client";
-
-import React from "react";
-import { CotPanel } from "@/components/macro-terminal/CotPanel";
+import CotPanel from "@/components/macro-terminal/CotPanel";
 
 export default function CotPage() {
   return (
