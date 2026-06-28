@@ -142,7 +142,7 @@ export function useDataFetching() {
         fetchWithRetry(`/api/v1/quant/snapshot`, "quant"),
         fetchWithRetry(`/api/v1/geo-risk`, "geoRisk"),
         fetchWithRetry(`/api/v1/market-data/tga`, "tga"),
-        fetchWithRetry(`/api/v1/market-data/cot`, "cot"),
+        fetchWithRetry(`/api/macro/cot`, "cot"),
       ]);
 
       const [
