@@ -1,37 +1,42 @@
-export interface CotItem {
-  symbol: string;
-  sentiment: string;
-  commercial: string;
-  nonCommercial: string;
-}
+import type { CotItem } from "@/types/cot";
+import { env } from "@/lib/env";
 
 export async function getCotData(): Promise<CotItem[]> {
   console.log("[COT SERVICE] getCotData() called on server");
+  console.log("[COT SERVICE] Target URL:", `${env.backendUrl}/api/v1/market-data/cot`);
   
+  if (!env.backendUrl) {
+    console.error("[COT SERVICE] BACKEND_URL not configured");
+    return getDummyData();
+  }
+
   try {
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
-    
-    console.log("[COT SERVICE] Fetching from:", `${BACKEND_URL}/api/v1/market-data/cot`);
-    
-    const res = await fetch(`${BACKEND_URL}/api/v1/market-data/cot`, {
+    const res = await fetch(`${env.backendUrl}/api/v1/market-data/cot`, {
       next: { revalidate: 3600 },
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
 
+    console.log("[COT SERVICE] Response status:", res.status);
+
     if (!res.ok) {
-      console.error("[COT SERVICE] Fetch failed:", res.status);
-      return getDummyData();
+      throw new Error(`HTTP ${res.status}`);
     }
 
     const result = await res.json();
     console.log("[COT SERVICE] Success:", result.data?.length || 0, "items");
     return result.data || getDummyData();
   } catch (error) {
-    console.error("[COT SERVICE] Error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("[COT SERVICE] Fetch failed:", errorMessage);
+    console.error("[COT SERVICE] Attempted URL:", `${env.backendUrl}/api/v1/market-data/cot`);
     return getDummyData();
   }
 }
 
 function getDummyData(): CotItem[] {
+  console.log("[COT SERVICE] Returning dummy data");
   return [
     {
       symbol: "CL=F",

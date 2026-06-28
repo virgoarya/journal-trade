@@ -3,7 +3,8 @@ export const revalidate = 0;
 
 import React from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { getCotData, type CotItem } from "@/lib/cot-service";
+import { getCotData } from "@/lib/cot-service";
+import type { CotItem } from "@/types/cot";
 
 export default async function CotPanel() {
   const cotData = await getCotData();
