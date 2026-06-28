@@ -8,6 +8,8 @@ interface CotItem {
 }
 
 export async function GET() {
+  console.log("[COT API] GET request received");
+  
   try {
     const data: CotItem[] = [
       {
@@ -30,6 +32,8 @@ export async function GET() {
       },
     ];
 
+    console.log("[COT API] Returning data:", JSON.stringify(data));
+    
     return NextResponse.json(data, {
       status: 200,
       headers: {
@@ -38,7 +42,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("COT API Error:", error);
+    console.error("[COT API] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

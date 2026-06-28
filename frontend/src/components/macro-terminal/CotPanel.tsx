@@ -13,16 +13,26 @@ interface CotItem {
 
 async function fetchCotData(): Promise<CotItem[]> {
   try {
-    const res = await fetch("https://hunter-trades.com/api/macro/cot", {
+    const url = "/api/macro/cot";
+    console.log("[COT] Fetching URL:", url);
+    
+    const res = await fetch(url, {
       cache: "no-store",
     });
 
+    console.log("[COT] Response status:", res.status);
+    console.log("[COT] Response ok:", res.ok);
+
     if (!res.ok) {
+      console.error("[COT] Fetch failed with status:", res.status);
       return [];
     }
 
-    return res.json();
-  } catch {
+    const data = await res.json();
+    console.log("[COT] Response data:", data);
+    return data;
+  } catch (error) {
+    console.error("[COT] Fetch error:", error);
     return [];
   }
 }
