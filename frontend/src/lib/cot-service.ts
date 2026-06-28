@@ -36,10 +36,15 @@ export async function getCotData(): Promise<CotItem[]> {
 }
 
 export async function getCotDataWithInternalFallback(): Promise<CotItem[]> {
+  console.log("[COT SERVICE] Starting data fetch with fallback chain");
+  
   const backendResult = await getCotData();
-  if (backendResult.length > 0) return backendResult;
+  if (backendResult.length > 0) {
+    console.log("[COT SERVICE] Using backend data");
+    return backendResult;
+  }
 
-  console.log("[COT SERVICE] Trying internal API route as fallback");
+  console.log("[COT SERVICE] Backend failed, trying internal API route");
   try {
     const siteUrl = env.siteUrl || "http://localhost:3000";
     const res = await fetch(`${siteUrl}/api/macro/cot`, {
@@ -53,9 +58,10 @@ export async function getCotDataWithInternalFallback(): Promise<CotItem[]> {
       return data;
     }
   } catch (error) {
-    console.error("[COT SERVICE] Internal API also failed:", error);
+    console.error("[COT SERVICE] Internal API failed:", error);
   }
 
+  console.log("[COT SERVICE] All sources failed, returning dummy data");
   return getDummyData();
 }
 
