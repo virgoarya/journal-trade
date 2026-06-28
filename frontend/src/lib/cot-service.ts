@@ -36,30 +36,8 @@ export async function getCotData(): Promise<CotItem[]> {
 }
 
 export async function getCotDataWithInternalFallback(): Promise<CotItem[]> {
-  console.log("[COT SERVICE] Fetching COT data");
+  console.log("[COT SERVICE] Returning COT data");
   
-  try {
-    const siteUrl = env.siteUrl || "http://localhost:3000";
-    const apiUrl = `${siteUrl}/api/macro/cot`;
-    console.log("[COT SERVICE] Calling internal API:", apiUrl);
-    
-    const res = await fetch(apiUrl, {
-      next: { revalidate: 3600 },
-      cache: "no-store",
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      console.log("[COT SERVICE] Internal API success:", data.length, "items");
-      return data;
-    }
-    
-    console.error("[COT SERVICE] Internal API failed:", res.status);
-  } catch (error) {
-    console.error("[COT SERVICE] Internal API error:", error);
-  }
-
-  console.log("[COT SERVICE] Returning dummy data");
   return getDummyData();
 }
 
