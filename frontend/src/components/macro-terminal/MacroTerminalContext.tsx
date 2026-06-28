@@ -36,6 +36,7 @@ export interface DataStatusState {
   geoRisk: DataStatus;
   quant: DataStatus;
   nexus: DataStatus;
+  cot: DataStatus;
 }
 
 export interface Asset {
@@ -99,6 +100,20 @@ export interface GeoRiskSummary {
   fetchedAt: string | null;
 }
 
+export interface CotPosition {
+  symbol: string;
+  name: string;
+  type: "commodity" | "currency" | "index" | "bond";
+  commercialLong: number;
+  commercialShort: number;
+  commercialSpread: number;
+  nonCommercialLong: number;
+  nonCommercialShort: number;
+  nonCommercialSpread: number;
+  sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
+  lastUpdate: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +135,7 @@ interface MacroTerminalContextProps {
   vix: VixState;
   yieldCurve: YieldCurveState;
   geoRisk: GeoRiskSummary;
+  cotData: CotPosition[];
   refreshSnapshot: () => Promise<void>;
 }
 
@@ -172,6 +188,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     setNextEvent,
     geoRisk,
     setGeoRisk,
+    cotData,
     dataStatus,
     setDataStatus,
     lastUpdated,
@@ -425,6 +442,7 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     vix,
     yieldCurve,
     geoRisk,
+    cotData,
     refreshSnapshot,
   };
 

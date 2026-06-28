@@ -10,6 +10,20 @@ import type {
   DataStatus,
 } from "@/components/macro-terminal/MacroTerminalContext";
 
+export interface CotPosition {
+  symbol: string;
+  name: string;
+  type: "commodity" | "currency" | "index" | "bond";
+  commercialLong: number;
+  commercialShort: number;
+  commercialSpread: number;
+  nonCommercialLong: number;
+  nonCommercialShort: number;
+  nonCommercialSpread: number;
+  sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
+  lastUpdate: string;
+}
+
 export type DataStatusState = {
   quotes: DataStatus;
   liquidity: DataStatus;
@@ -20,6 +34,7 @@ export type DataStatusState = {
   quant: DataStatus;
   nexus: DataStatus;
   tga: DataStatus;
+  cot: DataStatus;
 };
 
 const DATA_FRESH_MS = 60_000;
@@ -64,6 +79,7 @@ export function useDataFetching() {
     scores: {},
     fetchedAt: null,
   });
+  const [cotData, setCotData] = useState<CotPosition[]>([]);
   const [dataStatus, setDataStatus] = useState<DataStatusState>({
     quotes: "stale",
     liquidity: "stale",
@@ -74,6 +90,7 @@ export function useDataFetching() {
     quant: "stale",
     nexus: "stale",
     tga: "stale",
+    cot: "stale",
   });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isFallback, setIsFallback] = useState(false);
@@ -125,6 +142,7 @@ export function useDataFetching() {
         fetchWithRetry(`/api/v1/quant/snapshot`, "quant"),
         fetchWithRetry(`/api/v1/geo-risk`, "geoRisk"),
         fetchWithRetry(`/api/v1/market-data/tga`, "tga"),
+        fetchWithRetry(`/api/v1/cot`, "cot"),
       ]);
 
       const [
@@ -136,6 +154,7 @@ export function useDataFetching() {
         quantRes,
         geoRiskRes,
         tgaRes,
+        cotRes,
       ] = responses;
 
       const [
@@ -147,6 +166,7 @@ export function useDataFetching() {
         quantData,
         geoRiskData,
         tgaData,
+        cotDataRes,
       ] = await Promise.all(responses.map((res: any) =>
         res && typeof res.json === "function" ? res.json() : Promise.resolve(null)
       ));
@@ -159,6 +179,7 @@ export function useDataFetching() {
       const quantFetchStatus = getStatusFromResponse(quantRes, quantData);
       const geoRiskFetchStatus = getStatusFromResponse(geoRiskRes, geoRiskData);
       const tgaFetchStatus = getStatusFromResponse(tgaRes, tgaData);
+      const cotFetchStatus = getStatusFromResponse(cotRes, cotDataRes);
 
       setStatus("quotes", quoteStatus);
       setStatus("liquidity", liquidityFetchStatus);
@@ -168,6 +189,7 @@ export function useDataFetching() {
       setStatus("quant", quantFetchStatus);
       setStatus("geoRisk", geoRiskFetchStatus);
       setStatus("tga", tgaFetchStatus);
+      setStatus("cot", cotFetchStatus);
 
       setIsFallback([
         quoteStatus,
@@ -265,6 +287,11 @@ export function useDataFetching() {
         setStatus("geoRisk", geoRiskData.rateLimited ? "stale" : "live");
         setLastUpdated(new Date());
       }
+
+      if (cotDataRes?.success && Array.isArray(cotDataRes.data)) {
+        setCotData(cotDataRes.data);
+        setStatus("cot", cotDataRes.rateLimited ? "stale" : "live");
+      }
     } catch {
       setIsFallback(true);
       Object.keys(dataStatus).forEach((key) => {
@@ -284,6 +311,8 @@ export function useDataFetching() {
     setNextEvent,
     geoRisk,
     setGeoRisk,
+    cotData,
+    setCotData,
     dataStatus,
     setDataStatus,
     lastUpdated,

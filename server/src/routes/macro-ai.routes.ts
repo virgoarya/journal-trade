@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
+import { macroDataService } from "../services/macro-data.service";
 import { requireAuth } from "../middleware/auth";
 import { silentLogger } from "../utils/silent-logger";
 
@@ -158,6 +159,19 @@ router.post("/analyze-nexus", requireAuth, async (req, res) => {
     res.json({ success: true, reasoning });
   } catch (error: any) {
     silentLogger.error("Macro AI Analyze Nexus Route Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Terjadi kesalahan pada server",
+    });
+  }
+});
+
+router.get("/cot", requireAuth, async (req, res) => {
+  try {
+    const result = await macroDataService.getCommitmentOfTraders();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    silentLogger.error("COT Route Error:", error);
     res.status(500).json({
       success: false,
       error: error.message || "Terjadi kesalahan pada server",
