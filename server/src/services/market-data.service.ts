@@ -358,56 +358,6 @@ setCache(cacheKey, result);
       } catch (error) {
         silentLogger.warn("Market-bulls COT fetch failed, trying investing.com");
       }
-        });
-        
-        const results: any[] = [];
-        const html = marketBullRes.data;
-        
-        // Parse HTML untuk ekstrak data COT
-        const goldMatch = html.match(/(\d+,?\d*)\s*\/\s*(\d+,?\d*)/g);
-        if (goldMatch) {
-          const [longStr, shortStr] = goldMatch[0].replace(/,/g, "").split("/").map(s => parseInt(s.trim()));
-          results.push({
-            symbol: "GC=F",
-            name: "Gold",
-            type: "commodity",
-            commercialLong: longStr || 0,
-            commercialShort: shortStr || 0,
-            commercialSpread: (longStr || 0) - (shortStr || 0),
-            nonCommercialLong: Math.floor((longStr || 0) * 2.1),
-            nonCommercialShort: Math.floor((shortStr || 0) * 1.9),
-            nonCommercialSpread: 0,
-            sentiment: "NEUTRAL",
-            lastUpdate: new Date().toISOString(),
-          });
-        }
-        
-        // Cari data untuk kontrak lainnya
-        const oilMatch = html.match(/Crude Oil[\s\S]{0,500}(\d+,?\d*)\s*\/\s*(\d+,?\d*)/i);
-        if (oilMatch) {
-          const [longStr, shortStr] = oilMatch.slice(1).map((s: string) => parseInt(s.replace(/,/g, "").trim()));
-          results.push({
-            symbol: "CL=F",
-            name: "Crude Oil",
-            type: "commodity",
-            commercialLong: longStr || 0,
-            commercialShort: shortStr || 0,
-            commercialSpread: (longStr || 0) - (shortStr || 0),
-            nonCommercialLong: Math.floor((longStr || 0) * 1.7),
-            nonCommercialShort: Math.floor((shortStr || 0) * 1.7),
-            nonCommercialSpread: 0,
-            sentiment: (longStr || 0) > (shortStr || 0) ? "BULLISH" : "BEARISH",
-            lastUpdate: new Date().toISOString(),
-          });
-        }
-        
-        if (results.length > 0) {
-          setCache(cacheKey, results, 3600000);
-          return results;
-        }
-      } catch (error) {
-        silentLogger.warn("Market-bulls COT fetch failed, trying investing.com");
-      }
 
       // Coba investing.com sebagai alternatif terakhir
       try {
