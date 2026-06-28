@@ -224,8 +224,8 @@ setCache(cacheKey, result);
       const cached = getCache<any[]>(cacheKey);
       if (cached) return cached;
   
-      const finnhubKey = env.FINNHUB_API_KEY;
       const mockData = this.getMockCotData();
+      const finnhubKey = env.FINNHUB_API_KEY;
   
       // Coba Finnhub dulu
       if (finnhubKey) {
