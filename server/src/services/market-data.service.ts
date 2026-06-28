@@ -218,15 +218,15 @@ export const marketDataService = {
 setCache(cacheKey, result);
       return result;
     },
-  
+
     async getCommitmentOfTraders() {
       const cacheKey = "cot_commitment";
       const cached = getCache<any[]>(cacheKey);
       if (cached) return cached;
-  
+
       const mockData = this.getMockCotData();
       const finnhubKey = env.FINNHUB_API_KEY;
-  
+
       // Coba Finnhub dulu
       if (finnhubKey) {
         const { allowed } = await API_LIMITS.FINNHUB.consume();
@@ -242,9 +242,9 @@ setCache(cacheKey, result);
                 timeout: 10000,
               })
             ]);
-            
+
             const results: any[] = [];
-            
+
             if (futuresRes.data?.data && Array.isArray(futuresRes.data.data)) {
               futuresRes.data.data.forEach((item: any) => {
                 results.push({
@@ -262,7 +262,7 @@ setCache(cacheKey, result);
                 });
               });
             }
-            
+
             if (forexRes.data?.data && Array.isArray(forexRes.data.data)) {
               forexRes.data.data.forEach((item: any) => {
                 results.push({
@@ -280,7 +280,7 @@ setCache(cacheKey, result);
                 });
               });
             }
-            
+
             if (results.length > 0) {
               setCache(cacheKey, results, 3600000);
               return results;
@@ -291,27 +291,25 @@ setCache(cacheKey, result);
         }
       }
 
-// Coba market-bulls.com sebagai backup
+      // Coba market-bulls.com sebagai backup
       try {
         const marketBullRes = await axios.get("https://market-bulls.com/cot-report/", {
           timeout: 15000,
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           }
         });
-        
+
         const results: any[] = [];
         const html = marketBullRes.data;
-        
-        // Cari tanggal update
-        const dateMatch = html.match(/Release Date[:\s]*([A-Z][a-z]+ \d{1,2}, \d{4}|[A-Z][a-z]+ \d{1,2} \d{4})/i) || 
+
+        const dateMatch = html.match(/Release Date[:\s]*([A-Z][a-z]+ \d{1,2}, \d{4})/i) || 
                          html.match(/(\w+ \d{1,2}, \d{4})/);
         const lastUpdateDate = dateMatch ? dateMatch[1] : new Date().toISOString();
-        
-        // Parse HTML untuk ekstrak data COT dari tabel
+
         const tableRegex = /<tr[^>]*>(.*?)<\/tr>/gi;
         const rowMatches = html.match(tableRegex) || [];
-        
+
         const symbolMapping = [
           { symbol: "CL=F", name: "Crude Oil", type: "commodity" },
           { symbol: "GC=F", name: "Gold", type: "commodity" },
@@ -323,21 +321,21 @@ setCache(cacheKey, result);
           { symbol: "NAS100", name: "Nasdaq 100", type: "index" },
           { symbol: "SPX500", name: "S&P 500", type: "index" },
         ];
-        
+
         let rowIndex = 0;
         for (const row of rowMatches) {
           if (rowIndex >= symbolMapping.length) break;
-          
+
           const symbolInfo = symbolMapping[rowIndex];
           const numbers = row.match(/\d{1,3}(?:,\d{3})*(?:\.\d+)?/g);
-          
+
           if (numbers && numbers.length >= 4) {
             const parsed = numbers.map((n: string) => parseInt(n.replace(/,/g, "")));
             const commercialLong = parsed[0] || 0;
             const commercialShort = parsed[1] || 0;
             const nonCommercialLong = parsed[2] || 0;
             const nonCommercialShort = parsed[3] || 0;
-            
+
             results.push({
               symbol: symbolInfo.symbol,
               name: symbolInfo.name,
@@ -354,67 +352,7 @@ setCache(cacheKey, result);
           }
           rowIndex++;
         }
-        
-        if (results.length > 0) {
-          setCache(cacheKey, results, 3600000);
-          return results;
-        }
-      } catch (error) {
-        silentLogger.warn("Market-bulls COT fetch failed, trying investing.com");
-      }
-        });
-        
-        const results: any[] = [];
-        const html = marketBullRes.data;
-        
-        // Parse HTML untuk ekstrak data COT dari tabel
-        // Cari semua baris tabel yang mengandung data posisi
-        const tableRegex = /<tr[^>]*>(.*?)<\/tr>/gi;
-        const rowMatches = html.match(tableRegex) || [];
-        
-        const symbolMapping = [
-          { symbol: "CL=F", name: "Crude Oil", type: "commodity" },
-          { symbol: "GC=F", name: "Gold", type: "commodity" },
-          { symbol: "SI=F", name: "Silver", type: "commodity" },
-          { symbol: "NG=F", name: "Natural Gas", type: "commodity" },
-          { symbol: "EUR/USD", name: "Euro vs USD", type: "currency" },
-          { symbol: "GBP/USD", name: "British Pound vs USD", type: "currency" },
-          { symbol: "USD/JPY", name: "USD vs Japanese Yen", type: "currency" },
-          { symbol: "NAS100", name: "Nasdaq 100", type: "index" },
-          { symbol: "SPX500", name: "S&P 500", type: "index" },
-        ];
-        
-        let rowIndex = 0;
-        for (const row of rowMatches) {
-          if (rowIndex >= symbolMapping.length) break;
-          
-          const symbolInfo = symbolMapping[rowIndex];
-          const numbers = row.match(/\d{1,3}(?:,\d{3})*(?:\.\d+)?/g);
-          
-          if (numbers && numbers.length >= 4) {
-            const parsed = numbers.map((n: string) => parseInt(n.replace(/,/g, "")));
-            const commercialLong = parsed[0] || 0;
-            const commercialShort = parsed[1] || 0;
-            const nonCommercialLong = parsed[2] || 0;
-            const nonCommercialShort = parsed[3] || 0;
-            
-            results.push({
-              symbol: symbolInfo.symbol,
-              name: symbolInfo.name,
-              type: symbolInfo.type,
-              commercialLong,
-              commercialShort,
-              commercialSpread: commercialLong - commercialShort,
-              nonCommercialLong,
-              nonCommercialShort,
-              nonCommercialSpread: nonCommercialLong - nonCommercialShort,
-              sentiment: commercialLong > commercialShort ? "BULLISH" : commercialLong < commercialShort ? "BEARISH" : "NEUTRAL",
-              lastUpdate: new Date().toISOString(),
-            });
-          }
-          rowIndex++;
-        }
-        
+
         if (results.length > 0) {
           setCache(cacheKey, results, 3600000);
           return results;
@@ -427,11 +365,9 @@ setCache(cacheKey, result);
       try {
         const investingRes = await axios.get("https://api.investing.com/api/futures/cot", {
           timeout: 15000,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; HunterTradesBot/1.0)",
-          }
+          headers: { "User-Agent": "Mozilla/5.0" }
         });
-        
+
         if (investingRes.data?.length) {
           const results = investingRes.data.map((item: any) => ({
             symbol: item.symbol || item.symbol_title,
@@ -446,7 +382,7 @@ setCache(cacheKey, result);
             sentiment: item.sentiment || "NEUTRAL",
             lastUpdate: new Date().toISOString(),
           }));
-          
+
           if (results.length > 0) {
             setCache(cacheKey, results, 3600000);
             return results;
@@ -460,7 +396,7 @@ setCache(cacheKey, result);
       try {
         const symbols = ["CL=F", "GC=F", "SI=F", "NG=F"];
         const results: any[] = [];
-        
+
         for (const symbol of symbols) {
           const yahooRes = await axios.get(
             `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`,
@@ -469,7 +405,7 @@ setCache(cacheKey, result);
               headers: { "User-Agent": "Mozilla/5.0" }
             }
           );
-          
+
           if (yahooRes.data?.chart?.result?.[0]) {
             const meta = yahooRes.data.chart.result[0].meta;
             results.push({
@@ -487,7 +423,7 @@ setCache(cacheKey, result);
             });
           }
         }
-        
+
         if (results.length > 0) {
           setCache(cacheKey, results, 3600000);
           return results;
