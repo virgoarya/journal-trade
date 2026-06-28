@@ -32,20 +32,18 @@ async function callGeminiDirect(
     const fullPrompt = systemPrompt
       ? `${systemPrompt}\n\n${userPrompt}`
       : userPrompt;
-    const config = generationConfig || {
-      maxOutputTokens: 150,
-      temperature: 0.2,
-    };
     const response = await axios.post(
       `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-        generationConfig: config,
       },
       { headers: { "Content-Type": "application/json" }, timeout: 20000 },
     );
 
     const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    silentLogger.info(
+      `[MacroAI] Gemini generated ${text?.length} chars. Finish reason: ${response.data?.candidates?.[0]?.finishReason}`,
+    );
     return typeof text === "string" && text.trim() ? text.trim() : null;
   } catch (error) {
     silentLogger.error(
@@ -82,7 +80,7 @@ async function callDualEngine(
             { role: "system", content: systemPrompt || "" },
             { role: "user", content: userPrompt },
           ],
-          max_tokens: generationConfig?.max_output_tokens || 150,
+          max_tokens: generationConfig?.max_output_tokens || 512,
           temperature: generationConfig?.temperature || 0.2,
           stream: false,
         },
@@ -90,6 +88,9 @@ async function callDualEngine(
       );
 
       const text = response.choices?.[0]?.message?.content;
+      silentLogger.info(
+        `[MacroAI] Groq ${model} generated ${text?.length} chars. Finish reason: ${response.choices?.[0]?.finish_reason}`,
+      );
       if (text && text.trim()) {
         return text.trim();
       }
@@ -120,6 +121,87 @@ async function callDualEngine(
     lastError?.message,
     "Gemini: no response",
   );
+  return null;
+}
+
+// Variant of callDualEngine that validates JSON content — falls back to Gemini if Groq returns non-JSON
+async function callDualEngineWithJsonValidation(
+  userPrompt: string,
+  systemPrompt?: string,
+  generationConfig?: Record<string, any>,
+): Promise<string | null> {
+  const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+
+  const isValidJson = (text: string): boolean => {
+    try {
+      const cleaned = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      const firstBrace = cleaned.indexOf("{");
+      const lastBrace = cleaned.lastIndexOf("}");
+      if (firstBrace === -1 || lastBrace <= firstBrace) return false;
+      const obj = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      // Must have at least one required field
+      return obj && typeof obj === "object" && (obj.fakta || obj.dampakMarket);
+    } catch {
+      return false;
+    }
+  };
+
+  let lastError: any = null;
+  for (const model of GROQ_MODELS) {
+    if (!env.GROQ_API_KEY) break;
+    try {
+      const cacheKey = `feed-json-${JSON.stringify({ model, userPrompt })}`;
+      const response = await groqRequest<GroqResponse>(
+        GROQ_API_URL,
+        {
+          model,
+          messages: [
+            { role: "system", content: systemPrompt || "" },
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: generationConfig?.max_output_tokens || 512,
+          temperature: generationConfig?.temperature || 0.2,
+          stream: false,
+        },
+        { useCache: true, cacheKey },
+      );
+
+      const text = response.choices?.[0]?.message?.content;
+      silentLogger.info(
+        `[MacroAI][Feed] Groq ${model} generated ${text?.length} chars. finish_reason: ${response.choices?.[0]?.finish_reason}`,
+      );
+
+      if (text && text.trim() && isValidJson(text)) {
+        return text.trim();
+      }
+
+      // Groq returned text but it's not valid JSON — log and fall through to Gemini
+      silentLogger.warn(
+        `[MacroAI][Feed] Groq ${model} output is not valid JSON, falling back to Gemini.`,
+      );
+    } catch (error: any) {
+      lastError = error;
+      if (!isRetryableGroqError(error)) break;
+      silentLogger.warn(
+        `[MacroAI][Feed] Groq ${model} request failed (${error.response?.status}), trying next model...`,
+      );
+    }
+  }
+
+  silentLogger.info("[MacroAI][Feed] Using Gemini for macro feed analysis.");
+  const geminiText = await callGeminiDirect(
+    systemPrompt || "",
+    userPrompt,
+    geminiModel,
+    generationConfig,
+  );
+  if (geminiText) return geminiText;
+
+  silentLogger.error("[MacroAI][Feed] All engines failed.", lastError?.message);
   return null;
 }
 
@@ -296,6 +378,7 @@ async function groqRequest<T>(
           const delay = retryAfter
             ? parseInt(retryAfter, 10) * 1000
             : Math.pow(2, attempts) * 1000 + attempts * 1000;
+          if (delay > 5000) throw err;
           attempts++;
           if (attempts > 3) throw err;
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -331,6 +414,7 @@ async function groqRequestStream(url: string, data: any): Promise<any> {
           const delay = retryAfter
             ? parseInt(retryAfter, 10) * 1000
             : Math.pow(2, attempts) * 1000 + attempts * 1000;
+          if (delay > 5000) throw err;
           attempts++;
           if (attempts > 3) throw err;
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -453,25 +537,74 @@ export const macroAiService = {
       keyAssets,
     };
 
-    const prompt = `Anda adalah analis makro institusional. Gunakan state berikut sebagai SSOT Macro Terminal. Data ini identik dengan yang digunakan oleh Regime Classifier (Dual-EMA Crossover + ROC + Composite Score).
+    let externalContext = "";
+    try {
+      const { marketDataService } = require("./market-data.service");
+      const news = await marketDataService.getNews();
+      const calendar = await marketDataService.getEconomicCalendar();
+      const liquidityData = await marketDataService.getLiquidity();
+      const tgaData = await marketDataService.getTGA();
 
+      const newsStr = news?.length
+        ? news
+            .slice(0, 3)
+            .map((n: any) => `- ${n.headline}`)
+            .join("\n")
+        : "Tidak ada berita.";
+      const nextHighImpact = calendar?.find(
+        (c: any) => c.impact === "High" && new Date(c.date) > new Date(),
+      );
+      const calStr = nextHighImpact
+        ? `- ${nextHighImpact.title} (${nextHighImpact.currency})`
+        : "Tidak ada event high-impact.";
+      const formatLiquidity = (val: number | undefined) => {
+        if (val === undefined) return "N/A";
+        return val >= 1000
+          ? (val / 1000).toFixed(2) + "T"
+          : val.toFixed(2) + "B";
+      };
+
+      const rrpVal = formatLiquidity(liquidityData?.value);
+      const tgaVal = tgaData?.displayValue
+        ? tgaData.displayValue.replace("$", "")
+        : formatLiquidity(tgaData?.value);
+      const tgaRrpStr = `- ON RRP: $${rrpVal} | TGA: $${tgaVal}`;
+
+      externalContext = `\nDATA OVERVIEW TAMBAHAN:\n[MACRO FEED]:\n${newsStr}\n[NEXT CALENDAR EVENT]:\n${calStr}\n[LIQUIDITY FLOW]:\n${tgaRrpStr}`;
+    } catch (e) {
+      silentLogger.warn("[MacroAI] Failed to fetch external context", e);
+    }
+
+    const prompt = `Anda adalah analis makro institusional. Gunakan state berikut sebagai SSOT Macro Terminal.
+Data Utama:
 ${JSON.stringify(stateJson, null, 2)}
+${externalContext}
 
-INSTRUKSI ANALISIS (4 kalimat, lugas, tanpa meta-language):
+INSTRUKSI ANALISIS HOLISTIK:
+Gunakan format terminal header berikut untuk setiap bagian (jangan gunakan kata "Paragraf 1", dll):
 
-KALIMAT 1 — APA YANG TERJADI: Sebut regime aktif (${calculatedRegime || "unknown"}) dan confidence level (${context?.confidence?.label ?? "N/A"}, skor ${context?.confidence?.score ?? "?"}/100). Jelaskan singkat posisi growth vs inflation.
+[ REGIME & MOMENTUM ]
+Sebut regime aktif (${calculatedRegime || "unknown"}) dan skor confidence. Baca ROC-5d growth dan inflation. Sebutkan jika ada divergensi arah atau early warning shift.
 
-KALIMAT 2 — APA YANG AKAN DATANG: Baca ROC-5d growth (${context?.growth?.roc5d ?? "N/A"}%) dan ROC-5d inflation (${context?.inflation?.roc5d ?? "N/A"}%). Jika ada status TURNING di sub-score, sebutkan sebagai early warning shift. Jika ROC berlawanan arah dari EMA, sebutkan potensi divergence.
+[ LIQUIDITY FLOW ]
+Analisis likuiditas agregat (${context?.liquidity?.riskState ?? "N/A"}). Hubungkan dengan aliran dana spesifik ON RRP dan TGA.
 
-KALIMAT 3 — LIKUIDITAS & RISK: Sebutkan kondisi likuiditas (${context?.liquidity?.riskState ?? "N/A"}) dan hubungkan dengan VIX/yield curve jika relevan.
+[ MACRO HEATMAP ]
+Hubungkan tesis likuiditas & regime dengan performa ETF di Heatmap hari ini (Gunakan data dari objek keyAssets). Aset apa yang diakumulasi institusi?
 
-KALIMAT 4 — INVALIDATION: Sebutkan sub-indikator terlemah (paling dekat TURNING/NEUTRAL) yang bisa membatalkan tesis regime jika berbalik arah. Setiap kalimat diakhiri titik.`;
+[ BERITA & EVENT ]
+Simpulkan sentimen dan katalis utama dari berita di Macro Feed atau Economic Calendar. JANGAN sekadar membaca ulang atau menyebut judul berita satu per satu. Fokus pada kesimpulan: apakah narasi berita secara agregat memvalidasi atau membahayakan regime makro saat ini?
 
-    const text = await callDualEngine(
-      prompt,
-      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal. Anda menganalisis data Dual-EMA Crossover (EMA-10 vs EMA-50) dan ROC-5d sebagai leading indicator. DEFINISI: TURNING = EMA-10 baru saja cross EMA-50 (sinyal dini). ACCELERATING = EMA-10 di atas EMA-50. DECELERATING = EMA-10 di bawah EMA-50. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Gunakan istilah ROC, EMA crossover, sub-score saat relevan. Balas dalam Bahasa Indonesia.",
-      { max_output_tokens: 500, temperature: 0.2 },
-    );
+[ INVALIDATION ]
+Sebutkan sub-indikator teknis terlemah yang bisa membatalkan tesis ini jika berbalik arah.`;
+
+    const systemPrompt =
+      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst. Anda wajib membaca dan menyatukan seluruh panel (Regime Matrix, Liquidity Flow TGA/RRP, ETF Heatmap, Macro Feed News, dan Calendar) menjadi satu cerita makro (Causal Loop) yang holistik. RULES: 1. Tanpa meta-language (jangan bilang 'berikut adalah analisis'). 2. Kalimat lugas dan to-the-point ala terminal. 3. Gunakan header persis seperti yang diminta, TANPA tambahan asteris/bintang markdown (misalnya tulis [ REGIME & MOMENTUM ], bukan **[ REGIME & MOMENTUM ]**). Balas dalam Bahasa Indonesia yang profesional.";
+
+    const text = await callDualEngine(prompt, systemPrompt, {
+      max_output_tokens: 800,
+      temperature: 0.3,
+    });
 
     if (text) {
       return text.trim();
@@ -590,7 +723,10 @@ KALIMAT 4 — INVALIDATION: Sebutkan sub-indikator terlemah (paling dekat TURNIN
 - Real Yields: ${nexus.realYields?.value}%`;
       }
     } catch (e) {
-      silentLogger.warn("[MacroAI] Failed to fetch nexus data for chat context", e);
+      silentLogger.warn(
+        "[MacroAI] Failed to fetch nexus data for chat context",
+        e,
+      );
     }
 
     const systemPrompt = `ROLE & PERSONA: ${personaDescription}
@@ -633,69 +769,32 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
     targetAsset: string,
     context?: string,
   ) {
-    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+    const prompt = `Lakukan bedah berita makro berikut secara institusional:
+Berita: "${headline}"
+Aset Terkait: ${targetAsset}
+${context ? `Konteks Tambahan: ${context}` : ""}
 
-    const prompt = `Berita ekonomi: ${headline}
-Aset target: ${targetAsset}
-${context ? `Konteks: ${context}` : ""}
-
-Jawab HANYA dengan JSON valid (tanpa markdown, tanpa teks lain di luar JSON) dengan format:
+Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar JSON) yang menggunakan struktur berikut:
 {
-  "fakta": "...",
-  "dampakMarket": "...",
-  "logika": "...",
-  "contrarian": "...",
-  "triggerFundamentalNonTeknikal": "...",
-  "confidenceScore": "..."
+  "fakta": "Ekstrak 1-2 kalimat fakta absolut dari berita (angka, data, atau aksi nyata). Jangan tambahkan opini.",
+  "dampakMarket": "Arah aliran modal (capital flow) dan dampak orde-kedua terhadap aset ${targetAsset}, DXY, maupun Yields.",
+  "logika": "Mekanisme makro yang mendasari dampak tersebut (hubungkan dengan suku bunga, likuiditas, atau premi risiko).",
+  "contrarian": "Skenario kegagalan narasi (contoh: sudah di-price in, reaksi algoritma sesaat, atau anomali data musiman).",
+  "triggerFundamentalNonTeknikal": "Data makro atau event berikutnya yang akan memvalidasi/menggagalkan tesis ini.",
+  "confidenceScore": "Pilih SATU saja: TINGGI, SEDANG, atau RENDAH"
 }`;
 
     const systemPrompt =
-      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst dengan pendekatan 'Critical Thinking'. Anda selalu skeptis terhadap berita utama dan mencari kebenaran struktural serta risiko tersembunyi di balik narasi media. RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat diakhiri titik utuh. 4. Output HANYA JSON valid yang diminta, tanpa penjelasan tambahan. Balas dalam Bahasa Indonesia.";
+      "ROLE & PERSONA: Anda adalah Institutional Macro Strategist (Hedge Fund). Analisis Anda tajam, to-the-point, dan berfokus pada likuiditas, yield curve, dan pergerakan lintas-aset (cross-asset).\n" +
+      "ATURAN MUTLAK:\n" +
+      "1. DILARANG menggunakan kata klise seperti 'Investor mencari aset aman'. Gunakan bahasa teknis pasar (contoh: 'Flight-to-duration menekan yield, memicu bid pada Emas').\n" +
+      "2. DILARANG mengulang fakta berita di kolom analisis. Berikan turunan efek orde-kedua (second-order thinking).\n" +
+      "3. Output HARUS murni format JSON string, tanpa backticks (```json), tanpa teks awalan/akhiran. Parsing akan gagal jika ada karakter selain JSON.";
 
-    let text: string | null = null;
-    try {
-      if (env.GROQ_API_KEY) {
-        const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
-        const response = await groqRequest<GroqResponse>(
-          GROQ_API_URL,
-          {
-            model: GROQ_MODELS[0],
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 300,
-            temperature: 0.2,
-            stream: false,
-          },
-          { useCache: true, cacheKey },
-        );
-
-        text = response.choices?.[0]?.message?.content || null;
-      }
-    } catch (error: any) {
-      if (!isRetryableGroqError(error) || !env.GEMINI_API_KEY) {
-        if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY) {
-          throw new Error(
-            "Fitur AI dinonaktifkan: GROQ_API_KEY dan GEMINI_API_KEY tidak ditemukan",
-          );
-        }
-        if (!isRetryableGroqError(error)) {
-          throw error;
-        }
-      }
-      silentLogger.warn(
-        "[MacroAI] Groq macro feed error, switching to Gemini fallback:",
-        error.response?.status,
-      );
-    }
-
-    if (!text) {
-      text = await callGeminiDirect(systemPrompt, prompt, geminiModel, {
-        maxOutputTokens: 300,
-        temperature: 0.2,
-      });
-    }
+    const text = await callDualEngineWithJsonValidation(prompt, systemPrompt, {
+      max_output_tokens: 512,
+      temperature: 0.2,
+    });
 
     if (!text) {
       return {

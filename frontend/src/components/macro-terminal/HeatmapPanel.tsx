@@ -188,7 +188,7 @@ export function HeatmapPanel() {
         <div className="flex-1 overflow-y-auto px-3 pb-2 min-h-0">
           <div className="text-[10px] text-text-secondary leading-relaxed font-mono break-words whitespace-pre-wrap">
             {aiReasoning ? (
-              <div className="animate-in fade-in duration-500">{aiReasoning}</div>
+              <div className="animate-in fade-in duration-500">{aiReasoning.replace(/\*\*/g, "")}</div>
             ) : isAnalyzing ? (
               <div className="text-accent-gold animate-pulse">
                 Connecting to Hunter Desk Terminal...

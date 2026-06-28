@@ -293,7 +293,8 @@ export const macroDataService = {
 
     const finnhubKey = env.FINNHUB_API_KEY;
     const kobeissiRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://nitter.net/KobeissiLetter/rss";
-    const reutersRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best";
+    const cnbcRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664";
+    const yahooRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://finance.yahoo.com/news/rssindex";
     
     let allNews: NewsItem[] = [];
     let isRateLimited = false;
@@ -316,11 +317,12 @@ export const macroDataService = {
       };
 
       const { data: rssData } = await fetchWithRateLimit(API_LIMITS.RSS_BRIDGE, async () => {
-        const [kobeissi, reuters] = await Promise.all([
+        const [kobeissi, cnbc, yahoo] = await Promise.all([
           fetchRss(kobeissiRSS, "KobeissiLetter"),
-          fetchRss(reutersRSS, "Reuters"),
+          fetchRss(cnbcRSS, "CNBC"),
+          fetchRss(yahooRSS, "Yahoo Finance"),
         ]);
-        return [...kobeissi, ...reuters];
+        return [...kobeissi, ...cnbc, ...yahoo];
       });
 
       if (rssData && rssData.length > 0) {

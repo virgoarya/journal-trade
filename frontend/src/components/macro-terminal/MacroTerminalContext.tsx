@@ -13,7 +13,12 @@ import { useDataFetching } from "@/hooks/useDataFetching";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useRegimeAnalysis } from "@/hooks/useRegimeAnalysis";
 import { OnRrpStatus, deriveSentimentAndImpact } from "@/lib/macro/classifiers";
-import type { QuoteApiResponse, RegimeMetricData, RegimeConfidenceData, RegimeSnapshotData } from "@/lib/macro/types";
+import type {
+  QuoteApiResponse,
+  RegimeMetricData,
+  RegimeConfidenceData,
+  RegimeSnapshotData,
+} from "@/lib/macro/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -58,11 +63,7 @@ export interface LiquidityData {
 }
 
 export type RegimeType =
-  | "Goldilocks"
-  | "Reflation"
-  | "Stagflation"
-  | "Deflation"
-  | "Transition";
+  "Goldilocks" | "Reflation" | "Stagflation" | "Deflation" | "Transition";
 
 export interface VixState {
   value: number | null;
@@ -138,6 +139,10 @@ const initialAssets: Asset[] = [
   { ticker: "UUP", name: "US Dollar (DXY)", change: null, weight: 1.5 },
   { ticker: "FXY", name: "Japanese Yen", change: null, weight: 1.5 },
   { ticker: "TIP", name: "TIPS (Real Yield)", change: null, weight: 1 },
+  { ticker: "FXE", name: "Euro", change: null, weight: 1.5 },
+  { ticker: "FXB", name: "British Pound", change: null, weight: 1 },
+  { ticker: "FXC", name: "Canadian Dollar", change: null, weight: 1 },
+  { ticker: "FXF", name: "Swiss Franc", change: null, weight: 1 },
 ];
 
 function normalizeOnRrpStatus(status?: string): OnRrpStatus {
@@ -178,7 +183,6 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
 
   const [currentRegime, setCurrentRegime] = useState<RegimeType | null>(null);
   const [lastRegime, setLastRegime] = useState<RegimeType | null>(null);
-  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [systemAlert, setSystemAlert] = useState<string | null>(null);
   const [vix, setVix] = useState<VixState>({
     value: null,
@@ -195,26 +199,55 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     fetchedAt: null,
   });
 
-  const { isAnalyzing, reasoning, setReasoning, analyzeRegime, analyzeNexus } =
-    useRegimeAnalysis();
+  const {
+    isAnalyzing,
+    reasoning: aiReasoning,
+    setReasoning,
+    analyzeRegime,
+    analyzeNexus,
+  } = useRegimeAnalysis();
 
   const analyzeRegimeWrapper = useCallback(async () => {
     if (!regimeData) return;
     const liquidityStatus = normalizeOnRrpStatus(liquidity?.status);
     const regime = (regimeData.quadrant as RegimeType) || null;
-    const { sentiment } = deriveSentimentAndImpact(regime || "Deflation", liquidityStatus);
-    const assetsForService = assets.map((a) => ({ ticker: a.ticker, name: a.name, change: a.change }));
+    const { sentiment } = deriveSentimentAndImpact(
+      regime || "Deflation",
+      liquidityStatus,
+    );
+    const assetsForService = assets.map((a) => ({
+      ticker: a.ticker,
+      name: a.name,
+      change: a.change,
+    }));
     await analyzeRegime({
       assets: assetsForService,
       regime: regime,
       liquidityStatus,
       sentiment,
-      context: { growth: regimeData.growth, inflation: regimeData.inflation, liquidity: regimeData.liquidity, confidence: regimeData.confidence, vix, yieldCurve, geoRisk },
+      context: {
+        growth: regimeData.growth,
+        inflation: regimeData.inflation,
+        liquidity: regimeData.liquidity,
+        confidence: regimeData.confidence,
+        vix,
+        yieldCurve,
+        geoRisk,
+      },
     });
-  }, [regimeData, liquidity, assets, vix, yieldCurve, geoRisk, analyzeRegime]);
+    setLastUpdated(new Date());
+  }, [
+    regimeData,
+    liquidity?.status,
+    assets,
+    vix,
+    yieldCurve,
+    geoRisk,
+    analyzeRegime,
+  ]);
 
   const currentRegimeRef = useRef<RegimeType | null>(null);
-  const aiReasoningRef = useRef<string | null>(null);
+  const initialAnalysisDone = useRef<boolean>(false);
 
   // ── WebSocket handlers (batched debounce) ──────────────────────────────────
   const quoteBatchRef = useRef<Map<string, number | null>>(new Map());
@@ -236,14 +269,17 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     setLastUpdated(new Date());
   }, [setAssets, setDataStatus, setLastUpdated]);
 
-  const applyQuoteUpdate = useCallback((payload: { symbol: string; data: { dp?: number } }) => {
-    quoteBatchRef.current.set(
-      payload.symbol,
-      typeof payload.data?.dp === "number" ? payload.data.dp : null,
-    );
-    if (quoteFlushTimerRef.current) clearTimeout(quoteFlushTimerRef.current);
-    quoteFlushTimerRef.current = setTimeout(flushQuoteBatch, 500);
-  }, [flushQuoteBatch]);
+  const applyQuoteUpdate = useCallback(
+    (payload: { symbol: string; data: { dp?: number } }) => {
+      quoteBatchRef.current.set(
+        payload.symbol,
+        typeof payload.data?.dp === "number" ? payload.data.dp : null,
+      );
+      if (quoteFlushTimerRef.current) clearTimeout(quoteFlushTimerRef.current);
+      quoteFlushTimerRef.current = setTimeout(flushQuoteBatch, 500);
+    },
+    [flushQuoteBatch],
+  );
 
   const applyLiquidityUpdate = (payload: LiquidityData) => {
     setLiquidity({
@@ -254,7 +290,10 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     setLastUpdated(new Date());
   };
 
-  const applyVixUpdate = (payload: { value: number; source: "yahoo" | "fred" }) => {
+  const applyVixUpdate = (payload: {
+    value: number;
+    source: "yahoo" | "fred";
+  }) => {
     setVix({
       value: payload.value,
       regime: getVixRegime(payload.value),
@@ -283,19 +322,26 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
           const d = json.data;
           setVix({
             value: typeof d.vix === "number" ? d.vix : null,
-            regime: d.regime ?? getVixRegime(typeof d.vix === "number" ? d.vix : null),
+            regime:
+              d.regime ??
+              getVixRegime(typeof d.vix === "number" ? d.vix : null),
             source: d.vixSource ?? null,
             fetchedAt: json.fetchedAt ?? null,
           });
           setYieldCurve({
-            spread10y2y: typeof d.spread10y2y === "number" ? d.spread10y2y : null,
-            spread30y3m: typeof d.spread30y3m === "number" ? d.spread30y3m : null,
+            spread10y2y:
+              typeof d.spread10y2y === "number" ? d.spread10y2y : null,
+            spread30y3m:
+              typeof d.spread30y3m === "number" ? d.spread30y3m : null,
             curveRegime: d.curveRegime ?? "UNKNOWN",
             inverted: Boolean(d.inverted),
             aiExplainer: d.aiExplainer ?? null,
             fetchedAt: json.fetchedAt ?? null,
           });
-          setDataStatus((prev) => ({ ...prev, quant: json.fromCache ? "cache" : "live" }));
+          setDataStatus((prev) => ({
+            ...prev,
+            quant: json.fromCache ? "cache" : "live",
+          }));
         }
       } catch {
         setDataStatus((prev) => ({ ...prev, quant: "error" }));
@@ -314,89 +360,43 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!regimeData) return;
 
-    const liquidityStatus = normalizeOnRrpStatus(liquidity?.status);
     const regime = (regimeData.quadrant as RegimeType) || null;
-    
-    // Set currentRegime langsung dari regimeData
+
     if (regime) {
       setCurrentRegime(regime);
     }
-    
-    const { sentiment } = deriveSentimentAndImpact(
-      regime || "Deflation",
-      liquidityStatus,
-    );
 
     const previousRegime = currentRegimeRef.current;
-    const isInitialAnalysis = !aiReasoningRef.current;
-    const isRegimeChanged = previousRegime !== null && previousRegime !== regime;
+    const isRegimeChanged =
+      previousRegime !== null && previousRegime !== regime;
 
-    const runAnalysis = async () => {
-      let reasoningText: string;
+    if (isRegimeChanged && previousRegime) {
+      setSystemAlert(
+        `[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime.toUpperCase()} TO ${regime?.toUpperCase()}.`,
+      );
+      setLastRegime(previousRegime);
+      fetch("/api/v1/macro-ai-observer/clear-cache", {
+        method: "POST",
+      }).catch(() => undefined);
 
-      if (isInitialAnalysis || isRegimeChanged) {
-        const assetsForService = assets.map((a) => ({
-          ticker: a.ticker,
-          name: a.name,
-          change: a.change,
-        }));
+      // Auto re-analyze on regime shift
+      analyzeRegimeWrapper();
+    } else if (currentRegimeRef.current === null && regime) {
+      setLastRegime(regime);
+    }
 
-        reasoningText = await (async () => {
-          try {
-            const aiResponse = await fetch("/api/v1/macro-ai/analyze-regime", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                assets: assetsForService,
-                calculatedRegime: regime,
-                liquidityStatus,
-                sentiment,
-                context: {
-                  growth: regimeData.growth,
-                  inflation: regimeData.inflation,
-                  liquidity: regimeData.liquidity,
-                  confidence: regimeData.confidence,
-                  vix,
-                  yieldCurve,
-                  geoRisk,
-                },
-              }),
-            });
-            const aiData = await aiResponse.json();
-            return aiData.success && aiData.reasoning
-              ? aiData.reasoning.trim()
-              : `Regime: ${regime}, Liquidity: ${liquidityStatus}`;
-          } catch {
-            return `Regime: ${regime}, Liquidity: ${liquidityStatus}`;
-          }
-        })();
-      } else {
-        reasoningText = aiReasoningRef.current ?? `Regime: ${regime}, Liquidity: ${liquidityStatus}`;
-      }
+    if (regime) {
+      currentRegimeRef.current = regime;
+    }
+  }, [regimeData, analyzeRegimeWrapper]);
 
-      if (isRegimeChanged && previousRegime) {
-        setSystemAlert(
-          `[SYSTEM ALERT]: MACRO REGIME SHIFT DETECTED. TRANSITIONED FROM ${previousRegime.toUpperCase()} TO ${regime?.toUpperCase()}.`,
-        );
-        setLastRegime(previousRegime);
-        fetch("/api/v1/macro-ai-observer/clear-cache", {
-          method: "POST",
-        }).catch(() => undefined);
-      } else if (currentRegimeRef.current === null && regime) {
-        setLastRegime(regime);
-      }
-
-      if (regime) {
-        setCurrentRegime(regime);
-        currentRegimeRef.current = regime;
-      }
-      aiReasoningRef.current = reasoningText;
-      setAiReasoning(reasoningText);
-      setLastUpdated(new Date());
-    };
-
-    runAnalysis();
-  }, [regimeData, liquidity, assets, vix, yieldCurve, geoRisk, currentRegime, setDataStatus, setLastUpdated]);
+  // ── Initial Analysis ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!initialAnalysisDone.current && regimeData && assets.length > 0) {
+      initialAnalysisDone.current = true;
+      analyzeRegimeWrapper();
+    }
+  }, [regimeData, assets.length, analyzeRegimeWrapper]);
 
   // ── Refresh snapshot ────────────────────────────────────────────────────────
   const refreshSnapshot = async () => {

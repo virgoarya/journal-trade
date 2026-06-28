@@ -30,11 +30,12 @@ export function useRegimeAnalysis() {
         if (data.success && data.reasoning) {
           setReasoning(data.reasoning.trim());
         } else {
-          setReasoning(`Regime: ${params.regime}, Liquidity: ${params.liquidityStatus}`);
+          setReasoning(`Error API: ${data.error || 'Terjadi kesalahan'}. (Regime: ${params.regime})`);
         }
-      } catch {
+      } catch (error: any) {
+        console.error("Regime Analysis Error:", error);
         setReasoning(
-          `Regime: ${params.regime}, Liquidity: ${params.liquidityStatus}`,
+          `Error: ${error?.message || 'Unknown error'}. (Regime: ${params.regime})`
         );
       } finally {
         setIsAnalyzing(false);

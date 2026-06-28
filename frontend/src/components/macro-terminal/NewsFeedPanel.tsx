@@ -275,14 +275,18 @@ function AnalysisModal({
                 {getImpactIcon(item.impact)}
                 {item.impact} {item.targetAsset}
               </span>
-              <span
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
-              >
-                {item.alignment}
-              </span>
-              <span className="px-2 py-1 rounded text-[10px] font-bold border border-border-subtle text-text-muted">
-                CONF {item.confidence}
-              </span>
+              {item.alignment !== "UNVERIFIED" && (
+                <span
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
+                >
+                  {item.alignment}
+                </span>
+              )}
+              {item.confidence !== "LOW" && (
+                <span className="px-2 py-1 rounded text-[10px] font-bold border border-border-subtle text-text-muted bg-surface-elevated/40">
+                  CONF {item.confidence}
+                </span>
+              )}
             </div>
           </div>
 
@@ -427,133 +431,105 @@ export function NewsFeedPanel() {
     ? extractFirstJSON(modalData.rawAnalysis)
     : null;
 
-  const inferConfidence = (
-    headline: string,
-    targetAsset: string,
-  ): NewsItem["confidence"] => {
-    const strong = [
-      "fed",
-      "cpi",
-      "pce",
-      "payroll",
-      "inflation",
-      "rate decision",
-      "recession",
-      "default",
-      "war",
-      "sanctions",
-    ];
-    const medium = [
-      "claims",
-      "pmi",
-      "retail",
-      "confidence",
-      "oil",
-      "yield",
-      "dxy",
-    ];
-    const lower = `${headline} ${targetAsset}`.toLowerCase();
+  const inferConfidence = (headline: string): NewsItem["confidence"] => {
+    const strong = ["fed", "fomc", "powell", "cpi", "pce", "payroll", "nfp", "inflation", "rate", "recession", "war", "attack", "strike", "ecb", "boj"];
+    const medium = ["claims", "pmi", "retail", "sentiment", "confidence", "oil", "yield", "earnings", "gdp"];
+    const lower = headline.toLowerCase();
     if (strong.some((term) => lower.includes(term))) return "HIGH";
     if (medium.some((term) => lower.includes(term))) return "MEDIUM";
     return "LOW";
   };
 
-  const inferAlignment = (
-    headline: string,
-    targetAsset: string,
-  ): NewsItem["alignment"] => {
-    const lower = `${headline} ${targetAsset}`.toLowerCase();
+  const inferAlignment = (headline: string): NewsItem["alignment"] => {
+    const lower = headline.toLowerCase();
     if (!currentRegime) return "UNVERIFIED";
-    if (
-      (currentRegime === "Stagflation" || currentRegime === "Reflation") &&
-      /(inflation|cpi|pce|oil|commodities|yield)/.test(lower)
-    )
-      return "REGIME-ALIGNED";
-    if (
-      currentRegime === "Deflation" &&
-      /(recession|drop|fall|cut|weak|claims)/.test(lower)
-    )
-      return "REGIME-ALIGNED";
-    if (
-      currentRegime === "Goldilocks" &&
-      /(growth|retail|pmi|confidence|soft landing)/.test(lower)
-    )
-      return "REGIME-ALIGNED";
-    if (/(contrary|unexpected|surprise|shock|anomaly)/.test(lower))
-      return "REGIME-CONFLICT";
+
+    const isHotInflation = /(inflation|cpi|pce|hot|sticky|surge|jump)/.test(lower);
+    const isColdInflation = /(disinflation|cool|drop|fall|cut)/.test(lower);
+    const isStrongGrowth = /(strong|beat|jump|rally|surge|growth|robust)/.test(lower);
+    const isWeakGrowth = /(recession|weak|drop|fall|miss|slowdown|crash)/.test(lower);
+
+    switch (currentRegime) {
+      case "Goldilocks":
+        if (isColdInflation || isStrongGrowth) return "REGIME-ALIGNED";
+        if (isHotInflation || isWeakGrowth) return "REGIME-CONFLICT";
+        break;
+      case "Reflation":
+        if (isHotInflation || isStrongGrowth) return "REGIME-ALIGNED";
+        if (isColdInflation || isWeakGrowth) return "REGIME-CONFLICT";
+        break;
+      case "Stagflation":
+        if (isHotInflation || isWeakGrowth) return "REGIME-ALIGNED";
+        if (isColdInflation || isStrongGrowth) return "REGIME-CONFLICT";
+        break;
+      case "Deflation":
+        if (isColdInflation || isWeakGrowth) return "REGIME-ALIGNED";
+        if (isHotInflation || isStrongGrowth) return "REGIME-CONFLICT";
+        break;
+    }
     return "UNVERIFIED";
   };
 
   const mapNewsItem = (item: Record<string, unknown>, index: number): NewsItem => {
-    const date = (item.datetime ? new Date((item.datetime as number) * 1000) : new Date());
+    const date = item.datetime ? new Date((item.datetime as number) * 1000) : new Date();
     const timeStr = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 
     let impact: "BULLISH" | "BEARISH" | "NEUTRAL" = "NEUTRAL";
     let asset = "MKT";
-    const headline = typeof item.headline === "string" ? item.headline.toLowerCase() : "";
+    const rawHeadline = typeof item.headline === "string" ? item.headline : "";
+    const headlineLower = rawHeadline.toLowerCase();
+    
+    let cleanHeadline = rawHeadline
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (cleanHeadline.length > 130) {
+      cleanHeadline = cleanHeadline.substring(0, 127) + "...";
+    }
 
-    if (
-      headline.includes("fed") ||
-      headline.includes("rate") ||
-      headline.includes("inflation") ||
-      headline.includes("cpi") ||
-      headline.includes("pce")
-    ) {
-      impact =
-        headline.includes("cut") || headline.includes("dovish")
-          ? "BULLISH"
-          : "BEARISH";
+    // 1. Asset & Impact Classification
+    if (headlineLower.includes("fed") || headlineLower.includes("powell") || headlineLower.includes("fomc") || headlineLower.includes("cpi") || headlineLower.includes("pce")) {
       asset = "USD";
-    } else if (headline.includes("ecb")) {
-      impact = headline.includes("cut") || headline.includes("dovish") ? "BULLISH" : "BEARISH";
+      // Hawkish = Bullish USD, Dovish = Bearish USD
+      if (/(hike|hawkish|hot|sticky|higher|strong|beat)/.test(headlineLower)) impact = "BULLISH";
+      else if (/(cut|dovish|cool|lower|weak|miss|soft)/.test(headlineLower)) impact = "BEARISH";
+    } else if (headlineLower.includes("ecb") || headlineLower.includes("lagarde")) {
       asset = "EUR";
-    } else if (headline.includes("bank of japan") || headline.includes("jpy")) {
-      impact = "BULLISH";
+      if (/(hike|hawkish|strong|up)/.test(headlineLower)) impact = "BULLISH";
+      else if (/(cut|dovish|weak|down)/.test(headlineLower)) impact = "BEARISH";
+    } else if (headlineLower.includes("boj") || headlineLower.includes("ueda") || headlineLower.includes("yen")) {
       asset = "JPY";
-    } else if (headline.includes("gold") || headline.includes("safe haven") || headline.includes("middle east")) {
-      impact = "BULLISH";
+      if (/(hike|hawkish|intervene|strong)/.test(headlineLower)) impact = "BULLISH";
+      else if (/(cut|dovish|weak|down)/.test(headlineLower)) impact = "BEARISH";
+    } else if (/(gold|safe haven|middle east|war|sanctions|conflict|military|strike|missile|geopolitical|iran|israel|russia|ukraine)/.test(headlineLower)) {
       asset = "GOLD";
-    } else if (
-      headline.includes("war") ||
-      headline.includes("sanctions") ||
-      headline.includes("conflict") ||
-      headline.includes("military") ||
-      headline.includes("defense") ||
-      headline.includes("risk off") ||
-      headline.includes("geopolitical")
-    ) {
-      impact = "BULLISH";
-      asset = "GOLD";
-    } else if (
-      headline.includes("crash") ||
-      headline.includes("drop") ||
-      headline.includes("fall") ||
-      headline.includes("recession")
-    ) {
-      impact = "BEARISH";
+      if (/(war|strike|attack|escalat|tension|fear|risk off)/.test(headlineLower)) impact = "BULLISH";
+      else if (/(peace|truce|ease|risk on)/.test(headlineLower)) impact = "BEARISH";
+    } else if (/(stocks|s&p|nasdaq|tech|earnings|market|equity)/.test(headlineLower)) {
       asset = "EQUITY";
-    } else if (
-      headline.includes("jump") ||
-      headline.includes("rise") ||
-      headline.includes("gain") ||
-      headline.includes("beat")
-    ) {
-      impact = "BULLISH";
-      asset = "EQUITY";
+      if (/(beat|jump|rally|surge|strong|buy|upgrade)/.test(headlineLower)) impact = "BULLISH";
+      else if (/(miss|drop|crash|fall|weak|recession|sell|downgrade)/.test(headlineLower)) impact = "BEARISH";
+    } else if (headlineLower.includes("yield") || headlineLower.includes("treasury") || headlineLower.includes("bond")) {
+      asset = "BONDS";
+      if (/(rise|jump|surge|higher)/.test(headlineLower)) impact = "BEARISH"; // Yields up = Bonds down
+      else if (/(fall|drop|lower)/.test(headlineLower)) impact = "BULLISH";
     }
 
     const summaryStr = typeof item.summary === "string" ? item.summary : "";
     return {
       id: `news-${index}-${(item.headline || item.id || "fallback").toString().slice(0, 24)}`,
       time: timeStr,
-      headline: typeof item.headline === "string" ? item.headline : "",
+      headline: cleanHeadline,
       impact,
       targetAsset: asset,
-      aiSummary: summaryStr
-        ? summaryStr.substring(0, 120) + "..."
-        : "Analisis makro dalam antrian untuk proses institutional.",
-      confidence: inferConfidence(typeof item.headline === "string" ? item.headline : "", asset),
-      alignment: inferAlignment(typeof item.headline === "string" ? item.headline : "", asset),
+      aiSummary: summaryStr, // kept in object, but hidden in UI
+      confidence: inferConfidence(cleanHeadline),
+      alignment: inferAlignment(cleanHeadline),
     };
   };
 
@@ -602,12 +578,7 @@ export function NewsFeedPanel() {
 
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           const mappedNews = data.data.slice(0, 20).map(mapNewsItem);
-          const filteredNews = mappedNews.filter(
-            (item: NewsItem) => 
-              (item.impact === "BULLISH" || item.impact === "BEARISH") &&
-              (item.confidence === "HIGH" || item.alignment !== "UNVERIFIED")
-          );
-          setFeed(filteredNews);
+          setFeed(mappedNews);
           setIsFallback(false);
         } else {
           throw new Error("Invalid API response");
@@ -617,10 +588,10 @@ export function NewsFeedPanel() {
         const highImpactMock = mockNews
           .map((item, index) => ({
             ...item,
-            confidence: inferConfidence(item.headline, item.targetAsset),
-            alignment: inferAlignment(item.headline, item.targetAsset),
+            confidence: inferConfidence(item.headline),
+            alignment: inferAlignment(item.headline),
           }))
-          .filter((item: Omit<NewsItem, "confidence" | "alignment"> & { confidence?: string; alignment?: string }) => 
+          .filter((item) => 
             (item.impact === "BULLISH" || item.impact === "BEARISH") &&
             (item.confidence === "HIGH" || item.alignment !== "UNVERIFIED")
           ) as NewsItem[];
@@ -632,7 +603,8 @@ export function NewsFeedPanel() {
 
     fetchNews();
   }, []);
-return (
+
+  return (
     <>
       <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
         <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
@@ -710,26 +682,25 @@ return (
                     </div>
 
                   <div className="pl-10">
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div
                         className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${getImpactColor(item.impact)}`}
                       >
                         {getImpactIcon(item.impact)}
                         {item.impact} {item.targetAsset}
                       </div>
-                      <div
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
-                      >
-                        {item.alignment}
-                      </div>
-                      <div className="px-1.5 py-0.5 rounded text-[10px] font-bold border border-border-subtle text-text-muted bg-surface-elevated/40">
-                        CONF {item.confidence}
-                      </div>
-                    </div>
-                    <div className="relative pl-3 border-l-2 border-accent-gold/30">
-                      <p className="text-xs text-text-secondary font-mono leading-relaxed break-words">
-                        {item.aiSummary}
-                      </p>
+                      {item.alignment !== "UNVERIFIED" && (
+                        <div
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getAlignmentColor(item.alignment)}`}
+                        >
+                          {item.alignment}
+                        </div>
+                      )}
+                      {item.confidence !== "LOW" && (
+                        <div className="px-1.5 py-0.5 rounded text-[10px] font-bold border border-border-subtle text-text-muted bg-surface-elevated/40">
+                          CONF {item.confidence}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

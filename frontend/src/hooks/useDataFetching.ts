@@ -50,6 +50,10 @@ export function useDataFetching() {
     { ticker: "UUP", name: "US Dollar (DXY)", change: null, weight: 1.5 },
     { ticker: "FXY", name: "Japanese Yen", change: null, weight: 1.5 },
     { ticker: "TIP", name: "TIPS (Real Yield)", change: null, weight: 1 },
+    { ticker: "FXE", name: "Euro", change: null, weight: 1.5 },
+    { ticker: "FXB", name: "British Pound", change: null, weight: 1 },
+    { ticker: "FXC", name: "Canadian Dollar", change: null, weight: 1 },
+    { ticker: "FXF", name: "Swiss Franc", change: null, weight: 1 },
   ]);
   const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
   const [regimeData, setRegimeData] = useState<RegimeSnapshotData | null>(null);
@@ -113,7 +117,7 @@ export function useDataFetching() {
   const fetchSnapshot = useCallback(async () => {
     try {
       const responses = await Promise.all([
-        fetchWithRetry(`/api/v1/market-data/quotes?symbols=SPY,QQQ,GLD,VIXY,IEF,UUP,FXY,TIP`, "quotes"),
+        fetchWithRetry(`/api/v1/market-data/quotes?symbols=SPY,QQQ,GLD,VIXY,IEF,UUP,FXY,TIP,FXE,FXB,FXC,FXF`, "quotes"),
         fetchWithRetry(`/api/v1/market-data/liquidity`, "liquidity"),
         fetchWithRetry(`/api/v1/macro-regime/snapshot`, "regime"),
         fetchWithRetry(`/api/v1/market-data/economic-calendar`, "calendar"),
@@ -184,6 +188,10 @@ export function useDataFetching() {
             { ticker: "UUP", name: "US Dollar (DXY)", weight: 1.5 },
             { ticker: "FXY", name: "Japanese Yen", weight: 1.5 },
             { ticker: "TIP", name: "TIPS (Real Yield)", weight: 1 },
+            { ticker: "FXE", name: "Euro", weight: 1.5 },
+            { ticker: "FXB", name: "British Pound", weight: 1 },
+            { ticker: "FXC", name: "Canadian Dollar", weight: 1 },
+            { ticker: "FXF", name: "Swiss Franc", weight: 1 },
           ].find((a) => a.ticker === quote.symbol);
 
           return {

@@ -84,7 +84,8 @@ router.post("/chat", requireAuth, async (req, res) => {
 
 router.post("/analyze-regime", requireAuth, async (req, res) => {
   try {
-    const { assets, calculatedRegime, liquidityStatus, context } = req.body;
+    const { assets, regime, calculatedRegime, liquidityStatus, context } =
+      req.body;
 
     if (!assets || !Array.isArray(assets)) {
       res.status(400).json({ success: false, error: "Data aset tidak valid" });
@@ -93,7 +94,7 @@ router.post("/analyze-regime", requireAuth, async (req, res) => {
 
     const reasoning = await macroAiService.analyzeRegime(
       assets,
-      calculatedRegime,
+      calculatedRegime || regime,
       liquidityStatus,
       context,
     );
