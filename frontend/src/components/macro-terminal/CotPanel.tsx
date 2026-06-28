@@ -95,7 +95,7 @@ export function CotPanel() {
       </div>
 
       <div className="shrink-0 p-2 text-[9px] text-text-muted border-t border-border-subtle">
-        Data: CFTC Commitments of Traders Report
+        Data: CFTC Commitments of Traders Report | Last Update: {cotData[0]?.lastUpdate ? new Date(cotData[0].lastUpdate).toLocaleDateString("id-ID") : "-"}
       </div>
     </div>
   );
