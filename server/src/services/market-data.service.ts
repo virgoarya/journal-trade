@@ -227,6 +227,7 @@ setCache(cacheKey, result);
       const finnhubKey = env.FINNHUB_API_KEY;
       const mockData = this.getMockCotData();
   
+      // Coba Finnhub dulu
       if (finnhubKey) {
         const { allowed } = await API_LIMITS.FINNHUB.consume();
         if (allowed) {
@@ -285,11 +286,61 @@ setCache(cacheKey, result);
               return results;
             }
           } catch (error) {
-            silentLogger.warn("Finnhub COT fetch failed, using mock data");
+            silentLogger.warn("Finnhub COT fetch failed, trying market-bull");
           }
         }
       }
-  
+
+      // Coba market-bull.com sebagai backup
+      try {
+        const marketBullRes = await axios.get("https://market-bull.com/api/cot", {
+          timeout: 15000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; HunterTradesBot/1.0)",
+          }
+        });
+        
+        if (marketBullRes.data?.success && Array.isArray(marketBullRes.data.data)) {
+          setCache(cacheKey, marketBullRes.data.data, 3600000);
+          return marketBullRes.data.data;
+        }
+      } catch (error) {
+        silentLogger.warn("Market-bull COT fetch failed, trying investing.com");
+      }
+
+      // Coba investing.com sebagai alternatif terakhir
+      try {
+        const investingRes = await axios.get("https://api.investing.com/api/futures/cot", {
+          timeout: 15000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; HunterTradesBot/1.0)",
+          }
+        });
+        
+        if (investingRes.data?.length) {
+          const results = investingRes.data.map((item: any) => ({
+            symbol: item.symbol || item.symbol_title,
+            name: item.name || item.symbol,
+            type: "commodity",
+            commercialLong: item.commercial_long || 0,
+            commercialShort: item.commercial_short || 0,
+            commercialSpread: (item.commercial_long || 0) - (item.commercial_short || 0),
+            nonCommercialLong: item.non_commercial_long || 0,
+            nonCommercialShort: item.non_commercial_short || 0,
+            nonCommercialSpread: (item.non_commercial_long || 0) - (item.non_commercial_short || 0),
+            sentiment: item.sentiment || "NEUTRAL",
+            lastUpdate: new Date().toISOString(),
+          }));
+          
+          if (results.length > 0) {
+            setCache(cacheKey, results, 3600000);
+            return results;
+          }
+        }
+      } catch (error) {
+        silentLogger.warn("Investing.com COT fetch failed, using mock data");
+      }
+
       setCache(cacheKey, mockData, 3600000);
       return mockData;
     },
