@@ -429,7 +429,22 @@ setCache(cacheKey, result);
           return results;
         }
       } catch (error) {
-        silentLogger.warn("Yahoo Finance COT fetch failed, using mock data");
+        silentLogger.warn("Yahoo Finance COT fetch failed, trying tradingster");
+      }
+
+      // Coba tradingster.com sebagai alternatif terakhir
+      try {
+        const tradingsterRes = await axios.get("https://tradingster.com/api/cot-report", {
+          timeout: 15000,
+          headers: { "User-Agent": "Mozilla/5.0" }
+        });
+
+        if (tradingsterRes.data?.success && Array.isArray(tradingsterRes.data.data)) {
+          setCache(cacheKey, tradingsterRes.data.data, 3600000);
+          return tradingsterRes.data.data;
+        }
+      } catch (error) {
+        silentLogger.warn("Tradingster COT fetch failed, using mock data");
       }
 
       setCache(cacheKey, mockData, 3600000);
