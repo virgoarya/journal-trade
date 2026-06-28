@@ -3,48 +3,16 @@ export const revalidate = 0;
 
 import React from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-
-interface CotItem {
-  symbol: string;
-  sentiment: string;
-  commercial: string;
-  nonCommercial: string;
-}
-
-async function fetchCotData(): Promise<CotItem[]> {
-  try {
-    const url = "/api/macro/cot";
-    console.log("[COT] Fetching URL:", url);
-    
-    const res = await fetch(url, {
-      cache: "no-store",
-    });
-
-    console.log("[COT] Response status:", res.status);
-    console.log("[COT] Response ok:", res.ok);
-
-    if (!res.ok) {
-      console.error("[COT] Fetch failed with status:", res.status);
-      return [];
-    }
-
-    const data = await res.json();
-    console.log("[COT] Response data:", data);
-    return data;
-  } catch (error) {
-    console.error("[COT] Fetch error:", error);
-    return [];
-  }
-}
-
-function getSentimentColor(sentiment: string) {
-  if (sentiment === "BULLISH") return "text-data-profit";
-  if (sentiment === "BEARISH") return "text-data-loss";
-  return "text-text-muted";
-}
+import { getCotData, type CotItem } from "@/lib/cot-service";
 
 export default async function CotPanel() {
-  const cotData = await fetchCotData();
+  const cotData = await getCotData();
+
+  function getSentimentColor(sentiment: string) {
+    if (sentiment === "BULLISH") return "text-data-profit";
+    if (sentiment === "BEARISH") return "text-data-loss";
+    return "text-text-muted";
+  }
 
   return (
     <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden">
