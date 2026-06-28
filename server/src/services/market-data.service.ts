@@ -224,7 +224,53 @@ setCache(cacheKey, result);
       const cached = getCache<any[]>(cacheKey);
       if (cached) return cached;
   
-      const mockData = [
+      const finnhubKey = env.FINNHUB_API_KEY;
+      const mockData = this.getMockCotData();
+  
+      if (finnhubKey) {
+        const { allowed } = await API_LIMITS.FINNHUB.consume();
+        if (allowed) {
+          try {
+            const resp = await axios.get(
+              "https://finnhub.io/api/v1/cot",
+              {
+                params: { token: finnhubKey },
+                timeout: 10000,
+              }
+            );
+            
+            if (resp.data && Array.isArray(resp.data.data)) {
+              const results = resp.data.data.map((item: any) => ({
+                symbol: item.symbol,
+                name: item.name || item.symbol,
+                type: "commodity",
+                commercialLong: item.cfts?.commercial?.long || 0,
+                commercialShort: item.cfts?.commercial?.short || 0,
+                commercialSpread: (item.cfts?.commercial?.long || 0) - (item.cfts?.commercial?.short || 0),
+                nonCommercialLong: item.cfts?.non_commercial?.long || 0,
+                nonCommercialShort: item.cfts?.non_commercial?.short || 0,
+                nonCommercialSpread: (item.cfts?.non_commercial?.long || 0) - (item.cfts?.non_commercial?.short || 0),
+                sentiment: item.sentiment || "NEUTRAL",
+                lastUpdate: new Date().toISOString(),
+              }));
+              
+              if (results.length > 0) {
+                setCache(cacheKey, results, 3600000);
+                return results;
+              }
+            }
+          } catch (error) {
+            silentLogger.warn("Finnhub COT fetch failed, using mock data");
+          }
+        }
+      }
+  
+      setCache(cacheKey, mockData, 3600000);
+      return mockData;
+    },
+
+    getMockCotData() {
+      return [
         {
           symbol: "CL=F",
           name: "Crude Oil",
@@ -265,61 +311,5 @@ setCache(cacheKey, result);
           lastUpdate: new Date().toISOString(),
         },
       ];
-  
-      const fredKey = env.FRED_API_KEY;
-      if (!fredKey) {
-        setCache(cacheKey, mockData);
-        return mockData;
-      }
-  
-      const symbols = ["COT", "COT2", "COT3"];
-      const results: any[] = [];
-  
-      for (const symbol of symbols) {
-        try {
-          const resp = await axios.get(
-            "https://api.stlouisfed.org/fred/series/observations",
-            {
-              params: {
-                series_id: symbol,
-                api_key: fredKey,
-                file_type: "json",
-                sort_order: "desc",
-                limit: 1,
-              },
-              timeout: 5000,
-            }
-          );
-  
-          const value = parseFloat(resp.data?.observations?.[0]?.value);
-          if (!Number.isNaN(value)) {
-            const isLong = value > 0;
-            const spread = Math.abs(value);
-            results.push({
-              symbol,
-              name: `COT ${symbol}`,
-              type: "commodity",
-              commercialLong: spread,
-              commercialShort: spread,
-              commercialSpread: spread,
-              nonCommercialLong: spread * 0.8,
-              nonCommercialShort: spread * 0.8,
-              nonCommercialSpread: spread * 0.8,
-              sentiment: isLong ? "BULLISH" : "BEARISH",
-              lastUpdate: new Date().toISOString(),
-            });
-          }
-        } catch {
-          continue;
-        }
-      }
-  
-      if (results.length > 0) {
-        setCache(cacheKey, results);
-        return results;
-      }
-  
-      setCache(cacheKey, mockData);
-      return mockData;
     },
   };
