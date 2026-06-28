@@ -22,10 +22,12 @@ router.get("/tga", async (req, res) => {
     res.json({
       success: true,
       data: {
-        value: data.balance,
+        value: data.value,
         delta: data.delta,
         displayValue: data.displayValue,
         date: data.date,
+        history: data.history,
+        trend: data.trend,
       },
       fetchedAt: new Date().toISOString(),
       rateLimited: false,

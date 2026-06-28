@@ -13,11 +13,13 @@ import { useDataFetching } from "@/hooks/useDataFetching";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useRegimeAnalysis } from "@/hooks/useRegimeAnalysis";
 import { OnRrpStatus, deriveSentimentAndImpact } from "@/lib/macro/classifiers";
-import type { QuoteApiResponse } from "@/lib/macro/types";
+import type { QuoteApiResponse, RegimeMetricData, RegimeConfidenceData, RegimeSnapshotData } from "@/lib/macro/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
+export type { RegimeMetricData, RegimeConfidenceData, RegimeSnapshotData };
+
 export type DataStatus = "live" | "cache" | "fallback" | "stale" | "error";
 
 export interface DataStatusState {
@@ -38,50 +40,6 @@ export interface Asset {
   weight?: number;
 }
 
-export interface RegimeMetricData {
-  current: number;
-  ema10: number;
-  ema50: number;
-  roc5d: number;
-  status: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
-  pressure?: "HOT" | "NORMAL" | "COLD";
-  label: string;
-  subScores?: Record<string, { ratio?: number; value?: number | null; status: string }>;
-}
-
-export interface RegimeConfidenceData {
-  score: number;
-  conviction: number;
-  agreement: number;
-  persistence: number;
-  label: "LOW" | "MODERATE" | "HIGH" | "VERY HIGH";
-}
-
-export interface RegimeSnapshotData {
-  quadrant: string;
-  quadNumber: number;
-  description: string;
-  source?: "YAHOO" | "CACHE" | "FRED";
-  inflationSource?: "FRED_CPI" | "TIP_IEF" | "UNKNOWN";
-  cpiYoY?: number | null;
-  growth: RegimeMetricData;
-  inflation: RegimeMetricData;
-  liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
-  confidence: RegimeConfidenceData;
-  position: { x: number; y: number };
-  history: Array<{
-    date: string;
-    growthRatio: number;
-    growthEma: number;
-    inflationRatio: number;
-    inflationEma: number;
-    liquidityRatio: number;
-    liquidityEma: number;
-    quadrant: string;
-  }>;
-  fetchedAt: string;
-}
-
 export interface LiquidityData {
   value: number;
   change: number;
@@ -89,6 +47,14 @@ export interface LiquidityData {
   date: string;
   trend: ("injecting" | "draining" | "neutral")[];
   history?: { date: string; value: number; status: string }[];
+  tga?: {
+    value: number;
+    delta: number;
+    displayValue: string;
+    date: string;
+    history?: { date: string; value: number; status: string }[];
+    trend?: ("injecting" | "draining" | "neutral")[];
+  };
 }
 
 export type RegimeType =
@@ -250,18 +216,34 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   const currentRegimeRef = useRef<RegimeType | null>(null);
   const aiReasoningRef = useRef<string | null>(null);
 
-  // ── WebSocket handlers ──────────────────────────────────────────────────────
-  const applyQuoteUpdate = (payload: { symbol: string; data: { dp?: number } }) => {
+  // ── WebSocket handlers (batched debounce) ──────────────────────────────────
+  const quoteBatchRef = useRef<Map<string, number | null>>(new Map());
+  const quoteFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const flushQuoteBatch = useCallback(() => {
+    const batch = quoteBatchRef.current;
+    if (batch.size === 0) return;
+    const updates = new Map(batch);
+    batch.clear();
     setAssets((prev) =>
       prev.map((asset) =>
-        asset.ticker === payload.symbol
-          ? { ...asset, change: typeof payload.data?.dp === "number" ? payload.data.dp : null }
+        updates.has(asset.ticker)
+          ? { ...asset, change: updates.get(asset.ticker) ?? null }
           : asset,
       ),
     );
     setDataStatus((prev) => ({ ...prev, quotes: "live" }));
     setLastUpdated(new Date());
-  };
+  }, [setAssets, setDataStatus, setLastUpdated]);
+
+  const applyQuoteUpdate = useCallback((payload: { symbol: string; data: { dp?: number } }) => {
+    quoteBatchRef.current.set(
+      payload.symbol,
+      typeof payload.data?.dp === "number" ? payload.data.dp : null,
+    );
+    if (quoteFlushTimerRef.current) clearTimeout(quoteFlushTimerRef.current);
+    quoteFlushTimerRef.current = setTimeout(flushQuoteBatch, 500);
+  }, [flushQuoteBatch]);
 
   const applyLiquidityUpdate = (payload: LiquidityData) => {
     setLiquidity({

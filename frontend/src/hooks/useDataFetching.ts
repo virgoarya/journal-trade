@@ -19,6 +19,7 @@ export type DataStatusState = {
   geoRisk: DataStatus;
   quant: DataStatus;
   nexus: DataStatus;
+  tga: DataStatus;
 };
 
 const DATA_FRESH_MS = 60_000;
@@ -68,6 +69,7 @@ export function useDataFetching() {
     geoRisk: "stale",
     quant: "stale",
     nexus: "stale",
+    tga: "stale",
   });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isFallback, setIsFallback] = useState(false);
@@ -118,6 +120,7 @@ export function useDataFetching() {
         fetchWithRetry(`/api/v1/market-data/news`, "news"),
         fetchWithRetry(`/api/v1/quant/snapshot`, "quant"),
         fetchWithRetry(`/api/v1/geo-risk`, "geoRisk"),
+        fetchWithRetry(`/api/v1/market-data/tga`, "tga"),
       ]);
 
       const [
@@ -128,6 +131,7 @@ export function useDataFetching() {
         newsRes,
         quantRes,
         geoRiskRes,
+        tgaRes,
       ] = responses;
 
       const [
@@ -138,6 +142,7 @@ export function useDataFetching() {
         newsData,
         quantData,
         geoRiskData,
+        tgaData,
       ] = await Promise.all(responses.map((res: any) =>
         res && typeof res.json === "function" ? res.json() : Promise.resolve(null)
       ));
@@ -149,6 +154,7 @@ export function useDataFetching() {
       const newsFetchStatus = getStatusFromResponse(newsRes, newsData);
       const quantFetchStatus = getStatusFromResponse(quantRes, quantData);
       const geoRiskFetchStatus = getStatusFromResponse(geoRiskRes, geoRiskData);
+      const tgaFetchStatus = getStatusFromResponse(tgaRes, tgaData);
 
       setStatus("quotes", quoteStatus);
       setStatus("liquidity", liquidityFetchStatus);
@@ -157,6 +163,7 @@ export function useDataFetching() {
       setStatus("news", newsFetchStatus);
       setStatus("quant", quantFetchStatus);
       setStatus("geoRisk", geoRiskFetchStatus);
+      setStatus("tga", tgaFetchStatus);
 
       setIsFallback([
         quoteStatus,
@@ -192,6 +199,7 @@ export function useDataFetching() {
         setLiquidity({
           ...liquidityData.data,
           status: liquidityData.data.status ?? "UNKNOWN",
+          tga: tgaData?.success && tgaData.data ? tgaData.data : undefined,
         });
         setStatus("liquidity", "live");
       }

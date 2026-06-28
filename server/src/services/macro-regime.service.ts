@@ -230,16 +230,21 @@ function calculateEMA(data: number[], period: number): number[] {
   if (data.length === 0) return ema;
 
   const k = 2 / (period + 1);
+  const initialPeriod = Math.min(period, data.length);
 
   // Seed EMA with SMA of first `period` values
   let sum = 0;
-  for (let i = 0; i < Math.min(period, data.length); i++) {
+  for (let i = 0; i < initialPeriod; i++) {
     sum += data[i];
   }
-  ema.push(sum / Math.min(period, data.length));
+  const sma = sum / initialPeriod;
+
+  for (let i = 0; i < initialPeriod; i++) {
+    ema.push(sma);
+  }
 
   // Calculate subsequent EMA values
-  for (let i = 1; i < data.length; i++) {
+  for (let i = initialPeriod; i < data.length; i++) {
     const prev = ema[i - 1];
     ema.push(data[i] * k + prev * (1 - k));
   }

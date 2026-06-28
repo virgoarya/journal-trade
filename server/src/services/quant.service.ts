@@ -141,6 +141,8 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
   const y5 = await fetchYahooYield("^FVX");
   await sleep(YAHOO_STAGGER_MS);
   const y10 = await fetchYahooYield("^TNX");
+  await sleep(YAHOO_STAGGER_MS);
+  const y30 = await fetchYahooYield("^TYX");
 
   await sleep(YAHOO_STAGGER_MS);
 
@@ -149,6 +151,8 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
   const histY5 = await fetchYahooHistorical("^FVX");
   await sleep(YAHOO_STAGGER_MS);
   const histY10 = await fetchYahooHistorical("^TNX");
+  await sleep(YAHOO_STAGGER_MS);
+  const histY30 = await fetchYahooHistorical("^TYX");
 
   let y2y: number | null = null;
   let histY2y: number | null = null;
@@ -181,6 +185,10 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
     y10 != null && y3m != null ? Math.round((y10 - y3m) * 100) : null;
   const spread10y2y =
     y10 != null && y2y != null ? Math.round((y10 - y2y) * 100) : null;
+  const spread30y5y =
+    y30 != null && y5 != null ? Math.round((y30 - y5) * 100) : null;
+  const spread30y3m =
+    y30 != null && y3m != null ? Math.round((y30 - y3m) * 100) : null;
   const inverted = spread10y2y != null && spread10y2y < 0;
 
   const regime = classifyRegime(vix);
@@ -219,12 +227,16 @@ async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
     y2y,
     y5,
     y10,
+    y30,
     histY3m,
     histY2y,
     histY5,
     histY10,
+    histY30,
     spread10y3m,
     spread10y2y,
+    spread30y5y,
+    spread30y3m,
     inverted,
     vix,
     vixSource,
@@ -313,12 +325,16 @@ export const quantService = {
         y2y: s.y2y,
         y5: s.y5,
         y10: s.y10,
+        y30: s.y30 ?? null,
         histY3m: s.histY3m,
         histY2y: s.histY2y,
         histY5: s.histY5,
         histY10: s.histY10,
+        histY30: s.histY30 ?? null,
         spread10y3m: s.spread10y3m,
         spread10y2y: s.spread10y2y,
+        spread30y5y: s.spread30y5y ?? null,
+        spread30y3m: s.spread30y3m ?? null,
         inverted: s.inverted,
         vix: s.vix,
         vixSource: s.vixSource,

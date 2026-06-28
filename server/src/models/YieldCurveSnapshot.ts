@@ -7,12 +7,16 @@ export interface IYieldCurveSnapshot extends Document {
   y2y: number | null;
   y5: number | null;
   y10: number | null;
+  y30: number | null;
   histY3m: number | null;
   histY2y: number | null;
   histY5: number | null;
   histY10: number | null;
+  histY30: number | null;
   spread10y3m: number | null;
   spread10y2y: number | null;
+  spread30y5y: number | null;
+  spread30y3m: number | null;
   inverted: boolean;
   vix: number | null;
   vixSource: "yahoo" | "fred" | null;
@@ -36,12 +40,16 @@ const YieldCurveSnapshotSchema = new Schema<IYieldCurveSnapshot>(
     y2y: { type: Number, default: null },
     y5: { type: Number, default: null },
     y10: { type: Number, default: null },
+    y30: { type: Number, default: null },
     histY3m: { type: Number, default: null },
     histY2y: { type: Number, default: null },
     histY5: { type: Number, default: null },
     histY10: { type: Number, default: null },
+    histY30: { type: Number, default: null },
     spread10y3m: { type: Number, default: null },
     spread10y2y: { type: Number, default: null },
+    spread30y5y: { type: Number, default: null },
+    spread30y3m: { type: Number, default: null },
     inverted: { type: Boolean, default: false },
     vix: { type: Number, default: null },
     vixSource: { type: String, enum: ["yahoo", "fred"], default: null },

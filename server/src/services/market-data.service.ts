@@ -182,6 +182,26 @@ export const marketDataService = {
     const previousBalance = sorted.length >= 2 ? pickBalance(sorted[1]) : currentBalance;
     const delta = currentBalance - previousBalance;
 
+    const parsed = sorted.slice(0, 10).map((row) => ({
+      date: row.record_date,
+      value: pickBalance(row),
+    }));
+
+    const history = parsed.map((item, idx) => {
+      const prev = idx < parsed.length - 1 ? parsed[idx + 1].value : item.value;
+      const dailyChange = item.value - prev;
+      const dailyStatus = Math.abs(dailyChange) < 0.1
+        ? "UNKNOWN"
+        : dailyChange > 0
+          ? "DRAINING"
+          : "INJECTING";
+      return { date: item.date, value: item.value, status: dailyStatus };
+    });
+
+    const trend = history.slice(0, 5).map(h => 
+      h.status === "DRAINING" ? "draining" : h.status === "INJECTING" ? "injecting" : "neutral"
+    );
+
     const result = {
       value: currentBalance,
       delta,
@@ -191,6 +211,8 @@ export const marketDataService = {
         currentBalance >= 1000
           ? `$${(currentBalance / 1000).toFixed(2)}T`
           : `$${currentBalance.toFixed(1)}B`,
+      history,
+      trend,
     };
 
     setCache(cacheKey, result);

@@ -22,6 +22,7 @@ interface QuantData {
   y3m: number | null;
   y2y: number | null;
   y5: number | null;
+  y10: number | null;
   y30: number | null;
   histY3m: number | null;
   histY2y: number | null;
@@ -52,19 +53,21 @@ interface YieldPoint {
 }
 
 function buildHistoricalCurve(data: QuantData): YieldPoint[] {
-  const tenors: Array<keyof Pick<QuantData, "y3m" | "y2y" | "y5" | "y10">> = [
+  const tenors: Array<keyof Pick<QuantData, "y3m" | "y2y" | "y5" | "y10" | "y30">> = [
     "y3m",
     "y2y",
     "y5",
     "y10",
+    "y30",
   ];
-  const histKeys: Array<keyof Pick<QuantData, "histY3m" | "histY2y" | "histY5" | "histY10">> = [
+  const histKeys: Array<keyof Pick<QuantData, "histY3m" | "histY2y" | "histY5" | "histY10" | "histY30">> = [
     "histY3m",
     "histY2y",
     "histY5",
     "histY10",
+    "histY30",
   ];
-  const labels = ["3M", "2Y", "5Y", "10Y"];
+  const labels = ["3M", "2Y", "5Y", "10Y", "30Y"];
 
   const points: YieldPoint[] = [];
   tenors.forEach((tenor, index) => {
@@ -377,7 +380,7 @@ export function YieldCurvePanel() {
 
 
 
-      <div className="grid grid-cols-4 gap-2 mb-3 shrink-0">
+      <div className="grid grid-cols-5 gap-2 mb-3 shrink-0">
         <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             3M
@@ -408,6 +411,14 @@ export function YieldCurvePanel() {
           </div>
           <div className="text-xs font-mono font-bold text-text-primary">
             {data?.y10 != null ? `${data.y10.toFixed(2)}%` : "—"}
+          </div>
+        </div>
+        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+          <div className="text-[8px] text-text-muted font-mono uppercase">
+            30Y
+          </div>
+          <div className="text-xs font-mono font-bold text-text-primary">
+            {data?.y30 != null ? `${data.y30.toFixed(2)}%` : "—"}
           </div>
         </div>
       </div>

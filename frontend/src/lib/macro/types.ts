@@ -1,6 +1,6 @@
 "use client";
 
-import { useMacroTerminal } from "@/components/macro-terminal/MacroTerminalContext";
+
 
 export interface QuoteApiResponse {
   success: boolean;
@@ -47,6 +47,9 @@ export interface RegimeSnapshotData {
   quadrant: string;
   quadNumber: number;
   description: string;
+  source?: "YAHOO" | "CACHE" | "FRED";
+  inflationSource?: "FRED_CPI" | "TIP_IEF" | "UNKNOWN";
+  cpiYoY?: number | null;
   growth: RegimeMetricData;
   inflation: RegimeMetricData;
   liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
@@ -63,14 +66,6 @@ export interface RegimeSnapshotData {
     quadrant: string;
   }>;
   fetchedAt: string;
-  // Source fidelity & momentum indicators
-  source?: string; // "YAHOO" | "CACHE"
-  inflationSource?: string; // "FRED_CPI" | "TIP_IEF" | "UNKNOWN"
-  cpiYoY?: number | null;
-  momentum?: {
-    growthStatus: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
-    inflationStatus: "ACCELERATING" | "DECELERATING" | "TURNING" | "NEUTRAL";
-  };
 }
 
 
@@ -140,12 +135,3 @@ export type RegimeTransitionAlert = {
 
 export type MarketSentiment = 'RISK-ON' | 'RISK-OFF' | 'NEUTRAL';
 
-export function useMacroTypedData() {
-  const { assets, liquidity, regimeData } = useMacroTerminal();
-
-  return {
-    assets,
-    liquidity,
-    regimeData,
-  };
-}
