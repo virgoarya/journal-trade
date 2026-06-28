@@ -1,0 +1,1 @@
+import { macroAiService } from './src/services/macro-ai.service'; macroAiService.analyzeRegime([], 'Goldilocks', 'Draining', {}).then(console.log).catch(console.error);

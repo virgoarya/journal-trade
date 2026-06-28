@@ -83,6 +83,15 @@ router.get("/economic-calendar", async (req, res) => {
   }
 });
 
+router.get("/cot", async (req, res) => {
+  try {
+    const result = await marketDataService.getCommitmentOfTraders();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(503).json({ success: false, error: error.message, rateLimited: true });
+  }
+});
+
 router.post("/liquidity/mock-trigger", requireAuth, async (req, res) => {
   try {
     const { value, change } = req.body;

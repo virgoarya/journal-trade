@@ -215,7 +215,65 @@ export const marketDataService = {
       trend,
     };
 
-    setCache(cacheKey, result);
-    return result;
-  },
-};
+setCache(cacheKey, result);
+      return result;
+    },
+  
+    async getCommitmentOfTraders() {
+      const cacheKey = "cot_commitment";
+      const cached = getCache<any[]>(cacheKey);
+      if (cached) return cached;
+  
+      const fredKey = env.FRED_API_KEY;
+      if (!fredKey) {
+        return [];
+      }
+  
+      const symbols = ["COT", "COT2", "COT3"];
+      const results: any[] = [];
+  
+      for (const symbol of symbols) {
+        try {
+          const resp = await axios.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            {
+              params: {
+                series_id: symbol,
+                api_key: fredKey,
+                file_type: "json",
+                sort_order: "desc",
+                limit: 1,
+              },
+              timeout: 5000,
+            }
+          );
+  
+          const value = parseFloat(resp.data?.observations?.[0]?.value);
+          if (!Number.isNaN(value)) {
+            const isLong = value > 0;
+            const spread = Math.abs(value);
+            results.push({
+              symbol,
+              name: `COT ${symbol}`,
+              type: "commodity",
+              commercialLong: spread,
+              commercialShort: spread,
+              commercialSpread: spread,
+              nonCommercialLong: spread * 0.8,
+              nonCommercialShort: spread * 0.8,
+              nonCommercialSpread: spread * 0.8,
+              sentiment: isLong ? "BULLISH" : "BEARISH",
+              lastUpdate: new Date().toISOString(),
+            });
+          }
+        } catch {
+          continue;
+        }
+      }
+  
+      if (results.length > 0) {
+        setCache(cacheKey, results);
+      }
+      return results;
+    },
+  };

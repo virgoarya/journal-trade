@@ -43,33 +43,6 @@ export interface LiquidityData {
   }>;
 }
 
-export interface LiquidityData {
-  value: number;
-  change: number;
-  status: "INJECTING" | "DRAINING" | "UNKNOWN";
-  date: string;
-  trend: ("injecting" | "draining" | "neutral")[];
-  history: Array<{
-    date: string;
-    value: number;
-    status: "INJECTING" | "DRAINING" | "UNKNOWN";
-  }>;
-}
-
-export interface CotPosition {
-  symbol: string;
-  name: string;
-  type: "commodity" | "currency" | "index" | "bond";
-  commercialLong: number;
-  commercialShort: number;
-  commercialSpread: number;
-  nonCommercialLong: number;
-  nonCommercialShort: number;
-  nonCommercialSpread: number;
-  sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
-  lastUpdate: string;
-}
-
 const cacheStore = new Map<string, { data: any; timestamp: number; ttl: number }>();
 
 function getCache<T>(key: string): T | null {
@@ -513,75 +486,5 @@ export const macroDataService = {
     }
 
     return { spread10y2y: null, spread10y3m: null, spread30y3m: null, inverted: false, fetchedAt: null, rateLimited: true };
-  },
-
-  async getCommitmentOfTraders(): Promise<{
-    data: CotPosition[];
-    fromCache: boolean;
-    rateLimited: boolean;
-  }> {
-    const cacheKey = "cot_commitment";
-    const cached = getCache<CotPosition[]>(cacheKey);
-    if (cached) {
-      return { data: cached, fromCache: true, rateLimited: false };
-    }
-
-    const fredKey = env.FRED_API_KEY;
-    if (!fredKey) {
-      return { data: [], fromCache: false, rateLimited: false };
-    }
-
-    const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.FRED, async () => {
-      const symbols = ["COT", "COT2", "COT3"];
-      const results: CotPosition[] = [];
-
-      for (const symbol of symbols) {
-        try {
-          const resp = await axios.get(
-            "https://api.stlouisfed.org/fred/series/observations",
-            {
-              params: {
-                series_id: symbol,
-                api_key: fredKey,
-                file_type: "json",
-                sort_order: "desc",
-                limit: 1,
-              },
-              timeout: 5000,
-            }
-          );
-
-          const value = parseFloat(resp.data?.observations?.[0]?.value);
-          if (!Number.isNaN(value)) {
-            const isLong = value > 0;
-            const spread = Math.abs(value);
-            results.push({
-              symbol,
-              name: `COT ${symbol}`,
-              type: "commodity",
-              commercialLong: spread,
-              commercialShort: spread,
-              commercialSpread: spread,
-              nonCommercialLong: spread * 0.8,
-              nonCommercialShort: spread * 0.8,
-              nonCommercialSpread: spread * 0.8,
-              sentiment: isLong ? "BULLISH" : "BEARISH",
-              lastUpdate: new Date().toISOString(),
-            });
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      return results;
-    });
-
-    if (data && data.length > 0) {
-      setCache(cacheKey, data, 3600000);
-      return { data, fromCache: false, rateLimited };
-    }
-
-    return { data: [], fromCache: false, rateLimited: true };
   },
 };
