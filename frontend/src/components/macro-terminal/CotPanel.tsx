@@ -3,11 +3,11 @@ export const revalidate = 0;
 
 import React from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { getCotData } from "@/lib/cot-service";
+import { getCotDataWithInternalFallback } from "@/lib/cot-service";
 import type { CotItem } from "@/types/cot";
 
 export default async function CotPanel() {
-  const cotData = await getCotData();
+  const cotData = await getCotDataWithInternalFallback();
 
   function getSentimentColor(sentiment: string) {
     if (sentiment === "BULLISH") return "text-data-profit";
