@@ -231,33 +231,58 @@ setCache(cacheKey, result);
         const { allowed } = await API_LIMITS.FINNHUB.consume();
         if (allowed) {
           try {
-            const resp = await axios.get(
-              "https://finnhub.io/api/v1/cot",
-              {
+            const [futuresRes, forexRes] = await Promise.all([
+              axios.get("https://finnhub.io/api/v1/cot/futures", {
                 params: { token: finnhubKey },
                 timeout: 10000,
-              }
-            );
+              }),
+              axios.get("https://finnhub.io/api/v1/cot/forex", {
+                params: { token: finnhubKey },
+                timeout: 10000,
+              })
+            ]);
             
-            if (resp.data && Array.isArray(resp.data.data)) {
-              const results = resp.data.data.map((item: any) => ({
-                symbol: item.symbol,
-                name: item.name || item.symbol,
-                type: "commodity",
-                commercialLong: item.cfts?.commercial?.long || 0,
-                commercialShort: item.cfts?.commercial?.short || 0,
-                commercialSpread: (item.cfts?.commercial?.long || 0) - (item.cfts?.commercial?.short || 0),
-                nonCommercialLong: item.cfts?.non_commercial?.long || 0,
-                nonCommercialShort: item.cfts?.non_commercial?.short || 0,
-                nonCommercialSpread: (item.cfts?.non_commercial?.long || 0) - (item.cfts?.non_commercial?.short || 0),
-                sentiment: item.sentiment || "NEUTRAL",
-                lastUpdate: new Date().toISOString(),
-              }));
-              
-              if (results.length > 0) {
-                setCache(cacheKey, results, 3600000);
-                return results;
-              }
+            const results: any[] = [];
+            
+            if (futuresRes.data?.data && Array.isArray(futuresRes.data.data)) {
+              futuresRes.data.data.forEach((item: any) => {
+                results.push({
+                  symbol: item.symbol || item.ticker,
+                  name: item.name || item.symbol,
+                  type: "commodity",
+                  commercialLong: item.cfts?.commercial?.long || item.commercialLong || 0,
+                  commercialShort: item.cfts?.commercial?.short || item.commercialShort || 0,
+                  commercialSpread: (item.cfts?.commercial?.long || item.commercialLong || 0) - (item.cfts?.commercial?.short || item.commercialShort || 0),
+                  nonCommercialLong: item.cfts?.non_commercial?.long || item.nonCommercialLong || 0,
+                  nonCommercialShort: item.cfts?.non_commercial?.short || item.nonCommercialShort || 0,
+                  nonCommercialSpread: (item.cfts?.non_commercial?.long || item.nonCommercialLong || 0) - (item.cfts?.non_commercial?.short || item.nonCommercialShort || 0),
+                  sentiment: item.sentiment || "NEUTRAL",
+                  lastUpdate: new Date().toISOString(),
+                });
+              });
+            }
+            
+            if (forexRes.data?.data && Array.isArray(forexRes.data.data)) {
+              forexRes.data.data.forEach((item: any) => {
+                results.push({
+                  symbol: item.symbol || item.ticker,
+                  name: item.name || item.symbol,
+                  type: "currency",
+                  commercialLong: item.cfts?.commercial?.long || item.commercialLong || 0,
+                  commercialShort: item.cfts?.commercial?.short || item.commercialShort || 0,
+                  commercialSpread: (item.cfts?.commercial?.long || item.commercialLong || 0) - (item.cfts?.commercial?.short || item.commercialShort || 0),
+                  nonCommercialLong: item.cfts?.non_commercial?.long || item.nonCommercialLong || 0,
+                  nonCommercialShort: item.cfts?.non_commercial?.short || item.nonCommercialShort || 0,
+                  nonCommercialSpread: (item.cfts?.non_commercial?.long || item.nonCommercialLong || 0) - (item.cfts?.non_commercial?.short || item.nonCommercialShort || 0),
+                  sentiment: item.sentiment || "NEUTRAL",
+                  lastUpdate: new Date().toISOString(),
+                });
+              });
+            }
+            
+            if (results.length > 0) {
+              setCache(cacheKey, results, 3600000);
+              return results;
             }
           } catch (error) {
             silentLogger.warn("Finnhub COT fetch failed, using mock data");
@@ -298,6 +323,19 @@ setCache(cacheKey, result);
           lastUpdate: new Date().toISOString(),
         },
         {
+          symbol: "SI=F",
+          name: "Silver",
+          type: "commodity",
+          commercialLong: 45678,
+          commercialShort: 52345,
+          commercialSpread: -6667,
+          nonCommercialLong: 123456,
+          nonCommercialShort: 112345,
+          nonCommercialSpread: 11111,
+          sentiment: "NEUTRAL",
+          lastUpdate: new Date().toISOString(),
+        },
+        {
           symbol: "EUR/USD",
           name: "Euro vs USD",
           type: "currency",
@@ -308,6 +346,58 @@ setCache(cacheKey, result);
           nonCommercialShort: 321098,
           nonCommercialSpread: 24580,
           sentiment: "NEUTRAL",
+          lastUpdate: new Date().toISOString(),
+        },
+        {
+          symbol: "GBP/USD",
+          name: "British Pound vs USD",
+          type: "currency",
+          commercialLong: 98765,
+          commercialShort: 112345,
+          commercialSpread: -13580,
+          nonCommercialLong: 212345,
+          nonCommercialShort: 198765,
+          nonCommercialSpread: 13580,
+          sentiment: "BEARISH",
+          lastUpdate: new Date().toISOString(),
+        },
+        {
+          symbol: "USD/JPY",
+          name: "USD vs Japanese Yen",
+          type: "currency",
+          commercialLong: 189012,
+          commercialShort: 167890,
+          commercialSpread: 21122,
+          nonCommercialLong: 298765,
+          nonCommercialShort: 276543,
+          nonCommercialSpread: 22222,
+          sentiment: "BULLISH",
+          lastUpdate: new Date().toISOString(),
+        },
+        {
+          symbol: "NAS100",
+          name: "Nasdaq 100",
+          type: "index",
+          commercialLong: 312456,
+          commercialShort: 287654,
+          commercialSpread: 24802,
+          nonCommercialLong: 512345,
+          nonCommercialShort: 487654,
+          nonCommercialSpread: 24691,
+          sentiment: "BULLISH",
+          lastUpdate: new Date().toISOString(),
+        },
+        {
+          symbol: "SPX500",
+          name: "S&P 500",
+          type: "index",
+          commercialLong: 412345,
+          commercialShort: 387654,
+          commercialSpread: 24691,
+          nonCommercialLong: 612345,
+          nonCommercialShort: 587654,
+          nonCommercialSpread: 24691,
+          sentiment: "BULLISH",
           lastUpdate: new Date().toISOString(),
         },
       ];
