@@ -28,6 +28,7 @@ export interface NewsItem {
   headline: string;
   summary?: string;
   source: string;
+  analysis?: any;
 }
 
 export interface LiquidityData {
@@ -91,61 +92,60 @@ export const macroDataService = {
     const twelveDataKey = env.TWELVE_DATA_API_KEY;
 
     const fetchYahoo = async (syms: string[]) => {
-      const results: MarketQuote[] = [];
-      for (const symbol of syms) {
-        try {
-          const res = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`, { timeout: 5000 });
-          const result = res.data?.chart?.result?.[0];
-          const price = result?.meta?.regularMarketPrice;
-          const prevClose = result?.meta?.chartPreviousClose ?? result?.meta?.previousClose;
-          if (price != null) {
-            const change = prevClose != null ? price - prevClose : 0;
-            const changePercent = prevClose != null && prevClose !== 0 ? (change / prevClose) * 100 : 0;
-            results.push({ symbol, price, change, changePercent, timestamp: Date.now() });
-          } else {
-            results.push({ symbol, price: null, change: null, changePercent: null, timestamp: 0 });
-          }
-        } catch {
-          results.push({ symbol, price: null, change: null, changePercent: null, timestamp: 0 });
-        }
-      }
+      const fetchWithTimeout = (symbol: string) =>
+        Promise.race([
+          axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`, { timeout: 3000 })
+            .then(res => {
+              const result = res.data?.chart?.result?.[0];
+              const price = result?.meta?.regularMarketPrice;
+              const prevClose = result?.meta?.chartPreviousClose ?? result?.meta?.previousClose;
+              if (price != null) {
+                const change = prevClose != null ? price - prevClose : 0;
+                const changePercent = prevClose != null && prevClose !== 0 ? (change / prevClose) * 100 : 0;
+                return { symbol, price, change, changePercent, timestamp: Date.now() };
+              }
+              return { symbol, price: null, change: null, changePercent: null, timestamp: 0 };
+            })
+            .catch(() => ({ symbol, price: null, change: null, changePercent: null, timestamp: 0 })),
+          new Promise<any>(resolve => setTimeout(() => resolve({ symbol, price: null, change: null, changePercent: null, timestamp: 0 }), 2000))
+        ]);
+
+      const results = await Promise.all(syms.map(fetchWithTimeout));
       return results;
     };
 
     if (!finnhubKey && !twelveDataKey) {
       const data = await fetchYahoo(symbols);
       if (data.length > 0) {
-        setCache(cacheKey, data, 60000);
+        setCache(cacheKey, data, 120000);
       }
       return { data, fromCache: false, rateLimited: false };
     }
 
     if (finnhubKey) {
       const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.FINNHUB, async () => {
-        const results: MarketQuote[] = [];
-        const yahooNeeded: string[] = [];
-        
-        for (const symbol of symbols) {
-          if (symbol === "CL=F" || symbol === "GC=F" || symbol.includes("=F")) {
-            yahooNeeded.push(symbol);
-            continue;
-          }
+        const finnhubNeeded = symbols.filter(s => !(s === "CL=F" || s === "GC=F" || s.includes("=F")));
+        const yahooNeeded = symbols.filter(s => s === "CL=F" || s === "GC=F" || s.includes("=F"));
+
+        const finnhubPromises = finnhubNeeded.map(async (symbol) => {
           try {
             const resp = await axios.get(
               `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${finnhubKey}`,
               { timeout: 5000 }
             );
-            results.push({
+            return {
               symbol,
               price: resp.data.c,
               change: resp.data.d,
               changePercent: resp.data.dp,
               timestamp: resp.data.t * 1000,
-            });
+            };
           } catch {
-            results.push({ symbol, price: null, change: null, changePercent: null, timestamp: 0 });
+            return { symbol, price: null, change: null, changePercent: null, timestamp: 0 };
           }
-        }
+        });
+
+        let results: MarketQuote[] = await Promise.all(finnhubPromises);
 
         if (yahooNeeded.length > 0) {
           const yahooRes = await fetchYahoo(yahooNeeded);
@@ -155,7 +155,7 @@ export const macroDataService = {
         return results;
       });
       if (data) {
-        setCache(cacheKey, { data, rateLimited }, 60000);
+        setCache(cacheKey, data, 120000);
         return { data: data!, fromCache: false, rateLimited };
       }
     }
@@ -207,9 +207,9 @@ export const macroDataService = {
       const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const to = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const countries = "US,EU,GB,JP,CN,AU,NZ,CA,CH";
-      
+
       const url = `https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=${countries}`;
-      
+
       const resp = await axios.get(url, {
         headers: {
           "User-Agent": "Mozilla/5.0",
@@ -224,7 +224,7 @@ export const macroDataService = {
       if (resp.data && Array.isArray(resp.data.result)) {
         for (const item of resp.data.result) {
           if (item.importance < 0) continue; // skip non-economic/holidays
-          
+
           let impact: "High" | "Medium" | "Low" = "Low";
           if (item.importance === 1) impact = "High";
           else if (item.importance === 0) impact = "Medium";
@@ -234,14 +234,14 @@ export const macroDataService = {
 
           if (!seenIds.has(eventId)) {
             seenIds.add(eventId);
-            
+
             const formatVal = (v: any) => {
               if (v == null) return "";
               if (item.unit === "%") return `${v}%`;
               if (item.unit) return `${v} ${item.unit}`;
               return `${v}`;
             };
-            
+
             events.push({
               title: item.title,
               country: item.country,
@@ -282,7 +282,7 @@ export const macroDataService = {
     const kobeissiRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://nitter.net/KobeissiLetter/rss";
     const cnbcRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664";
     const yahooRSS = "https://api.rss2json.com/v1/api.json?rss_url=https://finance.yahoo.com/news/rssindex";
-    
+
     let allNews: NewsItem[] = [];
     let isRateLimited = false;
 
@@ -346,7 +346,7 @@ export const macroDataService = {
       allNews.sort((a, b) => b.datetime - a.datetime);
       const uniqueNews = Array.from(new Map(allNews.map(item => [item.headline, item])).values());
       const slicedNews = uniqueNews.slice(0, limit);
-      
+
       setCache(cacheKey, slicedNews, 60000);
       return { data: slicedNews, fromCache: false, rateLimited: false };
     }

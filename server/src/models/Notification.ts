@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface INotification extends Document {
   userId: string;
-  type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM";
+  type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM" | "COT_UPDATE" | "REGIME_SHIFT" | "YIELD_CURVE_REGIME";
   title: string;
   message: string;
   link?: string;
@@ -15,7 +15,7 @@ const NotificationSchema = new Schema<INotification>({
   userId: { type: String, required: true, index: true },
   type: {
     type: String,
-    enum: ["AI_REVIEW_READY", "TRADE_LOGGED", "RISK_WARNING", "SYSTEM"],
+    enum: ["AI_REVIEW_READY", "TRADE_LOGGED", "RISK_WARNING", "SYSTEM", "COT_UPDATE", "REGIME_SHIFT", "YIELD_CURVE_REGIME"],
     required: true
   },
   title: { type: String, required: true },

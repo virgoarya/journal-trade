@@ -17,7 +17,8 @@ export class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutMs: number = 30000
   ): Promise<ApiResponse<T>> {
     try {
       const headers: HeadersInit = {
@@ -25,11 +26,17 @@ export class ApiClient {
         ...options.headers,
       };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
         credentials: "include",
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const contentType = response.headers.get("content-type");
       let data;

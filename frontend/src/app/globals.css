@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-void: #0D0D0D;
+  --color-bg-void: #020202;
   --color-bg-surface: #111116;
   --color-bg-elevated: #151520;
   --color-bg-input: #0F0F14;
@@ -75,6 +75,14 @@
   50% { opacity: 0.75; }
 }
 
+@keyframes heartbeatGlow {
+  0%, 100% { box-shadow: 0 0 4px var(--glow-color); border-color: var(--glow-border-dim); }
+  15% { box-shadow: 0 0 15px var(--glow-color); border-color: var(--glow-border-bright); }
+  30% { box-shadow: 0 0 4px var(--glow-color); border-color: var(--glow-border-dim); }
+  45% { box-shadow: 0 0 25px var(--glow-color); border-color: var(--glow-border-bright); }
+  60% { box-shadow: 0 0 4px var(--glow-color); border-color: var(--glow-border-dim); }
+}
+
 @layer utilities {
   .scrollbar-hide {
     scrollbar-width: none;
@@ -92,6 +100,29 @@
 
   .terminal-pulse {
     animation: terminalPulse 2.4s ease-in-out infinite;
+  }
+
+  .animate-heartbeat {
+    animation: heartbeatGlow 2.5s ease-in-out infinite;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212, 175, 55, 0.3) transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(212, 175, 55, 0.3);
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(212, 175, 55, 0.6);
   }
 }
 
@@ -120,39 +151,33 @@
 
 @layer utilities {
 .glass {
-     background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(30, 30, 40, 0.3) 40%, rgba(5, 5, 10, 0.8) 100%);
-     backdrop-filter: blur(28px) saturate(140%);
-     -webkit-backdrop-filter: blur(28px) saturate(140%);
+     background: linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(10, 10, 10, 0.6) 100%) !important;
+     backdrop-filter: blur(12px) !important;
+     -webkit-backdrop-filter: blur(12px) !important;
      
-     /* Bevel borders for physical 3D edge */
-     border-top: 1px solid rgba(255, 255, 255, 0.25);
-     border-left: 1px solid rgba(255, 255, 255, 0.15);
-     border-right: 1px solid rgba(0, 0, 0, 0.5);
-     border-bottom: 1px solid rgba(0, 0, 0, 0.7);
+     border-top: 1px solid rgba(212, 175, 55, 0.4) !important;
+     border-left: 1px solid rgba(212, 175, 55, 0.3) !important;
+     border-right: 1px solid rgba(0, 0, 0, 0.6) !important;
+     border-bottom: 1px solid rgba(0, 0, 0, 0.8) !important;
      
-     /* Ultra 3D Drop Shadows */
      box-shadow: 
-       inset 1px 1px 2px rgba(255, 255, 255, 0.12),
-       inset -1px -1px 4px rgba(0, 0, 0, 0.8),
-       0 6px 12px rgba(0, 0, 0, 0.6),
-       0 24px 48px rgba(0, 0, 0, 0.9);
+       0 8px 24px rgba(0, 0, 0, 0.6), 
+       inset 1px 1px 3px rgba(212, 175, 55, 0.3) !important;
        
      border-radius: var(--radius-lg);
-     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
      position: relative;
    }
 
 .glass:hover {
-     background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(30, 30, 40, 0.4) 40%, rgba(5, 5, 10, 0.9) 100%);
-     
-     border-top-color: rgba(212, 175, 55, 0.6);
-     border-left-color: rgba(212, 175, 55, 0.4);
-     
+     background: linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0%, rgba(10, 10, 10, 0.8) 100%) !important;
+     border-top: 1px solid rgba(212, 175, 55, 0.5) !important;
+     border-left: 1px solid rgba(212, 175, 55, 0.4) !important;
+     border-right: 1px solid rgba(0, 0, 0, 0.6) !important;
+     border-bottom: 1px solid rgba(0, 0, 0, 0.8) !important;
      box-shadow: 
-       inset 1px 1px 3px rgba(212, 175, 55, 0.25),
-       inset -1px -1px 6px rgba(0, 0, 0, 0.9),
-       0 8px 16px rgba(0, 0, 0, 0.5),
-       0 24px 48px rgba(0, 0, 0, 0.75);
+       0 12px 32px rgba(0, 0, 0, 0.7), 
+       inset 1px 1px 4px rgba(212, 175, 55, 0.4) !important;
    }
 
   .glass-sidebar {
@@ -202,6 +227,30 @@
     transform: translateX(6px);
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     border-radius: var(--radius-md);
+  }
+
+  .glass-panel {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(10, 10, 10, 0.6) 100%);
+    border-top: 1px solid rgba(212, 175, 55, 0.4);
+    border-left: 1px solid rgba(212, 175, 55, 0.3);
+    border-right: 1px solid rgba(0, 0, 0, 0.6);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.8);
+    box-shadow: 
+      0 8px 24px rgba(0, 0, 0, 0.6), 
+      inset 1px 1px 3px rgba(212, 175, 55, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .glass-panel:hover {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0%, rgba(10, 10, 10, 0.8) 100%);
+    border-top: 1px solid rgba(212, 175, 55, 0.5);
+    border-left: 1px solid rgba(212, 175, 55, 0.4);
+    box-shadow: 
+      0 12px 32px rgba(0, 0, 0, 0.7), 
+      inset 1px 1px 4px rgba(212, 175, 55, 0.4);
   }
 
   .btn-gold {

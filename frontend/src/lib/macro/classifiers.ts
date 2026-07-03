@@ -322,7 +322,7 @@ export function deriveSentimentAndImpact(
         : 'dengan likuiditas draining menekan optimisme';
   }
 // Stagflation & Deflation generally risk‑off
-  else if (regime === 'Stagflation' || regime === 'Deflation' || regime === 'Inflation') {
+  else if (regime === 'Stagflation' || regime === 'Deflation') {
     sentiment = liquidityStatus === 'Refilling' ? 'NEUTRAL' : 'RISK-OFF';
     impactOnRisk =
       sentiment === 'RISK-OFF'

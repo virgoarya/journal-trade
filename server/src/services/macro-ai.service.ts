@@ -32,11 +32,26 @@ async function callGeminiDirect(
     const fullPrompt = systemPrompt
       ? `${systemPrompt}\n\n${userPrompt}`
       : userPrompt;
+
+    const payload: any = {
+      contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+    };
+
+    if (generationConfig) {
+      payload.generationConfig = {};
+      if (generationConfig.maxOutputTokens !== undefined)
+        payload.generationConfig.maxOutputTokens =
+          generationConfig.maxOutputTokens;
+      if (generationConfig.temperature !== undefined)
+        payload.generationConfig.temperature = generationConfig.temperature;
+      if (generationConfig.responseMimeType !== undefined)
+        payload.generationConfig.responseMimeType =
+          generationConfig.responseMimeType;
+    }
+
     const response = await axios.post(
       `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-      },
+      payload,
       { headers: { "Content-Type": "application/json" }, timeout: 20000 },
     );
 
@@ -80,7 +95,7 @@ async function callDualEngine(
             { role: "system", content: systemPrompt || "" },
             { role: "user", content: userPrompt },
           ],
-          max_tokens: generationConfig?.max_output_tokens || 512,
+          max_tokens: generationConfig?.max_output_tokens || 150,
           temperature: generationConfig?.temperature || 0.2,
           stream: false,
         },
@@ -121,87 +136,6 @@ async function callDualEngine(
     lastError?.message,
     "Gemini: no response",
   );
-  return null;
-}
-
-// Variant of callDualEngine that validates JSON content — falls back to Gemini if Groq returns non-JSON
-async function callDualEngineWithJsonValidation(
-  userPrompt: string,
-  systemPrompt?: string,
-  generationConfig?: Record<string, any>,
-): Promise<string | null> {
-  const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
-
-  const isValidJson = (text: string): boolean => {
-    try {
-      const cleaned = text
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-      const firstBrace = cleaned.indexOf("{");
-      const lastBrace = cleaned.lastIndexOf("}");
-      if (firstBrace === -1 || lastBrace <= firstBrace) return false;
-      const obj = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-      // Must have at least one required field
-      return obj && typeof obj === "object" && (obj.fakta || obj.dampakMarket);
-    } catch {
-      return false;
-    }
-  };
-
-  let lastError: any = null;
-  for (const model of GROQ_MODELS) {
-    if (!env.GROQ_API_KEY) break;
-    try {
-      const cacheKey = `feed-json-${JSON.stringify({ model, userPrompt })}`;
-      const response = await groqRequest<GroqResponse>(
-        GROQ_API_URL,
-        {
-          model,
-          messages: [
-            { role: "system", content: systemPrompt || "" },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: generationConfig?.max_output_tokens || 512,
-          temperature: generationConfig?.temperature || 0.2,
-          stream: false,
-        },
-        { useCache: true, cacheKey },
-      );
-
-      const text = response.choices?.[0]?.message?.content;
-      silentLogger.info(
-        `[MacroAI][Feed] Groq ${model} generated ${text?.length} chars. finish_reason: ${response.choices?.[0]?.finish_reason}`,
-      );
-
-      if (text && text.trim() && isValidJson(text)) {
-        return text.trim();
-      }
-
-      // Groq returned text but it's not valid JSON — log and fall through to Gemini
-      silentLogger.warn(
-        `[MacroAI][Feed] Groq ${model} output is not valid JSON, falling back to Gemini.`,
-      );
-    } catch (error: any) {
-      lastError = error;
-      if (!isRetryableGroqError(error)) break;
-      silentLogger.warn(
-        `[MacroAI][Feed] Groq ${model} request failed (${error.response?.status}), trying next model...`,
-      );
-    }
-  }
-
-  silentLogger.info("[MacroAI][Feed] Using Gemini for macro feed analysis.");
-  const geminiText = await callGeminiDirect(
-    systemPrompt || "",
-    userPrompt,
-    geminiModel,
-    generationConfig,
-  );
-  if (geminiText) return geminiText;
-
-  silentLogger.error("[MacroAI][Feed] All engines failed.", lastError?.message);
   return null;
 }
 
@@ -565,10 +499,18 @@ export const macroAiService = {
       };
 
       const rrpVal = formatLiquidity(liquidityData?.value);
+      const rrpChange = liquidityData?.change || 0;
+      const rrpDeltaStr = rrpChange >= 0 ? `+${formatLiquidity(rrpChange)}` : `-${formatLiquidity(Math.abs(rrpChange))}`;
+      const rrpStatus = rrpChange > 0 ? "Ekspansi/Naik (Liquidity Draining/Menyedot)" : rrpChange < 0 ? "Kontraksi/Turun (Liquidity Injecting/Menyuntik)" : "Flat";
+      
       const tgaVal = tgaData?.displayValue
         ? tgaData.displayValue.replace("$", "")
         : formatLiquidity(tgaData?.value);
-      const tgaRrpStr = `- ON RRP: $${rrpVal} | TGA: $${tgaVal}`;
+      const tgaChange = tgaData?.delta || 0;
+      const tgaDeltaStr = tgaChange >= 0 ? `+${formatLiquidity(tgaChange)}` : `-${formatLiquidity(Math.abs(tgaChange))}`;
+      const tgaStatus = tgaChange > 0 ? "Ekspansi/Naik (Liquidity Draining/Menyedot)" : tgaChange < 0 ? "Kontraksi/Turun (Liquidity Injecting/Menyuntik)" : "Flat";
+
+      const tgaRrpStr = `- ON RRP: Total $${rrpVal} (Perubahan: ${rrpDeltaStr}) [${rrpStatus}]\n- TGA: Total $${tgaVal} (Perubahan: ${tgaDeltaStr}) [${tgaStatus}]`;
 
       externalContext = `\nDATA OVERVIEW TAMBAHAN:\n[MACRO FEED]:\n${newsStr}\n[NEXT CALENDAR EVENT]:\n${calStr}\n[LIQUIDITY FLOW]:\n${tgaRrpStr}`;
     } catch (e) {
@@ -580,26 +522,37 @@ Data Utama:
 ${JSON.stringify(stateJson, null, 2)}
 ${externalContext}
 
-INSTRUKSI ANALISIS HOLISTIK:
-Gunakan format terminal header berikut untuk setiap bagian (jangan gunakan kata "Paragraf 1", dll):
+INSTRUKSI ANALISIS HOLISTIK (WAJIB GUNAKAN BULLET POINTS, GAYA TELEGRAFIS/FLASH NOTE TERMINAL):
 
 [ REGIME & MOMENTUM ]
-Sebut regime aktif (${calculatedRegime || "unknown"}) dan skor confidence. Baca ROC-5d growth dan inflation. Sebutkan jika ada divergensi arah atau early warning shift.
+- Nyatakan regime makro (${calculatedRegime || "unknown"}) dan skor confidence secara ringkas.
+- Hubungkan delta ROC-5d Growth & Inflation dengan prospek ke depan (Gunakan panah atau metrik langsung). WAJIB sertakan catatan analitis yang memperjelas dinamika "Momentum vs Absolute Level" jika terjadi divergensi (Contoh: "Meskipun CPI YoY secara absolut masih HOT, namun momentum (ROC) DECELERATING yang berarti ekspektasi inflasi mulai turun").
+- Jika ada divergensi, nyatakan potensi rotasi sektoral atau pergeseran postur makro dalam 1 kalimat padat.
 
 [ LIQUIDITY FLOW ]
-Analisis likuiditas agregat (${context?.liquidity?.riskState ?? "N/A"}). Hubungkan dengan aliran dana spesifik ON RRP dan TGA.
+- Kondisi likuiditas agregat (${context?.liquidity?.riskState ?? "N/A"}).
+- Laporkan dinamika harian ON RRP dan TGA menggunakan angka *Perubahan* (bukan angka Total).
+- Sebutkan secara eksplisit apakah perubahan harian tersebut berakibat *liquidity drain* (menyedot) atau *liquidity injection* (menyuntik) berdasarkan data yang disediakan. JANGAN PERNAH tertukar logika ini.
+- Nyatakan dampak langsung tekanan likuiditas ini ke risk-appetite pasar secara *to-the-point*.
 
 [ MACRO HEATMAP ]
-Hubungkan tesis likuiditas & regime dengan performa ETF di Heatmap hari ini (Gunakan data dari objek keyAssets). Aset apa yang diakumulasi institusi?
+- Identifikasi *capital flow* institusional agresif dari data ETF Heatmap hari ini (keyAssets).
+- Hubungkan flow ini dengan narasi regime & likuiditas di atas (Validasi vs Divergensi).
 
 [ BERITA & EVENT ]
-Simpulkan sentimen dan katalis utama dari berita di Macro Feed atau Economic Calendar. JANGAN sekadar membaca ulang atau menyebut judul berita satu per satu. Fokus pada kesimpulan: apakah narasi berita secara agregat memvalidasi atau membahayakan regime makro saat ini?
+- Sintesis katalis fundamental dari Macro Feed & Economic Calendar.
+- Jangan mengulang judul berita! Berikan *takeaway* analitis: Apakah berita secara kolektif memvalidasi (Risk-On/Off) atau mengancam stabilitas regime makro saat ini?
+
+[ MACRO SYNTHESIS ]
+- Jelaskan secara tajam MENGAPA data di atas saling terkait dan apa dampaknya secara keseluruhan (Causal Loop).
+- Hubungkan interaksi antara Regime saat ini dengan kondisi Likuiditas dan News. (Contoh: "Likuiditas yang *draining* memaksa rotasi dari aset berisiko meskipun Regime menunjukkan Growth stabil, karena...").
+- Ini membantu *user* memahami "benang merah" dari seluruh metrik yang disajikan.
 
 [ INVALIDATION ]
-Sebutkan sub-indikator teknis terlemah yang bisa membatalkan tesis ini jika berbalik arah.`;
+- Sebutkan metrik teknikal/sub-indikator spesifik yang bertindak sebagai titik invalidasi tesis makro ini.`;
 
     const systemPrompt =
-      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst. Anda wajib membaca dan menyatukan seluruh panel (Regime Matrix, Liquidity Flow TGA/RRP, ETF Heatmap, Macro Feed News, dan Calendar) menjadi satu cerita makro (Causal Loop) yang holistik. RULES: 1. Tanpa meta-language (jangan bilang 'berikut adalah analisis'). 2. Kalimat lugas dan to-the-point ala terminal. 3. Gunakan header persis seperti yang diminta, TANPA tambahan asteris/bintang markdown (misalnya tulis [ REGIME & MOMENTUM ], bukan **[ REGIME & MOMENTUM ]**). Balas dalam Bahasa Indonesia yang profesional.";
+      "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst di Hunter Trades. Anda menyajikan 'Flash Note' ke terminal kuantitatif elit. RULES MUTLAK: 1. DILARANG KERAS menggunakan kalimat naratif panjang, pengantar (seperti 'Regime makro saat ini adalah...', 'Berdasarkan data...'). 2. WAJIB menggunakan format telegraphic / bullet points (-) murni ala Bloomberg Terminal (Contoh: '- Active Regime: Goldilocks. - Momentum: Growth akselerasi, Inflasi tertekan.'). 3. Gunakan jargon finansial profesional (misal: 'Risk-On posture', 'Defensive rotation', 'Liquidity drain'). 4. JANGAN ulangi header dengan teks naratif di bawahnya, langsung masuk ke bullet point. 5. Gunakan header persis seperti yang diminta TANPA tambahan asteris markdown (tulis [ REGIME & MOMENTUM ]).";
 
     const text = await callDualEngine(prompt, systemPrompt, {
       max_output_tokens: 800,
@@ -769,14 +722,19 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
     targetAsset: string,
     context?: string,
   ) {
+    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+
     const prompt = `Lakukan bedah berita makro berikut secara institusional:
 Berita: "${headline}"
 Aset Terkait: ${targetAsset}
 ${context ? `Konteks Tambahan: ${context}` : ""}
 
-Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar JSON) yang menggunakan struktur berikut:
+Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar JSON) yang menggunakan struktur berikut (JANGAN mengisi dengan "Tidak ada data"):
 {
-  "fakta": "Ekstrak 1-2 kalimat fakta absolut dari berita (angka, data, atau aksi nyata). Jangan tambahkan opini.",
+  "topic": "Kategori/Topik berita (contoh: OIL, GEOPOLITICS, FED, INFLATION, atau nama negara)",
+  "assets": "Tuliskan 1-3 TICKER KEUANGAN (contoh: SPY, USO, DXY) atau kelas aset. JANGAN tulis nama negara di sini.",
+  "regime": "Pilih SATU: Reflation, Deflation, Goldilocks, Stagflation, atau Neutral",
+  "Fakta": "Ekstrak 1-2 kalimat fakta absolut dari berita (angka, data, atau aksi nyata). Jangan tambahkan opini.",
   "dampakMarket": "Arah aliran modal (capital flow) dan dampak orde-kedua terhadap aset ${targetAsset}, DXY, maupun Yields.",
   "logika": "Mekanisme makro yang mendasari dampak tersebut (hubungkan dengan suku bunga, likuiditas, atau premi risiko).",
   "contrarian": "Skenario kegagalan narasi (contoh: sudah di-price in, reaksi algoritma sesaat, atau anomali data musiman).",
@@ -785,19 +743,62 @@ Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar J
 }`;
 
     const systemPrompt =
-      "ROLE & PERSONA: Anda adalah Institutional Macro Strategist (Hedge Fund). Analisis Anda tajam, to-the-point, dan berfokus pada likuiditas, yield curve, dan pergerakan lintas-aset (cross-asset).\n" +
+      "ROLE & PERSONA: Anda adalah Institutional Macro Strategist (Hedge Fund). Analisis Anda tajam, to-the-point.\n" +
       "ATURAN MUTLAK:\n" +
-      "1. DILARANG menggunakan kata klise seperti 'Investor mencari aset aman'. Gunakan bahasa teknis pasar (contoh: 'Flight-to-duration menekan yield, memicu bid pada Emas').\n" +
+      "1. SELALU berikan analisis (jangan jawab 'Tidak ada data').\n" +
       "2. DILARANG mengulang fakta berita di kolom analisis. Berikan turunan efek orde-kedua (second-order thinking).\n" +
-      "3. Output HARUS murni format JSON string, tanpa backticks (```json), tanpa teks awalan/akhiran. Parsing akan gagal jika ada karakter selain JSON.";
+      "3. Output HARUS murni format JSON string, tanpa backticks (```json), tanpa teks awalan/akhiran. Parsing akan gagal jika ada karakter selain JSON.\n" +
+      "4. WAJIB gunakan Bahasa Indonesia untuk semua isi analisis.";
 
-    const text = await callDualEngineWithJsonValidation(prompt, systemPrompt, {
-      max_output_tokens: 512,
-      temperature: 0.2,
-    });
+    let text: string | null = null;
+    try {
+      if (env.GROQ_API_KEY) {
+        const cacheKey = `feed-${JSON.stringify({ headline, targetAsset, context })}`;
+        const response = await groqRequest<GroqResponse>(
+          GROQ_API_URL,
+          {
+            model: GROQ_MODELS[0],
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 1000,
+            temperature: 0.2,
+            stream: false,
+          },
+          { useCache: true, cacheKey },
+        );
+
+        text = response.choices?.[0]?.message?.content || null;
+      }
+    } catch (error: any) {
+      if (!isRetryableGroqError(error) || !env.GEMINI_API_KEY) {
+        if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY) {
+          throw new Error(
+            "Fitur AI dinonaktifkan: GROQ_API_KEY dan GEMINI_API_KEY tidak ditemukan",
+          );
+        }
+        if (!isRetryableGroqError(error)) {
+          throw error;
+        }
+      }
+      silentLogger.warn(
+        "[MacroAI] Groq macro feed error, switching to Gemini fallback:",
+        error.response?.status,
+      );
+    }
+
+    if (!text) {
+      text = await callGeminiDirect(systemPrompt, prompt, geminiModel, {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      });
+    }
 
     if (!text) {
       return {
+        assets: "Tidak ada data",
+        regime: "Tidak ada data",
         fakta: headline || "Tidak ada data",
         dampakMarket: "Analisis tidak tersedia",
         logika: "Analisis tidak tersedia",
@@ -808,7 +809,12 @@ Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar J
     }
 
     const parsed = parseMacroFeedText(text);
+    silentLogger.info("[MacroAI] Single Analysis Raw Response:", text);
+    silentLogger.info("[MacroAI] Parsed Result:", parsed);
     return {
+      topic: parsed.topic || "NEWS",
+      assets: parsed.assets || "General",
+      regime: parsed.regime || "Neutral",
       fakta: parsed.fakta || "Tidak ada data",
       dampakMarket: parsed.dampakMarket || "Tidak ada data",
       logika: parsed.logika || "Tidak ada data",
@@ -959,7 +965,204 @@ Aturan:
 
     return result;
   },
+
+  async batchAnalyzeNews(
+    newsItems: { id: string | number; headline: string; source: string }[],
+    context?: string,
+  ): Promise<Record<string, any>> {
+    if (newsItems.length === 0) return {};
+
+    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+    const newsListStr = newsItems
+      .map((n, i) => `[${n.id}] ${n.source}: ${n.headline}`)
+      .join("\n");
+
+    const prompt = `Lakukan bedah berita makro secara institusional untuk daftar berita berikut:
+${newsListStr}
+${context ? `Konteks Tambahan: ${context}` : ""}
+
+Jawab HANYA dengan array of JSON valid. Analisis SETIAP berita, JANGAN ADA yang terlewat. Jika berita singkat, tetap berikan ekstrapolasi logis. JANGAN PERNAH mengisi dengan "Tidak ada data". Setiap objek di dalam array merepresentasikan satu berita dan HARUS menggunakan struktur persis seperti berikut (perhatikan kapitalisasi huruf pada "Fakta"):
+[
+  {
+    "id": "id berita sesuai input",
+    "topic": "Kategori/Topik berita (contoh: OIL, GEOPOLITICS, FED, INFLATION, atau nama negara)",
+    "assets": "Tuliskan 1-3 TICKER KEUANGAN (contoh: SPY, USO, DXY) atau kelas aset. JANGAN tulis nama negara di sini.",
+    "regime": "Pilih SATU: Reflation, Deflation, Goldilocks, Stagflation, atau Neutral",
+    "Fakta": "1-2 kalimat fakta absolut dari berita",
+    "dampakMarket": "Arah aliran modal (capital flow) dan dampak orde-kedua",
+    "logika": "Mekanisme makro yang mendasari dampak tersebut",
+    "contrarian": "Skenario kegagalan narasi",
+    "triggerFundamentalNonTeknikal": "Data makro/event berikutnya",
+    "confidenceScore": "Pilih SATU: TINGGI, SEDANG, atau RENDAH"
+  }
+]`;
+
+    const systemPrompt =
+      "ROLE: Institutional Macro Strategist. RULES: 1. Selalu berikan analisis (jangan jawab 'Tidak ada data'). 2. Output HARUS array of JSON valid. 3. Jangan potong respon, selesaikan seluruh daftar. 4. WAJIB gunakan Bahasa Indonesia untuk semua isi analisis.";
+
+    try {
+      let text: string | null = null;
+      if (env.GROQ_API_KEY) {
+        try {
+          const response = await groqRequest<GroqResponse>(
+            GROQ_API_URL,
+            {
+              model: GROQ_MODELS[0],
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: prompt },
+              ],
+              max_tokens: 4000,
+              temperature: 0.2,
+              stream: false,
+            },
+            { useCache: false }
+          );
+          text = response.choices?.[0]?.message?.content || null;
+        } catch (groqError: any) {
+          silentLogger.warn("[MacroAI] batchAnalyzeNews Groq failed, switching to Gemini:", groqError.response?.status);
+        }
+      }
+
+      if (!text && env.GEMINI_API_KEY) {
+        text = await callGeminiDirect(systemPrompt, prompt, geminiModel, {
+          temperature: 0.2,
+        });
+      }
+
+      if (!text) return {};
+
+      // Parse array JSON and convert to map
+      const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const firstBracket = cleaned.indexOf('[');
+      const lastBracket = cleaned.lastIndexOf(']');
+      if (firstBracket >= 0 && lastBracket > firstBracket) {
+        const arr = JSON.parse(cleaned.substring(firstBracket, lastBracket + 1));
+        const map: Record<string, any> = {};
+        for (const item of arr) {
+          if (item.id) map[item.id] = item;
+        }
+        return map;
+      }
+      return {};
+    } catch (error) {
+      silentLogger.error("[MacroAI] batchAnalyzeNews failed:", error);
+      return {};
+    }
+  },
 };
+
+function parseCotJson(text: string | null | undefined): { momentum: string; warnings: string; conclusion: string } | null {
+  if (typeof text !== "string" || !text.trim()) return null;
+
+  try {
+    const cleaned = text
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
+
+    const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
+    const parsed = JSON.parse(jsonText);
+
+    return {
+      momentum: typeof parsed.momentum === "string" ? parsed.momentum.trim() : "",
+      warnings: typeof parsed.warnings === "string" ? parsed.warnings.trim() : "",
+      conclusion: typeof parsed.conclusion === "string" ? parsed.conclusion.trim() : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+const EXTREME_THRESHOLD = 1.5;
+
+function calculateMarketPhase(managedMoneyNet: number, commercialsNet: number): "MARK UP" | "DISTRIBUTION" | "MARK DOWN" | "ACCUMULATION" | "NEUTRAL" {
+  const mmPositive = managedMoneyNet > 0;
+  const commNetShort = commercialsNet < 0;
+  const commNetLong = commercialsNet > 0;
+  const commAbs = Math.abs(commercialsNet);
+  const mmAbs = Math.abs(managedMoneyNet);
+
+  if (mmPositive && !commNetShort) return "MARK UP";
+  if (mmPositive && commNetShort && commAbs > managedMoneyNet * EXTREME_THRESHOLD) return "DISTRIBUTION";
+  if (!mmPositive && !commNetLong) return "MARK DOWN";
+  if (!mmPositive && commNetLong && commercialsNet > mmAbs * EXTREME_THRESHOLD) return "ACCUMULATION";
+  return "NEUTRAL";
+}
+
+export async function analyzeCotAsset(cotData: {
+  symbol: string;
+  name: string;
+  category: string;
+  commercialLong: number;
+  commercialShort: number;
+  nonCommercialLong: number;
+  nonCommercialShort: number;
+  retailLong: number;
+  retailShort: number;
+  sentiment: string;
+  lastUpdate: string;
+}): Promise<{ momentum: string; warnings: string; conclusion: string } | null> {
+  const commercialNet = cotData.commercialLong - cotData.commercialShort;
+  const largeSpecsNet = cotData.nonCommercialLong - cotData.nonCommercialShort;
+  const retailNet = cotData.retailLong - cotData.retailShort;
+
+  const marketPhase = calculateMarketPhase(largeSpecsNet, commercialNet);
+
+  const systemPrompt = `Anda adalah professional quant analyst. Saat menganalisis data COT, gunakan persis logika Market Phases yang sama dengan dashboard:
+
+FASE PASAR (WAJIB DITERAPKAN):
+- MARK UP (Hijau): ManagedMoney > 0 DAN Commercials BUKAN net short ekstrem.
+- DISTRIBUTION (Kuning): ManagedMoney > 0 DAN Commercials Net Short DAN |CommercialsNet| > 1.5x ManagedMoneyNet (commercial melawan tren secara ekstrem).
+- MARK DOWN (Merah): ManagedMoney < 0 DAN Commercials BUKAN net long ekstrem.
+- ACCUMULATION (Biru): ManagedMoney < 0 DAN Commercials Net Long DAN CommercialsNet > 1.5x |ManagedMoneyNet| (commercial melawan tren secara ekstrem).
+- NEUTRAL: Kondisi lain.
+
+INSTRUKSI KRITIS: MULAI analisis Anda dengan menyatakan Fase Pasar yang telah dihitung, lalu lanjutkan ke analisis mendalam.
+
+WAJIB output format JSON (tanpa markdown):
+{
+  "momentum": "Analisis 1-2 kalimat tentang siapa yang mengontrol tren (Managed Money) dan bagaimana posisi Commercial dan Retail.",
+  "warnings": "Risiko utama 1-2 kalimat berdasarkan hedging Commercial (Smart Money) dan posisi Retail (kontrarian).",
+  "conclusion": "Kesimpulan eksekutif definitif dan seimbang, contoh: 'Tren masih Bullish didorong Large Specs, namun risiko koreksi tinggi karena Smart Money mulai hedging massal.'"
+}
+
+WAJIB gunakan Bahasa Indonesia institusional.`;
+
+  const userPrompt = `Analisis data COT untuk ${cotData.name} (${cotData.symbol}) menggunakan framework Multi-Dimensional Market Phase.
+
+DATA POSISI:
+- Managed Money (Large Specs): Net = ${largeSpecsNet > 0 ? "+" : ""}${largeSpecsNet.toLocaleString()} (${largeSpecsNet > 0 ? "NET LONG" : "NET SHORT"})
+- Commercials (Smart Money): Net = ${commercialNet > 0 ? "+" : ""}${commercialNet.toLocaleString()} (${commercialNet > 0 ? "NET LONG" : "NET SHORT"})
+- Retail (Small Traders): Net = ${retailNet > 0 ? "+" : ""}${retailNet.toLocaleString()} (${retailNet > 0 ? "NET LONG" : "NET SHORT"})
+
+FASE PASAR TERHITUNG: ${marketPhase}
+Kategori: ${cotData.category} | Tanggal: ${cotData.lastUpdate}
+
+MULAI dengan menyatakan Fase Pasar di atas, lalu berikan analisis momentum, peringatan, dan kesimpulan.`;
+
+  try {
+    const raw = await callDualEngine(userPrompt, systemPrompt, {
+      max_output_tokens: 500,
+      temperature: 0.3,
+      responseMimeType: "application/json",
+    });
+    if (!raw) return null;
+
+    const parsed = parseCotJson(raw);
+    if (!parsed) return null;
+
+    return parsed;
+  } catch (e: any) {
+    silentLogger.error("[COT AI] analyzeCotAsset failed:", e.message);
+    return null;
+  }
+}
 
 function parseMacroFeedText(text: string | null | undefined) {
   if (typeof text !== "string" || !text.trim()) {
@@ -985,19 +1188,24 @@ function parseMacroFeedText(text: string | null | undefined) {
       throw new Error("Parsed value is not an object");
     }
 
-    const result: Record<string, string> = {};
-    const fields = [
-      "fakta",
-      "dampakMarket",
-      "logika",
-      "contrarian",
-      "triggerFundamentalNonTeknikal",
-      "confidenceScore",
-    ];
-    for (const field of fields) {
-      result[field] =
-        typeof parsed[field] === "string" ? parsed[field].trim() : "";
+    const lowerParsed: Record<string, string> = {};
+    for (const key of Object.keys(parsed)) {
+      if (typeof parsed[key] === "string") {
+        lowerParsed[key.toLowerCase()] = parsed[key].trim();
+      }
     }
+
+    const result: Record<string, string> = {
+      topic: lowerParsed.topic || "",
+      assets: lowerParsed.assets || "",
+      regime: lowerParsed.regime || "",
+      fakta: lowerParsed.fakta || "",
+      dampakMarket: lowerParsed.dampakmarket || lowerParsed.dampak_market || "",
+      logika: lowerParsed.logika || "",
+      contrarian: lowerParsed.contrarian || "",
+      triggerFundamentalNonTeknikal: lowerParsed.triggerfundamentalnonteknikal || lowerParsed.trigger_fundamental || "",
+      confidenceScore: lowerParsed.confidencescore || lowerParsed.score || "",
+    };
     return result;
   } catch {
     return {};

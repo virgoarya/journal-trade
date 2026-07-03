@@ -34,7 +34,35 @@ export class AIReviewService {
   }
 
   async generate(tradeId: string): Promise<ApiResponse<AIReview>> {
-    return apiClient.post<AIReview>(`${this.basePath}/generate/${tradeId}`, {});
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
+      
+      const response = await fetch(`${this.basePath}/generate/${tradeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data?.error?.message || data?.message || `HTTP ${response.status}`,
+        };
+      }
+      
+      return { success: true, data: data.data ?? data };
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return { success: false, error: "Request timeout - AI sedang sibuk. Coba lagi nanti." };
+      }
+      return { success: false, error: error.message || "Network error occurred" };
+    }
   }
 
   async getByTrade(tradeId: string): Promise<ApiResponse<AIReview[]>> {

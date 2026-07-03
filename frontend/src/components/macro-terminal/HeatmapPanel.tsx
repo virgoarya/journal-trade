@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ShieldAlert, BrainCircuit, RefreshCw } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
 export type MarketSession = "LIVE" | "PRE-MARKET" | "AFTER-HOURS" | "CLOSED";
@@ -69,17 +69,31 @@ export function getMarketSessionStatus(): {
   return { label: "CLOSED", color: "bg-gray-500", textColor: "text-gray-400" };
 }
 
-export function HeatmapPanel() {
+export function HeatmapPanel({ className }: { className?: string }) {
   const {
     assets,
     isFallback,
-    aiReasoning,
-    isAnalyzing,
-    lastUpdated,
-    analyzeRegime,
     dataStatus,
+    lastUpdated,
   } = useMacroTerminal();
-  const sessionStatus = getMarketSessionStatus();
+  
+  const [sessionStatus, setSessionStatus] = React.useState<{
+    label: MarketSession;
+    color: string;
+    textColor: string;
+  }>({
+    label: "CLOSED",
+    color: "bg-gray-500",
+    textColor: "text-gray-400",
+  });
+
+  React.useEffect(() => {
+    setSessionStatus(getMarketSessionStatus());
+    const interval = setInterval(() => {
+      setSessionStatus(getMarketSessionStatus());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const renderChange = (change: number | null | undefined) => {
     if (change === null || change === undefined || Number.isNaN(change)) {
@@ -93,7 +107,7 @@ export function HeatmapPanel() {
 
   const getColor = (change: number | null | undefined) => {
     if (change === null || change === undefined || Number.isNaN(change)) {
-      return "bg-surface-elevated text-text-muted";
+      return "bg-[#1a1a1a] text-text-muted";
     }
 
     if (change > 2) return "bg-data-profit text-white";
@@ -102,118 +116,108 @@ export function HeatmapPanel() {
     if (change < -2) return "bg-data-loss text-white";
     if (change < -1) return "bg-data-loss/80 text-white";
     if (change < 0) return "bg-data-loss/40 text-data-loss";
-    return "bg-text-muted/20 text-white";
+    return "bg-[#1a1a1a] text-white";
   };
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
-      <div className="flex items-center justify-between border-b border-border-subtle p-3">
-        <h2
-          className="font-bold text-text-primary uppercase tracking-wider text-[10px] sm:text-xs"
-          id="heatmap-heading"
-        >
-          Macro ETFs Heatmap
-        </h2>
-        <div className="flex items-center gap-3" role="status">
-          <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border border-border-subtle">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${sessionStatus.color}`}
-              aria-hidden
-            />
-            <span className={`${sessionStatus.textColor}`}>
-              {sessionStatus.label}
-            </span>
-          </span>
-          <span
-            className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-              dataStatus.quotes === "live"
-                ? "text-data-profit border-data-profit/30 bg-data-profit/10"
-                : dataStatus.quotes === "cache"
-                  ? "text-data-warning border-data-warning/30 bg-data-warning/10"
-                  : dataStatus.quotes === "fallback"
-                    ? "text-data-warning border-data-warning/30 bg-data-warning/10"
-                    : dataStatus.quotes === "error"
-                      ? "text-data-loss border-data-loss/30 bg-data-loss/10"
-                      : "text-text-muted border-border-subtle bg-surface-elevated/50"
-            }`}
+    <div className={`flex flex-col w-full glass-panel overflow-hidden relative ${className ?? ""}`}>
+      <div className="flex items-center justify-between border-b border-border-subtle p-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <h2
+            className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap flex items-center gap-2"
+            id="heatmap-heading"
           >
-            {dataStatus.quotes.toUpperCase()}
-          </span>
+            <LayoutGrid size={14} className="text-accent-gold flex-shrink-0" /> Macro ETFs Heatmap
+          </h2>
+        </div>
+        <div className="flex items-center gap-2" role="status">
+          {dataStatus.quotes === "live" || dataStatus.quotes === "cache" ? (
+            <span className="flex items-center gap-1.5 text-[8px] sm:text-[9px] font-mono font-bold text-data-profit bg-data-profit/10 px-2 py-0.5 rounded border border-data-profit/20 uppercase tracking-widest whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-data-profit animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+              LIVE
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[8px] sm:text-[9px] font-mono font-medium text-text-muted bg-white/5 px-2 py-0.5 rounded border border-white/10 uppercase tracking-widest whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-gold/50 animate-pulse"></span>
+              {dataStatus.quotes === "error" ? "ERROR" : dataStatus.quotes === "stale" ? "STALE" : "CONNECTING..."}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="p-2 grid grid-cols-2 sm:grid-cols-4 gap-1 shrink-0">
-        {assets.map((asset) => {
-          const change = asset.change ?? null;
+      <div className="flex-1 p-2 flex flex-col justify-between gap-1">
+        {[
+          {
+            title: "• SAFE HAVEN & DEFENSIVE",
+            tickers: ["GLD", "UUP", "IEF", "TLT", "FXY", "FXF", "VIXY"],
+            color: "text-blue-400"
+          },
+          {
+            title: "• RISK-ON (EQUITIES)",
+            tickers: ["SPY", "QQQ", "IWM", "EFA", "EEM", "DIA", "ARKK"],
+            color: "text-green-400"
+          },
+          {
+            title: "• SECTORS & CREDIT",
+            tickers: ["XLK", "XLF", "XLE", "HYG", "XLV", "XLI", "LQD"],
+            color: "text-purple-400"
+          },
+          {
+            title: "• OTHER FX & REAL YIELD",
+            tickers: ["FXE", "FXB", "FXC", "TIP", "FXA", "USO", "DBA"],
+            color: "text-orange-400"
+          }
+        ].map((category) => {
+          const categoryAssets = assets.filter(a => category.tickers.includes(a.ticker));
+          if (categoryAssets.length === 0) return null;
+
           return (
-            <div
-              key={asset.ticker}
-              title={`${asset.ticker} · ${asset.name} · ${renderChange(change)}`}
-              className={`flex flex-col items-center justify-center rounded p-2 transition-all duration-300 hover:scale-[1.02] hover:ring-2 hover:ring-white/20 ${getColor(change)}`}
-            >
-              <span className="text-xs font-bold tracking-wide">
-                {asset.ticker}
-              </span>
-              <span className="text-[9px] opacity-80 truncate w-full text-center mt-0.5">
-                {asset.name}
-              </span>
-              <span className="text-sm font-mono font-bold mt-1">
-                {renderChange(change)}
-              </span>
+            <div key={category.title} className="flex flex-col gap-1.5 flex-1">
+              <h3 className={`text-[9px] font-bold font-mono uppercase tracking-wider ${category.color} px-1 border-b border-border-subtle pb-0.5`}>
+                {category.title}
+              </h3>
+              <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-7 gap-1.5 flex-1">
+                {category.tickers.map(ticker => {
+                  const asset = categoryAssets.find(a => a.ticker === ticker);
+                  if (!asset) return null;
+                  const change = asset.change ?? null;
+                  return (
+                    <div
+                      key={asset.ticker}
+                      title={`${asset.ticker} · ${asset.name} · ${renderChange(change)}`}
+                      className={`flex flex-col items-center justify-center rounded p-2 h-full transition-all duration-300 hover:scale-[1.02] hover:ring-1 hover:ring-white/20 ${getColor(change)}`}
+                    >
+                      <span className="text-[13px] font-extrabold tracking-widest">
+                        {asset.ticker}
+                      </span>
+                      <span className="text-[8px] opacity-90 w-full text-center mt-0.5 truncate">
+                        {asset.name}
+                      </span>
+                      <span className="text-sm font-mono font-bold mt-1">
+                        {renderChange(change)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="flex-1 border-t border-border-subtle flex flex-col min-h-0">
-        <div className="flex items-center justify-between p-3 pb-1.5 shrink-0">
-          <div className="flex items-center gap-2 text-accent-gold text-[10px] font-mono tracking-widest uppercase">
-            <BrainCircuit size={12} aria-hidden />
-            <span>Hunter AI Reasoning</span>
-          </div>
-          <button
-            onClick={() => analyzeRegime()}
-            disabled={isAnalyzing}
-            aria-busy={isAnalyzing}
-            aria-label="Analisis ulang regime makro"
-            className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
-          >
-            <RefreshCw
-              size={10}
-              className={isAnalyzing ? "animate-spin" : ""}
-            />
-            {isAnalyzing ? "ANALYZING..." : "RE-ANALYZE"}
-          </button>
+      {lastUpdated && (
+        <div className="shrink-0 px-2 pb-1 text-[8px] text-text-muted text-right border-t border-border-subtle/50 pt-1">
+          Last Sync:{" "}
+          {new Intl.DateTimeFormat("id-ID", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(lastUpdated)}
         </div>
-        <div className="flex-1 overflow-y-auto px-3 pb-2 min-h-0">
-          <div className="text-[10px] text-text-secondary leading-relaxed font-mono break-words whitespace-pre-wrap">
-            {aiReasoning ? (
-              <div className="animate-in fade-in duration-500">{aiReasoning.replace(/\*\*/g, "")}</div>
-            ) : isAnalyzing ? (
-              <div className="text-accent-gold animate-pulse">
-                Connecting to Hunter Desk Terminal...
-              </div>
-            ) : (
-              <div className="text-text-muted">
-                Menunggu pergerakan pasar untuk dianalisis...
-              </div>
-            )}
-          </div>
-        </div>
-        {lastUpdated && (
-          <div className="shrink-0 px-3 pb-2 text-[9px] text-text-muted text-right">
-            Last Sync:{" "}
-            {new Intl.DateTimeFormat("id-ID", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-            }).format(lastUpdated)}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

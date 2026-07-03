@@ -36,6 +36,8 @@ export interface DataStatusState {
   geoRisk: DataStatus;
   quant: DataStatus;
   nexus: DataStatus;
+  tga: DataStatus;
+  cot: DataStatus;
 }
 
 export interface Asset {
@@ -143,6 +145,22 @@ const initialAssets: Asset[] = [
   { ticker: "FXB", name: "British Pound", change: null, weight: 1 },
   { ticker: "FXC", name: "Canadian Dollar", change: null, weight: 1 },
   { ticker: "FXF", name: "Swiss Franc", change: null, weight: 1 },
+  { ticker: "TLT", name: "20+ Year Treasury", change: null, weight: 1 },
+  { ticker: "HYG", name: "High Yield Bonds", change: null, weight: 1 },
+  { ticker: "XLE", name: "Energy Sector", change: null, weight: 1 },
+  { ticker: "XLF", name: "Financial Sector", change: null, weight: 1 },
+  { ticker: "XLK", name: "Technology Sector", change: null, weight: 1 },
+  { ticker: "IWM", name: "Russell 2000", change: null, weight: 1 },
+  { ticker: "EFA", name: "Developed Markets", change: null, weight: 1 },
+  { ticker: "EEM", name: "Emerging Markets", change: null, weight: 1 },
+  { ticker: "DIA", name: "Dow Jones", change: null, weight: 1 },
+  { ticker: "ARKK", name: "Innovation", change: null, weight: 1 },
+  { ticker: "XLV", name: "Healthcare Sector", change: null, weight: 1 },
+  { ticker: "XLI", name: "Industrial Sector", change: null, weight: 1 },
+  { ticker: "LQD", name: "IG Corp Bonds", change: null, weight: 1 },
+  { ticker: "FXA", name: "Australian Dollar", change: null, weight: 1 },
+  { ticker: "USO", name: "US Oil", change: null, weight: 1 },
+  { ticker: "DBA", name: "Agriculture", change: null, weight: 1 },
 ];
 
 function normalizeOnRrpStatus(status?: string): OnRrpStatus {
@@ -172,7 +190,6 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     setNextEvent,
     geoRisk,
     setGeoRisk,
-    cotData,
     dataStatus,
     setDataStatus,
     lastUpdated,

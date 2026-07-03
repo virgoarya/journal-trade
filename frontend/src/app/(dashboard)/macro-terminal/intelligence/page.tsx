@@ -6,7 +6,7 @@ import { AiPersonaChatPanel } from "@/components/macro-terminal/AiPersonaChatPan
 
 export default function IntelligencePage() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[720px] lg:h-[calc(100vh-17rem)]">
+    <div className="w-full grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[720px] lg:h-[800px]">
       {/* Left: Geo-Risk Radar (2/5) */}
       <div className="lg:col-span-2 flex flex-col min-h-0 h-full overflow-y-auto custom-scrollbar pr-2">
         <GeoRiskRadarPanel />

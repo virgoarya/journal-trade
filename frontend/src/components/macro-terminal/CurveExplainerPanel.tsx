@@ -6,12 +6,12 @@ export function CurveExplainerPanel() {
   const { yieldCurve, dataStatus } = useMacroTerminal();
 
   return (
-    <div className="flex flex-col h-full bg-surface-base border-l border-border-subtle relative overflow-hidden">
+    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
       {/* HEADER */}
-      <div className="flex-none p-4 border-b border-border-subtle bg-surface-base sticky top-0 z-10 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <BrainCircuit className="w-4 h-4 text-accent-gold" />
-          <h2 className="text-xs font-mono font-bold tracking-widest uppercase text-text-primary">
+      <div className="flex-none p-4 border-b border-border-subtle bg-surface-base/50 sticky top-0 z-10 flex justify-between items-center">
+        <div className="flex items-center gap-2 min-w-0">
+          <BrainCircuit size={14} className="text-accent-gold flex-shrink-0" />
+          <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
             AI Yield Curve Analysis
           </h2>
         </div>
@@ -19,7 +19,7 @@ export function CurveExplainerPanel() {
 
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        {dataStatus.quant === "loading" || dataStatus.quant === "idle" ? (
+        {dataStatus.quant === "stale" || dataStatus.quant === "error" ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4">
             <Loader2 className="w-8 h-8 text-accent-gold animate-spin" />
             <p className="text-sm font-mono text-text-muted animate-pulse">

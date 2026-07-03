@@ -209,13 +209,13 @@ export function GeoRiskRadarPanel() {
       : "NEUTRAL";
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-bg-void p-4">
+    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
       <div className="flex items-center justify-between mb-3 shrink-0 gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <Shield className="w-4 h-4 text-accent-gold" />
-          <span className="text-[10px] sm:text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+          <Shield size={14} className="text-accent-gold flex-shrink-0" />
+          <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
             Geo-Risk Radar
-          </span>
+          </h2>
           {data && (
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded"
@@ -327,33 +327,31 @@ export function GeoRiskRadarPanel() {
           </div>
         ) : data ? (
           <ResponsiveContainer width="100%" height="100%">
-            <div style={{ width: "100%", height: "100%", minHeight: 180 }}>
-              <RadarChart
-                data={radarData}
-                margin={{ top: 4, right: 24, bottom: 4, left: 24 }}
-              >
-                <PolarGrid stroke="#2a2a3a" />
-                <PolarAngleAxis
-                  dataKey="subject"
-                  tick={{
-                    fill: "#888899",
-                    fontSize: 9,
-                    fontFamily: "monospace",
-                  }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Radar
-                  name="Risk Score"
-                  dataKey="score"
-                  stroke="#f59e0b"
-                  fill="#f59e0b"
-                  fillOpacity={0.18}
-                  strokeWidth={2}
-                  dot={{ fill: "#f59e0b", r: 3 }}
-                  animationDuration={800}
-                />
-              </RadarChart>
-            </div>
+            <RadarChart
+              data={radarData}
+              margin={{ top: 4, right: 24, bottom: 4, left: 24 }}
+            >
+              <PolarGrid stroke="#2a2a3a" />
+              <PolarAngleAxis
+                dataKey="subject"
+                tick={{
+                  fill: "#888899",
+                  fontSize: 9,
+                  fontFamily: "monospace",
+                }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Radar
+                name="Risk Score"
+                dataKey="score"
+                stroke="#f59e0b"
+                fill="#f59e0b"
+                fillOpacity={0.18}
+                strokeWidth={2}
+                dot={{ fill: "#f59e0b", r: 3 }}
+                animationDuration={800}
+              />
+            </RadarChart>
           </ResponsiveContainer>
         ) : (
           <div className="flex items-center justify-center h-full text-text-muted text-xs font-mono">

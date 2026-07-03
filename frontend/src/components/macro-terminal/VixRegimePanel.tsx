@@ -65,12 +65,14 @@ export function VixRegimePanel() {
 
   if (vix.value === null) {
     return (
-      <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-bg-void p-4">
-        <div className="flex items-center gap-2 mb-6 shrink-0">
-          <AlertOctagon className="w-4 h-4 text-accent-gold" />
-          <span className="text-[10px] sm:text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
-            Volatility Status
-          </span>
+      <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
+        <div className="flex items-center justify-between mb-6 shrink-0 relative z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertOctagon size={14} className="text-accent-gold flex-shrink-0" />
+            <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
+              Volatility Status
+            </h2>
+          </div>
         </div>
         <div className="flex-1 flex flex-col justify-center items-center min-h-0">
           <SkeletonGauge />
@@ -84,16 +86,16 @@ export function VixRegimePanel() {
   }
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl bg-bg-void p-4 relative overflow-hidden">
+    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
       <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: vixColor, opacity: 0.08 }} />
       <div className="absolute -left-24 -bottom-24 h-56 w-56 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: vixColor, opacity: 0.05 }} />
 
       <div className="flex items-center justify-between mb-6 shrink-0 relative z-10">
-        <div className="flex items-center gap-2">
-          <AlertOctagon className="w-4 h-4 text-accent-gold" />
-          <span className="text-[10px] sm:text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+        <div className="flex items-center gap-2 min-w-0">
+          <AlertOctagon size={14} className="text-accent-gold flex-shrink-0" />
+          <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
             Volatility Status
-          </span>
+          </h2>
         </div>
         <span
           className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${

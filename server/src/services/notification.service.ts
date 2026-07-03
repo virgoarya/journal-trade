@@ -40,7 +40,7 @@ export const notificationService = {
 
   async create(data: {
     userId: string;
-    type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM";
+    type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM" | "COT_UPDATE" | "REGIME_SHIFT" | "YIELD_CURVE_REGIME";
     title: string;
     message: string;
     link?: string;

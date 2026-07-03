@@ -291,7 +291,7 @@ export function AiPersonaChatPanel() {
 
   return (
     <div
-      className="flex flex-col h-full glass border rounded-xl bg-bg-void overflow-hidden transition-colors duration-300"
+      className="flex flex-col h-full w-full glass-panel overflow-hidden relative transition-colors duration-300"
       style={{ borderColor: activePersona.color + "35" }}
     >
       {/* Header with Persona selector */}

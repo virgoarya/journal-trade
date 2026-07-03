@@ -1301,7 +1301,7 @@ export default function Nexus() {
     <div className="flex flex-col gap-3">
       <div
         ref={containerRef}
-        className="relative w-full aspect-[16/10] min-h-[500px] max-h-[850px] glass border border-border-subtle rounded-2xl bg-bg-void overflow-hidden"
+        className="relative w-full aspect-[16/10] min-h-[500px] max-h-[850px] glass-panel overflow-hidden"
       >
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.06]"
@@ -1314,8 +1314,8 @@ export default function Nexus() {
 
         <div className="absolute top-3 left-4 right-4 z-20 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[10px] sm:text-xs font-mono font-bold text-text-primary uppercase tracking-[0.2em] flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-accent-gold" />
+            <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
+              <Activity size={14} className="text-accent-gold flex-shrink-0" />
               Macro Causal Loop
             </h2>
             <p className="text-[9px] font-mono text-text-muted mt-1 max-w-md leading-relaxed">
@@ -1403,7 +1403,7 @@ export default function Nexus() {
         </div>
 
         <svg
-          className="absolute inset-0 w-full h-full pointer-events-none overflow-visible relative z-10"
+          className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-10"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
@@ -1453,12 +1453,12 @@ export default function Nexus() {
         })}
       </div>
 
-      <div className="glass border border-border-subtle rounded-2xl bg-bg-void p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Terminal className="w-4 h-4 text-accent-gold" />
-          <span className="text-xs font-mono font-bold text-text-primary tracking-widest uppercase">
+      <div className="w-full glass-panel overflow-hidden relative p-5">
+        <div className="flex items-center gap-2 mb-3 min-w-0">
+          <Terminal size={14} className="text-accent-gold flex-shrink-0" />
+          <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
             Institutional Desk AI
-          </span>
+          </h2>
           {isAnalyzing && (
             <span className="text-[10px] font-mono text-text-muted ml-auto animate-pulse">
               Mapping causal flow...

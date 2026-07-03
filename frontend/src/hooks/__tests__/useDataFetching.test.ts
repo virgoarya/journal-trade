@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useDataFetching } from "../useDataFetching";
 
-// Mock fetch globally
-const mockFetch = jest.fn();
-global.fetch = mockFetch as jest.Mock;
+// Mock fetch globally using vi (Vitest) instead of jest
+const mockFetch = vi.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
 
 describe("useDataFetching", () => {
   beforeEach(() => {

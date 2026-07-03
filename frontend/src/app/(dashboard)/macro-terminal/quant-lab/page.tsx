@@ -5,7 +5,7 @@ import { CurveExplainerPanel } from "@/components/macro-terminal/CurveExplainerP
 
 export default function QuantLabPage() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[720px] lg:min-h-[calc(100vh-17rem)]">
+    <div className="w-full grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[720px] lg:h-[800px]">
       <div className="lg:col-span-2 flex flex-col min-h-0">
         <YieldCurvePanel />
       </div>

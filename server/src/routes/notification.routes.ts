@@ -8,7 +8,7 @@ import { z } from "zod";
 const router = Router();
 
 const createNotificationSchema = z.object({
-  type: z.enum(["AI_REVIEW_READY", "TRADE_LOGGED", "RISK_WARNING", "SYSTEM"]),
+  type: z.enum(["AI_REVIEW_READY", "TRADE_LOGGED", "RISK_WARNING", "SYSTEM", "COT_UPDATE", "REGIME_SHIFT", "YIELD_CURVE_REGIME"]),
   title: z.string().min(1).max(200),
   message: z.string().min(1).max(500),
   link: z.string().url().optional().nullable(),
@@ -52,6 +52,15 @@ router.post("/", validate({ body: createNotificationSchema }), async (req, res, 
   } catch (error) { next(error); }
 });
 
+// PUT /notifications/read-all - mark all as read
+// IMPORTANT: This must come BEFORE /:id/read to prevent Express matching "read-all" as :id
+router.put("/read-all", async (req, res, next) => {
+  try {
+    await notificationService.markAllAsRead(req.user.id);
+    return apiResponse.success(res, { message: "All notifications marked as read" });
+  } catch (error) { next(error); }
+});
+
 // PUT /notifications/:id/read - mark as read
 router.put("/:id/read", async (req, res, next) => {
   try {
@@ -63,14 +72,6 @@ router.put("/:id/read", async (req, res, next) => {
       return apiResponse.notFound(res, "Notification not found");
     }
     return apiResponse.success(res, notification);
-  } catch (error) { next(error); }
-});
-
-// PUT /notifications/read-all - mark all as read
-router.put("/read-all", async (req, res, next) => {
-  try {
-    await notificationService.markAllAsRead(req.user.id);
-    return apiResponse.success(res, { message: "All notifications marked as read" });
   } catch (error) { next(error); }
 });
 

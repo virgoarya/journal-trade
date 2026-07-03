@@ -173,7 +173,6 @@ function classifyInflationPressure(
   return "NORMAL";
 }
 
-// ─── Confidence Score Calculator ────────────────────────────────
 function calculateConfidence(
   growthSubStatuses: MomentumStatus[],
   inflationSubStatuses: MomentumStatus[],
@@ -184,21 +183,35 @@ function calculateConfidence(
 ): ConfidenceMetric {
   // 1. CONVICTION (0-40): Distance from neutral zone (Z-Score magnitude)
   const avgDelta = (Math.abs(growthDelta) + Math.abs(inflationDelta)) / 2;
-  // Scale: 0.001 = 10pts, 0.005 = 40pts (max)
-  const conviction = Math.min(40, Math.round(avgDelta * 8000));
+  // Scale: 0.02 (2% delta) = 40pts (max). So avgDelta * 2000
+  const conviction = Math.min(40, Math.round(avgDelta * 2000));
 
-  // 2. AGREEMENT (0-30): How many sub-indicators agree on direction
-  const allStatuses = [...growthSubStatuses, ...inflationSubStatuses];
-  const totalIndicators = allStatuses.length;
-  const dominantDirection = allStatuses.filter(
-    (s) => s === "ACCELERATING" || s === "DECELERATING",
-  ).length;
-  // If most indicators have a clear direction (not NEUTRAL/TURNING), agreement is high
-  const directedCount = allStatuses.filter(
-    (s) => s !== "NEUTRAL",
-  ).length;
+  // 2. AGREEMENT (0-30): How many sub-indicators agree with the CURRENT quadrant direction
+  let agreementVotes = 0;
+  const totalIndicators = growthSubStatuses.length + inflationSubStatuses.length;
+
+  for (const s of growthSubStatuses) {
+    if (currentQuadrant === "GOLDILOCKS" || currentQuadrant === "REFLATION") {
+      if (s === "ACCELERATING") agreementVotes++;
+    } else if (currentQuadrant === "STAGFLATION" || currentQuadrant === "DEFLATION") {
+      if (s === "DECELERATING") agreementVotes++;
+    }
+  }
+
+  for (const s of inflationSubStatuses) {
+    if (currentQuadrant === "REFLATION" || currentQuadrant === "STAGFLATION") {
+      if (s === "ACCELERATING") agreementVotes++;
+    } else if (currentQuadrant === "GOLDILOCKS" || currentQuadrant === "DEFLATION") {
+      if (s === "DECELERATING") agreementVotes++;
+    }
+  }
+
+  if (currentQuadrant === "TRANSITION") {
+    agreementVotes = 0;
+  }
+
   const agreement = totalIndicators > 0
-    ? Math.round((directedCount / totalIndicators) * 30)
+    ? Math.round((agreementVotes / totalIndicators) * 30)
     : 0;
 
   // 3. PERSISTENCE (0-30): Consecutive days current regime has held in history
@@ -210,7 +223,7 @@ function calculateConfidence(
       break;
     }
   }
-  // Scale: 5 days = 10pts, 15 days = 20pts, 25+ days = 30pts (max)
+  // Scale: 25+ days = 30pts (max)
   const persistence = Math.min(30, Math.round((consecutiveDays / 25) * 30));
 
   const score = conviction + agreement + persistence;
@@ -265,18 +278,34 @@ function calculateROC(data: number[], period: number = 5): number[] {
   return roc;
 }
 
-// ─── Composite Score Calculator ─────────────────────────────────
 function calculateComposite(
   ratios: { values: number[]; weight: number }[],
 ): number[] {
   if (ratios.length === 0) return [];
   const len = Math.min(...ratios.map((r) => r.values.length));
+  
+  // Normalize each ratio series so the first valid element is 1.0
+  // This prevents high-absolute-value ratios (like GLD/UUP) from dominating the composite
+  const normalizedRatios = ratios.map(r => {
+    let base = 1;
+    for (let i = 0; i < len; i++) {
+      if (r.values[i] !== 0) {
+        base = r.values[i];
+        break;
+      }
+    }
+    return {
+      weight: r.weight,
+      values: r.values.map(v => v === 0 ? 0 : v / base)
+    };
+  });
+
   const composite: number[] = [];
 
   for (let i = 0; i < len; i++) {
     let weightedSum = 0;
     let totalWeight = 0;
-    for (const r of ratios) {
+    for (const r of normalizedRatios) {
       if (i < r.values.length && r.values[i] !== 0) {
         weightedSum += r.values[i] * r.weight;
         totalWeight += r.weight;
@@ -350,8 +379,8 @@ async function fetchLatestCpiYoY(): Promise<number | null> {
 
   try {
     const response = await axios.get(
-      `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${key}&file_type=json&sort_order=desc&limit=13`,
-      { timeout: 5000 },
+      `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${key}&file_type=json&sort_order=desc&limit=24`,
+      { timeout: 15000 },
     );
     const observations = response.data?.observations ?? [];
     const values = observations

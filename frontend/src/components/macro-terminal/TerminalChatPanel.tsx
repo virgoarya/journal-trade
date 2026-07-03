@@ -257,10 +257,10 @@ export function TerminalChatPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full glass border border-border-subtle rounded-xl overflow-hidden relative">
-      <div className="bg-bg-surface/80 border-b border-border-subtle p-3 flex justify-between items-center z-10 shadow-sm">
-        <h2 className="font-semibold text-text-primary uppercase tracking-wider text-xs sm:text-sm flex items-center gap-2">
-          <TerminalIcon size={14} aria-hidden />
+    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
+      <div className="bg-bg-surface/80 border-b border-border-subtle p-2 flex justify-between items-center z-10 shadow-sm">
+        <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
+          <TerminalIcon size={14} className="text-accent-gold flex-shrink-0" aria-hidden />
           Hunter Desk AI
         </h2>
         <button

@@ -50,7 +50,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         </h2>
       </div>
 
-      <div className="flex items-center space-x-4 md:space-x-6">
+      <div className="flex items-center space-x-4 md:space-x-6 relative">
         {/* Notifications Dropdown */}
         <NotificationDropdown />
 

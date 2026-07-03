@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { marketDataService } from "../services/market-data.service";
 import { requireAuth } from "../middleware/auth";
+import { analyzeCotAsset } from "../services/macro-ai.service";
 
 const router = Router();
 
@@ -86,9 +87,25 @@ router.get("/economic-calendar", async (req, res) => {
 router.get("/cot", async (req, res) => {
   try {
     const result = await marketDataService.getCommitmentOfTraders();
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: result });
   } catch (error: any) {
     res.status(503).json({ success: false, error: error.message, rateLimited: true });
+  }
+});
+
+router.post("/cot/analyze", async (req, res) => {
+  try {
+    const cotData = req.body;
+    if (!cotData || !cotData.symbol) {
+      return res.status(400).json({ success: false, error: "Missing COT data" });
+    }
+    const analysis = await analyzeCotAsset(cotData);
+    if (!analysis) {
+      return res.status(503).json({ success: false, error: "AI analysis failed" });
+    }
+    res.json({ success: true, data: analysis });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

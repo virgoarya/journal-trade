@@ -39,7 +39,12 @@ let quoteStreamTimer: NodeJS.Timeout | null = null;
 let vixStreamTimer: NodeJS.Timeout | null = null;
 
 const refreshMarketStream = async () => {
-  const symbols = ["SPY", "QQQ", "GLD", "VIXY", "IEF", "UUP", "FXY", "TIP"];
+  const symbols = [
+    "SPY", "QQQ", "GLD", "VIXY", "IEF", "UUP", "FXY", "TIP",
+    "FXE", "FXB", "FXC", "FXF", "TLT", "HYG", "XLE", "XLF", 
+    "XLK", "IWM", "EFA", "EEM", "DIA", "ARKK", "XLV", "XLI", 
+    "LQD", "FXA", "USO", "DBA"
+  ];
   try {
     await marketDataService.getQuotes(symbols);
   } catch (error) {

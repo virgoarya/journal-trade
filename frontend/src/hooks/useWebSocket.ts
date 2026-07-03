@@ -29,6 +29,7 @@ export function useWebSocket(
   const mountedRef = useRef(false);
 
   const WS_RECONNECT_MS = 3_000;
+  const connectRef = useRef<() => void>(() => {});
 
   const getWebSocketUrl = useCallback(() => {
     if (typeof window === "undefined") return "";
@@ -71,7 +72,7 @@ export function useWebSocket(
       ws.onclose = () => {
         setStatus("disconnected");
         if (mountedRef.current) {
-          reconnectTimerRef.current = setTimeout(connect, WS_RECONNECT_MS);
+          reconnectTimerRef.current = setTimeout(() => connectRef.current(), WS_RECONNECT_MS);
         }
       };
 
@@ -83,7 +84,7 @@ export function useWebSocket(
       console.error("[Macro Terminal] WebSocket connect error:", error);
       setStatus("error");
       if (mountedRef.current) {
-        reconnectTimerRef.current = setTimeout(connect, WS_RECONNECT_MS);
+        reconnectTimerRef.current = setTimeout(() => connectRef.current(), WS_RECONNECT_MS);
       }
     }
   }, [getWebSocketUrl, onQuoteUpdate, onLiquidityUpdate, onVixUpdate]);
@@ -97,7 +98,12 @@ export function useWebSocket(
   }, []);
 
   useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
     mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     connect();
 
     return () => {

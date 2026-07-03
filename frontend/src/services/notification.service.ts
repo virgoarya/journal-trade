@@ -3,7 +3,7 @@ import { apiClient, ApiResponse } from "@/lib/api-client";
 export interface Notification {
   id: string;
   userId: string;
-  type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM";
+  type: "AI_REVIEW_READY" | "TRADE_LOGGED" | "RISK_WARNING" | "SYSTEM" | "COT_UPDATE" | "REGIME_SHIFT" | "YIELD_CURVE_REGIME";
   title: string;
   message: string;
   link?: string;
@@ -66,16 +66,10 @@ export class NotificationService {
     return apiClient.get<{ count: number }>(`${this.basePath}/unread-count`);
   }
 
+  // FIX: Optimized markAsRead - no longer fetches 100 notifications just to check
+  // if a notification is system-type. Instead, accept an optional isSystem flag
+  // or let the caller handle system notifications directly.
   async markAsRead(notificationId: string): Promise<ApiResponse<Notification>> {
-    // For system notifications, use localStorage instead of API
-    const notifications = await this.getRecent(100);
-    const systemNotif = notifications.data?.find(n => n.id === notificationId);
-    
-    if (systemNotif && systemNotif.userId === "system") {
-      this.setSystemReadId(notificationId);
-      return { success: true, data: { ...systemNotif, read: true } };
-    }
-    
     return apiClient.put<Notification>(`${this.basePath}/${notificationId}/read`, {});
   }
 

@@ -6,10 +6,294 @@ import { Notification } from "../models/Notification";
 import { env } from "../config/env";
 import Anthropic from "@anthropic-ai/sdk";
 
-function removeKanji(text: string): string {
-  // Remove CJK Unified Ideographs (Kanji/Hanzi) and common East Asian characters
-  // Keeps: Latin alphabet, numbers, Indonesian characters (a-z, A-Z, 0-9, spaces, punctuation)
-  return text.replace(/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/g, '');
+export const aiReviewService = {
+
+  async getFeed(userId: string, limit = 10, offset = 0, filter: any = {}) {
+    const query = { userId, ...filter };
+    return await AiReview.find(query)
+      .populate("tradeId", "tradeDate pair result actualPnl emotionalState notes")
+      .sort("-createdAt")
+      .skip(offset)
+      .limit(limit);
+  },
+
+  async generateReview(tradeId: string, userId: string) {
+    console.log("generateReview called: tradeId=", tradeId, "userId=", userId);
+    console.log("ANTHROPIC_AUTH_TOKEN present:", !!env.ANTHROPIC_AUTH_TOKEN);
+    if (!env.ANTHROPIC_AUTH_TOKEN) throw new Error("Fitur AI dinonaktifkan: ANTHROPIC_AUTH_TOKEN tidak ditemukan");
+
+    // Check for existing review
+    console.log("Checking existing review...");
+    let existing = await AiReview.findOne({ tradeId, userId });
+    console.log("Existing review found:", !!existing);
+    if (existing) return existing;
+
+    // Fetch trade with playbook context
+    console.log("Fetching trade...");
+    const trade = await Trade.findOne({ _id: tradeId, userId }).populate("playbookId");
+    console.log("Trade fetched:", trade ? trade.pair : "NOT FOUND");
+    if (!trade) throw new Error("Data trade tidak ditemukan");
+
+    // Fetch trading account for risk tier context
+    const account = await TradingAccount.findOne({ userId, isActive: true });
+    const riskTier = account?.riskTier || "MODERATE";
+    const maxDailyTrades = account?.maxDailyTrades || 3;
+
+    // Count trades on the same day as this trade for overtrade detection
+    const tradeDate = trade.tradeDate;
+    const dayStart = new Date(tradeDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const nextDay = new Date(dayStart);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const sameDayTradeCount = await Trade.countDocuments({
+      userId,
+      tradeDate: { $gte: dayStart, $lt: nextDay }
+    });
+
+    const playbook = trade.playbookId as any;
+
+    // Initialize Anthropic (OpenRouter) with required headers
+    const anthropic = new Anthropic({
+      apiKey: env.ANTHROPIC_AUTH_TOKEN,
+      baseURL: env.ANTHROPIC_BASE_URL,
+      defaultHeaders: {
+        'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
+        'X-Title': 'Journal Trade AI Review'
+      }
+    });
+
+    // Fallback models list - stable free models on OpenRouter
+    const fallbackModels = [
+      env.ANTHROPIC_MODEL,
+      "deepseek/deepseek-chat:free",
+      "meta-llama/llama-3.1-8b-instruct:free",
+      "google/gemma-3-27b-it:free"
+    ].filter(Boolean);
+
+    const prompt = `
+You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
+
+TRADE DATA:
+Pair: ${trade.pair}
+Direction: ${trade.direction}
+Result: ${trade.result}
+Pnl: ${trade.actualPnl}
+Risk %: ${trade.riskPercent ? trade.riskPercent + '%' : 'N/A'}
+R: ${trade.rMultiple || "N/A"}
+Emotional State (1-5): ${trade.emotionalState || "N/A"}
+${playbook ? `Strategy: ${playbook.name}, Category: ${playbook.category}` : ""}
+
+RISK MANAGEMENT CONTEXT:
+- Your configured Risk Tier: ${riskTier}
+- Your personal Risk Limit (per trade): ${account?.defaultRiskPercent || 1}%
+- Trades executed on same day: ${sameDayTradeCount}
+- ${maxDailyTrades ? `Daily trade limit set: ${maxDailyTrades}` : 'No daily trade limit configured'}
+
+EMOTIONAL STATE SCALE (reference):
+1 = Very Poor (gambling, impulsive, violating SOP)
+2 = Poor (fear, hesitation, FOMO)
+3 = Average (neutral, fair execution)
+4 = Good (disciplined, following plan)
+5 = Excellent (emotionless, precise, type-A setup)
+
+ANALYSIS FOCUS:
+1. RISK COMPLIANCE: Compare risk % used vs your configured limit (${account?.defaultRiskPercent || 1}%). If exceeded, comment on why this might be problematic.
+2. OVERTRADING: If today's trades >= ${maxDailyTrades || '3'} (or approaching limit), flag potential overtrade pattern.
+3. R-MULTIPLE vs RISK: Did the R-target justify the risk taken?
+4. DISCIPLINE: Based on emotional state and risk adherence.
+
+REQUIRED FORMAT (exactly this structure):
+
+AI Analysis Report
+[2-3 sentence summary in Indonesian]
+
+Overall Score: [1-10]
+[Excellent|Good|Needs Work|Poor]
+
+Strengths:
+✓ [first strength]
+✓ [second strength]
+✓ [third strength]
+
+Areas for Improvement:
+! [first improvement]
+! [second improvement]
+! [third improvement]
+
+Risk Warning:
+! [if risk % exceeds tier recommendation OR overtrade pattern detected, state the issue clearly. If none, write "No risk protocol violations detected."]
+
+Actionable Suggestions:
+→ [single recommendation sentence]
+
+CRITICAL RULES:
+- Use ✓ for strengths, ! for improvements/warnings, → for recommendation
+- Each bullet max 80 characters
+- Language: Indonesian (professional)
+- NO markdown, NO JSON, NO explanations
+- Consider emotional state: 5 is EXCELLENT (not overconfident), 1 is VERY POOR
+- Always include "Risk Warning:" section
+`;
+
+    try {
+      let response: any;
+      let lastError: Error | undefined;
+
+      // Try all models in fallback chain
+      for (let i = 0; i < fallbackModels.length && !response; i++) {
+        const model = fallbackModels[i];
+        console.log(`Trying AI model ${i + 1}/${fallbackModels.length}:`, model);
+
+        try {
+          response = await anthropic.messages.create({
+            model,
+            max_tokens: 1500,
+            messages: [
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.2,
+          });
+          console.log("Success with model:", model);
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Model ${model} failed:`, err.status || err.message);
+        }
+      }
+
+      // If OpenRouter failed, try Groq as fallback
+      if (!response && env.GROQ_API_KEY) {
+        console.log("Trying Groq as fallback...");
+
+        try {
+          const groqController = new AbortController();
+          const groqTimeout = setTimeout(() => groqController.abort(), 30000);
+
+          const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            signal: groqController.signal,
+            body: JSON.stringify({
+              model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
+              messages: [
+                { role: "system", content: "You are a professional trading coach. Respond ONLY with structured report format." },
+                { role: "user", content: prompt }
+              ],
+              max_tokens: 1500
+            })
+          });
+
+clearTimeout(groqTimeout);
+          const groqData: any = await groqResponse.json();
+
+          if (groqData.choices && groqData.choices[0]?.message?.content) {
+            console.log("Success with Groq");
+            response = { content: [{ type: 'text', text: groqData.choices[0].message.content }] };
+          } else {
+            console.warn("Groq response invalid:", groqData);
+          }
+        } catch (groqErr: any) {
+          console.warn("Groq also failed:", groqErr.name === 'AbortError' ? 'timeout' : groqErr.message);
+          lastError = groqErr;
+        }
+      }
+
+      if (!response) {
+        console.error("All AI providers failed:", lastError?.message);
+        throw lastError || new Error("Semua AI provider tidak tersedia");
+      }
+
+      console.log("AI response received");
+
+      // Extract text from all content blocks
+      let text = "";
+      const content = response.content || [];
+      for (const block of content) {
+        if (typeof block === 'string') {
+          text += block;
+        } else if (block.type === 'text') {
+          text += block.text;
+        }
+      }
+
+      console.log("Raw Claude response (length:", text.length, "):", text); // Debug: lihat apa yang dikirim Claude
+
+      let aiData: any;
+
+      // Try to extract and parse JSON from response
+      try {
+        // Find the first JSON object in the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          aiData = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No JSON object found");
+        }
+      } catch (jsonError) {
+        console.log("JSON parse/extract failed, falling back to formatted text parser");
+        aiData = parseFormattedText(text);
+      }
+
+      // Upsert: update if exists, create if not (handles duplicate key error)
+      const review = await AiReview.findOneAndUpdate(
+        { tradeId },
+        {
+          $set: {
+            userId,
+            score: aiData.score || 5,
+            strengths: aiData.strengths || [],
+            improvements: aiData.improvements || [],
+            summary: aiData.summary || "Analisis selesai.",
+            recommendation: aiData.recommendation || "Lanjutkan disiplin trading Anda.",
+            riskWarning: aiData.riskWarning
+          }
+        },
+        { upsert: true, returnDocument: 'after', runValidators: true }
+      );
+
+      // Create notification for AI review completion
+      await Notification.create({
+        userId,
+        type: "AI_REVIEW_READY",
+        title: "AI Review Ready",
+        message: `Analysis for ${trade.pair} (${trade.direction}) is complete. Overall score: ${review.score}/10`,
+        link: `/log-trade`,
+        metadata: {
+          tradeId: tradeId,
+          score: review.score,
+          pair: trade.pair
+        }
+      });
+
+      // Create separate risk warning notification if exists
+      if (aiData.riskWarning && aiData.riskWarning !== "No risk protocol violations detected.") {
+        await Notification.create({
+          userId,
+          type: "RISK_WARNING",
+          title: "Risk Protocol Alert",
+          message: aiData.riskWarning,
+          link: `/log-trade`,
+          metadata: {
+            tradeId: tradeId,
+            pair: trade.pair,
+            riskPercent: trade.riskPercent
+          }
+        });
+      }
+
+      return review;
+    } catch (error) {
+      console.error("Anthropic API Error:", error);
+      throw new Error("Gagal menghasilkan review AI. Silakan coba lagi nanti.");
+    }
+  },
+
+  async deleteReview(id: string, userId: string) {
+    const result = await AiReview.deleteOne({ _id: id, userId });
+    return result.deletedCount > 0;
+  }
 }
 
 function parseFormattedText(text: string): any {
@@ -27,9 +311,7 @@ function parseFormattedText(text: string): any {
   // Extract Overall Score - look for "Overall Score: 8" or "Overall Score\n8"
   const scoreMatch = text.match(/Overall Score\s*[:\n\r]+\s*(\d+)/i);
   if (scoreMatch) {
-    result.score = Math.max(1, Math.min(10, parseInt(scoreMatch[1], 10)));
-  } else {
-    result.score = 5; // Default fallback
+    result.score = parseInt(scoreMatch[1], 10);
   }
 
   // Extract Summary: between "AI Analysis Report" and "Overall Score"
@@ -104,346 +386,7 @@ function parseFormattedText(text: string): any {
     result.recommendation = result.recommendation.replace(/^[→→\s]+/, '').trim();
   }
 
-  // Remove any kanji/CJK characters from all fields
-  result.summary = removeKanji(result.summary);
-  result.strengths = result.strengths.map(removeKanji);
-  result.improvements = result.improvements.map(removeKanji);
-  result.recommendation = removeKanji(result.recommendation);
-  result.riskWarning = removeKanji(result.riskWarning);
-
   return result;
 }
 
-export const aiReviewService = {
-
-  async getFeed(userId: string, limit = 10, offset = 0, filter: any = {}) {
-    const query = { userId, ...filter };
-    return await AiReview.find(query)
-      .populate("tradeId", "tradeDate pair result actualPnl emotionalState notes")
-      .sort("-createdAt")
-      .skip(offset)
-      .limit(limit);
-  },
-
-  async generateReview(tradeId: string, userId: string) {
-    console.log("generateReview called: tradeId=", tradeId, "userId=", userId);
-    console.log("ANTHROPIC_AUTH_TOKEN present:", !!env.ANTHROPIC_AUTH_TOKEN);
-    console.log("ANTHROPIC_BASE_URL:", env.ANTHROPIC_BASE_URL);
-    console.log("ANTHROPIC_MODEL:", env.ANTHROPIC_MODEL);
-    if (!env.ANTHROPIC_AUTH_TOKEN) throw new Error("Fitur AI dinonaktifkan: ANTHROPIC_AUTH_TOKEN tidak ditemukan");
-
-    // Check for existing review
-    console.log("Checking existing review...");
-    let existing = await AiReview.findOne({ tradeId, userId });
-    console.log("Existing review found:", !!existing);
-    if (existing) return existing;
-
-    // Fetch trade with playbook context
-    console.log("Fetching trade...");
-    const trade = await Trade.findOne({ _id: tradeId, userId }).populate("playbookId");
-    console.log("Trade fetched:", trade ? trade.pair : "NOT FOUND");
-    if (!trade) throw new Error("Data trade tidak ditemukan");
-
-    // Fetch trading account for risk tier context
-    const account = await TradingAccount.findOne({ userId, isActive: true });
-    const riskTier = account?.riskTier || "MODERATE";
-    const maxDailyTrades = account?.maxDailyTrades || 3;
-
-    // Count trades on the same day as this trade for overtrade detection
-    const tradeDate = trade.tradeDate;
-    const dayStart = new Date(tradeDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const nextDay = new Date(dayStart);
-    nextDay.setDate(nextDay.getDate() + 1);
-    const sameDayTradeCount = await Trade.countDocuments({
-      userId,
-      tradeDate: { $gte: dayStart, $lt: nextDay }
-    });
-
-    const playbook = trade.playbookId as any;
-
-    // Initialize Anthropic (OpenRouter) with required headers
-    const anthropic = new Anthropic({
-      apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      baseURL: env.ANTHROPIC_BASE_URL,
-      defaultHeaders: {
-        'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
-        'X-Title': 'Journal Trade AI Review'
-      }
-    });
-
-    // Fallback models list
-    const fallbackModels = [
-      env.ANTHROPIC_MODEL || "google/gemma-4-31b-it:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "deepseek/deepseek-r1:free",
-      "openrouter/free"
-    ];
-    const triedModels: string[] = [];
-
-    const prompt = `
-You are a professional trading coach AI. Analyze this trade and respond with ONLY structured report.
-
-TRADE DATA:
-Pair: ${trade.pair}
-Direction: ${trade.direction}
-Result: ${trade.result}
-Pnl: ${trade.actualPnl}
-Risk %: ${trade.riskPercent ? trade.riskPercent + '%' : 'N/A'}
-R: ${trade.rMultiple || "N/A"}
-Emotional State (1-5): ${trade.emotionalState || "N/A"}
-${playbook ? `Strategy: ${playbook.name}, Category: ${playbook.category}` : ""}
-
-RISK MANAGEMENT CONTEXT:
-- Your configured Risk Tier: ${riskTier}
-- Your personal Risk Limit (per trade): ${account?.defaultRiskPercent || 1}%
-- Trades executed on same day: ${sameDayTradeCount}
-- ${maxDailyTrades ? `Daily trade limit set: ${maxDailyTrades}` : 'No daily trade limit configured'}
-
-EMOTIONAL STATE SCALE (reference):
-1 = Very Poor (gambling, impulsive, violating SOP)
-2 = Poor (fear, hesitation, FOMO)
-3 = Average (neutral, fair execution)
-4 = Good (disciplined, following plan)
-5 = Excellent (emotionless, precise, type-A setup)
-
-ANALYSIS FOCUS:
-1. RISK COMPLIANCE: Compare risk % used vs your configured limit (${account?.defaultRiskPercent || 1}%). If exceeded, comment on why this might be problematic.
-2. OVERTRADING: If today's trades >= ${maxDailyTrades || '3'} (or approaching limit), flag potential overtrade pattern.
-3. R-MULTIPLE vs RISK: Did the R-target justify the risk taken?
-4. DISCIPLINE: Based on emotional state and risk adherence.
-
-REQUIRED FORMAT (exactly this structure):
-
-AI Analysis Report
-[2-3 sentence summary in Indonesian]
-
-Overall Score: [1-10]
-[Excellent|Good|Needs Work|Poor]
-
-Strengths:
-✓ [first strength]
-✓ [second strength]
-✓ [third strength]
-
-Areas for Improvement:
-! [first improvement]
-! [second improvement]
-! [third improvement]
-
-Risk Warning:
-! [if risk % exceeds tier recommendation OR overtrade pattern detected, state the issue clearly. If none, write "No risk protocol violations detected."]
-
-Actionable Suggestions:
-→ [single recommendation sentence]
-
-CRITICAL RULES:
-- Use ✓ for strengths, ! for improvements/warnings, → for recommendation
-- Each bullet max 80 characters
-- Language: Indonesian (professional)
-- NO markdown, NO JSON, NO explanations
-- Consider emotional state: 5 is EXCELLENT (not overconfident), 1 is VERY POOR
-- Always include "Risk Warning:" section
-`;
-
-    let msg: any;
-    let lastError: Error | undefined;
-
-    try {
-    // Try primary model first
-    const primaryModel = fallbackModels[0];
-    console.log("Trying AI model:", primaryModel);
-
-    try {
-      msg = await anthropic.messages.create({
-        model: primaryModel,
-        max_tokens: 1500,
-        messages: [
-          { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with structured report. No markdown." }
-        ]
-      });
-      console.log("Success with model:", primaryModel);
-    } catch (error: any) {
-      lastError = error;
-      console.warn("Primary model failed:", error.status || error.message);
-
-      // If rate limit, try fallback model
-      if (error.status === 429 && fallbackModels.length > 1) {
-        console.log("Rate limit, trying fallback model...");
-        const fallbackModel = fallbackModels[1];
-
-        try {
-          msg = await anthropic.messages.create({
-            model: fallbackModel,
-            max_tokens: 1500,
-            messages: [
-              { role: "user", content: prompt + "\n\nIMPORTANT: Respond ONLY with structured report. No markdown." }
-            ]
-          });
-          console.log("Success with fallback:", fallbackModel);
-        } catch (fallbackError: any) {
-          lastError = fallbackError;
-          console.warn("Fallback model also failed:", fallbackError.status || fallbackError.message);
-        }
-      }
-    }
-
-    // If OpenRouter failed, try Groq as fallback
-    if (!msg && env.GROQ_API_KEY) {
-      console.log("Trying Groq as fallback...");
-
-      try {
-        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
-            messages: [
-              { role: "system", content: "You are a professional trading coach. Respond ONLY with structured report format." },
-              { role: "user", content: prompt }
-            ],
-            max_tokens: 1500
-          })
-        });
-
-        const groqData: any = await groqResponse.json();
-        
-        if (groqData.choices && groqData.choices[0]?.message?.content) {
-          console.log("Success with Groq");
-          msg = { content: groqData.choices[0].message.content };
-        } else {
-          console.warn("Groq response invalid:", groqData);
-        }
-      } catch (groqError: any) {
-        console.warn("Groq also failed:", groqError.message);
-      }
-    }
-
-    if (!msg) {
-      throw lastError || new Error("All AI providers failed");
-    }
-
-    console.log("AI response:", JSON.stringify(msg, null, 2));
-
-    // Extract text from response - handle OpenAI/Anthropic compatible formats
-      let text: string | undefined;
-
-      // First: check for OpenAI format (content as string)
-      if ('content' in msg && typeof msg.content === 'string') {
-        text = msg.content;
-        console.log("Using OpenAI-style content string");
-      }
-
-      // Second: Anthropic-style content blocks
-      if (!text && Array.isArray(msg.content)) {
-        console.log("Content array length:", msg.content.length);
-        console.log("Content types:", msg.content.map((c: any) => typeof c === 'object' ? c.type : typeof c));
-
-        // Find 'text' block
-        const textBlock = msg.content.find((block: any) => block.type === 'text');
-        if (textBlock && 'text' in textBlock) {
-          text = textBlock.text;
-        }
-
-        // Find 'redacted_thinking' block
-        if (!text) {
-          const redactedBlock = msg.content.find((block: any) => block.type === 'redacted_thinking');
-          if (redactedBlock && 'data' in redactedBlock) {
-            try {
-              const decoded = Buffer.from(redactedBlock.data, 'base64').toString('utf-8');
-              if (decoded.includes('AI Analysis Report')) {
-                text = decoded;
-                console.log("Extracted text from redacted_thinking");
-              }
-            } catch (e) {
-              console.log("Failed to decode redacted_thinking");
-            }
-          }
-        }
-
-        // Find 'thinking' block as fallback
-        if (!text) {
-          const thinkingBlock = msg.content.find((block: any) => block.type === 'thinking');
-          if (thinkingBlock && 'thinking' in thinkingBlock) {
-            text = thinkingBlock.thinking;
-          }
-        }
-      }
-
-      // Third: check for reasoning_content (some models use this)
-      if (!text && 'reasoning_content' in msg) {
-        text = msg.reasoning_content as string;
-        console.log("Using reasoning_content");
-      }
-
-      if (!text) {
-        console.log("Full response structure:", JSON.stringify(msg, null, 2));
-        throw new Error("Invalid response from AI: no text content found");
-      }
-
-      console.log("Anthropic response text (length:", text.length, "):", text);
-
-      let aiData: any = parseFormattedText(text);
-
-      // Upsert: update if exists, create if not (handles duplicate key error)
-      const review = await AiReview.findOneAndUpdate(
-        { tradeId },
-        {
-          $set: {
-            userId,
-            score: aiData.score || 5,
-            strengths: aiData.strengths || [],
-            improvements: aiData.improvements || [],
-            summary: aiData.summary || "Analisis selesai.",
-            recommendation: aiData.recommendation || "Lanjutkan disiplin trading Anda.",
-            riskWarning: aiData.riskWarning
-          }
-        },
-        { upsert: true, returnDocument: 'after', runValidators: true }
-      );
-
-      // Create notification for AI review completion
-      await Notification.create({
-        userId,
-        type: "AI_REVIEW_READY",
-        title: "AI Review Ready",
-        message: `Analysis for ${trade.pair} (${trade.direction}) is complete. Overall score: ${review.score}/10`,
-        link: `/log-trade`,
-        metadata: {
-          tradeId: tradeId,
-          score: review.score,
-          pair: trade.pair
-        }
-      });
-
-      // Create separate risk warning notification if exists
-      if (aiData.riskWarning && aiData.riskWarning !== "No risk protocol violations detected.") {
-        await Notification.create({
-          userId,
-          type: "RISK_WARNING",
-          title: "Risk Protocol Alert",
-          message: aiData.riskWarning,
-          link: `/log-trade`,
-          metadata: {
-            tradeId,
-            pair: trade.pair,
-            riskPercent: trade.riskPercent
-          }
-        });
-      }
-
-      return review;
-    } catch (error: any) {
-      console.error("AI API Error:", error.message || error);
-      throw new Error("Gagal menghasilkan review AI. Semua provider free sudah habis.");
-    }
-  },
-
-  async deleteReview(id: string, userId: string) {
-    const result = await AiReview.deleteOne({ _id: id, userId });
-    return result.deletedCount > 0;
-  }
-}
+export default aiReviewService;

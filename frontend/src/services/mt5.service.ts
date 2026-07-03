@@ -47,33 +47,34 @@ export interface MT5Position {
 
 class MT5Service {
   async getStatus(): Promise<MT5Status> {
-    const response = await apiClient.get("/api/v1/mt5/status");
-    return response.data;
+    const response = await apiClient.get<MT5Status>("/api/v1/mt5/status");
+    return response.data as MT5Status;
   }
 
   async connect(payload: MT5ConnectPayload): Promise<{ success: boolean; accountInfo?: any }> {
-    const response = await apiClient.post("/api/v1/mt5/connect", payload);
-    return response.data;
+    const response = await apiClient.post<{ success: boolean; accountInfo?: any }>("/api/v1/mt5/connect", payload);
+    return response.data as { success: boolean; accountInfo?: any };
   }
 
+  // Fix: apiClient.post requires 2 arguments; pass empty object as body
   async disconnect(): Promise<{ connected: boolean }> {
-    const response = await apiClient.post("/api/v1/mt5/disconnect");
-    return response.data;
+    const response = await apiClient.post<{ connected: boolean }>("/api/v1/mt5/disconnect", {});
+    return response.data as { connected: boolean };
   }
 
   async updateSettings(payload: MT5SettingsPayload): Promise<any> {
-    const response = await apiClient.patch("/api/v1/mt5/settings", payload);
+    const response = await apiClient.patch<any>("/api/v1/mt5/settings", payload);
     return response.data;
   }
 
   async getPositions(): Promise<{ positions: MT5Position[]; total: number }> {
-    const response = await apiClient.get("/api/v1/mt5/positions");
-    return response.data;
+    const response = await apiClient.get<{ positions: MT5Position[]; total: number }>("/api/v1/mt5/positions");
+    return response.data as { positions: MT5Position[]; total: number };
   }
 
   async sync(accountId?: string): Promise<MT5SyncResult> {
-    const response = await apiClient.post("/api/v1/mt5/sync", { accountId });
-    return response.data;
+    const response = await apiClient.post<MT5SyncResult>("/api/v1/mt5/sync", { accountId });
+    return response.data as MT5SyncResult;
   }
 }
 

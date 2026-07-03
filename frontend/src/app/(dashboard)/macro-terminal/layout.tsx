@@ -4,6 +4,10 @@ import React from "react";
 import {
   Activity,
   RefreshCw,
+  Droplets,
+  Gauge,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -35,10 +39,10 @@ function StatusDot({ status }: { status: string }) {
               ? "bg-text-muted"
               : "bg-text-muted";
 
-  return <span className={`w-2 h-2 rounded-full ${colorClass}`} />;
+  return <span className={`w-1.5 h-1.5 rounded-full ${colorClass}`} />;
 }
 
-function StatusLabel({ status }: { status: string }) {
+function StatusLabel({ status }: { status?: string }) {
   const map: Record<string, string> = {
     live: "LIVE",
     cache: "CACHE",
@@ -62,110 +66,82 @@ function StatusLabel({ status }: { status: string }) {
 
   return (
     <span className={`font-mono ${colorClass}`}>
-      {map[status] ?? status.toUpperCase()}
+      {map[status ?? ""] ?? (status ?? "UNKNOWN").toUpperCase()}
     </span>
   );
 }
 
-function MiniStatusPill({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "risk" | "watch" | "profit";
-}) {
-  const toneClass =
-    tone === "risk"
-      ? "border-data-loss/30 bg-data-loss/10 text-data-loss"
-      : tone === "watch"
-        ? "border-data-warning/30 bg-data-warning/10 text-data-warning"
-        : tone === "profit"
-          ? "border-data-profit/30 bg-data-profit/10 text-data-profit"
-          : "border-border-subtle bg-surface-elevated/40 text-text-muted";
-
-  return (
-    <div
-      className={`flex items-center gap-2 rounded border px-2.5 py-1.5 min-w-0 ${toneClass}`}
-    >
-      <span className="text-[9px] font-mono uppercase tracking-widest truncate max-w-[68px]">
-        {label}
-      </span>
-      <span className="text-[10px] font-mono font-bold text-text-primary truncate max-w-[110px]">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function AlertStrip() {
+function MarketStatusBar() {
   const {
-    currentRegime,
     liquidity,
     vix,
     yieldCurve,
-    nextEvent,
-    systemAlert,
-    clearSystemAlert,
     regimeData,
+    dataStatus,
+    lastUpdated,
   } = useMacroTerminal();
-  const alerts: Array<{ label: string; tone: "risk" | "watch" | "profit" }> =
-    [];
 
-  if (currentRegime === "Stagflation" || currentRegime === "Deflation") {
-    alerts.push({ label: "MACRO REGIME SHIFT WATCH", tone: "risk" });
-  }
-  if (liquidity?.status === "DRAINING") {
-    alerts.push({ label: "LIQUIDITY DRAIN", tone: "risk" });
-  } else if (
-    liquidity?.status === "NEUTRAL" ||
-    liquidity?.status === "UNKNOWN"
-  ) {
-    alerts.push({ label: "LIQUIDITY NEUTRAL", tone: "watch" });
-  }
-  if (vix.regime === "ELEVATED" || vix.regime === "FEAR") {
-    alerts.push({ label: `VIX ${vix.regime}`, tone: "risk" });
-  } else if (vix.regime === "NORMAL-CAUTIOUS") {
-    alerts.push({ label: "VIX NORMAL-CAUTIOUS", tone: "watch" });
-  }
-  if (regimeData?.inflation.pressure === "HOT") {
-    alerts.push({ label: "INFLATION HOT", tone: "risk" });
-  }
-  if (yieldCurve.inverted || yieldCurve.curveRegime === "Inverted") {
-    alerts.push({ label: "YIELD CURVE INVERTED", tone: "risk" });
-  }
-  if (nextEvent?.impact === "High") {
-    alerts.push({ label: "HIGH-IMPACT EVENT < 24H", tone: "watch" });
-  }
+  const liquidityStatus = liquidity?.status ?? "UNKNOWN";
+  const vixValue = vix.value === null ? "—" : vix.value.toFixed(1);
+  const vixRegime = vix.regime ?? "UNKNOWN";
+  const yieldCurveRegime = yieldCurve.curveRegime ?? "UNKNOWN";
+  const inflationPressure = regimeData?.inflation.pressure ?? "UNKNOWN";
+
+  const getLiquidityTone = (status: string) => {
+    if (status === "DRAINING") return "text-data-loss";
+    if (status === "INJECTING") return "text-data-profit";
+    return "text-data-warning";
+  };
+
+  const getVixTone = (regime: string) => {
+    if (regime === "ELEVATED" || regime === "FEAR") return "text-data-loss";
+    if (regime === "NORMAL-CAUTIOUS") return "text-data-warning";
+    return "text-data-profit";
+  };
+
+  const getInflationTone = (pressure: string) => {
+    if (pressure === "HOT") return "text-data-loss";
+    if (pressure === "COLD") return "text-data-profit";
+    return "text-data-warning";
+  };
+
+  const getYieldCurveTone = (inverted: boolean) => {
+    if (inverted) return "text-data-loss";
+    return "text-data-profit";
+  };
 
   return (
-    <div className="flex flex-col gap-2 shrink-0">
-      {systemAlert && (
-        <div className="flex items-center justify-between rounded border border-accent-gold/30 bg-accent-gold/10 px-3 py-2 text-[10px] font-mono text-accent-gold">
-          <span>{systemAlert}</span>
-          <button
-            onClick={clearSystemAlert}
-            className="text-text-muted hover:text-text-primary"
-          >
-            DISMISS
-          </button>
-        </div>
-      )}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-        {alerts.length > 0 ? (
-          alerts.map((alert) => (
-            <MiniStatusPill
-              key={alert.label}
-              label={alert.label}
-              value="ACTIVE"
-              tone={alert.tone}
-            />
-          ))
-        ) : (
-          <MiniStatusPill label="DESK STATE" value="MONITORING" tone="profit" />
-        )}
+    <div className="flex items-center gap-3 text-[9px] font-mono text-text-muted px-2 py-1 rounded border border-border-subtle bg-white/5">
+      <div className="flex items-center gap-1">
+        <Droplets size={10} className={getLiquidityTone(liquidityStatus)} />
+        <span className={getLiquidityTone(liquidityStatus)}>{liquidityStatus.toUpperCase()}</span>
       </div>
+      <div className="flex items-center gap-1">
+        <Gauge size={10} className={getVixTone(vixRegime)} />
+        <span className={getVixTone(vixRegime)}>VIX: {vixValue}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {yieldCurve.inverted ? <TrendingDown size={10} className="text-data-loss" /> : <TrendingUp size={10} className="text-data-profit" />}
+        <span className={getYieldCurveTone(yieldCurve.inverted)}>YIELD: {yieldCurveRegime.toUpperCase()}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Activity size={10} className={getInflationTone(inflationPressure)} />
+        <span className={getInflationTone(inflationPressure)}>INFL: {inflationPressure.toUpperCase()}</span>
+      </div>
+      <div className="flex items-center gap-1 ml-auto border-l border-border-subtle pl-3">
+        <StatusDot status={dataStatus.quotes} />
+        <span className="text-text-muted">DATA:</span>
+        <StatusLabel status={dataStatus.quotes} />
+      </div>
+      {lastUpdated && (
+        <span className="ml-auto pl-3 border-l border-border-subtle text-text-muted">
+          {new Intl.DateTimeFormat("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(lastUpdated)}
+        </span>
+      )}
     </div>
   );
 }
@@ -173,11 +149,7 @@ function AlertStrip() {
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {
-    liquidity,
-    vix,
-    yieldCurve,
     refreshSnapshot,
-    regimeData,
   } = useMacroTerminal();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -191,7 +163,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-8rem)] w-full max-w-[1600px] mx-auto gap-4">
+    <div className="flex flex-col w-full gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
@@ -207,7 +179,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -218,18 +190,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
             />
             REFRESH
           </button>
-          <div className="hidden md:flex items-center gap-4 text-xs font-mono">
-            <div className="flex items-center gap-2">
-              <StatusDot status="live" />
-              <span className="text-text-muted">MARKET DATA:</span>
-              <StatusLabel status="live" />
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusDot status="live" />
-              <span className="text-text-muted">AI ENGINE:</span>
-              <StatusLabel status="live" />
-            </div>
-          </div>
+          <MarketStatusBar /> {/* Consolidated Market Status Bar */}
         </div>
       </div>
 
@@ -252,51 +213,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         })}
       </div>
 
-      <div className="flex flex-col gap-2 shrink-0">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <MiniStatusPill
-            label="LIQUIDITY"
-            value={liquidity?.status ?? "INJECTING"}
-            tone={
-              liquidity?.status === "DRAINING"
-                ? "risk"
-                : liquidity?.status === "INJECTING"
-                  ? "profit"
-                  : "watch"
-            }
-          />
-          <MiniStatusPill
-            label="INFLATION"
-            value={regimeData?.inflation.pressure ?? "NORMAL"}
-            tone={
-              regimeData?.inflation.pressure === "HOT"
-                ? "risk"
-                : regimeData?.inflation.pressure === "COLD"
-                  ? "profit"
-                  : "neutral"
-            }
-          />
-<MiniStatusPill
-            label="VIX"
-            value={vix.value === null ? "—" : vix.value.toFixed(1)}
-            tone={
-              vix.regime === "ELEVATED" || vix.regime === "FEAR"
-                ? "risk"
-                : vix.regime === "NORMAL-CAUTIOUS"
-                    ? "watch"
-                    : "profit"
-            }
-          />
-          <MiniStatusPill
-            label="YIELD CURVE"
-            value={yieldCurve.curveRegime === "UNKNOWN" ? "Bear Flattener" : yieldCurve.curveRegime}
-            tone={yieldCurve.inverted ? "risk" : "watch"}
-          />
-        </div>
-        <AlertStrip />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-visible">{children}</div>
+      {/* Children (Overview, COT, etc.) will render here */}
+      <div className="flex-1 min-h-0 flex flex-col">{children}</div>
     </div>
   );
 }

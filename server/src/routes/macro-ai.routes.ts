@@ -2,6 +2,7 @@ import { Router } from "express";
 import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
 import { silentLogger } from "../utils/silent-logger";
+import { marketDataService } from "../services/market-data.service";
 
 const router = Router();
 
@@ -127,6 +128,7 @@ router.post("/analyze-macro-feed", requireAuth, async (req, res) => {
     );
 
     if (analysis && typeof analysis === "object") {
+      marketDataService.updateNewsAnalysis(headline, analysis);
       res.json({ success: true, analysis });
     } else {
       res.status(500).json({
