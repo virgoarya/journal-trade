@@ -191,22 +191,22 @@ function calculateConfidence(
   const totalIndicators = growthSubStatuses.length + inflationSubStatuses.length;
 
   for (const s of growthSubStatuses) {
-    if (currentQuadrant === "GOLDILOCKS" || currentQuadrant === "REFLATION") {
+    if (currentQuadrant === "Goldilocks" || currentQuadrant === "Reflation") {
       if (s === "ACCELERATING") agreementVotes++;
-    } else if (currentQuadrant === "STAGFLATION" || currentQuadrant === "DEFLATION") {
+    } else if (currentQuadrant === "Stagflation" || currentQuadrant === "Deflation") {
       if (s === "DECELERATING") agreementVotes++;
     }
   }
 
   for (const s of inflationSubStatuses) {
-    if (currentQuadrant === "REFLATION" || currentQuadrant === "STAGFLATION") {
+    if (currentQuadrant === "Reflation" || currentQuadrant === "Stagflation") {
       if (s === "ACCELERATING") agreementVotes++;
-    } else if (currentQuadrant === "GOLDILOCKS" || currentQuadrant === "DEFLATION") {
+    } else if (currentQuadrant === "Goldilocks" || currentQuadrant === "Deflation") {
       if (s === "DECELERATING") agreementVotes++;
     }
   }
 
-  if (currentQuadrant === "TRANSITION") {
+  if (currentQuadrant === "Transition") {
     agreementVotes = 0;
   }
 

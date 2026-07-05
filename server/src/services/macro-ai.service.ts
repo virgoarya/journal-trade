@@ -2,11 +2,15 @@ import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { geoRiskService } from "./geo-risk.service";
+import { generateText, tool, jsonSchema } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { mcpService } from "./mcp.service";
 
 const GEMINI_API_URL_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+const GROQ_MODELS = [env.GROQ_MODEL || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
 // Cache for playbook per regime - cleared on regime change
 const playbookCache: Record<
@@ -701,19 +705,372 @@ ${nexusContext}
 
 Gunakan data lintas-dimensi di atas sebagai satu-satunya landasan argumen Anda. Jika ditanya, sebutkan dan kaitkan metrik-metrik dari Nexus, Quant Lab, dan Overview untuk mendukung tesis Anda.
 
+Anda MEMILIKI AKSES ke external TOOLS via Model Context Protocol (MCP). 
+INSTRUKSI PENTING TOOLS:
+- Jika Anda membutuhkan data/berita/search, Anda WAJIB memanggil function/tools yang disediakan melalui mekanisme function calling API. 
+- DILARANG KERAS merespon dengan teks pengantar seperti "Saya akan menggunakan tool..." atau "Tunggu sebentar...". Jika butuh tool, LANGSUNG panggil tool tersebut TANPA mengeluarkan teks/kata-kata tambahan apapun!
+- JANGAN HANYA menulis teks seperti "[Menggunakan Model Context Protocol]" tanpa benar-benar memanggil function. Anda harus mengeksekusi tool tersebut!
+- Jika tool meminta input seperti 'query', berikan input yang relevan secara lengkap.
+
 RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdampak. Balas dalam Bahasa Indonesia institusional.`;
 
     try {
-      return await callDualEngineStream(
-        [{ role: "system", content: systemPrompt }, ...messages],
-        geminiModel,
-      );
+      const openRouter = createOpenAI({
+        baseURL: env.ANTHROPIC_BASE_URL?.includes("/v1") ? env.ANTHROPIC_BASE_URL : "https://openrouter.ai/api/v1",
+        apiKey: env.ANTHROPIC_AUTH_TOKEN,
+      });
+
+      const groq = createOpenAI({
+        baseURL: env.GROQ_BASE_URL,
+        apiKey: env.GROQ_API_KEY,
+      });
+
+      const google = createGoogleGenerativeAI({
+        apiKey: env.GEMINI_API_KEY,
+      });
+
+      const dashscope = createOpenAI({
+        baseURL: env.DASHSCOPE_BASE_URL || "https://ws-u59n2if85mr2x9mq.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        apiKey: env.DASHSCOPE_API_KEY,
+      });
+
+      // Always prioritize models that have native robust function calling in Vercel AI SDK
+      let aiModel;
+      
+      // 9Router acts as the ultimate fallback proxy to handle rate limits automatically
+      if (env.NINE_ROUTER_URL) {
+        const nineRouter = createOpenAI({
+          baseURL: env.NINE_ROUTER_URL,
+          apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
+        });
+        // You can specify a generic model name or the specific one 9Router is configured to route
+        aiModel = nineRouter.chat("openai/gpt-4o");
+        silentLogger.info("[MacroAI] Using 9Router as the primary AI gateway.");
+      } else if (env.ANTHROPIC_AUTH_TOKEN) {
+        aiModel = openRouter.chat(env.ANTHROPIC_MODEL || "claude-3-opus-20240229");
+      } else if (env.GEMINI_API_KEY) {
+        aiModel = google(geminiModel);
+      } else if (env.GROQ_API_KEY) {
+        aiModel = groq.chat(GROQ_MODELS[0]);
+      } else {
+        aiModel = openRouter.chat("openai/gpt-oss-120b:free");
+      }
+
+      // Build MCP Tools Map
+      const mcpTools = mcpService.getTools();
+      const toolsConfig: Record<string, any> = {};
+      
+      console.log(`[DEBUG MacroAI] Fetched ${mcpTools.length} tools from MCP Service.`);
+      if (mcpTools.length > 0) {
+        console.log(`[DEBUG MacroAI] Tool Names: ${mcpTools.map(t => t.name).join(', ')}`);
+      }
+      
+      for (const t of mcpTools) {
+        if (t.name === 'dashscope_search' || t.name === 'mock_search') {
+          silentLogger.info(`[MacroAI] Skipping tool ${t.name} to avoid poor AI tool choice`);
+          continue;
+        }
+        try {
+          // Sanitize tool name for LLM compatibility (only alphanumeric, _, -)
+          const safeName = t.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+          
+          // Build a clean schema - remove fields that confuse AI models
+          const rawSchema = t.inputSchema || { type: "object", properties: {} };
+          const cleanSchema: Record<string, any> = {
+            type: "object",
+            properties: rawSchema.properties || {},
+          };
+          if (rawSchema.required) cleanSchema.required = rawSchema.required;
+          // Log what we're registering
+          silentLogger.info(`[MacroAI Agent] Registering tool '${safeName}' with schema: ${JSON.stringify(cleanSchema)}`);
+          
+          toolsConfig[safeName] = tool({
+            description: t.description || `Tool: ${t.name}`,
+            parameters: jsonSchema(cleanSchema, {
+              // Permissive validate: accept whatever the AI model sends
+              validate: (value: unknown) => ({ success: true as const, value: value as any }),
+            }) as any,
+            execute: async (args: any) => {
+            silentLogger.info(`[MacroAI Agent] Executing MCP Tool: ${t.name} (as ${safeName}), args: ${JSON.stringify(args)}`);
+            try {
+              const result = await mcpService.executeTool(t.name, args);
+              // MCP results usually have { content: [{ type: "text", text: "..." }] }
+              if (result && Array.isArray(result.content)) {
+                const texts = result.content
+                  .map((c: any) => c.text || JSON.stringify(c))
+                  .filter((txt: string) => txt && txt.trim())
+                  .join("\n");
+                if (texts.trim()) return texts;
+                return "No data returned from tool.";
+              }
+              return JSON.stringify(result);
+            } catch (err: any) {
+              silentLogger.error(`[MacroAI Agent] Tool ${t.name} execution error: ${err.message}`);
+              return `Error executing tool ${t.name}: ${err.message}`;
+            }
+          },
+          } as any);
+        } catch (err: any) {
+          silentLogger.warn(`[MacroAI Agent] Failed to parse tool ${t.name}:`, err.message);
+        }
+      }
+
+      // Add Native AlphaVantage Tool for Technical Analysis
+      if (env.ALPHA_VANTAGE_API_KEY) {
+        toolsConfig['get_technical_indicator'] = tool({
+          description: "Get technical indicator data (RSI, SMA, EMA) for a given symbol using AlphaVantage. e.g. for Bitcoin use 'BTC', for Apple use 'AAPL'.",
+          parameters: jsonSchema({
+            type: "object",
+            properties: {
+              function_name: { type: "string", description: "The indicator function to call: RSI, SMA, EMA", enum: ["RSI", "SMA", "EMA"] },
+              symbol: { type: "string", description: "The ticker symbol (e.g. BTC, AAPL)" },
+              interval: { type: "string", description: "Time interval: daily, weekly, monthly", enum: ["daily", "weekly", "monthly"] },
+              time_period: { type: "number", description: "Time period for calculation (e.g. 14 for RSI, 50 for SMA50)" }
+            },
+            required: ["function_name", "symbol", "interval", "time_period"]
+          }) as any,
+          execute: async (args: any) => {
+             silentLogger.info(`[MacroAI Agent] Executing Native Tool get_technical_indicator: ${JSON.stringify(args)}`);
+             try {
+                // If the user asks for crypto like BTC, AlphaVantage requires the market (e.g. BTCUSD) or sometimes just BTC works if it's an exchange symbol. But for technical indicators, typically it accepts standard symbols.
+                const url = `https://www.alphavantage.co/query?function=${args.function_name}&symbol=${args.symbol}&interval=${args.interval}&time_period=${args.time_period}&series_type=close&apikey=${env.ALPHA_VANTAGE_API_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data["Information"] || data["Note"] || data["Error Message"]) {
+                   return JSON.stringify(data); // Limit reached or error
+                }
+
+                // AlphaVantage returns huge JSONs, let's just return the last 10 data points to save tokens
+                const timeSeriesKey = Object.keys(data).find(k => k.startsWith("Technical Analysis"));
+                if (!timeSeriesKey) return JSON.stringify(data);
+
+                const timeSeries = data[timeSeriesKey];
+                const dates = Object.keys(timeSeries).slice(0, 10);
+                const recentData: any = {};
+                for (const d of dates) {
+                   recentData[d] = timeSeries[d];
+                }
+                return JSON.stringify({ symbol: args.symbol, indicator: args.function_name, recent_data: recentData });
+             } catch (err: any) {
+                return `Error fetching indicator: ${err.message}`;
+             }
+          }
+        } as any);
+      }
+
+      const cleanMessages = messages.map((m: any) => ({
+        role: m.role,
+        content: String(m.content)
+      }));
+
+      // Ensure the first message is a user message (some providers reject leading assistant messages)
+      while (cleanMessages.length > 0 && cleanMessages[0].role !== "user") {
+        cleanMessages.shift();
+      }
+
+      silentLogger.info("[MacroAI] cleanMessages length:", cleanMessages.length);
+
+      // --- Helper: Extract text from generateText response robustly ---
+      function isToolError(text: string): boolean {
+        if (!text) return true;
+        const errorPatterns = [
+          '{"type":"missing","loc":["query"],"msg":"Field required"',
+          'pydantic.error_wrappers.ValidationError',
+          'Error executing tool: ',
+        ];
+        return errorPatterns.some(p => text.toLowerCase().includes(p.toLowerCase()));
+      }
+
+      function extractResponseText(res: any): string {
+        // 1. Direct text is available
+        if (res.text && res.text.trim()) return res.text.trim();
+
+        // 2. Walk all steps to collect any text or tool results
+        const collectedTexts: string[] = [];
+        const collectedToolData: string[] = [];
+        if (res.steps && Array.isArray(res.steps)) {
+          for (const step of res.steps) {
+            // Check for text content in the step
+            if (step.text && step.text.trim()) {
+              collectedTexts.push(step.text.trim());
+            }
+            // Check tool results in step content
+            if (step.content && Array.isArray(step.content)) {
+              for (const item of step.content) {
+                if (item.type === "tool-result" && item.output) {
+                  const output = typeof item.output === "string" ? item.output : JSON.stringify(item.output);
+                  if (output && output.trim() && !isToolError(output)) {
+                    collectedToolData.push(output);
+                  }
+                }
+              }
+            }
+            // Also check toolResults array
+            if (step.toolResults && Array.isArray(step.toolResults)) {
+              for (const tr of step.toolResults) {
+                const output = tr.output || tr.result;
+                if (output) {
+                  const str = typeof output === "string" ? output : JSON.stringify(output);
+                  if (str.trim() && !isToolError(str)) {
+                    collectedToolData.push(str);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 3. Top-level toolResults fallback
+        if (res.toolResults && Array.isArray(res.toolResults)) {
+          for (const tr of res.toolResults) {
+            const output = tr.output || tr.result;
+            if (output) {
+              const str = typeof output === "string" ? output : JSON.stringify(output);
+              if (str.trim() && !isToolError(str)) {
+                collectedToolData.push(str);
+              }
+            }
+          }
+        }
+
+        if (collectedTexts.length > 0) return collectedTexts.join("\n\n");
+        if (collectedToolData.length > 0) return "Berikut data yang ditemukan oleh tools:\n\n" + collectedToolData.join("\n\n");
+        return "";
+      }
+
+      // --- Helper: Extract tool names used across all steps ---
+      function extractToolNames(res: any): string[] {
+        const names: string[] = [];
+        if (res?.steps && Array.isArray(res.steps)) {
+          for (const step of res.steps) {
+            if (step.toolCalls && Array.isArray(step.toolCalls)) {
+              for (const tc of step.toolCalls) names.push(tc.toolName);
+            }
+          }
+        }
+        return names;
+      }
+
+      // --- Agent Models (Adjusted for Rate Limits) ---
+      // Primary Researcher: Try Flatkey (GPT-4o) first, fallback to DashScope (Qwen-Plus), then Gemini
+      const researcherModel = env.ANTHROPIC_AUTH_TOKEN ? openRouter.chat(env.ANTHROPIC_MODEL || "gpt-4o") : google(geminiModel || "gemini-2.5-flash");
+      const reviewerModel = env.DASHSCOPE_API_KEY ? dashscope.chat(env.DASHSCOPE_MODEL || "qwen3.7-max") : researcherModel;
+      const synthesizerModel = env.ANTHROPIC_AUTH_TOKEN ? openRouter.chat(env.ANTHROPIC_MODEL || "gpt-4o") : reviewerModel;
+
+      // --- STAGE 1: The Researcher (Tool Execution) ---
+      silentLogger.info(`[MacroAI] Stage 1: The Researcher - Gathering Context`);
+      
+      const researcherCandidates = [
+        { model: researcherModel, label: "primary-researcher" }
+      ];
+      // Add DashScope Qwen-Plus as a robust fallback for tool calling if GPT-4o/Gemini fails
+      if (env.DASHSCOPE_API_KEY) {
+         researcherCandidates.push({ model: dashscope.chat("qwen-plus"), label: "fallback-qwen-plus" });
+      }
+      if (env.GEMINI_API_KEY) {
+         researcherCandidates.push({ model: google(geminiModel || "gemini-2.5-flash"), label: "fallback-gemini" });
+      }
+
+      let researcherRes;
+      let researcherError: any = null;
+
+      for (const candidate of researcherCandidates) {
+        try {
+          silentLogger.info(`[MacroAI] Researcher using: ${candidate.label}`);
+          researcherRes = await generateText({
+            model: candidate.model,
+            system: systemPrompt,
+            messages: cleanMessages,
+            tools: Object.keys(toolsConfig).length > 0 ? toolsConfig : undefined,
+            maxSteps: 1, // Stop immediately after tool execution
+            temperature: 0.2,
+          } as any);
+          researcherError = null; // Success
+          break;
+        } catch (err: any) {
+          silentLogger.warn(`[MacroAI] Researcher ${candidate.label} failed: ${err.message}`);
+          researcherError = err;
+        }
+      }
+
+      if (researcherError || !researcherRes) {
+        throw new Error(`The Researcher AI failed after all fallbacks. Last error: ${researcherError?.message}`);
+      }
+
+      const researcherText = extractResponseText(researcherRes);
+      const toolsUsed = extractToolNames(researcherRes);
+
+      // If no tools were used, the Researcher answered the user directly. We can return immediately.
+      if (toolsUsed.length === 0 && researcherText.trim().length > 0) {
+        silentLogger.info(`[MacroAI] No tools used by Researcher. Returning direct response.`);
+        return { text: researcherText, toolsUsed: [] };
+      }
+
+      // If tools were used, researcherText contains raw JSON data.
+      let dataToSynthesize = researcherText;
+
+      // --- STAGE 2: The Reviewer (Data Extraction & Analysis) ---
+      if (dataToSynthesize.trim()) {
+        silentLogger.info(`[MacroAI] Stage 2: The Reviewer - Analyzing Data`);
+        try {
+          const reviewerRes = await generateText({
+            model: reviewerModel,
+            system: "Anda adalah analis kuantitatif makroekonomi senior. Tugas Anda adalah mengekstrak data dan angka-angka kunci dari teks JSON mentah berikut, lalu membuat laporan eksekutif pendek yang menyoroti temuan fakta tanpa opini berlebihan. Gunakan Bahasa Indonesia.",
+            messages: [
+              ...cleanMessages,
+              { role: "assistant", content: `RAW TOOL DATA:\n${dataToSynthesize}` }
+            ],
+            temperature: 0.1,
+          });
+          
+          if (reviewerRes.text && reviewerRes.text.trim()) {
+            dataToSynthesize = reviewerRes.text.trim();
+          }
+        } catch (err: any) {
+          silentLogger.warn(`[MacroAI] Stage 2 (Reviewer) failed, bypassing Reviewer: ${err.message}`);
+          // Bypassing Reviewer, will pass raw JSON directly to Synthesizer
+        }
+      }
+
+      // --- STAGE 3: The Synthesizer (Persona Formatting) ---
+      silentLogger.info(`[MacroAI] Stage 3: The Synthesizer - Formatting Output`);
+      try {
+        const synthesizerRes = await generateText({
+          model: synthesizerModel,
+          system: systemPrompt, // Re-apply the strict Persona prompt
+          messages: [
+            ...cleanMessages,
+            { role: "assistant", content: `Laporan Data / Fakta:\n${dataToSynthesize}\n\nInstruksi: Tuliskan respons akhir Anda kepada user berdasarkan Laporan Fakta di atas. Gunakan gaya bahasa telegraphic dan sinis sesuai Persona Anda. DILARANG memuntahkan JSON mentah.` }
+          ],
+          temperature: 0.3,
+        });
+
+        if (synthesizerRes.text && synthesizerRes.text.trim()) {
+          let finalText = synthesizerRes.text.trim();
+          if (toolsUsed.length > 0) {
+            finalText += `\n\n*(Data disintesis dari: ${toolsUsed.join(', ')})*`;
+          }
+          silentLogger.info(`[MacroAI Agent] Multi-Agent Pipeline Completed. Tools used: ${toolsUsed.join(', ')}`);
+          return { text: finalText, toolsUsed };
+        }
+      } catch (err: any) {
+        silentLogger.error(`[MacroAI] Stage 3 (Synthesizer) failed: ${err.message}`);
+        // Ultimate fallback
+        return { text: dataToSynthesize + `\n\n*(Data mentah dari: ${toolsUsed.join(', ')})*`, toolsUsed };
+      }
+
+      throw new Error("All AI agents in the pipeline failed to generate a response");
     } catch (error: any) {
       silentLogger.error(
-        "[MacroAI] chatStream failed after all attempts:",
+        "[MacroAI] chatStream Agent Loop failed with details:",
         error.message,
+        error.stack || error
       );
-      throw new Error("Gagal mendapatkan respons chat dari layanan AI.");
+      if (error.cause) {
+        silentLogger.error("[MacroAI] Error cause:", JSON.stringify(error.cause, null, 2));
+      }
+      throw new Error("Gagal mendapatkan respons chat dari layanan AI: " + (error.message || "Unknown error"));
     }
   },
 

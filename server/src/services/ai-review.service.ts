@@ -11,7 +11,7 @@ export const aiReviewService = {
   async getFeed(userId: string, limit = 10, offset = 0, filter: any = {}) {
     const query = { userId, ...filter };
     return await AiReview.find(query)
-      .populate("tradeId", "tradeDate pair result actualPnl emotionalState notes")
+      .populate("tradeId", "tradeDate pair result actualPnl emotionalState notes marketCondition session")
       .sort("-createdAt")
       .skip(offset)
       .limit(limit);

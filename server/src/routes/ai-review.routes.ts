@@ -7,6 +7,29 @@ import { validate } from "../middleware/validate";
 import { Trade } from "../models/Trade";
 import { AiReview } from "../models/AiReview";
 
+// Helper to map emotionalState & notes into psychologyNotes
+const getPsychologyNotes = (trade: any): string => {
+  if (!trade || typeof trade !== 'object') return "Tidak ada data psikologi";
+  const emotionalStateMap: Record<number, string> = {
+    1: "Sangat Tertekan / FOMO tinggi",
+    2: "Cemas / Kurang percaya diri",
+    3: "Netral / Tenang",
+    4: "Disiplin / Fokus baik",
+    5: "Sangat Tenang / Eksekusi objektif"
+  };
+  const emotionalRating = trade.emotionalState ? emotionalStateMap[trade.emotionalState] : "Tidak dicatat";
+  const notesText = trade.notes ? ` | Catatan: ${trade.notes}` : "";
+  return `Kondisi Emosi: ${emotionalRating}${notesText}`;
+};
+
+// Helper to map marketCondition & session into marketContext
+const getMarketContext = (trade: any): string => {
+  if (!trade || typeof trade !== 'object') return "Tidak ada data konteks pasar";
+  const condition = trade.marketCondition || "ALL";
+  const session = trade.session || "Other";
+  return `Kondisi Pasar: ${condition} | Sesi: ${session}`;
+};
+
 const router = Router();
 
 // Log all routes for debugging
@@ -20,19 +43,20 @@ router.use(requireAuth);
 router.post("/generate/:id", validate({ params: objectIdParamSchema }), async (req, res, next) => {
   try {
     const review = await aiReviewService.generateReview(req.params.id as string, req.user.id);
+    const trade = await Trade.findById(review.tradeId);
     // Transform to frontend format
     const formattedReview = {
       id: review._id.toString(),
       tradeId: review.tradeId.toString(),
       date: review.createdAt.toISOString().split('T')[0],
-      pair: (await Trade.findById(review.tradeId))?.pair || "Unknown",
+      pair: trade?.pair || "Unknown",
       overallScore: review.score,
       summary: review.summary || "No summary available",
       strengths: review.strengths || [],
       improvements: review.improvements || [],
       suggestions: review.recommendation ? [review.recommendation] : [],
-      psychologyNotes: "", // TODO: extract from trade emotionalState
-      marketContext: "", // TODO: derive from trade context
+      psychologyNotes: getPsychologyNotes(trade),
+      marketContext: getMarketContext(trade),
       riskManagement: review.riskWarning || "",
       timestamp: review.createdAt.toISOString()
     };
@@ -63,8 +87,8 @@ router.get("/", async (req, res, next) => {
         strengths: review.strengths || [],
         improvements: review.improvements || [],
         suggestions: review.recommendation ? [review.recommendation] : [],
-        psychologyNotes: "",
-        marketContext: "",
+        psychologyNotes: getPsychologyNotes(t),
+        marketContext: getMarketContext(t),
         riskManagement: review.riskWarning || "",
         timestamp: review.createdAt.toISOString()
       };
@@ -95,8 +119,8 @@ router.get("/:id", validate({ params: objectIdParamSchema }), async (req, res, n
       strengths: r.strengths || [],
       improvements: r.improvements || [],
       suggestions: r.recommendation ? [r.recommendation] : [],
-      psychologyNotes: "",
-      marketContext: "",
+      psychologyNotes: getPsychologyNotes(t),
+      marketContext: getMarketContext(t),
       riskManagement: r.riskWarning || "",
       timestamp: r.createdAt.toISOString()
     };
@@ -139,8 +163,8 @@ router.get("/trade/:tradeId", validate({ params: objectIdParamSchema }), async (
       strengths: r.strengths || [],
       improvements: r.improvements || [],
       suggestions: r.recommendation ? [r.recommendation] : [],
-      psychologyNotes: "",
-      marketContext: "",
+      psychologyNotes: getPsychologyNotes(t),
+      marketContext: getMarketContext(t),
       riskManagement: r.riskWarning || "",
       timestamp: r.createdAt.toISOString()
     };

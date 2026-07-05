@@ -39,8 +39,14 @@ const envSchema = z.object({
     .optional()
     .default("anthropic/claude-3-5-haiku-latest"),
 
+  // Alibaba DashScope
+  DASHSCOPE_API_KEY: z.string().min(1).optional(),
+  DASHSCOPE_BASE_URL: z.string().url().optional(),
+  DASHSCOPE_MODEL: z.string().min(1).optional().default("qwen3.7-max"),
+
   // Groq (fallback for free AI)
   GROQ_API_KEY: z.string().min(1).optional(),
+  GROQ_BASE_URL: z.string().optional().default("https://api.groq.com/openai/v1"),
   GROQ_MODEL: z.string().optional().default("llama-3.3-70b-versatile"),
   GROQ_API_URL: z
     .string()
@@ -64,6 +70,16 @@ const envSchema = z.object({
 
   // Finnhub (already exists but ensure it's required for leading indicator)
   FINNHUB_API_KEY: z.string().min(1).optional(),
+
+  // FlowLLM & Aitrados MCP dependencies
+  TUSHARE_API_TOKEN: z.string().optional(),
+  TAVILY_API_KEY: z.string().optional(),
+  AITRADOS_SECRET_KEY: z.string().optional(),
+  FLOW_LLM_API_KEY: z.string().optional(),
+
+  // 9Router
+  NINE_ROUTER_URL: z.string().optional(),
+  NINE_ROUTER_API_KEY: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

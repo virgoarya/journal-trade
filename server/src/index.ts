@@ -9,6 +9,7 @@ import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { env } from "./config/env";
 import { corsMiddleware } from "./config/cors";
+import { MARKET_SYMBOLS } from "./config/market.config";
 import apiRoutes from "./routes";
 import { errorHandler } from "./middleware/error-handler";
 import { connectDB } from "./db/mongoose";
@@ -42,14 +43,8 @@ let quoteStreamTimer: NodeJS.Timeout | null = null;
 let vixStreamTimer: NodeJS.Timeout | null = null;
 
 const refreshMarketStream = async () => {
-  const symbols = [
-    "SPY", "QQQ", "GLD", "VIXY", "IEF", "UUP", "FXY", "TIP",
-    "FXE", "FXB", "FXC", "FXF", "TLT", "HYG", "XLE", "XLF", 
-    "XLK", "IWM", "EFA", "EEM", "DIA", "ARKK", "XLV", "XLI", 
-    "LQD", "FXA", "USO", "DBA"
-  ];
   try {
-    await marketDataService.getQuotes(symbols);
+    await marketDataService.getQuotes(MARKET_SYMBOLS);
   } catch (error) {
     console.warn("Macro market stream quote refresh failed:", error);
   }
