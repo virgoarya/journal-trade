@@ -47,15 +47,22 @@ export class AIReviewService {
       
       clearTimeout(timeoutId);
       
-      const data = await response.json();
-      
+      let data = null;
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = { error: { message: text } };
+      }
+
       if (!response.ok) {
         return {
           success: false,
           error: data?.error?.message || data?.message || `HTTP ${response.status}`,
         };
       }
-      
+
       return { success: true, data: data.data ?? data };
     } catch (error: any) {
       if (error.name === 'AbortError') {

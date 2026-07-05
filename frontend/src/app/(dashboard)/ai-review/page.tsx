@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bot, Sparkles, MessageSquare, TrendingUp, AlertTriangle, Lightbulb, Target, Clock, RefreshCw, Loader2, Trash2 } from "lucide-react";
 import { aiReviewService, type AIReview } from "@/services/ai-review.service";
 import { tradeService, type Trade } from "@/services/trade.service";
+import { AiCoachChatPanel } from "@/components/macro-terminal/AiCoachChatPanel";
 import { toast } from "sonner";
 
 export default function AIReviewPage() {
@@ -249,115 +250,119 @@ export default function AIReviewPage() {
             <span>← Back to reviews</span>
           </button>
 
-          <div className="glass p-8">
-            {/* Score Header */}
-            <div className="flex justify-between items-start mb-8 pb-6 border-b border-white/10">
-              <div>
-                <div className="flex items-center space-x-3 mb-2">
-                  <span className="px-3 py-1 text-xs font-bold uppercase bg-accent-gold/10 text-accent-gold rounded">
-                    {selectedReview.pair}
-                  </span>
-                  <span className="text-[11px] text-text-muted uppercase">{selectedReview.date}</span>
-                  <span className="text-[11px] text-text-muted">ID: {selectedReview.tradeId}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+            {/* Left: Report Details */}
+            <div className="lg:col-span-3 glass p-8">
+              {/* Score Header */}
+              <div className="flex justify-between items-start mb-8 pb-6 border-b border-white/10">
+                <div>
+                  <div className="flex items-center space-x-3 mb-2">
+                    <span className="px-3 py-1 text-xs font-bold uppercase bg-accent-gold/10 text-accent-gold rounded">
+                      {selectedReview.pair}
+                    </span>
+                    <span className="text-[11px] text-text-muted uppercase">{selectedReview.date}</span>
+                    <span className="text-[11px] text-text-muted">ID: {selectedReview.tradeId}</span>
+                  </div>
+                  <h2 className="text-2xl font-bold text-text-primary mb-2">AI Analysis Report</h2>
+                  <p className="text-sm text-text-secondary">{selectedReview.summary}</p>
                 </div>
-                <h2 className="text-2xl font-bold text-text-primary mb-2">AI Analysis Report</h2>
-                <p className="text-sm text-text-secondary">{selectedReview.summary}</p>
+                <div className="text-center">
+                  <div className={`text-5xl font-mono font-bold ${getScoreColor(selectedReview.overallScore)}`}>
+                    {selectedReview.overallScore}
+                  </div>
+                  <div className="text-[11px] text-text-muted uppercase mt-1">Overall Score</div>
+                  <div className={`text-sm font-bold uppercase mt-1 ${getScoreColor(selectedReview.overallScore)}`}>
+                    {getScoreLabel(selectedReview.overallScore)}
+                  </div>
+                </div>
               </div>
-              <div className="text-center">
-                <div className={`text-5xl font-mono font-bold ${getScoreColor(selectedReview.overallScore)}`}>
-                  {selectedReview.overallScore}
+
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-bg-void/50 rounded-lg">
+                {selectedReview.marketContext && selectedReview.marketContext.trim() ? (
+                  <div>
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Market Context</p>
+                    <p className="text-sm text-text-primary">{selectedReview.marketContext}</p>
+                  </div>
+                ) : null}
+
+                {selectedReview.riskManagement && selectedReview.riskManagement.trim() ? (
+                  <div>
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Risk Management</p>
+                    <p className="text-sm text-text-primary">{selectedReview.riskManagement}</p>
+                  </div>
+                ) : null}
+
+                {selectedReview.psychologyNotes && selectedReview.psychologyNotes.trim() ? (
+                  <div>
+                    <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Psychology Notes</p>
+                    <p className="text-sm text-text-primary">{selectedReview.psychologyNotes}</p>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Strengths & Improvements */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="p-6 bg-data-profit/5 border border-data-profit/20 rounded-xl">
+                  <div className="flex items-center mb-4">
+                    <TrendingUp className="w-5 h-5 text-data-profit mr-2" />
+                    <h3 className="font-semibold text-data-profit">Strengths</h3>
+                  </div>
+                  <ul className="space-y-3">
+                    {selectedReview.strengths.map((strength, idx) => (
+                      <li key={idx} className="flex items-start">
+                        <span className="text-data-profit mr-2 mt-1">✓</span>
+                        <span className="text-sm text-text-secondary">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="text-[11px] text-text-muted uppercase mt-1">Overall Score</div>
-                <div className={`text-sm font-bold uppercase mt-1 ${getScoreColor(selectedReview.overallScore)}`}>
-                  {getScoreLabel(selectedReview.overallScore)}
+
+                <div className="p-6 bg-data-warning/5 border border-data-warning/20 rounded-xl">
+                  <div className="flex items-center mb-4">
+                    <AlertTriangle className="w-5 h-5 text-data-warning mr-2" />
+                    <h3 className="font-semibold text-data-warning">Areas for Improvement</h3>
+                  </div>
+                  <ul className="space-y-3">
+                    {selectedReview.improvements.map((improvement, idx) => (
+                      <li key={idx} className="flex items-start">
+                        <span className="text-data-warning mr-2 mt-1">!</span>
+                        <span className="text-sm text-text-secondary">{improvement}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            </div>
 
-            {/* Metadata Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 p-4 bg-bg-void/50 rounded-lg">
-              {selectedReview.marketContext && selectedReview.marketContext.trim() ? (
-                <div>
-                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Market Context</p>
-                  <p className="text-sm text-text-primary">{selectedReview.marketContext}</p>
-                </div>
-              ) : null}
-
-              {selectedReview.riskManagement && selectedReview.riskManagement.trim() ? (
-                <div>
-                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Risk Management</p>
-                  <p className="text-sm text-text-primary">{selectedReview.riskManagement}</p>
-                </div>
-              ) : null}
-
-              {selectedReview.psychologyNotes && selectedReview.psychologyNotes.trim() ? (
-                <div>
-                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Psychology Notes</p>
-                  <p className="text-sm text-text-primary">{selectedReview.psychologyNotes}</p>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Strengths & Improvements */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="p-6 bg-data-profit/5 border border-data-profit/20 rounded-xl">
+              {/* Suggestions */}
+              <div className="p-6 bg-accent-gold/5 border border-accent-gold/20 rounded-xl">
                 <div className="flex items-center mb-4">
-                  <TrendingUp className="w-5 h-5 text-data-profit mr-2" />
-                  <h3 className="font-semibold text-data-profit">Strengths</h3>
+                  <Lightbulb className="w-5 h-5 text-accent-gold mr-2" />
+                  <h3 className="font-semibold text-accent-gold">Actionable Suggestions</h3>
                 </div>
                 <ul className="space-y-3">
-                  {selectedReview.strengths.map((strength, idx) => (
-                    <li key={idx} className="flex items-start">
-                      <span className="text-data-profit mr-2 mt-1">✓</span>
-                      <span className="text-sm text-text-secondary">{strength}</span>
+                  {selectedReview.recommendation ? (
+                    <li className="flex items-start">
+                      <span className="text-accent-gold mr-2 mt-1">→</span>
+                      <span className="text-sm text-text-secondary">{selectedReview.recommendation}</span>
                     </li>
-                  ))}
+                  ) : (
+                    <li className="text-text-muted text-sm italic">No recommendation</li>
+                  )}
                 </ul>
               </div>
 
-              <div className="p-6 bg-data-warning/5 border border-data-warning/20 rounded-xl">
-                <div className="flex items-center mb-4">
-                  <AlertTriangle className="w-5 h-5 text-data-warning mr-2" />
-                  <h3 className="font-semibold text-data-warning">Areas for Improvement</h3>
-                </div>
-                <ul className="space-y-3">
-                  {selectedReview.improvements.map((improvement, idx) => (
-                    <li key={idx} className="flex items-start">
-                      <span className="text-data-warning mr-2 mt-1">!</span>
-                      <span className="text-sm text-text-secondary">{improvement}</span>
-                    </li>
-                  ))}
-                </ul>
+              {/* Footer */}
+              <div className="mt-6 pt-6 border-t border-white/10 flex justify-between items-center">
+                <p className="text-[10px] text-text-muted">
+                  Analysis generated by AI at {selectedReview.timestamp}
+                </p>
               </div>
             </div>
 
-            {/* Suggestions */}
-            <div className="p-6 bg-accent-gold/5 border border-accent-gold/20 rounded-xl">
-              <div className="flex items-center mb-4">
-                <Lightbulb className="w-5 h-5 text-accent-gold mr-2" />
-                <h3 className="font-semibold text-accent-gold">Actionable Suggestions</h3>
-              </div>
-              <ul className="space-y-3">
-                {selectedReview.recommendation ? (
-                  <li className="flex items-start">
-                    <span className="text-accent-gold mr-2 mt-1">→</span>
-                    <span className="text-sm text-text-secondary">{selectedReview.recommendation}</span>
-                  </li>
-                ) : (
-                  <li className="text-text-muted text-sm italic">No recommendation</li>
-                )}
-              </ul>
-            </div>
-
-            {/* Footer */}
-            <div className="mt-6 pt-6 border-t border-white/10 flex justify-between items-center">
-              <p className="text-[10px] text-text-muted">
-                Analysis generated by AI at {selectedReview.timestamp}
-              </p>
-              <button className="flex items-center space-x-2 text-[11px] text-accent-gold hover:underline">
-                <MessageSquare className="w-4 h-4" />
-                <span>Ask follow-up questions</span>
-              </button>
+            {/* Right: AI Coach Chat Panel */}
+            <div className="lg:col-span-2 flex flex-col h-full lg:h-[720px]">
+              <AiCoachChatPanel selectedReview={selectedReview} />
             </div>
           </div>
         </div>

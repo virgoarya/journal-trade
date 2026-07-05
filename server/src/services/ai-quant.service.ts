@@ -10,8 +10,8 @@ export const aiQuantService = {
     }
 
     const anthropic = new Anthropic({
-      apiKey: env.ANTHROPIC_AUTH_TOKEN || "dummy",
-      baseURL: env.ANTHROPIC_BASE_URL,
+      apiKey: env.NINE_ROUTER_URL ? (env.NINE_ROUTER_API_KEY || "sk-9router-local") : (env.ANTHROPIC_AUTH_TOKEN || "dummy"),
+      baseURL: env.NINE_ROUTER_URL || env.ANTHROPIC_BASE_URL,
       defaultHeaders: {
         'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
         'X-Title': 'Journal Trade AI Quant'
@@ -19,7 +19,7 @@ export const aiQuantService = {
     });
 
     const fallbackModels = [
-      "google/gemini-pro",
+      env.NINE_ROUTER_URL ? (env.NINE_ROUTER_MODEL || "free") : "google/gemini-pro",
       env.ANTHROPIC_MODEL || "google/gemma-2-9b-it:free",
       "meta-llama/llama-3.3-70b-instruct:free",
       "openrouter/free"
@@ -112,13 +112,49 @@ ATURAN FORMAT OUTPUT
 `;
 
     let msg: any;
-    let lastError: Error | undefined;
+    let lastError: any = null;
 
-    // Try primary and fallback models through OpenRouter/Anthropic SDK
-    if (env.ANTHROPIC_AUTH_TOKEN) {
+    // 1. Try 9Router first via direct OpenAI-compatible HTTP fetch
+    if (env.NINE_ROUTER_URL) {
+      try {
+        const modelName = env.NINE_ROUTER_MODEL || "free";
+        console.log("Trying 9Router for Quant with model:", modelName);
+        const nineResponse = await fetch(`${env.NINE_ROUTER_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: [
+              { role: "user", content: prompt }
+            ],
+            max_tokens: 1500,
+            stream: false
+          })
+        });
+
+        const nineData: any = await nineResponse.json();
+
+        if (nineData.choices && nineData.choices[0]?.message?.content) {
+          console.log("Success with 9Router for Quant");
+          msg = { content: nineData.choices[0].message.content };
+        } else {
+          console.warn("9Router response invalid:", nineData);
+          lastError = new Error(nineData.error?.message || "Invalid 9Router response structure");
+        }
+      } catch (error: any) {
+        console.warn("9Router failed for Quant:", error.message);
+        lastError = error;
+      }
+    }
+
+    // 2. Try Anthropic/OpenRouter as fallback
+    if (!msg && env.ANTHROPIC_AUTH_TOKEN) {
       for (const model of fallbackModels) {
         try {
-          console.log("Trying AI model for Quant:", model);
+          console.log("Trying fallback AI model for Quant:", model);
           msg = await anthropic.messages.create({
             model: model,
             max_tokens: 1500,
@@ -127,6 +163,7 @@ ATURAN FORMAT OUTPUT
             ]
           });
           console.log("Success with model:", model);
+          lastError = undefined;
           break;
         } catch (error: any) {
           lastError = error;

@@ -15,6 +15,7 @@ import geoRiskRoutes from "./geo-risk.routes";
 import quantRoutes from "./quant.routes";
 import macroRegimeRoutes from "./macro-regime.routes";
 import nexusRoutes from "./nexus.routes";
+import aiCoachRoutes from "./ai-coach.routes";
 import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
@@ -40,5 +41,6 @@ router.use("/v1/geo-risk", geoRiskRoutes);
 router.use("/v1/quant", quantRoutes);
 router.use("/v1/macro-regime", macroRegimeRoutes);
 router.use("/v1/nexus", nexusRoutes);
+router.use("/v1/ai-coach", aiLimiter, aiCoachRoutes);
 
 export default router;

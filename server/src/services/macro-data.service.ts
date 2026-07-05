@@ -2,6 +2,7 @@ import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { API_LIMITS } from "../utils/rate-limiter";
+import { MacroIndicator } from "../models/MacroIndicator";
 
 export interface MarketQuote {
   symbol: string;
@@ -257,6 +258,34 @@ export const macroDataService = {
       }
 
       if (events.length > 0) {
+        // --- INGEST INTO MONGODB ---
+        try {
+          // Process asynchronously so it doesn't block the API return
+          Promise.all(
+            events
+              .filter((e) => e.actual && e.actual.trim() !== "")
+              .map(async (e) => {
+                const parsedActual = parseFloat(e.actual.replace(/[^0-9.-]/g, ""));
+                if (!isNaN(parsedActual)) {
+                  // Only update if the release date is newer or same
+                  await MacroIndicator.findOneAndUpdate(
+                    { indicatorName: e.title, country: e.country },
+                    {
+                      $set: {
+                        actualValue: parsedActual,
+                        releaseDate: new Date(e.date),
+                      },
+                    },
+                    { upsert: true, new: true }
+                  );
+                }
+              })
+          ).catch((err) => silentLogger.warn("Failed to ingest calendar events: " + err.message));
+        } catch (err: any) {
+          silentLogger.warn("Error ingesting calendar to DB: " + err.message);
+        }
+        // ---------------------------
+
         setCache(cacheKey, events, 300000);
         return { data: events, fromCache: false, rateLimited: false };
       }

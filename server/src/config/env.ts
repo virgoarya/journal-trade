@@ -80,6 +80,7 @@ const envSchema = z.object({
   // 9Router
   NINE_ROUTER_URL: z.string().optional(),
   NINE_ROUTER_API_KEY: z.string().optional(),
+  NINE_ROUTER_MODEL: z.string().optional().default("free"),
 });
 
 const _env = envSchema.safeParse(process.env);

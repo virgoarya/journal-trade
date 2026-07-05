@@ -9,6 +9,7 @@ import { useMacroTerminal } from "./MacroTerminalContext";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  toolsUsed?: string[];
 }
 
 type ThinkingState = "idle" | "thinking" | "responding" | "done";
@@ -203,14 +204,14 @@ export function AiPersonaChatPanel() {
     }, 900);
   };
 
-  const finishThinking = (reply: string) => {
+  const finishThinking = (reply: string, toolsUsed?: string[]) => {
     clearThinking();
     setThinkingState("done");
     setAllMessages((prev) => {
       const updated = [...prev[activePersonaId]];
       const lastIdx = updated.length - 1;
       if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-        updated[lastIdx] = { role: "assistant", content: reply };
+        updated[lastIdx] = { role: "assistant", content: reply, toolsUsed };
       }
       return { ...prev, [activePersonaId]: updated };
     });
@@ -238,9 +239,14 @@ export function AiPersonaChatPanel() {
     startThinking();
 
     try {
-      const resp = await fetch("/api/v1/macro-ai/chat", {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      const resp = await fetch("http://localhost:5000/api/v1/macro-ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           messages: prevMessages,
           currentRegime,
@@ -258,13 +264,22 @@ export function AiPersonaChatPanel() {
           },
         }),
       });
+      
+      clearTimeout(timeoutId);
 
-      if (!resp.ok) throw new Error("AI response error");
+      if (!resp.ok) {
+        let errData;
+        try {
+          errData = await resp.json();
+        } catch(e) {}
+        throw new Error(errData?.error || "AI response error");
+      }
+      
       const data = await resp.json();
-      finishThinking(data.reply || "AI tidak merespons. Coba lagi.");
-    } catch {
+      finishThinking(data.reply || "AI tidak merespons. Coba lagi.", data.toolsUsed);
+    } catch (err: any) {
       finishThinking(
-        "Koneksi ke AI Engine gagal. Silakan coba beberapa saat lagi.",
+        `[Error Server]: ${err.message || "Koneksi ke AI Engine gagal."}`
       );
     }
   };
@@ -372,9 +387,24 @@ export function AiPersonaChatPanel() {
               }`}
             >
               {msg.role === "assistant" ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
+                <>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                  {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1 border-t border-border-subtle pt-2">
+                      <span className="text-[9px] text-text-muted flex items-center gap-1">
+                        <Zap size={10} className="text-accent-gold" />
+                        Tools dipanggil:
+                      </span>
+                      {msg.toolsUsed.map((t, i) => (
+                        <span key={i} className="text-[9px] bg-accent-gold/10 text-accent-gold border border-accent-gold/20 px-1.5 py-0.5 rounded font-bold tracking-wider">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 msg.content
               )}

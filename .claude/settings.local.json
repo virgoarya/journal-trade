@@ -25,7 +25,12 @@
       "Bash(pkill -9 -f \"node\")",
       "Bash(git push:*)",
       "Bash(powershell -Command \"curl http://localhost:3000/api/calendar\")",
-      "Bash(node --check \"node_modules/.bin/tsc\")"
+      "Bash(node --check \"node_modules/.bin/tsc\")",
+      "PowerShell(npm install *)",
+      "PowerShell(npm test *)",
+      "PowerShell(npm run *)",
+      "Bash(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object OwningProcess, State, LocalPort)"
     ]
   }
 }

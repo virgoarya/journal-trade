@@ -47,6 +47,30 @@
     transition: background-color 0.4s ease, color 0.4s ease;
   }
 
+  /* Custom Scrollbar for Terminal Noir */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212, 175, 55, 0.3) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(212, 175, 55, 0.3);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(212, 175, 55, 0.6);
+  }
+
   /* ============== LIGHT THEME ============== */
   :root.light {
     --color-bg-void: #F5F3EE;

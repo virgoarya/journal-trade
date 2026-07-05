@@ -64,6 +64,13 @@ export class ApiClient {
         message: (data as any)?.message,
       };
     } catch (error: any) {
+      if (error.name === "AbortError") {
+        console.warn(`API Request Aborted (${endpoint}): ${error.message}`);
+        return {
+          success: false,
+          error: "Request was aborted",
+        };
+      }
       console.error(`API Error (${endpoint}):`, error);
       return {
         success: false,

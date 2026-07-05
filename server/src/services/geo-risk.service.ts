@@ -1,14 +1,16 @@
 import axios from "axios";
 import { env } from "../config/env";
 import { GeoRiskSnapshot, IGeoRiskSnapshot } from "../models/GeoRiskSnapshot";
+import { MacroIndicator } from "../models/MacroIndicator";
 import { fredLatest, fredYoY } from "../utils/fred-api.helper";
 import { silentLogger } from "../utils/silent-logger";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const TRADING_ECONOMICS_BASE = "https://api.tradingeconomics.com";
+const DBNOMICS_BASE = "https://api.db.nomics.world/v22";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const PMI_CACHE_TTL_MS = 30 * 1000; // 30 seconds for real-time PMI
+const PMI_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours (ISM PMI is monthly)
 const VIX_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const FETCH_TIMEOUT_MS = 8000;
 const YAHOO_RETRY_DELAY_MS = 1200;
@@ -83,11 +85,16 @@ function extractYahooPrice(data: any): number | null {
 const FRED_SERIES = {
   CPI: "CPIAUCSL", // Consumer Price Index – All Urban Consumers
   FEDFUNDS: "FEDFUNDS", // Effective Federal Funds Rate
-  VIX: "VIXCLS", // CBOE Volatility Index (geopolitics proxy)
-  PMI: "NAPM", // ISM Manufacturing PMI
-  PMI_FALLBACK: "MANEMP", // All Employees Manufacturing (fallback proxy)
-  ONRRP: "RRPONTSYD", // Fed ON RRP Balance (liquidity drain)
+  VIX: "VIXCLS", // CBOE Volatility Index (geopolitics/vol proxy)
+  // NOTE: NAPM was removed from FRED in June 2016 by ISM.
+  // Primary PMI source is now DBnomics (ISM/pmi/pm), free, no API key needed.
+  // IPMAN (Industrial Production: Manufacturing) as final fallback proxy.
+  PMI_FALLBACK: "IPMAN", // Industrial Production: Manufacturing (2017=100 index)
+  ONRRP: "RRPONTSYD", // Fed ON RRP Balance (liquidity drain, in billions USD)
 } as const;
+
+// PMI source tracking type
+type PmiSource = "calendar_db" | "dbnomics" | "trading_economics" | "ipman_synthetic" | null;
 
 // ── Score Formula ─────────────────────────────────────────────────────────────
 // All formulas output 0–100 (integer)
@@ -120,9 +127,13 @@ function scoreSupplyChain(pmi: number | null): number {
 
 function scoreLiquidityDrain(onRrpB: number | null): number {
   if (onRrpB === null) return 50;
-  // When ON RRP → 0 the buffer is gone → maximum drain risk
-  // ON RRP in billions: 0B=100, 500B=80, 2500B=0
-  return Math.round(Math.min(100, Math.max(0, 100 - (onRrpB / 2500) * 100)));
+  // When ON RRP → 0 the buffer is gone → maximum drain risk.
+  // As of mid-2026, ON RRP is near depletion (~$2B).
+  // Logarithmic formula to better differentiate low values:
+  //   0B → 100, 10B → 90, 50B → 75, 200B → 55, 500B → 38, 2500B → 0
+  if (onRrpB <= 0) return 100;
+  const logScore = 100 - (Math.log10(onRrpB + 1) / Math.log10(2501)) * 100;
+  return Math.round(Math.min(100, Math.max(0, logScore)));
 }
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -155,56 +166,130 @@ async function fetchFreshVix(
   }
 }
 
+// ── PMI Fetch Pipeline ────────────────────────────────────────────────────────
+// Primary: DBnomics ISM PMI (free, no API key, official ISM data)
+// Fallback 1: Trading Economics (if TE_API_KEY available)
+// Fallback 2: FRED IPMAN synthetic proxy
+
+async function fetchIsmPmi(): Promise<{ pmi: number | null; pmiSource: PmiSource }> {
+  // Check in-memory cache first
+  const cached = getCache<{ pmi: number; pmiSource: PmiSource }>("pmi:ism", PMI_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  // ── Primary 0: Internal MongoDB Calendar Data ───────────────────────────
+  try {
+    const internalDoc = await MacroIndicator.findOne({
+      indicatorName: "ISM Manufacturing PMI",
+      country: "US"
+    }).lean();
+
+    if (internalDoc && internalDoc.actualValue) {
+      // Check if it's reasonably fresh (within 45 days)
+      const ageMs = Date.now() - new Date(internalDoc.releaseDate).getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      
+      if (ageDays <= 45 && internalDoc.actualValue >= 20 && internalDoc.actualValue <= 65) {
+        silentLogger.info(`[GeoRisk] Internal Calendar ISM PMI: ${internalDoc.actualValue}`);
+        const result = { pmi: internalDoc.actualValue, pmiSource: "calendar_db" as PmiSource };
+        setCache("pmi:ism", result);
+        return result;
+      }
+    }
+  } catch (err: any) {
+    silentLogger.warn("[GeoRisk] MongoDB MacroIndicator fetch failed:", err.message);
+  }
+
+  // ── Primary: DBnomics ISM Manufacturing PMI ─────────────────────────────
+  try {
+    const dbData = await fetchJsonWithRetry<any>(
+      `${DBNOMICS_BASE}/series/ISM/pmi/pm?observations=1&format=json`,
+      "DBnomics ISM PMI",
+      1,
+    );
+    const docs = dbData?.series?.docs;
+    if (docs?.length > 0) {
+      const periods: string[] = docs[0].period ?? [];
+      const values: number[] = docs[0].value ?? [];
+      // Walk backwards to find the latest VALID PMI (must be 20–65 range for sanity)
+      for (let i = periods.length - 1; i >= 0; i--) {
+        const val = values[i];
+        if (typeof val === "number" && val >= 20 && val <= 65) {
+          silentLogger.info(`[GeoRisk] DBnomics ISM PMI: ${val} (${periods[i]})`);
+          const result = { pmi: val, pmiSource: "dbnomics" as PmiSource };
+          setCache("pmi:ism", result);
+          return result;
+        }
+      }
+      silentLogger.warn("[GeoRisk] DBnomics ISM PMI: no valid values in range 20-65");
+    }
+  } catch (err: any) {
+    silentLogger.warn("[GeoRisk] DBnomics ISM PMI failed:", err.message);
+  }
+
+  // ── Fallback 1: Trading Economics ISM PMI ───────────────────────────────
+  if (process.env.TE_API_KEY) {
+    try {
+      const teResp = await fetchJsonWithRetry<any[]>(
+        `${TRADING_ECONOMICS_BASE}/historical/country/united%20states/indicator/manufacturing%20pmi?c=${process.env.TE_API_KEY}&f=json`,
+        "TradingEconomics PMI",
+        1,
+      );
+      // TE returns array of { DateTime, Value, ... }
+      if (Array.isArray(teResp) && teResp.length > 0) {
+        // Sort by DateTime desc, take latest
+        const sorted = teResp
+          .filter((r: any) => typeof r.Value === "number" && r.Value >= 20 && r.Value <= 65)
+          .sort((a: any, b: any) => new Date(b.DateTime).getTime() - new Date(a.DateTime).getTime());
+        if (sorted.length > 0) {
+          const pmi = sorted[0].Value;
+          silentLogger.info(`[GeoRisk] TE ISM PMI: ${pmi}`);
+          const result = { pmi, pmiSource: "trading_economics" as PmiSource };
+          setCache("pmi:ism", result);
+          return result;
+        }
+      }
+    } catch (err: any) {
+      silentLogger.warn("[GeoRisk] TradingEconomics PMI fallback failed:", err.message);
+    }
+  }
+
+  // ── Fallback 2: FRED IPMAN synthetic proxy ──────────────────────────────
+  // IPMAN = Industrial Production: Manufacturing (2017=100 index)
+  // We convert to a pseudo-PMI: index > 100 ≈ expansion, < 100 ≈ contraction
+  // Linear map: 95 → PMI 45, 100 → PMI 50, 105 → PMI 55
+  try {
+    const ipman = await fredLatest(FRED_SERIES.PMI_FALLBACK, 6);
+    if (ipman !== null) {
+      const syntheticPmi = parseFloat((50 + (ipman - 100)).toFixed(1));
+      const clampedPmi = Math.min(65, Math.max(35, syntheticPmi));
+      silentLogger.warn(`[GeoRisk] IPMAN synthetic PMI: ${clampedPmi} (raw IPMAN=${ipman})`);
+      const result = { pmi: clampedPmi, pmiSource: "ipman_synthetic" as PmiSource };
+      setCache("pmi:ism", result);
+      return result;
+    }
+  } catch (err: any) {
+    silentLogger.warn("[GeoRisk] IPMAN fallback failed:", err.message);
+  }
+
+  return { pmi: null, pmiSource: null };
+}
+
 async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
   // Parallel fetch – partial failure is acceptable
-  // Use limit=12 for PMI to reliably skip pending "." entries
-  let [cpi_yoy, fedfunds_raw, pmi_raw, onRrp_raw] = await Promise.all([
+  const [cpi_yoy, fedfunds_raw, pmiResult, onRrp_raw] = await Promise.all([
     fredYoY(FRED_SERIES.CPI),
     fredLatest(FRED_SERIES.FEDFUNDS, 6),
-    // Primary PMI source
-    fredLatest(FRED_SERIES.PMI, 12),
+    fetchIsmPmi(),
     fredLatest(FRED_SERIES.ONRRP, 6),
   ]);
-  // If primary PMI missing, try secondary proxy (Trading Economics)
-  if (pmi_raw === null) {
-    try {
-      const teResp = await fetchJsonWithRetry<any>(
-        `https://api.tradingeconomics.com/commodity/PMI?c=${process.env.TE_API_KEY}`,
-        "TradingEconomics PMI",
-        2,
-      );
-      // Expected format: { PMI: number }
-      if (teResp && typeof teResp.PMI === "number") {
-        pmi_raw = teResp.PMI;
-      }
-    } catch (e) {
-      silentLogger.warn("[GeoRisk] TradingEconomics PMI fallback failed");
-    }
-  }
 
-  // VIX: fetch LIVE from Yahoo Finance with short cache, fallback to FRED only if Yahoo unavailable
+  // VIX: fetch LIVE from Yahoo Finance with short cache, fallback to FRED
   const vixData = await fetchFreshVix(true);
-  let vix: number | null = vixData.vix;
-  let vixSource: "yahoo" | "fred" | null = vixData.vixSource;
-
-  // Fallback: if ISM NAPM returns null, try Manufacturing Employment as proxy
-  // Store the RAW value before rounding so UI shows the real number
-  let pmiSource: "NAPM" | "MANEMP_SYNTHETIC" = "NAPM";
-  if (pmi_raw === null) {
-    silentLogger.warn("[GeoRisk] NAPM returned null, trying MANEMP fallback…");
-    const manemp = await fredLatest(FRED_SERIES.PMI_FALLBACK, 6);
-    // MANEMP is in thousands of employees; normalize around ~12,500k (expansion)
-    // >12500 ≈ expansion (PMI>50 equiv), <12000 ≈ contraction
-    if (manemp !== null) {
-      // Map to a synthetic PMI: 13000k → 55, 12500k → 50, 12000k → 45
-      pmi_raw = parseFloat((50 + (manemp - 12500) / 100).toFixed(1));
-      pmi_raw = Math.min(65, Math.max(35, pmi_raw));
-      pmiSource = "MANEMP_SYNTHETIC";
-    }
-  }
+  const vix: number | null = vixData.vix;
+  const vixSource: "yahoo" | "fred" | null = vixData.vixSource;
 
   const fedfunds_rate = fedfunds_raw;
-  const globalPmi = pmi_raw;
+  const globalPmi = pmiResult.pmi;
   // ON RRP from FRED is in billions of USD
   const onRrpBalance = onRrp_raw;
 
@@ -215,6 +300,12 @@ async function fetchFreshSnapshot(): Promise<IGeoRiskSnapshot> {
     supplyChain: scoreSupplyChain(globalPmi),
     liquidityDrain: scoreLiquidityDrain(onRrpBalance),
   };
+
+  silentLogger.info(
+    `[GeoRisk] Snapshot: CPI_YoY=${cpi_yoy}, FedFunds=${fedfunds_rate}, ` +
+    `VIX=${vix}(${vixSource}), PMI=${globalPmi}(${pmiResult.pmiSource}), ` +
+    `ON_RRP=${onRrpBalance}B`,
+  );
 
   const snapshot = await GeoRiskSnapshot.create({
     fetchedAt: new Date(),
@@ -247,6 +338,7 @@ export const geoRiskService = {
       vix: number | null;
       vixSource: "yahoo" | "fred" | null;
       globalPmi: number | null;
+      pmiSource: PmiSource;
       onRrpBalance: number | null;
     };
     fetchedAt: Date;
@@ -298,12 +390,15 @@ export const geoRiskService = {
       try {
         const freshVix = await fetchFreshVix(false);
         if (freshVix.vix != null && freshVix.vixSource) {
+          // Re-fetch PMI source info (uses cache)
+          const pmiInfo = await fetchIsmPmi();
           const raw = {
             cpi_yoy: (snapshot as any).cpi_yoy ?? null,
             fedfunds_rate: (snapshot as any).fedfunds_rate ?? null,
             vix: freshVix.vix,
             vixSource: freshVix.vixSource,
             globalPmi: (snapshot as any).globalPmi ?? null,
+            pmiSource: pmiInfo.pmiSource,
             onRrpBalance: (snapshot as any).onRrpBalance ?? null,
           };
           const scores = {
@@ -328,6 +423,9 @@ export const geoRiskService = {
       }
     }
 
+    // For cached snapshots, attempt to determine PMI source from cache
+    const cachedPmiInfo = getCache<{ pmi: number; pmiSource: PmiSource }>("pmi:ism", PMI_CACHE_TTL_MS);
+
     return {
       scores: (snapshot as any).scores,
       raw: {
@@ -336,6 +434,7 @@ export const geoRiskService = {
         vix: (snapshot as any).vix ?? null,
         vixSource: (snapshot as any).vixSource ?? null,
         globalPmi: (snapshot as any).globalPmi ?? null,
+        pmiSource: cachedPmiInfo?.pmiSource ?? null,
         onRrpBalance: (snapshot as any).onRrpBalance ?? null,
       },
       fetchedAt: new Date((snapshot as any).fetchedAt),

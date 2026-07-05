@@ -4,7 +4,13 @@ import rateLimit from "express-rate-limit";
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
-  message: "Too many requests from this IP, please try again later.",
+  message: {
+    success: false,
+    error: {
+      code: "RATE_LIMIT_EXCEEDED",
+      message: "Too many requests from this IP, please try again later.",
+    },
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -13,7 +19,13 @@ export const apiLimiter = rateLimit({
 export const aiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: "Too many AI requests, please try again later.",
+  message: {
+    success: false,
+    error: {
+      code: "AI_RATE_LIMIT_EXCEEDED",
+      message: "Too many AI requests, please try again later.",
+    },
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -22,7 +34,13 @@ export const aiLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: "Too many authentication attempts, please try again later.",
+  message: {
+    success: false,
+    error: {
+      code: "AUTH_RATE_LIMIT_EXCEEDED",
+      message: "Too many authentication attempts, please try again later.",
+    },
+  },
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,

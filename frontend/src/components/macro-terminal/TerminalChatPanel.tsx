@@ -186,11 +186,16 @@ export function TerminalChatPanel() {
     startThinking();
 
     try {
-      const response = await fetch("/api/v1/macro-ai/chat", {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      const response = await fetch("http://localhost:5000/api/v1/macro-ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           messages: newMessages,
           currentRegime,
@@ -198,6 +203,8 @@ export function TerminalChatPanel() {
           liquidityStatus: liquidity?.status,
         }),
       });
+      
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error("Failed to connect to Terminal");

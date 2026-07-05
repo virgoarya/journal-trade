@@ -209,7 +209,7 @@ function AiModal({ item, onClose }: { item: CotItem; onClose: () => void }) {
         {/* Footer */}
         <div className="border-t border-border-subtle px-4 py-2 flex items-center justify-between text-[10px] text-zinc-500">
           <span>Data CFTC · Rilis: {item.lastUpdate ? new Date(item.lastUpdate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
-          <span className="text-amber-400/60">Dual Engine (Groq + Gemini)</span>
+          <span className="text-amber-400/60">9Router AI Engine</span>
         </div>
       </div>
     </div>

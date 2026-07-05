@@ -108,6 +108,7 @@ connectDB()
             TAVILY_API_KEY: env.TAVILY_API_KEY || "",
             DASHSCOPE_API_KEY: env.DASHSCOPE_API_KEY || "",
             PYTHONIOENCODING: "utf-8",
+            PYTHONUNBUFFERED: "1",
           }
         ).catch(e => console.error("FlowLLM MCP error:", e));
       }
@@ -121,6 +122,7 @@ connectDB()
           {
             AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY,
             PYTHONIOENCODING: "utf-8",
+            PYTHONUNBUFFERED: "1",
           }
         ).catch(e => console.error("Aitrados MCP error:", e));
       }

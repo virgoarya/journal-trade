@@ -37,6 +37,7 @@ router.post("/refresh", requireAuth, async (req, res) => {
           vix: snapshot.vix ?? null,
           vixSource: snapshot.vixSource ?? null,
           globalPmi: snapshot.globalPmi ?? null,
+          pmiSource: null, // Source tracking not available on force-refresh (snapshot doesn't store it)
           onRrpBalance: snapshot.onRrpBalance ?? null,
         },
         fetchedAt: snapshot.fetchedAt,

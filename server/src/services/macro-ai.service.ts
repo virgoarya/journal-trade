@@ -87,6 +87,47 @@ async function callDualEngine(
   const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
 
   let lastError: any = null;
+
+  // 1. Try 9Router first if URL is configured
+  if (env.NINE_ROUTER_URL) {
+    try {
+      const modelName = env.NINE_ROUTER_MODEL || "free";
+      const response = await axios.post(
+        `${env.NINE_ROUTER_URL}/chat/completions`,
+        {
+          model: modelName,
+          messages: [
+            ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: generationConfig?.max_output_tokens || 1000,
+          temperature: generationConfig?.temperature || 0.2,
+          stream: false,
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 20000,
+        }
+      );
+      const text = response.data?.choices?.[0]?.message?.content;
+      if (text && text.trim()) {
+        // Bersihkan <think> block dari model reasoning
+        const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+        if (cleaned) {
+          silentLogger.info(`[MacroAI] 9Router (${modelName}) generated ${cleaned.length} chars.`);
+          return cleaned;
+        }
+      }
+    } catch (error: any) {
+      silentLogger.warn(`[MacroAI] 9Router failed, falling back to Groq/Gemini: ${error.message}`);
+      lastError = error;
+    }
+  }
+
+  // 2. Try Groq fallback
   for (const model of GROQ_MODELS) {
     if (!env.GROQ_API_KEY) break;
     try {
@@ -99,7 +140,7 @@ async function callDualEngine(
             { role: "system", content: systemPrompt || "" },
             { role: "user", content: userPrompt },
           ],
-          max_tokens: generationConfig?.max_output_tokens || 150,
+          max_tokens: generationConfig?.max_output_tokens || 1500,
           temperature: generationConfig?.temperature || 0.2,
           stream: false,
         },
@@ -111,7 +152,8 @@ async function callDualEngine(
         `[MacroAI] Groq ${model} generated ${text?.length} chars. Finish reason: ${response.choices?.[0]?.finish_reason}`,
       );
       if (text && text.trim()) {
-        return text.trim();
+        const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+        if (cleaned) return cleaned;
       }
     } catch (error: any) {
       lastError = error;
@@ -559,7 +601,7 @@ INSTRUKSI ANALISIS HOLISTIK (WAJIB GUNAKAN BULLET POINTS, GAYA TELEGRAFIS/FLASH 
       "ROLE & PERSONA: Anda adalah Senior Macro Institutional Analyst di Hunter Trades. Anda menyajikan 'Flash Note' ke terminal kuantitatif elit. RULES MUTLAK: 1. DILARANG KERAS menggunakan kalimat naratif panjang, pengantar (seperti 'Regime makro saat ini adalah...', 'Berdasarkan data...'). 2. WAJIB menggunakan format telegraphic / bullet points (-) murni ala Bloomberg Terminal (Contoh: '- Active Regime: Goldilocks. - Momentum: Growth akselerasi, Inflasi tertekan.'). 3. Gunakan jargon finansial profesional (misal: 'Risk-On posture', 'Defensive rotation', 'Liquidity drain'). 4. JANGAN ulangi header dengan teks naratif di bawahnya, langsung masuk ke bullet point. 5. Gunakan header persis seperti yang diminta TANPA tambahan asteris markdown (tulis [ REGIME & MOMENTUM ]).";
 
     const text = await callDualEngine(prompt, systemPrompt, {
-      max_output_tokens: 800,
+      max_output_tokens: 2500,
       temperature: 0.3,
     });
 
@@ -744,8 +786,8 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
           apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
         });
         // You can specify a generic model name or the specific one 9Router is configured to route
-        aiModel = nineRouter.chat("openai/gpt-4o");
-        silentLogger.info("[MacroAI] Using 9Router as the primary AI gateway.");
+        aiModel = nineRouter.chat(env.NINE_ROUTER_MODEL || "free");
+        silentLogger.info(`[MacroAI] Using 9Router as the primary AI gateway (${env.NINE_ROUTER_MODEL || "free"}).`);
       } else if (env.ANTHROPIC_AUTH_TOKEN) {
         aiModel = openRouter.chat(env.ANTHROPIC_MODEL || "claude-3-opus-20240229");
       } else if (env.GEMINI_API_KEY) {
@@ -1048,16 +1090,13 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
 
         if (synthesizerRes.text && synthesizerRes.text.trim()) {
           let finalText = synthesizerRes.text.trim();
-          if (toolsUsed.length > 0) {
-            finalText += `\n\n*(Data disintesis dari: ${toolsUsed.join(', ')})*`;
-          }
           silentLogger.info(`[MacroAI Agent] Multi-Agent Pipeline Completed. Tools used: ${toolsUsed.join(', ')}`);
           return { text: finalText, toolsUsed };
         }
       } catch (err: any) {
         silentLogger.error(`[MacroAI] Stage 3 (Synthesizer) failed: ${err.message}`);
         // Ultimate fallback
-        return { text: dataToSynthesize + `\n\n*(Data mentah dari: ${toolsUsed.join(', ')})*`, toolsUsed };
+        return { text: dataToSynthesize, toolsUsed };
       }
 
       throw new Error("All AI agents in the pipeline failed to generate a response");
@@ -1240,13 +1279,16 @@ TUGAS: Hasilkan analisis desk brief dengan format eksplisit berikut:
 JANGAN ulangi semua angka secara kaku. Gunakan angka hanya untuk mendukung narasi tajam Anda. Jangan gunakan kata-kata AI generik (misal: "Kesimpulannya", "Dinamika saat ini"). Langsung menukik ke analisis.`;
 
     const systemPrompt =
-      "ROLE: Senior Institutional Quant Trader. TONE: Tajam, analitis, sedikit sinis jika pasar tidak rasional. WAJIB menggunakan istilah finansial (Bear Steepener, Debasement, Liquidity Drain, Defying Gravity). Balas dalam Bahasa Indonesia yang profesional namun edgy.";
+      "ROLE: Senior Institutional Quant Trader. TONE: Tajam, analitis, sedikit sinis jika pasar tidak rasional. WAJIB menggunakan istilah finansial (Bear Steepener, Debasement, Liquidity Drain, Defying Gravity).\n\nBAHASA: WAJIB 100% Bahasa Indonesia profesional. DILARANG KERAS menggunakan bahasa Inggris untuk analisis. Jika ada istilah Inggris, tulis dalam Bahasa Indonesia atau beri padanannya.\n\nFORMAT: Langsung ke inti analisis. Jangan gunakan kata pengantar seperti 'Kesimpulannya', 'Dinamika saat ini', 'Berdasarkan data'. Jangan ulangi semua angka mentah — gunakan angka hanya untuk mendukung insight.";
 
     const text = await callDualEngine(prompt, systemPrompt, {
-      max_output_tokens: 600,
+      max_output_tokens: 2000,
       temperature: 0.3,
     });
-    if (text) return text.trim();
+    if (text) {
+      // Bersihkan <think> block dari model reasoning (misal qwen, deepseek)
+      return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    }
 
     throw new Error("Gagal mendapatkan analisis Nexus dari layanan AI.");
   },
@@ -1359,7 +1401,42 @@ Jawab HANYA dengan array of JSON valid. Analisis SETIAP berita, JANGAN ADA yang 
 
     try {
       let text: string | null = null;
-      if (env.GROQ_API_KEY) {
+
+      // 1. Try 9Router first if URL is configured
+      if (env.NINE_ROUTER_URL) {
+        try {
+          const modelName = env.NINE_ROUTER_MODEL || "free";
+          const response = await axios.post(
+            `${env.NINE_ROUTER_URL}/chat/completions`,
+            {
+              model: modelName,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: prompt },
+              ],
+              max_tokens: 4000,
+              temperature: 0.2,
+              stream: false,
+            },
+            {
+              headers: {
+                "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+                "Content-Type": "application/json",
+              },
+              timeout: 30000,
+            }
+          );
+          text = response.data?.choices?.[0]?.message?.content || null;
+          if (text) {
+            silentLogger.info(`[MacroAI] batchAnalyzeNews 9Router (${modelName}) succeeded.`);
+          }
+        } catch (error: any) {
+          silentLogger.warn("[MacroAI] batchAnalyzeNews 9Router failed, trying Groq/Gemini:", error.message);
+        }
+      }
+
+      // 2. Try Groq fallback
+      if (!text && env.GROQ_API_KEY) {
         try {
           const response = await groqRequest<GroqResponse>(
             GROQ_API_URL,
@@ -1505,13 +1582,15 @@ MULAI dengan menyatakan Fase Pasar di atas, lalu berikan analisis momentum, peri
 
   try {
     const raw = await callDualEngine(userPrompt, systemPrompt, {
-      max_output_tokens: 500,
+      max_output_tokens: 1500,
       temperature: 0.3,
-      responseMimeType: "application/json",
     });
     if (!raw) return null;
 
-    const parsed = parseCotJson(raw);
+    // Clean thinking tags from response (some models output thinking)
+    const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+    const parsed = parseCotJson(cleaned);
     if (!parsed) return null;
 
     return parsed;

@@ -56,24 +56,15 @@ router.post("/chat", requireAuth, async (req, res) => {
       context,
     );
 
-    const chunks: string[] = [];
-    await new Promise<void>((resolve, reject) => {
-      groqResponse.data.on("data", (chunk: Buffer) => {
-        chunks.push(chunk.toString("utf-8"));
-      });
-      groqResponse.data.on("end", () => resolve());
-      groqResponse.data.on("error", (err: any) => reject(err));
-    });
-
-    const combined = chunks.join("");
-    const text = extractAssistantText(combined);
+    const text = typeof groqResponse === 'string' ? groqResponse : groqResponse.text;
+    const toolsUsed = typeof groqResponse === 'object' && groqResponse.toolsUsed ? groqResponse.toolsUsed : [];
 
     if (!text) {
       res.status(502).json({ success: false, error: "Respons AI kosong" });
       return;
     }
 
-    res.json({ success: true, reply: text });
+    res.json({ success: true, reply: text, toolsUsed });
   } catch (error: any) {
     silentLogger.error("Macro AI Chat Route Error:", error);
     res.status(500).json({

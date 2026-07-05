@@ -54,8 +54,8 @@ export const aiReviewService = {
 
     // Initialize Anthropic (OpenRouter) with required headers
     const anthropic = new Anthropic({
-      apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      baseURL: env.ANTHROPIC_BASE_URL,
+      apiKey: env.NINE_ROUTER_URL ? (env.NINE_ROUTER_API_KEY || "sk-9router-local") : env.ANTHROPIC_AUTH_TOKEN,
+      baseURL: env.NINE_ROUTER_URL || env.ANTHROPIC_BASE_URL,
       defaultHeaders: {
         'HTTP-Referer': env.FRONTEND_URL || 'http://localhost:3000',
         'X-Title': 'Journal Trade AI Review'
@@ -64,7 +64,7 @@ export const aiReviewService = {
 
     // Fallback models list - stable free models on OpenRouter
     const fallbackModels = [
-      env.ANTHROPIC_MODEL,
+      env.NINE_ROUTER_URL ? (env.NINE_ROUTER_MODEL || "free") : env.ANTHROPIC_MODEL,
       "deepseek/deepseek-chat:free",
       "meta-llama/llama-3.1-8b-instruct:free",
       "google/gemma-3-27b-it:free"
@@ -139,24 +139,63 @@ CRITICAL RULES:
       let response: any;
       let lastError: Error | undefined;
 
-      // Try all models in fallback chain
-      for (let i = 0; i < fallbackModels.length && !response; i++) {
-        const model = fallbackModels[i];
-        console.log(`Trying AI model ${i + 1}/${fallbackModels.length}:`, model);
-
+      // 1. Try 9Router first via direct OpenAI-compatible HTTP fetch
+      if (env.NINE_ROUTER_URL) {
         try {
-          response = await anthropic.messages.create({
-            model,
-            max_tokens: 1500,
-            messages: [
-              { role: "user", content: prompt }
-            ],
-            temperature: 0.2,
+          const modelName = env.NINE_ROUTER_MODEL || "free";
+          console.log("Trying 9Router for Review with model:", modelName);
+          const nineResponse = await fetch(`${env.NINE_ROUTER_URL}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: modelName,
+              messages: [
+                { role: "user", content: prompt }
+              ],
+              max_tokens: 1500,
+              stream: false
+            })
           });
-          console.log("Success with model:", model);
-        } catch (err: any) {
-          lastError = err;
-          console.warn(`Model ${model} failed:`, err.status || err.message);
+
+          const nineData: any = await nineResponse.json();
+
+          if (nineData.choices && nineData.choices[0]?.message?.content) {
+            console.log("Success with 9Router for Review");
+            response = { content: [{ type: 'text', text: nineData.choices[0].message.content }] };
+          } else {
+            console.warn("9Router response invalid:", nineData);
+            lastError = new Error(nineData.error?.message || "Invalid 9Router response structure");
+          }
+        } catch (error: any) {
+          console.warn("9Router failed for Review:", error.message);
+          lastError = error;
+        }
+      }
+
+      // 2. Try Anthropic/OpenRouter as fallback
+      if (!response && env.ANTHROPIC_AUTH_TOKEN) {
+        for (let i = 0; i < fallbackModels.length && !response; i++) {
+          const model = fallbackModels[i];
+          console.log(`Trying fallback AI model ${i + 1}/${fallbackModels.length}:`, model);
+
+          try {
+            response = await anthropic.messages.create({
+              model,
+              max_tokens: 1500,
+              messages: [
+                { role: "user", content: prompt }
+              ],
+              temperature: 0.2,
+            });
+            console.log("Success with model:", model);
+            lastError = undefined;
+          } catch (err: any) {
+            lastError = err;
+            console.warn(`Model ${model} failed:`, err.status || err.message);
+          }
         }
       }
 
