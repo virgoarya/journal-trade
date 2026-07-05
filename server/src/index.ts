@@ -18,12 +18,14 @@ import { setAuthInstance } from "./auth-context";
 import { startMt5AutoSync } from "./services/mt5-scheduler.service";
 import { marketDataService } from "./services/market-data.service";
 import { quantService } from "./services/quant.service";
+import { mcpService } from "./services/mcp.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
 import path from "node:path";
 
 // nextapp
 const nextAppDir = path.join(__dirname, "..", "..", "frontend");
-const nextApp = next({ dev: true, dir: nextAppDir });
+const isDev = process.env.NODE_ENV !== 'production';
+const nextApp = next({ dev: isDev, dir: nextAppDir });
 
 const app = express();
 app.use(corsMiddleware);
@@ -92,6 +94,47 @@ connectDB()
       setAuthInstance(auth);
       const authHandler = toNodeHandler(auth);
       await startMt5AutoSync();
+
+      // Register Multi-MCP Servers
+      if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {
+        console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
+         mcpService.registerServer(
+          "FlowLLM-Finance",
+          "cmd.exe",
+          [
+            "/c",
+            "set", "PYTHONIOENCODING=utf-8", "&&",
+            ".venv-mcp\\Scripts\\finance-mcp.exe",
+            "config=default",
+            "mcp.transport=stdio",
+            "llm.default.model_name=qwen3-30b-a3b-thinking-2507"
+          ],
+          {
+            FLOW_LLM_API_KEY: env.FLOW_LLM_API_KEY || "",
+            TUSHARE_API_TOKEN: env.TUSHARE_API_TOKEN || "",
+            TAVILY_API_KEY: env.TAVILY_API_KEY || "",
+            DASHSCOPE_API_KEY: env.DASHSCOPE_API_KEY || "",
+            PYTHONIOENCODING: "utf-8",
+          }
+        ).catch(e => console.error("FlowLLM MCP error:", e));
+      }
+
+      if (env.AITRADOS_SECRET_KEY) {
+        console.log("Starting Aitrados MCP Server...");
+        mcpService.registerServer(
+          "Aitrados",
+          "cmd.exe",
+          [
+            "/c",
+            "set", "PYTHONIOENCODING=utf-8", "&&",
+            ".venv-mcp\\Scripts\\finance-trading-ai-agents-mcp.exe"
+          ],
+          {
+            AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY,
+            PYTHONIOENCODING: "utf-8",
+          }
+        ).catch(e => console.error("Aitrados MCP error:", e));
+      }
 
       app.use((req, res, next) => {
         if (req.url.startsWith("/api/auth")) {

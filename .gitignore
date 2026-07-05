@@ -86,6 +86,13 @@ Thumbs.db
 # Logs
 logs
 *.log
+debug.log
+
+# Test scripts and debug outputs
+server/scripts/test-*.js
+server/scripts/test-*.ts
+server/scripts/out*.txt
+server/schema_dump.json
 
 # Miscellaneous
 *.local
