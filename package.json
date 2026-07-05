@@ -1,6 +1,12 @@
 {
   "scripts": {
-    "test": "npm test --prefix server && npm test --prefix frontend"
+    "postinstall": "npm install --prefix server && npm install --prefix frontend",
+    "build": "npm run build:server && npm run build:frontend",
+    "build:server": "npm run build --prefix server",
+    "build:frontend": "npm run build --prefix frontend",
+    "test": "npm test --prefix server && npm test --prefix frontend",
+    "dev:server": "npm run dev --prefix server",
+    "dev:frontend": "npm run dev --prefix frontend"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

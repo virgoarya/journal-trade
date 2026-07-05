@@ -1,6 +1,8 @@
 ﻿import { Router } from "express";
+import { z } from "zod";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
+import { validateRequest } from "../middleware/validation";
 import { exportService } from "../services/export.service";
 import { tradingAccountService } from "../services/trading-account.service";
 import { Trade } from "../models/Trade";
@@ -8,8 +10,22 @@ import { TradingAccount } from "../models/TradingAccount";
 import { Playbook } from "../models/Playbook";
 import { AiReview } from "../models/AiReview";
 import { DailySnapshot } from "../models/DailySnapshot";
-
 import { UserSettings } from "../models/UserSettings";
+
+const updateSettingsSchema = z.object({
+  appearance: z.object({
+    theme: z.enum(["light", "dark"]),
+    accentColor: z.string().regex(/^#[0-9A-F]{6}$/i, "Format kode HEX warna tidak valid"),
+    soundEnabled: z.boolean(),
+  }).optional(),
+  notifications: z.object({
+    tradeAlerts: z.boolean(),
+    aiReviews: z.boolean(),
+    weeklyReports: z.boolean(),
+    achievements: z.boolean(),
+  }).optional(),
+});
+
 const router = Router();
 router.use(requireAuth);
 
@@ -30,7 +46,7 @@ router.get("/", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.patch("/", async (req, res, next) => {
+router.patch("/", validateRequest({ body: updateSettingsSchema }), async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { appearance, notifications } = req.body;
