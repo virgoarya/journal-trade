@@ -20,6 +20,7 @@ import { marketDataService } from "./services/market-data.service";
 import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
+import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import path from "node:path";
 
 // nextapp
@@ -136,6 +137,9 @@ connectDB()
         ).catch(e => console.error("Aitrados MCP error:", e));
       }
 
+      // Apply auth rate limiter to auth endpoints
+      app.use("/api/auth", authLimiter);
+
       app.use((req, res, next) => {
         if (req.url.startsWith("/api/auth")) {
           authHandler(req, res).catch((err) => {
@@ -147,7 +151,8 @@ connectDB()
         }
       });
 
-      app.use("/api", apiRoutes);
+      // Apply general API rate limiter to all API routes
+      app.use("/api", apiLimiter, apiRoutes);
       app.use(errorHandler);
 
       const server = createServer(app);

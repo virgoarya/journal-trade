@@ -1,7 +1,33 @@
-import fs from 'fs';
+import { logger } from "./logger";
+
 export const silentLogger = {
-  debug: (msg?: any, ...args: any[]) => fs.appendFileSync('debug.log', `[DEBUG] ${msg} ${args.map(a => JSON.stringify(a)).join(' ')}\n`),
-  info: (msg?: any, ...args: any[]) => fs.appendFileSync('debug.log', `[INFO] ${msg} ${args.map(a => JSON.stringify(a)).join(' ')}\n`),
-  warn: (msg?: any, ...args: any[]) => fs.appendFileSync('debug.log', `[WARN] ${msg} ${args.map(a => JSON.stringify(a)).join(' ')}\n`),
-  error: (msg?: any, ...args: any[]) => fs.appendFileSync('debug.log', `[ERROR] ${msg} ${args.map(a => JSON.stringify(a)).join(' ')}\n`),
+  debug: (msg?: any, ...args: any[]) => {
+    if (args.length > 0) {
+      logger.debug({ extra: args }, msg);
+    } else {
+      logger.debug(msg);
+    }
+  },
+  info: (msg?: any, ...args: any[]) => {
+    if (args.length > 0) {
+      logger.info({ extra: args }, msg);
+    } else {
+      logger.info(msg);
+    }
+  },
+  warn: (msg?: any, ...args: any[]) => {
+    if (args.length > 0) {
+      logger.warn({ extra: args }, msg);
+    } else {
+      logger.warn(msg);
+    }
+  },
+  error: (msg?: any, ...args: any[]) => {
+    if (args.length > 0) {
+      logger.error({ extra: args }, msg);
+    } else {
+      logger.error(msg);
+    }
+  },
 };
+

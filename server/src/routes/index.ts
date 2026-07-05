@@ -15,6 +15,7 @@ import geoRiskRoutes from "./geo-risk.routes";
 import quantRoutes from "./quant.routes";
 import macroRegimeRoutes from "./macro-regime.routes";
 import nexusRoutes from "./nexus.routes";
+import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
 
@@ -28,12 +29,12 @@ router.use("/v1/trading-accounts", tradingAccountRoutes);
 router.use("/v1/trades", tradeRoutes);
 router.use("/v1/playbooks", playbookRoutes);
 router.use("/v1/analytics", analyticsRoutes);
-router.use("/v1/ai-reviews", aiReviewRoutes);
+router.use("/v1/ai-reviews", aiLimiter, aiReviewRoutes);
 router.use("/v1/notifications", notificationRoutes);
 router.use("/v1/settings", settingsRoutes);
 router.use("/v1/mt5", mt5Routes);
-router.use("/v1/macro-ai", macroAiRoutes);
-router.use("/v1/macro-ai-observer", macroAiObserverRoutes);
+router.use("/v1/macro-ai", aiLimiter, macroAiRoutes);
+router.use("/v1/macro-ai-observer", aiLimiter, macroAiObserverRoutes);
 router.use("/v1/market-data", marketDataRoutes);
 router.use("/v1/geo-risk", geoRiskRoutes);
 router.use("/v1/quant", quantRoutes);

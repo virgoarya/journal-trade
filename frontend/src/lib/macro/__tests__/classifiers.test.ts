@@ -13,8 +13,8 @@ describe('classifyMacroRegime', () => {
   it('should return Goldilocks when growth high & inflation low', () => {
     const res = classifyMacroRegime({
       ...baseInput,
-      growth: 0.5, // >0.2
-      inflation: 2, // <3
+      growth: 0.5, // >0.15 (high)
+      inflation: -0.2, // <-0.15 (low)
     });
     expect(res.regime).toBe('Goldilocks');
     expect(res.shortReason).toContain('Pertumbuhan di atas tren');
@@ -41,8 +41,8 @@ describe('classifyMacroRegime', () => {
   it('should return Deflation when growth low & inflation low', () => {
     const res = classifyMacroRegime({
       ...baseInput,
-      growth: -0.1,
-      inflation: 1,
+      growth: -0.5, // <-0.15 (low)
+      inflation: -0.5, // <-0.15 (low)
     });
     expect(res.regime).toBe('Deflation');
   });

@@ -14,7 +14,7 @@ describe("useDataFetching", () => {
   it("should initialize with default assets", () => {
     const { result } = renderHook(() => useDataFetching());
 
-    expect(result.current.assets).toHaveLength(8);
+    expect(result.current.assets).toHaveLength(28);
     expect(result.current.assets[0].ticker).toBe("SPY");
   });
 
