@@ -96,11 +96,8 @@ connectDB()
         console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
          mcpService.registerServer(
           "FlowLLM-Finance",
-          "cmd.exe",
+          path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-mcp.exe"),
           [
-            "/c",
-            "set", "PYTHONIOENCODING=utf-8", "&&",
-            ".venv-mcp\\Scripts\\finance-mcp.exe",
             "config=default",
             "mcp.transport=stdio",
             "llm.default.model_name=qwen3-30b-a3b-thinking-2507"
@@ -119,12 +116,8 @@ connectDB()
         console.log("Starting Aitrados MCP Server...");
         mcpService.registerServer(
           "Aitrados",
-          "cmd.exe",
-          [
-            "/c",
-            "set", "PYTHONIOENCODING=utf-8", "&&",
-            ".venv-mcp\\Scripts\\finance-trading-ai-agents-mcp.exe"
-          ],
+          path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-trading-ai-agents-mcp.exe"),
+          [],
           {
             AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY,
             PYTHONIOENCODING: "utf-8",
