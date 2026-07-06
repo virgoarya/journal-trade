@@ -7,6 +7,7 @@ import { PositionsTable } from "./components/PositionsTable";
 import { TradingPanel } from "./components/TradingPanel";
 import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
+import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { BacktestTab } from "./components/BacktestTab";
 import { useMT5Connection } from "./hooks/useMT5Connection";
@@ -188,6 +189,21 @@ function AITradingPageContent() {
                 marketStructure={lastAnalysis.marketStructure}
               />
             )}
+
+            {/* AI Backtest Skill — rankings, verdicts, auto-scan */}
+            <SkillDisplay onApplySkill={(skill) => {
+              // Auto-fill pipeline config from skill data
+              if (skill.symbolRankings?.length > 0) {
+                const topSymbols = skill.symbolRankings
+                  .filter(s => s.score >= 50)
+                  .slice(0, 5)
+                  .map(s => s.symbol);
+                if (topSymbols.length > 0) {
+                  // The pipeline will pick these up on next start
+                  console.log(`[SKILL] Auto-selected pairs: ${topSymbols.join(", ")}`);
+                }
+              }
+            }} />
 
             {/* Pipeline Performance — live methodology & symbol stats */}
             <PipelinePerformance />

@@ -442,6 +442,76 @@ class AITradingService {
   }
 }
 
+  // ── Auto Backtest & Skill ──────────────────────────────────────────
+  async autoBacktest() {
+    const res = await apiClient.post<AutoBacktestSummary>(
+      "/api/v1/ai-trading/auto-backtest",
+      {},
+    );
+    return res;
+  }
+
+  async getSkill() {
+    const res = await apiClient.get<AIBacktestSkill>(
+      "/api/v1/ai-trading/skill",
+    );
+    return res;
+  }
+}
+
+export interface AutoBacktestSummary {
+  status: "running" | "complete" | "error";
+  totalSymbols: number;
+  processedSymbols: number;
+  qualifiedSymbols: number;
+  results: Array<{
+    symbol: string;
+    totalTrades: number;
+    winRate: number;
+    totalPnL: number;
+    totalPnLPercent: number;
+    profitFactor: number;
+    recoveryFactor: number;
+    score: number;
+    qualified: boolean;
+    reason?: string;
+  }>;
+  topPairs: Array<{ symbol: string; score: number; totalPnL: number }>;
+  error?: string;
+}
+
+export interface AIBacktestSkill {
+  totalBacktests: number;
+  symbolRankings: Array<{
+    symbol: string;
+    score: number;
+    totalBacktests: number;
+    avgWinRate: number;
+    avgProfitFactor: number;
+    avgRecoveryFactor: number;
+    totalPnL: number;
+    totalTrades: number;
+    bestMethodology: string;
+    recommendedParams: {
+      rsiOversold: number;
+      rsiOverbought: number;
+      atrMultiplierSL: number;
+      atrMultiplierTP: number;
+      signalInterval: number;
+    };
+    lastTested: string;
+  }>;
+  methodologyRankings: Array<{
+    methodology: string;
+    totalTrades: number;
+    totalPnL: number;
+    avgWinRate: number;
+    bestSymbol: string;
+    verdict: "KEEP" | "ADJUST" | "DISABLE";
+  }>;
+  globalRecoveryFactor: number;
+}
+
 export interface PipelinePerformance {
   totalTrades: number;
   winningTrades: number;

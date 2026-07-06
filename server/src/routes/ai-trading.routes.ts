@@ -10,6 +10,7 @@ import { apiResponse } from "../utils/api-response";
 import { AITradeLog } from "../models/AITradeLog";
 import { autoBacktestService } from "../services/auto-backtest.service";
 import { aiBacktestSkillService } from "../services/ai-backtest-skill.service";
+import { newsCalendarService } from "../services/news-calendar.service";
 import {
   mt5ConnectSchema,
   openPositionSchema,
@@ -735,6 +736,31 @@ router.post("/auto-backtest", heavyLimiter, async (req, res, next) => {
   } catch (error: any) {
     next(error);
   }
+});
+
+/**
+ * GET /api/ai-trading/news/upcoming
+ * Get upcoming economic events (filtered by impact).
+ */
+router.get("/news/upcoming", async (req, res, next) => {
+  try {
+    const hours = parseInt(req.query.hours as string) || 48;
+    const events = await newsCalendarService.getUpcomingEvents(hours);
+    return apiResponse.success(res, { events, total: events.length });
+  } catch (error) { next(error); }
+});
+
+/**
+ * GET /api/ai-trading/news/warnings
+ * Get active high-impact news warnings for currently watched pipeline pairs.
+ */
+router.get("/news/warnings", async (req, res, next) => {
+  try {
+    const ps = tradingPipelineService.getPipelineStatus(req.user.id);
+    const symbols = ps.config?.symbols || [];
+    const warnings = await newsCalendarService.getActiveWarnings(symbols);
+    return apiResponse.success(res, { warnings });
+  } catch (error) { next(error); }
 });
 
 export default router;

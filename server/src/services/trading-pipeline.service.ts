@@ -2,6 +2,8 @@ import { mt5McpService } from "./mt5-mcp.service";
 import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
+import { newsCalendarService } from "./news-calendar.service";
+import { fundamentalResearchService } from "./fundamental-research.service";
 import { AITradingSession } from "../models/AITradingSession";
 import { AITradeLog } from "../models/AITradeLog";
 import { silentLogger } from "../utils/silent-logger";
@@ -452,6 +454,28 @@ class TradingPipelineService {
           );
           continue;
         }
+
+        // ── NEWS: Skip if high-impact event within ±30 minutes ────────
+        try {
+          const newsWindow = await newsCalendarService.isHighImpactWindow(signal.symbol, 30);
+          if (newsWindow) {
+            this.addLog(userId, "INFO", `[NEWS] Skipped ${signal.symbol} ${signal.direction} — high-impact event within 30 min`);
+            continue;
+          }
+        } catch (e: any) { silentLogger.warn(`[PIPELINE] News check error: ${e.message}`); }
+
+        // ── FUNDAMENTAL: Skip if against strong trend ─────────────────
+        try {
+          const fundScore = await fundamentalResearchService.scorePair(signal.symbol);
+          const aligned = !(
+            (signal.direction === "BUY" && fundScore.trendAlignment === "BEARISH") ||
+            (signal.direction === "SELL" && fundScore.trendAlignment === "BULLISH")
+          );
+          if (!aligned && Math.abs(fundScore.compositeScore) >= 30) {
+            this.addLog(userId, "INFO", `[NEWS] Skipped ${signal.symbol} — against fundamental trend (${fundScore.trendAlignment}, score: ${fundScore.compositeScore})`);
+            continue;
+          }
+        } catch (e: any) { silentLogger.warn(`[PIPELINE] Fundamental check error: ${e.message}`); }
 
         // ── OPTIONAL: LLM Consensus validation ─────────────────────
         if (pipeline.config.llmConsensus?.enabled) {
