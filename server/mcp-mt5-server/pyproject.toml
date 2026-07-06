@@ -1,0 +1,13 @@
+[project]
+name = "mt5-mcp-server"
+version = "1.0.0"
+description = "MCP Server for MetaTrader 5 trading - part of Journal Trade platform"
+requires-python = ">=3.10"
+dependencies = [
+    "MetaTrader5>=5.0.45",
+    "mcp>=1.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

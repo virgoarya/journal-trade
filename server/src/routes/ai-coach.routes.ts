@@ -96,7 +96,7 @@ ATURAN PERILAKU:
               parameters: z.object({
                 tradeId: z.string().describe("ID dari trade yang ingin dicari detailnya")
               }),
-              execute: async ({ tradeId }) => {
+              execute: async ({ tradeId }: { tradeId: string }) => {
                 const trade = await Trade.findOne({ _id: tradeId, userId });
                 if (!trade) return JSON.stringify({ error: "Trade tidak ditemukan atau bukan milik Anda" });
                 return JSON.stringify({

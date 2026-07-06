@@ -3,6 +3,8 @@
 import dns from "node:dns";
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
+process.env.PYTHONIOENCODING = "utf-8";
+
 import express from "express";
 import next from "next";
 import { createServer } from "node:http";
@@ -20,6 +22,7 @@ import { startMt5AutoSync } from "./services/mt5-scheduler.service";
 import { marketDataService } from "./services/market-data.service";
 import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
+import { mt5McpService } from "./services/mt5-mcp.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import path from "node:path";
@@ -124,8 +127,11 @@ connectDB()
             PYTHONIOENCODING: "utf-8",
             PYTHONUNBUFFERED: "1",
           }
-        ).catch(e => console.error("Aitrados MCP error:", e));
+        ).catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
       }
+
+      // Initialize MT5 MCP Service (lazy - connects on first use)
+      mt5McpService.init().catch((e) => console.warn("MT5 MCP init delayed:", e.message));
 
       // Apply auth rate limiter to auth endpoints
       app.use("/api/auth", authLimiter);

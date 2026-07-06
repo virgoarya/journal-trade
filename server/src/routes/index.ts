@@ -16,6 +16,8 @@ import quantRoutes from "./quant.routes";
 import macroRegimeRoutes from "./macro-regime.routes";
 import nexusRoutes from "./nexus.routes";
 import aiCoachRoutes from "./ai-coach.routes";
+import aiTradingRoutes from "./ai-trading.routes";
+import backtestRoutes from "./backtest.routes";
 import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
@@ -42,5 +44,7 @@ router.use("/v1/quant", quantRoutes);
 router.use("/v1/macro-regime", macroRegimeRoutes);
 router.use("/v1/nexus", nexusRoutes);
 router.use("/v1/ai-coach", aiLimiter, aiCoachRoutes);
+router.use("/v1/ai-trading", aiLimiter, aiTradingRoutes);
+router.use("/v1/backtest", backtestRoutes);
 
 export default router;

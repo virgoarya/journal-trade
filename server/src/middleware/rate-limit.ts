@@ -1,9 +1,9 @@
 import rateLimit from "express-rate-limit";
 
-// General API rate limiter - 100 requests per 15 minutes
+// General API rate limiter - 500 requests per 15 minutes
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 500,
   message: {
     success: false,
     error: {
@@ -15,10 +15,10 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Strict limiter for AI endpoints - 20 requests per 15 minutes
+// Strict limiter for AI endpoints - 100 requests per 15 minutes
 export const aiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 1000,
   message: {
     success: false,
     error: {

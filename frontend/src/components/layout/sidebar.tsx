@@ -15,7 +15,9 @@ import {
   LogOut,
   Globe,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Cpu,
+  FlaskConical
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +33,7 @@ const mainNav = [
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "AI Review", href: "/ai-review", icon: Bot },
   { name: "Macro Terminal", href: "/macro-terminal/overview", icon: Globe },
+  { name: "AI Trading", href: "/ai-trading", icon: Cpu },
 ];
 
 const utilityNav = [

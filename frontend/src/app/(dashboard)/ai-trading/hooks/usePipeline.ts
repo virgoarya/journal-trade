@@ -1,0 +1,147 @@
+"use client";
+
+import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  aiTradingService,
+  type PipelineConfig,
+  type PipelineStatus,
+  type PipelineLog,
+  type MultiStrategyAnalysis,
+} from "@/services/ai-trading.service";
+import { toast } from "sonner";
+
+export function usePipeline() {
+  const [status, setStatus] = useState<PipelineStatus | null>(null);
+  const [logs, setLogs] = useState<PipelineLog[]>([]);
+  const [isStarting, setIsStarting] = useState(false);
+  const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const start = useCallback(async (config: PipelineConfig) => {
+    setIsStarting(true);
+    try {
+      const result = await aiTradingService.startPipeline(config);
+      if (result.success) {
+        // Immediately set status so polling useEffect kicks in
+        setStatus({
+          running: true,
+          paused: false,
+          startedAt: new Date().toISOString(),
+          config,
+          metrics: {
+            totalTrades: 0,
+            winningTrades: 0,
+            losingTrades: 0,
+            totalPnL: 0,
+            dailyPnL: 0,
+            openPositions: 0,
+            currentDrawdown: 0,
+          },
+          lastSignal: null,
+          lastAnalysis: null,
+          lastError: null,
+        });
+        toast.success("AI Trading Pipeline started");
+        return true;
+      } else {
+        toast.error(result.error || "Failed to start pipeline");
+        return false;
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to start pipeline");
+      return false;
+    } finally {
+      setIsStarting(false);
+    }
+  }, []);
+
+  const stop = useCallback(async () => {
+    setIsStopping(true);
+    try {
+      await aiTradingService.stopPipeline();
+      toast.success("Pipeline stopped");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to stop pipeline");
+    } finally {
+      setIsStopping(false);
+    }
+  }, []);
+
+  const pause = useCallback(async () => {
+    try {
+      await aiTradingService.pausePipeline();
+      toast.success("Pipeline paused");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to pause");
+    }
+  }, []);
+
+  const resume = useCallback(async () => {
+    try {
+      await aiTradingService.resumePipeline();
+      toast.success("Pipeline resumed");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to resume");
+    }
+  }, []);
+
+  // Poll status & logs while running
+  useEffect(() => {
+    if (status?.running) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const [statusRes, logsRes] = await Promise.all([
+            aiTradingService.getPipelineStatus(),
+            aiTradingService.getPipelineLogs(100),
+          ]);
+          if (statusRes.success && statusRes.data) {
+            setStatus(statusRes.data);
+            if (statusRes.data.lastAnalysis) {
+              setLastAnalysis(statusRes.data.lastAnalysis);
+            }
+          }
+          if (logsRes.success && logsRes.data) setLogs(logsRes.data.logs);
+        } catch {
+          // ignore
+        }
+      }, 10000);
+
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+      };
+    }
+  }, [status?.running]);
+
+  // Initial fetch
+  const refresh = useCallback(async () => {
+    try {
+      const [statusRes, logsRes] = await Promise.all([
+        aiTradingService.getPipelineStatus(),
+        aiTradingService.getPipelineLogs(100),
+      ]);
+      if (statusRes.success && statusRes.data) {
+        setStatus(statusRes.data);
+        if (statusRes.data.lastAnalysis) {
+          setLastAnalysis(statusRes.data.lastAnalysis);
+        }
+      }
+      if (logsRes.success && logsRes.data) setLogs(logsRes.data.logs);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  return {
+    status,
+    lastAnalysis,
+    logs,
+    isStarting,
+    isStopping,
+    start,
+    stop,
+    pause,
+    resume,
+    refresh,
+  };
+}
