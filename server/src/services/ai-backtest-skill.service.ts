@@ -155,6 +155,92 @@ class AIBacktestSkillService {
   async getSkill(userId: string) {
     return AIBacktestSkill.findOne({ userId });
   }
+
+  /** Get top N best symbols by score */
+  async getBestSymbols(userId: string, limit = 5) {
+    const skill = await AIBacktestSkill.findOne({ userId });
+    if (!skill) return [];
+    return skill.symbolRankings
+      .filter((s: any) => s.totalBacktests >= 2 && s.score >= 40)
+      .sort((a: any, b: any) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  /** Get methodology verdicts for disabling poor performers */
+  async getMethodologyVerdicts(userId: string) {
+    const skill = await AIBacktestSkill.findOne({ userId });
+    if (!skill) return [];
+    return skill.methodologyRankings.filter((m: any) => m.totalTrades >= 5);
+  }
+
+  /** Get recommended params for a specific symbol */
+  async getRecommendedParams(userId: string, symbol: string) {
+    const skill = await AIBacktestSkill.findOne({ userId });
+    if (!skill) return null;
+    const entry = skill.symbolRankings.find((s: any) => s.symbol === symbol);
+    return entry?.recommendedParams || null;
+  }
+
+  /** Lightweight inline skill update from auto-backtest partial result */
+  async updateFromAutoResult(
+    userId: string,
+    symbol: string,
+    pnl: number,
+    trades: number,
+    winRate: number,
+    profitFactor: number,
+    recoveryFactor: number,
+  ): Promise<void> {
+    try {
+      let skill = await AIBacktestSkill.findOne({ userId });
+      if (!skill) {
+        skill = new AIBacktestSkill({ userId, symbolRankings: [], methodologyRankings: [], globalRecoveryFactor: 0, totalBacktests: 0 });
+      }
+
+      let symSkill = skill.symbolRankings.find((s: any) => s.symbol === symbol);
+      if (!symSkill) {
+        skill.symbolRankings.push({
+          symbol,
+          score: 0,
+          totalBacktests: 1,
+          avgWinRate: winRate,
+          avgProfitFactor: profitFactor,
+          avgRecoveryFactor: recoveryFactor,
+          totalPnL: pnl,
+          totalTrades: trades,
+          bestMethodology: "unknown",
+          recommendedParams: { rsiOversold: 30, rsiOverbought: 70, atrMultiplierSL: 1.5, atrMultiplierTP: 2.0, signalInterval: 4 },
+          lastTested: new Date(),
+        });
+      } else {
+        symSkill.totalBacktests += 1;
+        symSkill.avgWinRate = (symSkill.avgWinRate * (symSkill.totalBacktests - 1) + winRate) / symSkill.totalBacktests;
+        symSkill.avgProfitFactor = (symSkill.avgProfitFactor * (symSkill.totalBacktests - 1) + profitFactor) / symSkill.totalBacktests;
+        const rf = recoveryFactor === Infinity ? 10 : recoveryFactor;
+        symSkill.avgRecoveryFactor = (symSkill.avgRecoveryFactor * (symSkill.totalBacktests - 1) + rf) / symSkill.totalBacktests;
+        symSkill.totalPnL += pnl;
+        symSkill.totalTrades += trades;
+        symSkill.lastTested = new Date();
+      }
+
+      // Recalculate scores
+      const maxPnL = Math.max(...skill.symbolRankings.map((s: any) => Math.abs(s.totalPnL)), 1);
+      const maxTrades = Math.max(...skill.symbolRankings.map((s: any) => s.totalTrades), 1);
+      for (const s of skill.symbolRankings) {
+        s.score = Math.round(
+          (s.avgWinRate * 0.25) +
+          (Math.min(100, s.avgProfitFactor * 25) * 0.25) +
+          (Math.min(100, s.avgRecoveryFactor * 20) * 0.20) +
+          (((s.totalPnL + maxPnL) / (2 * maxPnL)) * 100 * 0.15) +
+          ((s.totalTrades / maxTrades) * 100 * 0.15)
+        );
+      }
+      skill.symbolRankings.sort((a: any, b: any) => b.score - a.score);
+      await skill.save();
+    } catch (err: any) {
+      silentLogger.error(`[AI-SKILL] updateFromAutoResult error: ${err.message}`);
+    }
+  }
 }
 
 export const aiBacktestSkillService = new AIBacktestSkillService();

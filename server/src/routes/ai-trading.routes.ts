@@ -8,6 +8,8 @@ import { tradingPipelineService } from "../services/trading-pipeline.service";
 import { riskManagerService } from "../services/risk-manager.service";
 import { apiResponse } from "../utils/api-response";
 import { AITradeLog } from "../models/AITradeLog";
+import { autoBacktestService } from "../services/auto-backtest.service";
+import { aiBacktestSkillService } from "../services/ai-backtest-skill.service";
 import {
   mt5ConnectSchema,
   openPositionSchema,
@@ -686,6 +688,51 @@ router.get("/performance", async (req, res, next) => {
       equityCurve,
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/ai-trading/skill
+ * Get AI Backtest Skill — symbol rankings, methodology verdicts, recommended params.
+ */
+router.get("/skill", async (req, res, next) => {
+  try {
+    const skill = await aiBacktestSkillService.getSkill(req.user.id);
+    if (!skill) {
+      return apiResponse.success(res, {
+        totalBacktests: 0,
+        symbolRankings: [],
+        methodologyRankings: [],
+        globalRecoveryFactor: 0,
+      });
+    }
+    return apiResponse.success(res, {
+      totalBacktests: skill.totalBacktests,
+      symbolRankings: skill.symbolRankings.sort((a: any, b: any) => b.score - a.score),
+      methodologyRankings: skill.methodologyRankings,
+      globalRecoveryFactor: skill.globalRecoveryFactor,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/ai-trading/auto-backtest
+ * Trigger AI auto-scan across all major pairs with 0.5% risk, no overtrade.
+ * Results aggregated into AIBacktestSkill for live pipeline consumption.
+ */
+router.post("/auto-backtest", heavyLimiter, async (req, res, next) => {
+  try {
+    const summary = await autoBacktestService.runFullScan(req.user.id);
+
+    if (summary.status === "error") {
+      return apiResponse.error(res, summary.error || "Auto backtest failed", "AUTO_BT_ERROR", 500);
+    }
+
+    return apiResponse.success(res, summary);
+  } catch (error: any) {
     next(error);
   }
 });
