@@ -455,6 +455,15 @@ class TradingPipelineService {
           continue;
         }
 
+        // ── CORRELATION: Prevent over-exposure to single currency ──────
+        try {
+          const corrCheck = await riskManagerService.checkCorrelationRisk(signal.symbol);
+          if (!corrCheck.allowed) {
+            this.addLog(userId, "ERROR", `[RISK] Skipped ${signal.symbol}: ${corrCheck.reason}`);
+            continue;
+          }
+        } catch (e: any) { silentLogger.warn(`[PIPELINE] Correlation check error: ${e.message}`); }
+
         // ── NEWS: Skip if high-impact event within ±30 minutes ────────
         try {
           const newsWindow = await newsCalendarService.isHighImpactWindow(signal.symbol, 30);

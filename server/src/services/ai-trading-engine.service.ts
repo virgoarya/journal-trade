@@ -331,6 +331,7 @@ class AITradingEngine {
     riskPercent: number;
     entryPrice: number;
     stopLoss: number;
+    atr?: number;
     contractSize: number;
     volumeMin: number;
     volumeMax: number;
@@ -341,6 +342,7 @@ class AITradingEngine {
       riskPercent,
       entryPrice,
       stopLoss,
+      atr,
       contractSize,
       volumeMin,
       volumeMax,
@@ -348,7 +350,13 @@ class AITradingEngine {
     } = params;
 
     const riskAmount = accountBalance * (riskPercent / 100);
-    const slDistance = Math.abs(entryPrice - stopLoss);
+    let slDistance = Math.abs(entryPrice - stopLoss);
+
+    // ATR adjustment: ensure minimum SL distance is 1.5× ATR
+    // Prevents stop-out from noise during high volatility
+    if (atr && atr > 0) {
+      slDistance = Math.max(slDistance, atr * 1.5);
+    }
 
     let lotSize = 0;
     if (slDistance > 0 && contractSize > 0) {

@@ -113,6 +113,44 @@ class RiskManagerService {
   }
 
   /**
+   * Correlation Risk Check — ensures no more than max positions per currency group.
+   * Prevents over-exposure to a single currency (e.g. 3x short USD via EURUSD + GBPUSD + AUDUSD).
+   */
+  async checkCorrelationRisk(
+    symbol: string,
+    maxPositionsPerBase = 2,
+    maxPositionsPerQuote = 3,
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    try {
+      const positions = await mt5McpService.getPositions();
+      const base = symbol.substring(0, 3);
+      const quote = symbol.substring(3, 6);
+
+      let baseCount = 0;
+      let quoteCount = 0;
+
+      for (const pos of positions) {
+        const posBase = pos.symbol.substring(0, 3);
+        const posQuote = pos.symbol.substring(3, 6);
+        if (posBase === base) baseCount++;
+        if (posQuote === base) baseCount++;
+        if (posQuote === quote) quoteCount++;
+      }
+
+      if (baseCount >= maxPositionsPerBase) {
+        return { allowed: false, reason: `Max ${maxPositionsPerBase} positions per ${base} (currently ${baseCount})` };
+      }
+      if (quoteCount >= maxPositionsPerQuote) {
+        return { allowed: false, reason: `Max ${maxPositionsPerQuote} positions per ${quote} (currently ${quoteCount})` };
+      }
+
+      return { allowed: true };
+    } catch (error: any) {
+      return { allowed: true }; // fail open — correlation is advisory
+    }
+  }
+
+  /**
    * Calculate current risk metrics from MT5.
    */
   async calculateRiskMetrics(userId: string): Promise<RiskMetrics> {

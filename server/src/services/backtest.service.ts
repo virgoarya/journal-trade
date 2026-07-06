@@ -641,6 +641,7 @@ class BacktestService {
               const vol = aiTradingEngine.calculatePositionSize({
                 accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
                 entryPrice: simulatedEntry, stopLoss: fs.sl,
+                atr,
                 contractSize: symState.contractSize, volumeMin: symState.volumeMin,
                 volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
               });
@@ -668,7 +669,7 @@ class BacktestService {
               const confidence = this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOversold);
               const vol = aiTradingEngine.calculatePositionSize({
                 accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
-                entryPrice: entryPrice, stopLoss: sl,
+                entryPrice: entryPrice, stopLoss: sl, atr,
                 contractSize: symState.contractSize, volumeMin: symState.volumeMin,
                 volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
               });
@@ -687,7 +688,7 @@ class BacktestService {
               const confidence = this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOverbought);
               const vol = aiTradingEngine.calculatePositionSize({
                 accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
-                entryPrice: entryPrice, stopLoss: sl,
+                entryPrice: entryPrice, stopLoss: sl, atr,
                 contractSize: symState.contractSize, volumeMin: symState.volumeMin,
                 volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
               });
