@@ -624,10 +624,34 @@ class TradingPipelineService {
 
         if (atrValue === 0) continue;
 
+        // ── BREAKEVEN: Jika harga bergerak 1× ATR sesuai prediksi → SL geser ke entry
+        const breakevenDistance = atrValue * 1.0;
+        let shouldBreakeven = false;
+
+        if (pos.type === "BUY" && pos.priceCurrent >= pos.priceOpen + breakevenDistance) {
+          if (pos.sl < pos.priceOpen) {
+            shouldBreakeven = true;
+          }
+        } else if (pos.type === "SELL" && pos.priceCurrent <= pos.priceOpen - breakevenDistance) {
+          if (pos.sl > pos.priceOpen) {
+            shouldBreakeven = true;
+          }
+        }
+
+        if (shouldBreakeven) {
+          await mt5McpService.modifyPosition(pos.ticket, pos.priceOpen, pos.tp);
+          this.addLog(userId, "TRAILING",
+            `Breakeven ${pos.symbol} ticket=${pos.ticket}: SL moved to entry ${pos.priceOpen.toFixed(5)}`,
+            { ticket: pos.ticket, newSL: pos.priceOpen },
+          );
+          continue; // Skip trailing this cycle — breakeven happens first
+        }
+
+        // ── TRAILING STOP: Geser SL mengikuti harga (existing logic) ──────
         const result = aiTradingEngine.calculateTrailingStopSL({
           positionType: pos.type,
           currentPrice: pos.priceCurrent,
-          currentSL: pos.sl,
+          currentSL: shouldBreakeven ? pos.priceOpen : pos.sl,
           atrValue,
           trailATR: pipeline.config.trailingStop.trailATR,
           activationATR: pipeline.config.trailingStop.activationATR,
