@@ -1,9 +1,11 @@
 import { mt5McpService } from "./mt5-mcp.service";
-import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis } from "./ai-trading-engine.service";
+import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis, type Candle } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
 import { newsCalendarService } from "./news-calendar.service";
 import { fundamentalResearchService } from "./fundamental-research.service";
+import { marketRegimeService } from "./market-regime.service";
+import { multiTimeframeService } from "./multi-timeframe.service";
 import { AITradingSession } from "../models/AITradingSession";
 import { AITradeLog } from "../models/AITradeLog";
 import { silentLogger } from "../utils/silent-logger";
@@ -355,6 +357,22 @@ class TradingPipelineService {
         pipeline.lastError = null;
         return;
       }
+
+      // ── MARKET REGIME: Detect current market conditions ────────────
+      let regimeMult: Record<string, number> = {};
+      try {
+        const rates = await mt5McpService.getRates(pipeline.config.symbols[0], pipeline.config.timeframe, 60);
+        if (rates && rates.length > 30) {
+          const candles: Candle[] = rates.map((r: any) => ({
+            time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
+          }));
+          const regimeResult = marketRegimeService.analyze(candles);
+          regimeMult = marketRegimeService.getRegimeMultipliers(regimeResult.regime);
+          this.addLog(userId, "CONFLUENCE",
+            `[REGIME] ${regimeResult.regime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
+          );
+        }
+      } catch (e: any) { silentLogger.warn(`[PIPELINE] Regime check error: ${e.message}`); }
 
       // Use multi-methodology analysis only for symbols with new candles
       const analyses = await aiTradingEngine.analyzeSymbols(
