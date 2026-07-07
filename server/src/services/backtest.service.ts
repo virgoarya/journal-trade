@@ -662,8 +662,8 @@ class BacktestService {
             }
           }
 
-          // Fallback RSI+Engulf
-          if (!newTrade) {
+          // Fallback RSI+Engulf (only if rsiEngulf is in activeMethodologies)
+          if (!newTrade && am.includes("rsiEngulf")) {
             if (rsi < merged.entrySettings.rsiOversold && pattern.type === "BULLISH_ENGULFING" && volumeBuy) {
               const spreadValue = (merged.spreadPips || 0) * 0.0001;
               const entryPrice = currentPrice + spreadValue;

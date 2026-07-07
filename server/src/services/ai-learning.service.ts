@@ -455,6 +455,25 @@ class AILearningService {
       };
     }
 
+    // Copy active methodologies and weights
+    if (snapshot?.activeMethodologies) {
+      updatedConfig.activeMethodologies = snapshot.activeMethodologies;
+      changes.activeMethodologies = snapshot.activeMethodologies;
+    }
+    if (snapshot?.methodologyWeights) {
+      updatedConfig.methodologyWeights = snapshot.methodologyWeights;
+      changes.methodologyWeights = snapshot.methodologyWeights;
+    }
+
+    // Copy risk settings
+    if (snapshot?.maxRiskPerTrade) {
+      updatedConfig.maxRiskPerTrade = snapshot.maxRiskPerTrade;
+      changes.maxRiskPerTrade = snapshot.maxRiskPerTrade;
+    }
+    if (snapshot?.maxOpenPositions) {
+      updatedConfig.maxOpenPositions = snapshot.maxOpenPositions;
+    }
+
     // Apply AI recommended changes
     if (experience.aiLearningSummary?.recommendedAdjustments) {
       const adj = experience.aiLearningSummary.recommendedAdjustments;

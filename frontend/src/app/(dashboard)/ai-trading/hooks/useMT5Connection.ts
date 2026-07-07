@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { aiTradingService } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
@@ -48,6 +48,22 @@ export function useMT5Connection() {
     } catch (e: any) {
       toast.error(e.message || "Disconnect failed");
     }
+  }, []);
+
+  // ── Check existing session on mount ───────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await aiTradingService.getStatus();
+        if (mounted && res.success && res.data?.connected) {
+          setIsConnected(true);
+        }
+      } catch {
+        // Silently ignore — user will see connection panel
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   return { isConnected, isConnecting, error, connect, disconnect };
