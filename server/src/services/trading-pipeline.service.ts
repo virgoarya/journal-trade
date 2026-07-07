@@ -6,6 +6,7 @@ import { newsCalendarService } from "./news-calendar.service";
 import { fundamentalResearchService } from "./fundamental-research.service";
 import { marketRegimeService } from "./market-regime.service";
 import { multiTimeframeService } from "./multi-timeframe.service";
+import { tradeExitStrategyService } from "./trade-exit-strategy.service";
 import { AITradingSession } from "../models/AITradingSession";
 import { AITradeLog } from "../models/AITradeLog";
 import { silentLogger } from "../utils/silent-logger";
@@ -504,6 +505,20 @@ class TradingPipelineService {
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] Fundamental check error: ${e.message}`); }
 
+        // ── MULTI-TIMEFRAME: Verifikasi sinyal di higher timeframe ─────
+        try {
+          const htfCheck = await multiTimeframeService.checkConfluence(
+            signal.symbol, pipeline.config.timeframe, signal.direction,
+          );
+          if (!htfCheck.isAligned && htfCheck.confidence < 50) {
+            this.addLog(userId, "INFO", `[HTF] Skipped ${signal.symbol} ${signal.direction} — HTF conflict (${htfCheck.details})`);
+            continue;
+          }
+          if (htfCheck.confidence < 80) {
+            this.addLog(userId, "CONFLUENCE", `[HTF] ${signal.symbol} ${signal.direction} — ${htfCheck.details}`);
+          }
+        } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
+
         // ── OPTIONAL: LLM Consensus validation ─────────────────────
         if (pipeline.config.llmConsensus?.enabled) {
           this.addLog(userId, "INFO",
@@ -665,11 +680,41 @@ class TradingPipelineService {
           continue; // Skip trailing this cycle — breakeven happens first
         }
 
+        // ── PARTIAL TP: Evaluasi exit strategy (partial take-profit) ──
+        const partialAction = tradeExitStrategyService.evaluate(
+          { symbol: pos.symbol, type: pos.type, priceOpen: pos.priceOpen, priceCurrent: pos.priceCurrent, sl: pos.sl, tp: pos.tp, volume: pos.volume, ticket: pos.ticket },
+          atrValue,
+        );
+
+        if (partialAction.action === "CLOSE_PARTIAL" && partialAction.closePercent) {
+          // Close partial position at market
+          const closeVolume = Math.round(pos.volume * partialAction.closePercent * 100) / 100;
+          if (closeVolume > 0) {
+            await mt5McpService.closePosition(pos.ticket);
+            this.addLog(userId, "TRADE",
+              `TP1 Partial ${pos.symbol} ticket=${pos.ticket}: closed ${(partialAction.closePercent * 100).toFixed(0)}% — ${partialAction.reason}`,
+            );
+          }
+          // Move SL to breakeven on remaining position (done via modify)
+          if (partialAction.newSL) {
+            await mt5McpService.modifyPosition(pos.ticket, partialAction.newSL, pos.tp);
+          }
+          continue;
+        }
+
+        if (partialAction.action === "MODIFY_SL" && partialAction.newSL) {
+          await mt5McpService.modifyPosition(pos.ticket, partialAction.newSL, pos.tp);
+          this.addLog(userId, "TRAILING",
+            `Trailing ${pos.symbol} ticket=${pos.ticket}: ${partialAction.reason}`,
+          );
+          continue;
+        }
+
         // ── TRAILING STOP: Geser SL mengikuti harga (existing logic) ──────
         const result = aiTradingEngine.calculateTrailingStopSL({
           positionType: pos.type,
           currentPrice: pos.priceCurrent,
-          currentSL: shouldBreakeven ? pos.priceOpen : pos.sl,
+          currentSL: pos.sl,
           atrValue,
           trailATR: pipeline.config.trailingStop.trailATR,
           activationATR: pipeline.config.trailingStop.activationATR,
