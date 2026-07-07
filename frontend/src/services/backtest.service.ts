@@ -80,6 +80,7 @@ export interface BacktestConfig {
   leverage: number;
   signalInterval: number;
   speedMs?: number;
+  activeMethodologies?: string[];
 }
 export interface BacktestTrade {
   entryTime: number;
@@ -251,6 +252,9 @@ export function buildStreamUrl(config: BacktestConfig): string {
   p.set("leverage", String(config.leverage));
   p.set("signalInterval", String(config.signalInterval));
   p.set("speedMs", String(config.speedMs ?? 0));
+  if (config.activeMethodologies && config.activeMethodologies.length > 0) {
+    p.set("activeMethodologies", config.activeMethodologies.join(","));
+  }
   return `/api/v1/backtest/stream?${p.toString()}`;
 }
 

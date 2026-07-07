@@ -108,6 +108,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         .filter((m: any) => m.verdict === "DISABLE")
         .map((m: any) => m.methodology);
       setActiveMethodologies(METHODOLOGY_NAMES.filter(m => !disabled.includes(m)));
+      setShowAdvanced(true); // auto-expand so user sees which methodologies changed
 
       // Params — from best symbol's recommendedParams
       const best = res.data.symbolRankings[0]?.recommendedParams;
@@ -282,7 +283,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               value={initialBalance}
               onChange={(e) => setInitialBalance(Number(e.target.value))}
               min={100}
-              step={1000}
+              step={100}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
