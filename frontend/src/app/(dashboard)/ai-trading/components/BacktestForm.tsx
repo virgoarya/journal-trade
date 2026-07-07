@@ -352,7 +352,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Risk/Trade (%)</label>
             <input
               type="number" value={maxRisk} onChange={(e) => setMaxRisk(Number(e.target.value))}
-              step={0.25} min={0.1} max={10}
+              step={0.01} min={0.1} max={10}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
