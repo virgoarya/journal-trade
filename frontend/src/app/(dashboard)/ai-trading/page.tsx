@@ -50,7 +50,7 @@ function AITradingPageContent() {
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } =
     useAccountInfo();
   const { positions, isLoading: posLoading, closePosition, modifyPosition } =
-    usePositions();
+    usePositions(10000, isConnected);
   const {
     status: pipelineStatus,
     lastAnalysis,

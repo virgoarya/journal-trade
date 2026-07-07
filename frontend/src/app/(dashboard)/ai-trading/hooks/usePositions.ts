@@ -8,7 +8,7 @@ import {
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
-export function usePositions(pollInterval = 10000) {
+export function usePositions(pollInterval = 10000, isConnected?: boolean) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,6 +20,8 @@ export function usePositions(pollInterval = 10000) {
       if (result.success && result.data) {
         setPositions(result.data.positions);
         setTotal(result.data.total);
+      } else {
+        // If fetch fails silently, keep previous data instead of clearing
       }
     } catch {
       // silently fail on poll
@@ -29,12 +31,13 @@ export function usePositions(pollInterval = 10000) {
   }, []);
 
   useEffect(() => {
+    if (isConnected === false) return;
     fetchPositions();
     intervalRef.current = setInterval(fetchPositions, pollInterval);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchPositions, pollInterval]);
+  }, [fetchPositions, pollInterval, isConnected]);
 
   const closePosition = useCallback(
     async (ticket: number) => {
