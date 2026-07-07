@@ -211,10 +211,9 @@ export function TradingPanel({
                 {METHODOLOGY_LABELS[method]}
               </span>
               <input
-                type="number"
+                type="text" inputMode="decimal"
                 value={methodologyWeights[method]}
                 onChange={(e) => updateWeight(method, parseFloat(e.target.value) || 0)}
-                step={0.1}
                 min={0}
                 max={2}
                 disabled={!activeMethodologies.includes(method)}
@@ -294,11 +293,9 @@ export function TradingPanel({
             Max Positions
           </label>
           <input
-            type="number"
+            type="text" inputMode="numeric"
             value={maxPositions}
-            onChange={(e) => setMaxPositions(Number(e.target.value))}
-            min={1}
-            max={10}
+            onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
             className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
           />
         </div>
@@ -307,12 +304,9 @@ export function TradingPanel({
             Risk / Trade (%)
           </label>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             value={riskPerTrade}
-            onChange={(e) => setRiskPerTrade(Number(e.target.value))}
-            step={0.1}
-            min={0.1}
-            max={5}
+            onChange={(e) => setRiskPerTrade(parseFloat(e.target.value) || 0)}
             className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
           />
         </div>
@@ -321,12 +315,9 @@ export function TradingPanel({
             Max Daily Risk (%)
           </label>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             value={maxDailyRisk}
-            onChange={(e) => setMaxDailyRisk(Number(e.target.value))}
-            step={0.5}
-            min={1}
-            max={10}
+            onChange={(e) => setMaxDailyRisk(parseFloat(e.target.value) || 0)}
             className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
           />
         </div>
@@ -350,11 +341,9 @@ export function TradingPanel({
                 Activation (ATR)
               </label>
               <input
-                type="number"
+                type="text" inputMode="decimal"
                 value={activationATR}
-                onChange={(e) => setActivationATR(Number(e.target.value))}
-                step={0.5}
-                min={0.5}
+                onChange={(e) => setActivationATR(parseFloat(e.target.value) || 0)}
                 className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white"
               />
             </div>
@@ -363,11 +352,9 @@ export function TradingPanel({
                 Trail Distance (ATR)
               </label>
               <input
-                type="number"
+                type="text" inputMode="decimal"
                 value={trailATR}
-                onChange={(e) => setTrailATR(Number(e.target.value))}
-                step={0.1}
-                min={0.1}
+                onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
                 className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white"
               />
             </div>

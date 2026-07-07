@@ -140,6 +140,45 @@ class AIBacktestSkillService {
         }
       }
 
+      // ── 2b. Update verdicts for active methodologies with zero trades ──
+      // If a methodology was in activeMethodologies but had zero trades,
+      // still track it so its verdict doesn't stay stale from previous runs.
+      const activeMeths = (result.config as any)?.activeMethodologies as string[] | undefined;
+      if (activeMeths && activeMeths.length > 0) {
+        for (const meth of activeMeths) {
+          const alreadyUpdated = (result.methodologyStats || []).some(
+            (ms: any) => ms.methodology === meth,
+          );
+          if (alreadyUpdated) continue;
+          let methSkill = skill.methodologyRankings.find((m: any) => m.methodology === meth);
+          if (!methSkill) {
+            skill.methodologyRankings.push({
+              methodology: meth,
+              totalTrades: 0,
+              totalPnL: 0,
+              avgWinRate: 0,
+              bestSymbol: result.symbols.join(","),
+              verdict: "ADJUST",
+            });
+          }
+          // If it exists but had no trades this run, keep existing state
+        }
+      }
+      // ── 2c. Mark methodologies that were NOT tested as ADJUST ──────────
+      // If a methodology has very old data and was excluded from active,
+      // nudge it toward ADJUST so user re-evaluates.
+      const ALL_METHODOLOGIES = ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"];
+      if (activeMeths) {
+        for (const meth of ALL_METHODOLOGIES) {
+          if (activeMeths.includes(meth)) continue;
+          const methSkill = skill.methodologyRankings.find((m: any) => m.methodology === meth);
+          if (methSkill && methSkill.totalTrades > 0 && methSkill.verdict === "KEEP") {
+            // Was previously good but excluded this run — flag as ADJUST
+            methSkill.verdict = "ADJUST";
+          }
+        }
+      }
+
       // ── 3. Update global recovery factor ────────────────────────────
       const totalRF = result.recoveryFactor === Infinity ? 10 : (result.recoveryFactor || 0);
       skill.globalRecoveryFactor = (skill.globalRecoveryFactor * (skill.totalBacktests - 1) + totalRF) / skill.totalBacktests;
