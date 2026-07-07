@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { aiTradingService, type SymbolInfo, type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS, DEFAULT_METHODOLOGY_WEIGHTS } from "@/services/ai-trading.service";
+import { aiTradingService, type SymbolInfo, type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS, DEFAULT_METHODOLOGY_WEIGHTS, type AIBacktestSkill } from "@/services/ai-trading.service";
 import { Play, Square, Pause, RotateCcw, Loader2, Signal, TrendingUp, Brain } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,6 +15,8 @@ interface TradingPanelProps {
   pipelinePaused: boolean;
   isStarting: boolean;
   isStopping: boolean;
+  /** Skill data to apply from AI Backtest Skill display */
+  skillConfig?: AIBacktestSkill | null;
 }
 
 const DEFAULT_SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD"];
@@ -31,6 +33,7 @@ export function TradingPanel({
   pipelinePaused,
   isStarting,
   isStopping,
+  skillConfig,
 }: TradingPanelProps) {
   const [symbols, setSymbols] = useState<string[]>(["EURUSD", "XAUUSD"]);
   const [availableSymbols, setAvailableSymbols] = useState<SymbolInfo[]>([]);
@@ -68,6 +71,27 @@ export function TradingPanel({
         .finally(() => setLoadingSymbols(false));
     }
   }, [isConnected]);
+
+  // ── Apply skill config when received from SkillDisplay ─────────────────
+  useEffect(() => {
+    if (!skillConfig) return;
+    const topSymbols = skillConfig.symbolRankings
+      ?.filter(s => s.score >= 50)
+      .slice(0, 5)
+      .map(s => s.symbol);
+    if (topSymbols && topSymbols.length > 0) {
+      setSymbols(topSymbols);
+    }
+    const disabled = (skillConfig.methodologyRankings || [])
+      .filter(m => m.verdict === "DISABLE")
+      .map(m => m.methodology);
+    if (disabled.length > 0) {
+      setActiveMethodologies(
+        ALL_METHODOLOGIES.filter(m => !disabled.includes(m)),
+      );
+    }
+    setRiskPerTrade(0.5);
+  }, [skillConfig]);
 
   const addSymbol = (sym: string) => {
     const s = sym.toUpperCase().trim();

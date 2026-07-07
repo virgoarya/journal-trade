@@ -17,6 +17,7 @@ import { usePipeline } from "./hooks/usePipeline";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, Activity } from "lucide-react";
 import { Suspense } from "react";
+import type { AIBacktestSkill } from "@/services/ai-trading.service";
 
 type Tab = "trading" | "backtest";
 
@@ -62,6 +63,7 @@ function AITradingPageContent() {
     resume,
     refresh: refreshPipeline,
   } = usePipeline();
+  const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
 
   // Refresh pipeline state on mount
   useEffect(() => {
@@ -180,6 +182,7 @@ function AITradingPageContent() {
               pipelinePaused={pipelineStatus?.paused ?? false}
               isStarting={isStarting}
               isStopping={isStopping}
+              skillConfig={skillConfig}
             />
 
             {/* Methodology Confluence Display */}
@@ -192,17 +195,7 @@ function AITradingPageContent() {
 
             {/* AI Backtest Skill — rankings, verdicts, auto-scan */}
             <SkillDisplay onApplySkill={(skill) => {
-              // Auto-fill pipeline config from skill data
-              if (skill.symbolRankings?.length > 0) {
-                const topSymbols = skill.symbolRankings
-                  .filter(s => s.score >= 50)
-                  .slice(0, 5)
-                  .map(s => s.symbol);
-                if (topSymbols.length > 0) {
-                  // The pipeline will pick these up on next start
-                  console.log(`[SKILL] Auto-selected pairs: ${topSymbols.join(", ")}`);
-                }
-              }
+              setSkillConfig(skill);
             }} />
 
             {/* Pipeline Performance — live methodology & symbol stats */}
