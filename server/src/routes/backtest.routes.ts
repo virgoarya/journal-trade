@@ -51,6 +51,9 @@ const streamQuerySchema = z.object({
   speedMs: z.coerce.number().int().min(0).max(5000).default(0),
   leverage: z.coerce.number().int().min(1).max(2000).default(100),
   signalInterval: z.coerce.number().int().min(1).max(20).default(4),
+  activeMethodologies: z.string().optional().transform((v) =>
+    v ? v.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) : undefined
+  ),
 });
 
 /**
@@ -109,6 +112,7 @@ router.get("/stream", async (req: Request, res: Response) => {
     leverage: q.leverage,
     signalInterval: q.signalInterval,
     speedMs: q.speedMs,
+    activeMethodologies: q.activeMethodologies,
   };
 
   // ── 4. Track client disconnect ──────────────────────────────────
