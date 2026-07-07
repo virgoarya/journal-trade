@@ -279,11 +279,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               Balance ($)
             </label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               value={initialBalance}
-              onChange={(e) => setInitialBalance(Number(e.target.value))}
-              min={100}
-              step={100}
+              onChange={(e) => setInitialBalance(Number(e.target.value) || 0)}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
@@ -311,16 +309,14 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">RSI Oversold</label>
             <input
-              type="number" value={rsiOversold} onChange={(e) => setRsiOversold(Number(e.target.value))}
-              min={10} max={50}
+              type="text" inputMode="numeric" value={rsiOversold} onChange={(e) => { const v = parseInt(e.target.value) || 0; if (v >= 10 && v <= 50) setRsiOversold(v); }}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">RSI Overbought</label>
             <input
-              type="number" value={rsiOverbought} onChange={(e) => setRsiOverbought(Number(e.target.value))}
-              min={50} max={90}
+              type="text" inputMode="numeric" value={rsiOverbought} onChange={(e) => { const v = parseInt(e.target.value) || 0; if (v >= 50 && v <= 90) setRsiOverbought(v); }}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
@@ -331,16 +327,14 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">SL (ATR ×)</label>
             <input
-              type="number" value={slMultiplier} onChange={(e) => setSlMultiplier(Number(e.target.value))}
-              step={0.5} min={0.5}
+              type="text" inputMode="decimal" value={slMultiplier} onChange={(e) => setSlMultiplier(parseFloat(e.target.value) || 0)}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">TP (ATR ×)</label>
             <input
-              type="number" value={tpMultiplier} onChange={(e) => setTpMultiplier(Number(e.target.value))}
-              step={0.5} min={0.5}
+              type="text" inputMode="decimal" value={tpMultiplier} onChange={(e) => setTpMultiplier(parseFloat(e.target.value) || 0)}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
@@ -351,16 +345,14 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Risk/Trade (%)</label>
             <input
-              type="number" value={maxRisk} onChange={(e) => setMaxRisk(Number(e.target.value))}
-              step={0.01} min={0.1} max={10}
+              type="text" inputMode="decimal" value={maxRisk} onChange={(e) => setMaxRisk(parseFloat(e.target.value) || 0)}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Max Positions</label>
             <input
-              type="number" value={maxPositions} onChange={(e) => setMaxPositions(Number(e.target.value))}
-              min={1} max={10}
+              type="text" inputMode="numeric" value={maxPositions} onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
             />
           </div>
@@ -379,14 +371,12 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           {trailingEnabled && (
             <div className="flex gap-2 ml-2">
               <input
-                type="number" value={activationATR} onChange={(e) => setActivationATR(Number(e.target.value))}
-                step={0.5} min={0.5}
+                type="text" inputMode="decimal" value={activationATR} onChange={(e) => setActivationATR(parseFloat(e.target.value) || 0)}
                 className="w-16 bg-gray-950/50 border border-gray-700/50 rounded-lg p-1 text-xs text-white text-center outline-none"
                 title="Activation ATR"
               />
               <input
-                type="number" value={trailATR} onChange={(e) => setTrailATR(Number(e.target.value))}
-                step={0.1} min={0.1}
+                type="text" inputMode="decimal" value={trailATR} onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
                 className="w-16 bg-gray-950/50 border border-gray-700/50 rounded-lg p-1 text-xs text-white text-center outline-none"
                 title="Trail ATR"
               />
