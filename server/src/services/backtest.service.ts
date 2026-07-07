@@ -558,6 +558,9 @@ class BacktestService {
             rsiAtEntry: trade.rsiAtEntry, atrAtEntry: trade.atrAtEntry,
             pattern: trade.pattern, confidence: trade.confidence,
             trailingHistory: trade.trailingHistory,
+            primaryMethodology: trade.primaryMethodology,
+            methodologyConfidence: trade.methodologyConfidence,
+            methodologyCount: trade.methodologyCount,
           });
 
           equity += pnl;

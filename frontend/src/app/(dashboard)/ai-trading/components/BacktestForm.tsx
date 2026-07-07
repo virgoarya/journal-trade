@@ -15,6 +15,7 @@ import {
   Layers,
   Gauge,
   Zap,
+  BrainCircuit,
 } from "lucide-react";
 
 const FALLBACK_SYMBOLS = [
@@ -32,8 +33,10 @@ interface Props {
 }
 
 export function BacktestForm({ onRun, isRunning }: Props) {
-  const [symbols, setSymbols] = useState<string[]>(["EURUSD"]);
+  const [symbols] = useState<string[]>(FALLBACK_SYMBOLS);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["EURUSD"]);
+  const [symbolSearch, setSymbolSearch] = useState("");
+  const [filteredSymbols, setFilteredSymbols] = useState(FALLBACK_SYMBOLS);
   const [timeframe, setTimeframe] = useState("M15");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -61,15 +64,24 @@ export function BacktestForm({ onRun, isRunning }: Props) {
     setFromDate(past.toISOString().split("T")[0]);
   }, []);
 
-  // Load symbols (fallback to hardcoded if API fails)
+  // Filter symbols berdasarkan pencarian
   useEffect(() => {
-    setSymbols(FALLBACK_SYMBOLS);
-  }, []);
-
-  const toggleSymbol = (sym: string) => {
-    setSelectedSymbols((prev) =>
-      prev.includes(sym) ? prev.filter((s) => s !== sym) : [...prev, sym],
+    setFilteredSymbols(
+      symbolSearch.length === 0
+        ? symbols
+        : symbols.filter(s => s.toLowerCase().includes(symbolSearch.toLowerCase()))
     );
+  }, [symbolSearch, symbols]);
+
+  const addSymbol = (sym: string) => {
+    const s = sym.toUpperCase().trim();
+    if (s && !selectedSymbols.includes(s)) {
+      setSelectedSymbols(prev => [...prev, s]);
+    }
+  };
+
+  const removeSymbol = (sym: string) => {
+    setSelectedSymbols(prev => prev.filter(s => s !== sym));
   };
 
   const toggleMethodology = (m: string) => {
@@ -78,13 +90,47 @@ export function BacktestForm({ onRun, isRunning }: Props) {
     );
   };
 
+  const handleAIConfig = async () => {
+    try {
+      const { aiTradingService } = await import("@/services/ai-trading.service");
+      const res = await aiTradingService.getSkill();
+      if (!res.success || !res.data?.symbolRankings) return;
+
+      // Symbols — 5 best pairs with score ≥ 50
+      const topSymbols = res.data.symbolRankings
+        .filter((s: any) => s.score >= 50)
+        .slice(0, 5)
+        .map((s: any) => s.symbol);
+      if (topSymbols.length > 0) setSelectedSymbols(topSymbols);
+
+      // Methodologies — disable DISABLE verdicts
+      const disabled = (res.data.methodologyRankings || [])
+        .filter((m: any) => m.verdict === "DISABLE")
+        .map((m: any) => m.methodology);
+      setActiveMethodologies(METHODOLOGY_NAMES.filter(m => !disabled.includes(m)));
+
+      // Params — from best symbol's recommendedParams
+      const best = res.data.symbolRankings[0]?.recommendedParams;
+      if (best) {
+        if (best.rsiOversold) setRsiOversold(best.rsiOversold);
+        if (best.rsiOverbought) setRsiOverbought(best.rsiOverbought);
+        if (best.atrMultiplierSL) setSlMultiplier(best.atrMultiplierSL);
+        if (best.atrMultiplierTP) setTpMultiplier(best.atrMultiplierTP);
+        if (best.signalInterval) setSignalInterval(best.signalInterval);
+      }
+
+      // Risk — 0.5% (auto-backtest standard)
+      setMaxRisk(0.5);
+    } catch {}
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fromDate || !toDate || selectedSymbols.length === 0) return;
 
     onRun({
       symbols: selectedSymbols,
-      timeframe,
+      timeframe: timeframe as "M5" | "M15" | "H1" | "H4" | "D1",
       fromDate: new Date(fromDate).toISOString(),
       toDate: new Date(toDate).toISOString(),
       initialBalance,
@@ -121,18 +167,48 @@ export function BacktestForm({ onRun, isRunning }: Props) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
-        {/* Symbols Multi-Select */}
+        {/* Symbols Multi-Select dengan Search */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
             <CandlestickChart className="w-3.5 h-3.5" />
             Symbols ({selectedSymbols.length})
           </label>
-          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-            {symbols.map((sym) => (
+
+          {/* Input untuk search + ketik manual */}
+          <input
+            type="text"
+            value={symbolSearch}
+            onChange={(e) => setSymbolSearch(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addSymbol(symbolSearch);
+                setSymbolSearch("");
+              }
+            }}
+            placeholder="Type symbol & Enter (e.g. EURUSD) or search..."
+            className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none mb-2"
+          />
+
+          {/* Selected symbols sebagai tag */}
+          {selectedSymbols.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {selectedSymbols.map(sym => (
+                <span key={sym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-gold/20 text-accent-gold text-[10px] rounded-full">
+                  {sym}
+                  <button type="button" onClick={() => removeSymbol(sym)} className="hover:text-red-400">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Daftar symbols terfilter */}
+          <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+            {filteredSymbols.map((sym) => (
               <button
                 key={sym}
                 type="button"
-                onClick={() => toggleSymbol(sym)}
+                onClick={() => addSymbol(sym)}
                 className={`px-2 py-1 text-[10px] rounded font-medium transition ${
                   selectedSymbols.includes(sym)
                     ? "bg-accent-gold text-black"
@@ -143,7 +219,18 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               </button>
             ))}
           </div>
+          <p className="text-[10px] text-gray-600">Click symbol to add. Type custom symbol + Enter.</p>
         </div>
+
+        {/* Tombol AI Auto-Config */}
+        <button
+          type="button"
+          onClick={handleAIConfig}
+          className="w-full py-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs rounded-lg hover:bg-purple-600/30 transition flex items-center justify-center gap-2"
+        >
+          <BrainCircuit className="w-3.5 h-3.5" />
+          Apply AI Insights (auto-configure from skill)
+        </button>
 
         {/* Timeframe + Dates */}
         <div className="grid grid-cols-3 gap-3">
@@ -212,6 +299,8 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               <option value={100}>1:100</option>
               <option value={200}>1:200</option>
               <option value={500}>1:500</option>
+              <option value={1000}>1:1000</option>
+              <option value={2000}>1:2000</option>
             </select>
           </div>
         </div>

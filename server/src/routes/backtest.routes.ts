@@ -49,7 +49,7 @@ const streamQuerySchema = z.object({
   maxRiskPerTrade: z.coerce.number().min(0.1).max(10).default(1.0),
   maxOpenPositions: z.coerce.number().int().min(1).max(10).default(3),
   speedMs: z.coerce.number().int().min(0).max(5000).default(0),
-  leverage: z.coerce.number().int().min(1).max(500).default(100),
+  leverage: z.coerce.number().int().min(1).max(2000).default(100),
   signalInterval: z.coerce.number().int().min(1).max(20).default(4),
 });
 

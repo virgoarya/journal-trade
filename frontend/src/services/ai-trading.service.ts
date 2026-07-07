@@ -440,7 +440,6 @@ class AITradingService {
     );
     return res;
   }
-}
 
   // ── Auto Backtest & Skill ──────────────────────────────────────────
   async autoBacktest() {

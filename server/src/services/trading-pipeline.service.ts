@@ -108,6 +108,7 @@ class TradingPipelineService {
       lastAnalysis: MultiStrategySymbolAnalysis | null;
       lastError: string | null;
       lastAnalyzedCandleTimes?: Map<string, number>;
+      paused: boolean;
     }
   > = new Map();
 
@@ -155,6 +156,7 @@ class TradingPipelineService {
       lastAnalysis: null as MultiStrategySymbolAnalysis | null,
       lastError: null as string | null,
       lastAnalyzedCandleTimes: new Map<string, number>(),
+      paused: false,
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -212,8 +214,8 @@ class TradingPipelineService {
 
   async resumePipeline(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
-    if (!pipeline) {
-      throw new Error("No pipeline to resume");
+    if (!pipeline?.paused) {
+      throw new Error("Pipeline is not paused");
     }
 
     const intervalMs = this.getIntervalMs(pipeline.config.timeframe);
@@ -221,6 +223,7 @@ class TradingPipelineService {
       () => this.pipelineLoop(userId),
       intervalMs,
     );
+    pipeline.paused = false;
 
     this.addLog(userId, "INFO", "Pipeline resumed");
   }
@@ -590,7 +593,7 @@ class TradingPipelineService {
           volume,
           sl: signal.sl,
           tp: signal.tp,
-          comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}`,
+          comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
         });
 
         if (orderResult.success) {
