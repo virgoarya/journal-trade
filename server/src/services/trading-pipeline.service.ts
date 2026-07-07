@@ -528,6 +528,16 @@ class TradingPipelineService {
             `LLM Consensus: Validating ${signal.symbol} ${signal.direction} signal across providers...`,
           );
 
+          // ── HTF conformance data ──
+          let llmHtfTrend: string | undefined;
+          let llmHtfConf: number | undefined;
+          try { const h = await multiTimeframeService.checkConfluence(signal.symbol, pipeline.config.timeframe, signal.direction); llmHtfTrend = h.htfTrend; llmHtfConf = h.confidence; } catch {}
+          let llmSymScore: number | undefined;
+          let llmMethV: string | undefined;
+          let llmMethWR: number | undefined;
+          let llmMethPnL: number | undefined;
+          try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
+
           const llmResult = await llmConsensusService.evaluate(
             {
               symbol: signal.symbol,
@@ -541,6 +551,12 @@ class TradingPipelineService {
               methodologyBreakdown: analysis.confluence.methodologyBreakdown,
               agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
               totalMethodologies: Object.keys(analysis.confluence.methodologyBreakdown).length,
+              htfTrend: llmHtfTrend,
+              htfConfidence: llmHtfConf,
+              symbolScore: llmSymScore,
+              methodologyVerdict: llmMethV,
+              methodologyWinRate: llmMethWR,
+              methodologyPnL: llmMethPnL,
             },
             pipeline.config.llmConsensus,
           );

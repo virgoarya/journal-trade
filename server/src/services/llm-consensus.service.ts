@@ -156,7 +156,22 @@ function buildSignalPrompt(signal: {
   methodologyBreakdown: Record<string, { confidence: number; weight: number; contribution: number }>;
   agreeingCount: number;
   totalMethodologies: number;
+  htfTrend?: string;
+  htfConfidence?: number;
+  symbolScore?: number;
+  methodologyVerdict?: string;
+  methodologyWinRate?: number;
+  methodologyPnL?: number;
 }): string {
+  let extra = "";
+  if (signal.htfTrend) extra += `\nHTF Trend: ${signal.htfTrend} (confidence: ${signal.htfConfidence}%)`;
+  if (signal.symbolScore !== undefined) extra += `\nSymbol Historical Score: ${signal.symbolScore}/100`;
+  if (signal.methodologyVerdict) {
+    extra += `\nMethodology Verdict from Backtest: ${signal.methodologyVerdict}`;
+    extra += `\nMethodology Win Rate: ${signal.methodologyWinRate}%`;
+    extra += `\nMethodology PnL: ${signal.methodologyPnL}`;
+  }
+
   return `Evaluate this trading signal:
 
 Symbol: ${signal.symbol}
@@ -169,7 +184,7 @@ R:R: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.tp - signal.ent
 Reason: ${signal.reason}
 
 Market Trend: ${signal.marketTrend}
-Methodologies Agreeing: ${signal.agreeingCount}/${signal.totalMethodologies}
+Methodologies Agreeing: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}
 
 Methodology Breakdown:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}
@@ -198,6 +213,12 @@ class LLMConsensusService {
       methodologyBreakdown: Record<string, any>;
       agreeingCount: number;
       totalMethodologies: number;
+      htfTrend?: string;
+      htfConfidence?: number;
+      symbolScore?: number;
+      methodologyVerdict?: string;
+      methodologyWinRate?: number;
+      methodologyPnL?: number;
     },
     config?: Partial<LLMConsensusConfig>,
   ): Promise<LLMConsensusResult> {
