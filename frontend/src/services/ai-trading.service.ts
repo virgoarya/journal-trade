@@ -100,6 +100,26 @@ export interface PipelineConfig {
   };
 }
 
+export interface LLMConsensusVote {
+  provider: string;
+  modelLabel: string;
+  verdict: "GOOD" | "BAD" | "SKIP";
+  reasoning: string;
+  latencyMs: number;
+  error?: string;
+}
+
+export interface LLMConsensusResult {
+  verdict: "GOOD" | "BAD" | "SKIP";
+  votes: LLMConsensusVote[];
+  totalVotes: number;
+  goodVotes: number;
+  badVotes: number;
+  skipVotes: number;
+  consensusReached: boolean;
+  details: string;
+}
+
 export interface PipelineStatus {
   running: boolean;
   paused: boolean;

@@ -7,6 +7,7 @@ import {
   type PipelineStatus,
   type PipelineLog,
   type MultiStrategyAnalysis,
+  type LLMConsensusResult,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ export function usePipeline() {
   const [isStarting, setIsStarting] = useState(false);
   const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);
   const [isStopping, setIsStopping] = useState(false);
+  const [lastLLMVotes, setLastLLMVotes] = useState<LLMConsensusResult | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const start = useCallback(async (config: PipelineConfig) => {
@@ -101,7 +103,17 @@ export function usePipeline() {
               setLastAnalysis(statusRes.data.lastAnalysis);
             }
           }
-          if (logsRes.success && logsRes.data) setLogs(logsRes.data.logs);
+          if (logsRes.success && logsRes.data) {
+            setLogs(logsRes.data.logs);
+            // Extract latest LLM consensus from CONFLUENCE logs
+            const llmLogs = logsRes.data.logs.filter(
+              (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
+            );
+            if (llmLogs.length > 0) {
+              const latest = (llmLogs[llmLogs.length - 1].data as any).llmConsensus as LLMConsensusResult;
+              if (latest?.votes) setLastLLMVotes(latest);
+            }
+          }
         } catch {
           // ignore
         }
@@ -126,7 +138,16 @@ export function usePipeline() {
           setLastAnalysis(statusRes.data.lastAnalysis);
         }
       }
-      if (logsRes.success && logsRes.data) setLogs(logsRes.data.logs);
+      if (logsRes.success && logsRes.data) {
+        setLogs(logsRes.data.logs);
+        const llmLogs = logsRes.data.logs.filter(
+          (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
+        );
+        if (llmLogs.length > 0) {
+          const latest = (llmLogs[llmLogs.length - 1].data as any).llmConsensus as LLMConsensusResult;
+          if (latest?.votes) setLastLLMVotes(latest);
+        }
+      }
     } catch {
       // ignore
     }
@@ -138,6 +159,7 @@ export function usePipeline() {
     logs,
     isStarting,
     isStopping,
+    lastLLMVotes,
     start,
     stop,
     pause,

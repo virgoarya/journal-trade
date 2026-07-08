@@ -9,6 +9,7 @@ import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
 import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
+import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { BacktestTab } from "./components/BacktestTab";
 import { useMT5Connection } from "./hooks/useMT5Connection";
 import { useAccountInfo } from "./hooks/useAccountInfo";
@@ -57,6 +58,7 @@ function AITradingPageContent() {
     logs,
     isStarting,
     isStopping,
+    lastLLMVotes,
     start,
     stop,
     pause,
@@ -65,6 +67,18 @@ function AITradingPageContent() {
   } = usePipeline();
   const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
   const [skillVersion, setSkillVersion] = useState(0);
+  const [llmModelStatus, setLlmModelStatus] = useState<Array<{ name: string; label: string; model: string; status: string }>>([]);
+
+  // Fetch LLM model status
+  useEffect(() => {
+    let mounted = true;
+    import("@/services/ai-trading.service").then(({ aiTradingService }) => {
+      aiTradingService.getLlmStatus().then(res => {
+        if (mounted && res.success && res.data) setLlmModelStatus(res.data);
+      }).catch(() => {});
+    });
+    return () => { mounted = false; };
+  }, [isConnected]);
 
   // Refresh pipeline state on mount
   useEffect(() => {
@@ -168,7 +182,14 @@ function AITradingPageContent() {
             />
 
             {pipelineStatus?.running && (
-              <PipelineLogs logs={logs} />
+              <>
+                <LLMConsensusViz
+                  votes={lastLLMVotes}
+                  modelStatus={llmModelStatus}
+                  threshold={pipelineStatus.config?.llmConsensus?.threshold ?? 0.5}
+                />
+                <PipelineLogs logs={logs} />
+              </>
             )}
           </div>
 
