@@ -16,6 +16,7 @@ interface PositionsTableProps {
   onClose: (ticket: number) => void;
   onModify: (ticket: number, sl?: number, tp?: number) => void;
   isLoading: boolean;
+  error?: string | null;
 }
 
 export function PositionsTable({
@@ -23,6 +24,7 @@ export function PositionsTable({
   onClose,
   onModify,
   isLoading,
+  error,
 }: PositionsTableProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSL, setEditSL] = useState("");
@@ -73,9 +75,15 @@ export function PositionsTable({
         </h3>
       </div>
 
+      {error && (
+        <div className="px-4 py-4 text-center text-red-400 text-xs border-b border-gray-800/50">
+          ⚠ {error}
+        </div>
+      )}
+
       {positions.length === 0 ? (
         <div className="px-4 py-8 text-center text-gray-500 text-sm">
-          No open positions
+          {error ? "Could not load positions" : "No open positions"}
         </div>
       ) : (
         <div className="overflow-x-auto">

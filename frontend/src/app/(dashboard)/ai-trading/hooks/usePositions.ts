@@ -12,26 +12,34 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchPositions = useCallback(async () => {
+    if (isConnected === false) return;
     try {
       const result = await aiTradingService.getPositions();
       if (result.success && result.data) {
         setPositions(result.data.positions);
         setTotal(result.data.total);
+        setFetchError(null);
       } else {
-        // If fetch fails silently, keep previous data instead of clearing
+        // Only show error if we were previously connected (had data or first load)
+        setFetchError(result.error || "Failed to fetch positions");
+        console.error(`[POSITIONS] API error: ${result.error}`);
       }
-    } catch {
-      // silently fail on poll
+    } catch (e: any) {
+      setFetchError(e.message || "Network error");
+      console.error(`[POSITIONS] Fetch error: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isConnected]);
 
   useEffect(() => {
     if (isConnected === false) return;
+    setIsLoading(true);
+    setFetchError(null);
     fetchPositions();
     intervalRef.current = setInterval(fetchPositions, pollInterval);
     return () => {
@@ -77,6 +85,7 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
     positions,
     total,
     isLoading,
+    fetchError,
     refetch: fetchPositions,
     closePosition,
     modifyPosition,
