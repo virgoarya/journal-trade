@@ -55,6 +55,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [liveMethStats, setLiveMethStats] = useState<Array<{ methodology: string; count: number; pnl: number }>>([]);
   const methStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
 
+  const initLoggedRef = useRef(false);
+
   useEffect(() => {
     if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -64,6 +66,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   useEffect(() => {
     let mounted = true;
     let eventSource: EventSource | null = null;
+    // Reset init flag when config changes (new backtest)
+    initLoggedRef.current = false;
 
     const startStream = () => {
       try {
@@ -83,8 +87,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           }]);
         };
 
-        addLog("info", `Initializing backtest for ${config.symbols?.join(", ") || "symbols"} (${config.timeframe})...`);
-        addLog("info", `Loading historical data...`);
+        // Only log initialization once per stream session
+        if (!initLoggedRef.current) {
+          initLoggedRef.current = true;
+          addLog("info", `Initializing backtest for ${config.symbols?.join(", ") || "symbols"} (${config.timeframe})...`);
+          addLog("info", `Loading historical data...`);
+        }
 
         eventSource.addEventListener("progress", (e: any) => {
           if (!mounted) return;
@@ -168,6 +176,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
         eventSource.onerror = () => {
           if (!mounted) return;
+          // EventSource auto-reconnects — ignore CONNECTING state to prevent duplicates
+          if (eventSource?.readyState === EventSource.CONNECTING) return;
           if (eventSource?.readyState !== EventSource.CLOSED) {
             addLog("error", "Connection interrupted.");
             if (eventSource) eventSource.close();
