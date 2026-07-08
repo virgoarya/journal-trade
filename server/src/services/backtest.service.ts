@@ -405,7 +405,8 @@ class BacktestService {
     let allReturns: number[] = [];
 
     let lastProgressPct = -1;
-    const MIN_PROGRESS_INTERVAL_PCT = 1;
+    const MIN_PROGRESS_INTERVAL_PCT = 0.25;
+    const PROGRESS_FLUSH_MS = 5;
 
     // Track which candle index each symbol is at
     const symbolCandleIdx = new Map<string, number>();
@@ -803,10 +804,13 @@ class BacktestService {
           floatingPnL: Math.round(floatingPnL * 100) / 100,
         },
       });
+      if (merged.speedMs === 0 && timelineStep % 50 === 0) {
+        await new Promise(r => setTimeout(r, 1));
+      }
 
-      // Progress
+      // Progress — emit every 0.25% and after every trade event for smoothness
       const progressPct = Math.round((timelineStep / totalTimelineSteps) * 100);
-      if (progressPct - lastProgressPct >= MIN_PROGRESS_INTERVAL_PCT) {
+      if (progressPct - lastProgressPct >= MIN_PROGRESS_INTERVAL_PCT || timelineStep === totalTimelineSteps) {
         lastProgressPct = progressPct;
         emit({
           type: "progress",
@@ -816,6 +820,9 @@ class BacktestService {
             percent: progressPct,
           },
         });
+        if (merged.speedMs === 0) {
+          await new Promise(r => setTimeout(r, PROGRESS_FLUSH_MS));
+        }
       }
 
       // Stop if account blown

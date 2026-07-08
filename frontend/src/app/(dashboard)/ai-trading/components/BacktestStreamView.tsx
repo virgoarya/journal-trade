@@ -406,7 +406,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       <div className="p-4 bg-gray-900/80 border-t border-gray-800 backdrop-blur-md relative z-10 flex flex-col gap-2">
         <div className="flex justify-between text-xs font-medium font-mono">
           <span className="text-accent-gold flex items-center gap-2">
-            {progressPercent < 100 ? <><Loader2 className="w-3 h-3 animate-spin" /> Processing...</> : "Completed."}
+            {progressPercent === 0 && !progress ? (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Initializing historical data...</>
+            ) : progressPercent < 100 ? (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Processing...</>
+            ) : "Completed."}
           </span>
           <span className="text-gray-400">
             {progress ? `${progress.currentCandle} / ${progress.totalCandles}` : "0 / 0"} ({Math.round(progressPercent)}%)
@@ -417,7 +421,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             className="h-full bg-accent-gold rounded-full relative"
             initial={{ width: 0 }}
             animate={{ width: `${progressPercent}%` }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
           >
             <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
           </motion.div>
