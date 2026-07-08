@@ -86,6 +86,8 @@ class AutoBacktestService {
       if (onProgress) onProgress({ ...summary });
     };
 
+    const fullResults = new Map<string, BacktestResult>();
+
     try {
       for (const symbol of TRADABLE_SYMBOLS) {
         try {
@@ -131,6 +133,7 @@ class AutoBacktestService {
 
           if (qualified) {
             summary.qualifiedSymbols++;
+            fullResults.set(symbol, result);
           }
         } catch (err: any) {
           silentLogger.error(`[AUTO-BT] Error scanning ${symbol}: ${err.message}`);
@@ -152,13 +155,6 @@ class AutoBacktestService {
 
         // Emit progress after each symbol
         if (summary.processedSymbols % 3 === 0 || summary.processedSymbols === summary.totalSymbols) {
-          // Update skill progressively
-          await aiBacktestSkillService.updateSkill(userId, {
-            symbols: [summary.results[summary.results.length - 1]?.symbol || "unknown"],
-            totalTrades: summary.results.reduce((a, r) => a + r.totalTrades, 0),
-            totalPnL: summary.results.reduce((a, r) => a + r.totalPnL, 0),
-            winRate: 0,
-          } as any);
           emitProgress();
         }
       }
@@ -176,26 +172,13 @@ class AutoBacktestService {
 
       summary.status = "complete";
 
-      // Final skill aggregation with ALL results
-      for (const result of summary.results) {
-        if (result.qualified) {
+      // Final skill aggregation with FULL backtest results (includes methodologyStats)
+      for (const [symbol, fullResult] of fullResults.entries()) {
+        if (fullResult.methodologyStats && fullResult.methodologyStats.length > 0) {
           try {
-            await aiBacktestSkillService.updateSkill(userId, {
-              symbols: [result.symbol],
-              symbolStats: [{
-                symbol: result.symbol,
-                totalTrades: result.totalTrades,
-                winningTrades: Math.round(result.totalTrades * result.winRate / 100),
-                losingTrades: Math.round(result.totalTrades * (100 - result.winRate) / 100),
-                breakEvenTrades: 0,
-                totalPnL: result.totalPnL,
-                winRate: result.winRate,
-              }],
-              profitFactor: result.profitFactor,
-              recoveryFactor: result.recoveryFactor === 999 ? Infinity : result.recoveryFactor,
-            } as any);
+            await aiBacktestSkillService.updateSkill(userId, fullResult);
           } catch (err: any) {
-            silentLogger.error(`[AUTO-BT] Skill update error for ${result.symbol}: ${err.message}`);
+            silentLogger.error(`[AUTO-BT] Skill update error for ${symbol}: ${err.message}`);
           }
         }
       }
