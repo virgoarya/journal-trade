@@ -456,6 +456,16 @@ class AITradingService {
     );
     return res;
   }
+
+  async getLlmStatus() {
+    const res = await apiClient.get<Array<{
+      name: string;
+      label: string;
+      model: string;
+      status: "active" | "hibernasi";
+    }>>("/api/v1/ai-trading/llm-status");
+    return res;
+  }
 }
 
 export interface AutoBacktestSummary {

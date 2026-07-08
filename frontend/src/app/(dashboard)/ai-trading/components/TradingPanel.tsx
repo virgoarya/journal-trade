@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { aiTradingService, type SymbolInfo, type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS, DEFAULT_METHODOLOGY_WEIGHTS, type AIBacktestSkill } from "@/services/ai-trading.service";
-import { Play, Square, Pause, RotateCcw, Loader2, Signal, TrendingUp, Brain } from "lucide-react";
+import { Play, Square, Pause, RotateCcw, Loader2, Signal, TrendingUp, Brain, Zap, ZapOff } from "lucide-react";
 import { toast } from "sonner";
 
 interface TradingPanelProps {
@@ -55,6 +55,19 @@ export function TradingPanel({
   // ── NEW: LLM Consensus state ───────────────────────────────────────
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [llmThreshold, setLlmThreshold] = useState(0.5);
+  const [llmModels, setLlmModels] = useState<Array<{ name: string; label: string; status: string }>>([]);
+  const [llmLoading, setLlmLoading] = useState(false);
+
+  // Fetch LLM model status
+  useEffect(() => {
+    let mounted = true;
+    setLlmLoading(true);
+    aiTradingService.getLlmStatus()
+      .then(res => { if (mounted && res.success && res.data) setLlmModels(res.data); })
+      .catch(() => {})
+      .finally(() => { if (mounted) setLlmLoading(false); });
+    return () => { mounted = false; };
+  }, []);
 
   // Load available symbols
   useEffect(() => {
@@ -396,9 +409,25 @@ export function TradingPanel({
               <span>90%</span>
             </div>
             <p className="text-[9px] text-gray-600 mt-1.5 leading-tight">
-              Menjalankan 6 LLM (DeepSeek, Qwen, Gemini, Mistral, Nemotron, Claude Opus) via 9Router secara paralel untuk validasi sinyal.
-              Eksekusi hanya jika ≥{Math.round(llmThreshold * 100)}% model menyetujui.
+              Menjalankan 6 LLM via 9Router secara paralel. Eksekusi hanya jika ≥{Math.round(llmThreshold * 100)}% model menyetujui.
             </p>
+
+            {/* LLM Model Status */}
+            <div className="mt-2 space-y-1">
+              {llmModels.map((m) => (
+                <div key={m.name} className="flex items-center gap-2 text-[10px]">
+                  {m.status === "active" ? (
+                    <Zap className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <ZapOff className="w-3 h-3 text-yellow-500" />
+                  )}
+                  <span className="text-gray-400 flex-1">{m.label}</span>
+                  <span className={`font-medium ${m.status === "active" ? "text-green-400" : "text-yellow-500"}`}>
+                    {m.status === "active" ? "siap" : "zzz"}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

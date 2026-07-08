@@ -331,6 +331,18 @@ class LLMConsensusService {
   }
 
   /**
+   * Get status of all 6 models (active / rate-limited).
+   */
+  getModelStatus(): Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" }> {
+    return NINE_ROUTER_MODELS.map((m) => ({
+      name: m.name,
+      label: m.label,
+      model: m.model,
+      status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
+    }));
+  }
+
+  /**
    * Get list of available providers with their status.
    */
   getAvailableProviders(): { name: string; label: string; available: boolean }[] {

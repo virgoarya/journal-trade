@@ -10,6 +10,7 @@ import { apiResponse } from "../utils/api-response";
 import { AITradeLog } from "../models/AITradeLog";
 import { autoBacktestService } from "../services/auto-backtest.service";
 import { aiBacktestSkillService } from "../services/ai-backtest-skill.service";
+import { llmConsensusService } from "../services/llm-consensus.service";
 import { newsCalendarService } from "../services/news-calendar.service";
 import {
   mt5ConnectSchema,
@@ -714,6 +715,19 @@ router.get("/skill", async (req, res, next) => {
       methodologyRankings: skill.methodologyRankings,
       globalRecoveryFactor: skill.globalRecoveryFactor,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/ai-trading/llm-status
+ * Get status of all 6 LLM models (from health check).
+ */
+router.get("/llm-status", async (req, res, next) => {
+  try {
+    const status = llmConsensusService.getModelStatus();
+    return apiResponse.success(res, status);
   } catch (error) {
     next(error);
   }
