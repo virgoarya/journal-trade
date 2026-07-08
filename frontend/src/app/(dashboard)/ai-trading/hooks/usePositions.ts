@@ -24,13 +24,12 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
         setTotal(result.data.total);
         setFetchError(null);
       } else {
-        // Only show error if we were previously connected (had data or first load)
         setFetchError(result.error || "Failed to fetch positions");
-        console.error(`[POSITIONS] API error: ${result.error}`);
       }
     } catch (e: any) {
-      setFetchError(e.message || "Network error");
-      console.error(`[POSITIONS] Fetch error: ${e.message}`);
+      if (e.message !== "Request was aborted") {
+        setFetchError(e.message || "Network error");
+      }
     } finally {
       setIsLoading(false);
     }

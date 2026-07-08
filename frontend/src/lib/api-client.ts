@@ -18,7 +18,7 @@ export class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    timeoutMs: number = 30000
+    timeoutMs: number = 60000
   ): Promise<ApiResponse<T>> {
     try {
       const headers: HeadersInit = {
