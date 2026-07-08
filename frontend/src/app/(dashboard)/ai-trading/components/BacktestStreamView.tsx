@@ -30,6 +30,7 @@ interface Props {
 type LogEntry = {
   id: string;
   time: string;
+  candleTime?: string;
   type: "info" | "trade_open" | "trade_close" | "error";
   message: string;
   details?: any;
@@ -69,11 +70,15 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         const url = buildStreamUrl(config);
         eventSource = new EventSource(url, { withCredentials: true });
 
-        const addLog = (type: LogEntry["type"], message: string, details?: any) => {
+        const addLog = (type: LogEntry["type"], message: string, details?: any, candleTimestamp?: number) => {
           if (!mounted) return;
+          const candleTime = candleTimestamp
+            ? new Date(candleTimestamp * 1000).toLocaleDateString("en-GB") + " " + new Date(candleTimestamp * 1000).toLocaleTimeString([], { hour12: false })
+            : undefined;
           setLogs(prev => [...prev.slice(-49), {
             id: Math.random().toString(36).substr(2, 9),
             time: new Date().toLocaleTimeString([], { hour12: false }),
+            candleTime,
             type, message, details,
           }]);
         };
@@ -105,10 +110,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         eventSource.addEventListener("trade_open", (e: any) => {
           if (!mounted) return;
           try {
-            const data = JSON.parse(e.data) as StreamTradeOpen & { symbol: string; primaryMethodology?: string };
+            const data = JSON.parse(e.data) as StreamTradeOpen & { symbol: string; primaryMethodology?: string; time: number };
             addLog("trade_open",
               `${data.direction} ${data.symbol} @ ${data.entryPrice.toFixed(5)}${data.primaryMethodology ? ` [${data.primaryMethodology}]` : ""}`,
               data,
+              data.time,
             );
             const sym = data.symbol || "unknown";
             if (!symbolStatsRef.current.has(sym)) {
@@ -128,11 +134,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         eventSource.addEventListener("trade_close", (e: any) => {
           if (!mounted) return;
           try {
-            const data = JSON.parse(e.data) as StreamTradeClose & { symbol: string; primaryMethodology?: string };
+            const data = JSON.parse(e.data) as StreamTradeClose & { symbol: string; primaryMethodology?: string; exitTime: number };
             const pnlPrefix = data.pnl >= 0 ? "+" : "";
             addLog("trade_close",
               `[${data.reason}] ${data.symbol} @ ${data.exitPrice.toFixed(5)} | PnL: ${pnlPrefix}${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)`,
               data,
+              data.exitTime,
             );
             const sym = data.symbol || "unknown";
             if (symbolStatsRef.current.has(sym)) {
@@ -384,7 +391,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                           : "border-gray-700 text-gray-400"
                     }`}
                   >
-                    <span className="text-gray-600 shrink-0">[{log.time}]</span>
+                    <span className="text-gray-600 shrink-0">[{log.candleTime || log.time}]</span>
                     <span className="break-words">{log.message}</span>
                   </motion.div>
                 ))}
