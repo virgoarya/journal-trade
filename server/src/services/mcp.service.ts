@@ -19,46 +19,58 @@ class MCPService {
     serverName: string,
     command: string,
     args: string[],
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    retries = 2,
   ) {
     if (this.clients.has(serverName)) {
       silentLogger.info(`[MCP] Server ${serverName} already registered.`);
       return;
     }
 
-    try {
-      const client = new Client(
-        {
-          name: "HunterTradesTerminal",
-          version: "1.0.0",
-        },
-        {
-          capabilities: {},
+    for (let attempt = 1; attempt <= 1 + retries; attempt++) {
+      try {
+        const client = new Client(
+          {
+            name: "HunterTradesTerminal",
+            version: "1.0.0",
+          },
+          {
+            capabilities: {},
+          }
+        );
+
+        const transport = new StdioClientTransport({
+          command,
+          args,
+          env: {
+            ...process.env,
+            ...(env || {}),
+          } as Record<string, string>,
+        });
+
+        await client.connect(transport, { timeout: 300000 });
+        this.clients.set(serverName, client);
+        this.isConnected = true;
+        silentLogger.info(
+          `[MCP] Connected to MCP Server '${serverName}' via stdio: ${command} ${args.join(
+            " "
+          )}`
+        );
+
+        // Refresh tools
+        await this.refreshTools();
+        return;
+      } catch (error: any) {
+        if (attempt <= retries) {
+          const delay = 5000 * Math.pow(2, attempt - 1);
+          silentLogger.warn(
+            `[MCP] Connection to '${serverName}' attempt ${attempt}/${1 + retries} failed: ${error.message}. Retrying in ${delay}ms...`
+          );
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          silentLogger.error(`[MCP] Failed to connect to '${serverName}': ${error.message}`);
         }
-      );
-
-      const transport = new StdioClientTransport({
-        command,
-        args,
-        env: {
-          ...process.env,
-          ...(env || {}),
-        } as Record<string, string>,
-      });
-
-      await client.connect(transport, { timeout: 100000 });
-      this.clients.set(serverName, client);
-      this.isConnected = true;
-      silentLogger.info(
-        `[MCP] Connected to MCP Server '${serverName}' via stdio: ${command} ${args.join(
-          " "
-        )}`
-      );
-
-      // Refresh tools
-      await this.refreshTools();
-    } catch (error: any) {
-      silentLogger.error(`[MCP] Failed to connect to '${serverName}': ${error.message}`);
+      }
     }
   }
 

@@ -128,10 +128,13 @@ class MT5MCPService {
         args: [serverScript],
       });
 
-      await client.connect(transport, { timeout: 100000 });
+      await client.connect(transport, { timeout: 300000 });
       this.client = client;
       silentLogger.info("[MT5-MCP] Connected to MT5 MCP server");
     } catch (error: any) {
+      if (this.client) {
+        try { await this.client.close(); } catch {}
+      }
       this.client = null;
       silentLogger.error(`[MT5-MCP] Init failed: ${error.message}`);
       throw error;
@@ -275,6 +278,23 @@ class MT5MCPService {
     if (!this.client) {
       await this.init();
     }
+  }
+
+  /** Retry init with exponential backoff — used by external trigger. */
+  async ensureInit(maxRetries = 3, baseDelayMs = 2000): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.init();
+        return;
+      } catch {
+        if (attempt < maxRetries) {
+          const delay = baseDelayMs * Math.pow(2, attempt - 1);
+          silentLogger.warn(`[MT5-MCP] Init attempt ${attempt}/${maxRetries} failed, retrying in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    }
+    silentLogger.error(`[MT5-MCP] All ${maxRetries} init attempts failed — MT5 unavailable`);
   }
 
   private async call(tool: string, args: Record<string, any>): Promise<any> {
