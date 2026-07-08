@@ -22,6 +22,10 @@ router.use(requireAuth);
  */
 function sendSSE(res: Response, event: string, data: any) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // Flush immediately so browser receives the event without buffering delay
+  if (typeof (res as any).flush === "function") {
+    (res as any).flush();
+  }
 }
 
 /**
@@ -75,6 +79,8 @@ router.get("/stream", async (req: Request, res: Response) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
   res.flushHeaders();
+  // Disable Nagle's so data is sent immediately without buffering
+  res.socket?.setNoDelay(true);
 
   // ── 2. Validate query params ────────────────────────────────────
   const parsed = streamQuerySchema.safeParse(req.query);
@@ -121,11 +127,11 @@ router.get("/stream", async (req: Request, res: Response) => {
     aborted = true;
   });
 
-  // Keepalive: send a comment every 5s so proxies/browsers don't drop the connection
+  // Keepalive: send a comment every 2s so browser doesn't timeout during data loading
   const keepalive = setInterval(() => {
     if (aborted) { clearInterval(keepalive); return; }
     res.write(": keepalive\n\n");
-  }, 5000);
+  }, 2000);
 
   // ── 5. Run streaming backtest ───────────────────────────────────
   try {

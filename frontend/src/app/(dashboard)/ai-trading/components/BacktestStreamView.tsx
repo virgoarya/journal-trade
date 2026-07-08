@@ -56,6 +56,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const methStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
 
   const initLoggedRef = useRef(false);
+  const configKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -66,8 +67,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   useEffect(() => {
     let mounted = true;
     let eventSource: EventSource | null = null;
-    // Reset init flag when config changes (new backtest)
-    initLoggedRef.current = false;
+    // Detect NEW backtest config (not StrictMode re-mount)
+    const configKey = JSON.stringify(config);
+    if (configKey !== configKeyRef.current) {
+      configKeyRef.current = configKey;
+      initLoggedRef.current = false;
+    }
 
     const startStream = () => {
       try {
