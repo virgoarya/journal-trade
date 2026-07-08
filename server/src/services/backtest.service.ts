@@ -297,52 +297,74 @@ class BacktestService {
     emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
     await new Promise(r => setTimeout(r, 50)); // flush SSE
 
-    // ── 1. Fetch historical data + symbol info for ALL symbols ──────
+    // ── 1. Fetch historical data + symbol info for ALL symbols in PARALLEL ──
     const fromTs = Math.floor(merged.fromDate.getTime() / 1000);
     const toTs = Math.floor(merged.toDate.getTime() / 1000);
 
     const symbolStates = new Map<string, SymbolState>();
+    const totalSymbols = merged.symbols.length;
 
-    for (const sym of merged.symbols) {
-      let rates: MT5Rate[] = [];
-      try {
-        rates = await mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs);
-      } catch (error: any) {
-        const msg = `Failed to fetch data for ${sym}: ${error.message}`;
-        emit({ type: "error", data: { message: msg } });
-        throw new Error(msg);
-      }
+    // Fetch all symbols concurrently
+    const fetchResults = await Promise.all(
+      merged.symbols.map(async (sym, idx) => {
+        // Emit progress per symbol
+        emit({
+          type: "progress",
+          data: {
+            currentCandle: idx,
+            totalCandles: totalSymbols,
+            percent: Math.round((idx / totalSymbols) * 10), // 0-10% = loading data
+          },
+        });
 
-      if (rates.length < 50) {
-        const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
-        emit({ type: "error", data: { message: msg } });
-        continue; // skip this symbol, continue with others
-      }
-
-      // Fetch symbol info for broker-agnostic positioning
-      let contractSize = 100000;
-      let volumeMin = 0.01;
-      let volumeMax = 100;
-      let volumeStep = 0.01;
-      try {
-        const info = await mt5McpService.getSymbolInfo(sym);
-        if (info) {
-          contractSize = info.tradeContractSize;
-          volumeMin = info.volumeMin;
-          volumeMax = info.volumeMax;
-          volumeStep = info.volumeStep;
+        let rates: MT5Rate[] = [];
+        try {
+          rates = await mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs);
+        } catch (error: any) {
+          const msg = `Failed to fetch data for ${sym}: ${error.message}`;
+          emit({ type: "error", data: { message: msg } });
+          return { sym, error: msg };
         }
-      } catch {
-        // fallback
-      }
 
-      symbolStates.set(sym, {
-        rates,
-        closes: rates.map((r) => r.close),
-        contractSize,
-        volumeMin,
-        volumeMax,
-        volumeStep,
+        if (rates.length < 50) {
+          const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
+          emit({ type: "error", data: { message: msg } });
+          return { sym, error: msg };
+        }
+
+        // Fetch symbol info for broker-agnostic positioning
+        let contractSize = 100000;
+        let volumeMin = 0.01;
+        let volumeMax = 100;
+        let volumeStep = 0.01;
+        try {
+          const info = await mt5McpService.getSymbolInfo(sym);
+          if (info) {
+            contractSize = info.tradeContractSize;
+            volumeMin = info.volumeMin;
+            volumeMax = info.volumeMax;
+            volumeStep = info.volumeStep;
+          }
+        } catch {
+          // fallback
+        }
+
+        return {
+          sym, rates, closes: rates.map((r) => r.close),
+          contractSize, volumeMin, volumeMax, volumeStep, error: null,
+        };
+      }),
+    );
+
+    for (const r of fetchResults) {
+      if (r.error) continue;
+      symbolStates.set(r.sym, {
+        rates: r.rates,
+        closes: r.closes,
+        contractSize: r.contractSize,
+        volumeMin: r.volumeMin,
+        volumeMax: r.volumeMax,
+        volumeStep: r.volumeStep,
         candleIndex: 0,
       });
     }

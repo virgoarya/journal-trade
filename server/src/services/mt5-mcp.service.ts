@@ -231,8 +231,15 @@ class MT5MCPService {
 
   /** Get all open positions. */
   async getPositions(): Promise<MT5Position[]> {
-    const result = await this.call("mt5_positions_get", {});
-    return (result as any).positions ?? [];
+    try {
+      const result = await this.call("mt5_positions_get", {});
+      const positions = (result as any).positions ?? [];
+      silentLogger.info(`[MT5-MCP] getPositions: ${positions.length} positions returned`);
+      return positions;
+    } catch (error: any) {
+      silentLogger.error(`[MT5-MCP] getPositions failed: ${error.message}`);
+      throw error;
+    }
   }
 
   /** Open a market order. */
