@@ -249,6 +249,24 @@ router.get("/positions", async (req, res, next) => {
 });
 
 /**
+ * GET /api/ai-trading/debug-positions
+ * Debug endpoint — returns raw diagnostic info from MT5 about positions state.
+ */
+router.get("/debug-positions", async (req, res, next) => {
+  try {
+    if (!mt5McpService.isConnected) {
+      return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
+    }
+
+    const debug = await mt5McpService.debugInfo();
+
+    return apiResponse.success(res, debug);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/ai-trading/open
  * Open a new market position.
  */

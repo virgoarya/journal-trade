@@ -8,6 +8,7 @@ via the Model Context Protocol (MCP).
 
 import asyncio
 import json
+import sys
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -60,22 +61,42 @@ def _require_connected():
 
 
 def _pos_dict(p) -> dict:
-    return {
-        "ticket": p.ticket,
-        "symbol": p.symbol,
-        "type": "BUY" if p.type == 0 else "SELL",
-        "volume": p.volume,
-        "priceOpen": p.price_open,
-        "priceCurrent": p.price_current,
-        "sl": p.sl or 0,
-        "tp": p.tp or 0,
-        "profit": p.profit,
-        "swap": p.swap,
-        "commission": p.commission,
-        "comment": p.comment or "",
-        "time": p.time,
-        "magic": p.magic,
-    }
+    try:
+        return {
+            "ticket": p.ticket,
+            "symbol": p.symbol,
+            "type": "BUY" if p.type == 0 else "SELL",
+            "volume": p.volume,
+            "priceOpen": p.price_open,
+            "priceCurrent": p.price_current,
+            "sl": getattr(p, "sl", 0) or 0,
+            "tp": getattr(p, "tp", 0) or 0,
+            "profit": p.profit,
+            "swap": getattr(p, "swap", 0) or 0,
+            "commission": getattr(p, "commission", 0) or 0,
+            "comment": getattr(p, "comment", "") or "",
+            "time": p.time,
+            "magic": getattr(p, "magic", 0) or 0,
+        }
+    except AttributeError as e:
+        # Log and return a minimal dict so one bad position doesn't kill the batch
+        print(f"[MT5-ERROR] _pos_dict failed for ticket={getattr(p, 'ticket', '?')}: {e}", file=sys.stderr)
+        return {
+            "ticket": getattr(p, "ticket", 0),
+            "symbol": getattr(p, "symbol", "?"),
+            "type": "BUY" if getattr(p, "type", 0) == 0 else "SELL",
+            "volume": getattr(p, "volume", 0),
+            "priceOpen": getattr(p, "price_open", 0),
+            "priceCurrent": getattr(p, "price_current", 0),
+            "sl": getattr(p, "sl", 0) or 0,
+            "tp": getattr(p, "tp", 0) or 0,
+            "profit": getattr(p, "profit", 0),
+            "swap": getattr(p, "swap", 0) or 0,
+            "commission": getattr(p, "commission", 0) or 0,
+            "comment": getattr(p, "comment", "") or "",
+            "time": getattr(p, "time", 0),
+            "magic": getattr(p, "magic", 0) or 0,
+        }
 
 
 def _account_dict(a) -> dict:
@@ -118,6 +139,11 @@ async def list_tools():
         Tool(
             name="mt5_disconnect",
             description="Disconnect from MT5 terminal",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="mt5_debug_info",
+            description="Get raw MT5 debug info (positions total and last error)",
             inputSchema={"type": "object", "properties": {}},
         ),
         # ── Account ───────────────────────────────────────────────────
@@ -332,6 +358,32 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         mt5_config = {}
         return _ok({"disconnected": True})
 
+    # ── Debug ────────────────────────────────────────────────────────────
+    if name == "mt5_debug_info":
+        err = _require_connected()
+        if err:
+            return err
+        total = mt5.positions_total()
+        err_info = mt5.last_error()
+        pos_list = mt5.positions_get()
+        if pos_list is None:
+            pos_count = 0
+            pos_list_info = f"None (last_error: {err_info})"
+        elif isinstance(pos_list, tuple):
+            pos_count = len(pos_list)
+            pos_list_info = f"tuple({pos_count})"
+        else:
+            pos_count = len(pos_list)
+            pos_list_info = f"list({pos_count})"
+        return _ok({
+            "positions_total": total,
+            "positions_get_count": pos_count,
+            "positions_get_type": pos_list_info,
+            "last_error": err_info,
+            "symbols_total": mt5.symbols_total(),
+            "account": _account_dict(mt5.account_info()) if mt5.account_info() else None,
+        })
+
     # ── Guard ─────────────────────────────────────────────────────────
     err = _require_connected()
     if err:
@@ -347,6 +399,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         group = arguments.get("group")
         symbols = mt5.symbols_get(group) if group else mt5.symbols_get()
         if symbols is None:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] mt5.symbols_get() returned None: {err}", file=sys.stderr)
             return _ok({"symbols": []})
         result = [
             {
@@ -392,6 +446,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         count = min(arguments.get("count", 100), 2000)
         rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
         if rates is None:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] mt5.copy_rates_from_pos({symbol}) returned None: {err}", file=sys.stderr)
             return _err(f"No rates for {symbol} {arguments['timeframe']}")
         result = [
             {
@@ -417,6 +473,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
         rates = mt5.copy_rates_range(symbol, timeframe, from_ts, to_ts)
         if rates is None or len(rates) == 0:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] mt5.copy_rates_range({symbol}) returned None: {err}", file=sys.stderr)
             return _err(f"No rates for {symbol} between given dates")
         result = [
             {
@@ -451,9 +509,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     # ── Positions ─────────────────────────────────────────────────────
     if name == "mt5_positions_get":
+        total = mt5.positions_total()
+        err_info = mt5.last_error()
+        print(f"[MT5-DEBUG] positions_total()={total}, last_error()={err_info}", file=sys.stderr)
         positions = mt5.positions_get()
         if positions is None:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] mt5.positions_get() returned None: {err}", file=sys.stderr)
             return _ok({"positions": [], "total": 0})
+        if isinstance(positions, tuple):
+            # positions_get returns a tuple; we check it
+            print(f"[MT5-DEBUG] mt5.positions_get() type=tuple len={len(positions)}", file=sys.stderr)
         result = [_pos_dict(p) for p in positions]
         return _ok({"positions": result, "total": len(result)})
 

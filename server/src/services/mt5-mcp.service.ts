@@ -229,16 +229,38 @@ class MT5MCPService {
     }
   }
 
-  /** Get all open positions. */
+  /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
+    const maxRetries = 3;
+    const delays = [1000, 2000, 4000];
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.call("mt5_positions_get", {});
+        silentLogger.info(`[MT5-MCP] Raw result from mt5_positions_get: ${JSON.stringify(result)}`);
+        const positions = (result as any).positions ?? [];
+        silentLogger.info(`[MT5-MCP] getPositions: ${positions.length} positions returned (attempt ${attempt})`);
+        return positions;
+      } catch (error: any) {
+        silentLogger.warn(`[MT5-MCP] getPositions attempt ${attempt}/${maxRetries} failed: ${error.message}`);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, delays[attempt - 1]));
+        } else {
+          throw error;
+        }
+      }
+    }
+    throw new Error("getPositions exhausted retries");
+  }
+
+  /** Debug — get raw MT5 diagnostic info about positions. */
+  async debugInfo(): Promise<any> {
     try {
-      const result = await this.call("mt5_positions_get", {});
-      const positions = (result as any).positions ?? [];
-      silentLogger.info(`[MT5-MCP] getPositions: ${positions.length} positions returned`);
-      return positions;
+      const result = await this.call("mt5_debug_info", {});
+      silentLogger.info(`[MT5-MCP] debugInfo: ${JSON.stringify(result)}`);
+      return result;
     } catch (error: any) {
-      silentLogger.error(`[MT5-MCP] getPositions failed: ${error.message}`);
-      throw error;
+      silentLogger.error(`[MT5-MCP] debugInfo failed: ${error.message}`);
+      return { error: error.message };
     }
   }
 
@@ -312,10 +334,20 @@ class MT5MCPService {
       throw new Error("MT5 not connected");
     }
 
-    const result = await this.client.callTool({ name: tool, arguments: args });
-    const data = this.parseResult(result);
-    if (data.error) throw new Error(data.error);
-    return data;
+    try {
+      const result = await this.client.callTool({ name: tool, arguments: args });
+      const data = this.parseResult(result);
+      if (data.error) throw new Error(data.error);
+      return data;
+    } catch (error: any) {
+      // Auto-reset connected flag when MCP call fails (except for connect itself)
+      if (tool !== "mt5_connect") {
+        silentLogger.warn(`[MT5-MCP] Tool ${tool} failed, resetting connected flag: ${error.message}`);
+        this.connected = false;
+        this.accountInfo = null;
+      }
+      throw error;
+    }
   }
 
   private parseResult(result: any): any {

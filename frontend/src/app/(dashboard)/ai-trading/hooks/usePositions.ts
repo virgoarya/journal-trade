@@ -4,11 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   aiTradingService,
   type Position,
-  type OrderResult,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
-export function usePositions(pollInterval = 10000, isConnected?: boolean) {
+export function usePositions(pollInterval = 10000) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +15,6 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchPositions = useCallback(async () => {
-    if (isConnected === false) return;
     try {
       const result = await aiTradingService.getPositions();
       if (result.success && result.data) {
@@ -33,10 +31,9 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected]);
+  }, []);
 
   useEffect(() => {
-    if (isConnected === false) return;
     setIsLoading(true);
     setFetchError(null);
     fetchPositions();
@@ -44,7 +41,7 @@ export function usePositions(pollInterval = 10000, isConnected?: boolean) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchPositions, pollInterval, isConnected]);
+  }, [fetchPositions, pollInterval]);
 
   const closePosition = useCallback(
     async (ticket: number) => {

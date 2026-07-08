@@ -79,11 +79,11 @@ export function PositionsTable({
       </div>
 
       {error && (
-        <div className="px-4 py-3 text-center text-red-400 text-xs border-b border-gray-800/50 flex items-center justify-center gap-2">
+        <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
           <span>⚠ {error}</span>
           {onRetry && (
-            <button onClick={onRetry} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition">
-              <RefreshCw className="w-3 h-3" /> Retry
+            <button onClick={onRetry} className="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition text-xs">
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
             </button>
           )}
         </div>
