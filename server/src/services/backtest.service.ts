@@ -293,6 +293,10 @@ class BacktestService {
       }
     };
 
+    // ── 0. Emit initializing progress ──────────────────────────────
+    emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
+    await new Promise(r => setTimeout(r, 50)); // flush SSE
+
     // ── 1. Fetch historical data + symbol info for ALL symbols ──────
     const fromTs = Math.floor(merged.fromDate.getTime() / 1000);
     const toTs = Math.floor(merged.toDate.getTime() / 1000);
@@ -346,6 +350,10 @@ class BacktestService {
     if (symbolStates.size === 0) {
       throw new Error("No valid symbols with enough data");
     }
+
+    // Emit progress after data loaded
+    const totalDataCandles = Array.from(symbolStates.values()).reduce((sum, s) => sum + s.rates.length, 0);
+    emit({ type: "progress", data: { currentCandle: 0, totalCandles: totalDataCandles, percent: 1 } });
 
     // ── 2. Build interleaved timeline ───────────────────────────────
     // Get the earliest warmup start for each symbol
