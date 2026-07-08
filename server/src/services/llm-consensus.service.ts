@@ -7,7 +7,6 @@
 
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 
@@ -47,9 +46,9 @@ export interface LLMConsensusConfig {
 
 export const DEFAULT_LLM_CONSENSUS_CONFIG: LLMConsensusConfig = {
   enabled: false,
-  minProviders: 2,
+  minProviders: 4,
   threshold: 0.5,
-  providerTimeoutMs: 8000,
+  providerTimeoutMs: 15000,
 };
 
 // ─── Available Providers ─────────────────────────────────────────────
@@ -63,58 +62,29 @@ interface LLMProvider {
   /** createOpenAI-compatible or createGoogleGenerativeAI-compatible */
 }
 
+/** 6 LLM models via 9Router — all run in parallel for consensus */
+const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> = [
+  { name: "deepseek",   label: "DeepSeek V4",      model: "oc/deepseek-v4-flash-free" },
+  { name: "qwen",       label: "Qwen 3 32B",       model: "groq/qwen/qwen3-32b" },
+  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gemini/gemini-2.5-flash" },
+  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
+  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
+  { name: "claude-opus", label: "Claude Opus 4",    model: "ag/claude-opus-4-6-thinking" },
+];
+
 function getAvailableProviders(): LLMProvider[] {
   const providers: LLMProvider[] = [];
 
-  if (env.ANTHROPIC_AUTH_TOKEN) {
-    providers.push({
-      name: "openrouter",
-      label: "Claude Haiku",
-      model: env.ANTHROPIC_MODEL || "anthropic/claude-3-5-haiku-latest",
-      baseUrl: env.ANTHROPIC_BASE_URL?.includes("/v1")
-        ? env.ANTHROPIC_BASE_URL
-        : "https://openrouter.ai/api/v1",
-      apiKey: env.ANTHROPIC_AUTH_TOKEN,
-    });
-  }
-
-  if (env.GEMINI_API_KEY) {
-    providers.push({
-      name: "gemini",
-      label: "Gemini Flash",
-      model: env.GEMINI_MODEL || "gemini-2.5-flash",
-      apiKey: env.GEMINI_API_KEY,
-    });
-  }
-
-  if (env.GROQ_API_KEY) {
-    providers.push({
-      name: "groq",
-      label: "Groq Llama",
-      model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      baseUrl: env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
-      apiKey: env.GROQ_API_KEY,
-    });
-  }
-
-  if (env.DASHSCOPE_API_KEY) {
-    providers.push({
-      name: "dashscope",
-      label: "Qwen Max",
-      model: env.DASHSCOPE_MODEL || "qwen3.7-max",
-      baseUrl: env.DASHSCOPE_BASE_URL,
-      apiKey: env.DASHSCOPE_API_KEY,
-    });
-  }
-
   if (env.NINE_ROUTER_URL) {
-    providers.push({
-      name: "9router",
-      label: "9Router Free",
-      model: env.NINE_ROUTER_MODEL || "free",
-      baseUrl: env.NINE_ROUTER_URL,
-      apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
-    });
+    for (const m of NINE_ROUTER_MODELS) {
+      providers.push({
+        name: m.name,
+        label: m.label,
+        model: m.model,
+        baseUrl: env.NINE_ROUTER_URL,
+        apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
+      });
+    }
   }
 
   return providers;

@@ -396,7 +396,7 @@ export function TradingPanel({
               <span>90%</span>
             </div>
             <p className="text-[9px] text-gray-600 mt-1.5 leading-tight">
-              Menjalankan Claude + Gemini + Groq secara paralel untuk validasi sinyal.
+              Menjalankan 6 LLM (DeepSeek, Qwen, Gemini, Mistral, Nemotron, Claude Opus) via 9Router secara paralel untuk validasi sinyal.
               Eksekusi hanya jika ≥{Math.round(llmThreshold * 100)}% model menyetujui.
             </p>
           </div>

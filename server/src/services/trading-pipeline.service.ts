@@ -92,7 +92,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   },
   methodologyWeights: { ...DEFAULT_METHODOLOGY_WEIGHTS },
   activeMethodologies: Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
-  llmConsensus: { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+  llmConsensus: { enabled: false, minProviders: 4, threshold: 0.5, providerTimeoutMs: 15000 },
 };
 
 // ─── Service ─────────────────────────────────────────────────────────
