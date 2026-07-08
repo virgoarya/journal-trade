@@ -172,7 +172,7 @@ function buildSignalPrompt(signal: {
     extra += `\nMethodology PnL: ${signal.methodologyPnL}`;
   }
 
-  return `Evaluate this trading signal:
+  return `Evaluate this trading signal. Answer in Bahasa Indonesia.
 
 Symbol: ${signal.symbol}
 Direction: ${signal.direction}

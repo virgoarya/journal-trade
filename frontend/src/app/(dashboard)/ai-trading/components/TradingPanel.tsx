@@ -396,8 +396,8 @@ export function TradingPanel({
               <span>90%</span>
             </div>
             <p className="text-[9px] text-gray-600 mt-1.5 leading-tight">
-              Runs Claude + Gemini + Groq in parallel to validate each signal.
-              Only executes if ≥{Math.round(llmThreshold * 100)}% of models approve.
+              Menjalankan Claude + Gemini + Groq secara paralel untuk validasi sinyal.
+              Eksekusi hanya jika ≥{Math.round(llmThreshold * 100)}% model menyetujui.
             </p>
           </div>
         )}
