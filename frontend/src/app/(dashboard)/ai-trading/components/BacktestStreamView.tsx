@@ -169,7 +169,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           try {
             addLog("info", "Backtest complete. Generating report...");
             const data = JSON.parse(e.data) as BacktestResultData;
-            if (eventSource) eventSource.close();
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
             setTimeout(() => { if (mounted) onComplete(data); }, 1500);
           } catch {}
         });

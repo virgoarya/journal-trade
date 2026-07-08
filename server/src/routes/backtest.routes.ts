@@ -115,11 +115,17 @@ router.get("/stream", async (req: Request, res: Response) => {
     activeMethodologies: q.activeMethodologies,
   };
 
-  // ── 4. Track client disconnect ──────────────────────────────────
+  // ── 4. Track client disconnect + keepalive ──────────────────────
   let aborted = false;
   req.on("close", () => {
     aborted = true;
   });
+
+  // Keepalive: send a comment every 5s so proxies/browsers don't drop the connection
+  const keepalive = setInterval(() => {
+    if (aborted) { clearInterval(keepalive); return; }
+    res.write(": keepalive\n\n");
+  }, 5000);
 
   // ── 5. Run streaming backtest ───────────────────────────────────
   try {
@@ -156,6 +162,7 @@ router.get("/stream", async (req: Request, res: Response) => {
       });
     }
   } finally {
+    clearInterval(keepalive);
     if (!aborted) {
       res.end();
     }
