@@ -1013,7 +1013,7 @@ class BacktestService {
     // Auto-save the aggregated result to AI Backtest Skill database
     try {
       const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
-      void aiBacktestSkillService.updateSkill(userId, result);
+      await aiBacktestSkillService.updateSkill(userId, result);
     } catch (err: any) {
       silentLogger.error(`[BACKTEST] Failed to trigger skill aggregation: ${err.message}`);
     }

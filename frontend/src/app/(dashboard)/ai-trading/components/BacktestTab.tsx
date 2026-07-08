@@ -13,7 +13,11 @@ import {
 import { History } from "lucide-react";
 import { toast } from "sonner";
 
-export function BacktestTab() {
+interface BacktestTabProps {
+  onBacktestComplete?: () => void;
+}
+
+export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -52,7 +56,10 @@ export function BacktestTab() {
         setIsAnalyzing(false);
       }
     }
-  }, []);
+
+    // Notify parent to refresh SkillDisplay (methodology verdicts)
+    onBacktestComplete?.();
+  }, [onBacktestComplete]);
 
   const handleStreamError = useCallback((error: string) => {
     setIsStreaming(false);

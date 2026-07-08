@@ -64,6 +64,7 @@ function AITradingPageContent() {
     refresh: refreshPipeline,
   } = usePipeline();
   const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
+  const [skillVersion, setSkillVersion] = useState(0);
 
   // Refresh pipeline state on mount
   useEffect(() => {
@@ -194,7 +195,7 @@ function AITradingPageContent() {
             )}
 
             {/* AI Backtest Skill — rankings, verdicts, auto-scan */}
-            <SkillDisplay onApplySkill={(skill) => {
+            <SkillDisplay key={skillVersion} onApplySkill={(skill) => {
               setSkillConfig(skill);
             }} />
 
@@ -276,7 +277,7 @@ function AITradingPageContent() {
         </div>
       )}
 
-      {activeTab === "backtest" && <BacktestTab />}
+      {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(v => v + 1)} />}
     </div>
   );
 }
