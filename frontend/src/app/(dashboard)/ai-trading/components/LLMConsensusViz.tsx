@@ -3,6 +3,28 @@
 import { type LLMConsensusResult, type LLMConsensusVote } from "@/services/ai-trading.service";
 import { Zap, ZapOff } from "lucide-react";
 
+// ─── Inline SVG logos for each LLM provider ──────────────────────────
+const LOGO_SVGS: Record<string, string> = {
+  deepseek: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#4F46E5"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="12" font-weight="bold" font-family="sans-serif">D</text></svg>`
+  )}`,
+  qwen: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#3B82F6"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">Qw</text></svg>`
+  )}`,
+  gemini: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#10B981"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="11" font-weight="bold" font-family="sans-serif">G</text></svg>`
+  )}`,
+  mistral: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#F59E0B"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">M</text></svg>`
+  )}`,
+  nemotron: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#EF4444"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="sans-serif">Nv</text></svg>`
+  )}`,
+  "claude-opus": `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#D4AF37"/><text x="16" y="21" text-anchor="middle" fill="black" font-size="10" font-weight="bold" font-family="sans-serif">Cl</text></svg>`
+  )}`,
+};
+
 interface ModelNode {
   name: string;
   label: string;
@@ -120,9 +142,13 @@ export function LLMConsensusViz({ votes, modelStatus, threshold = 0.5 }: Props) 
           return (
             <g key={node.name} opacity={isActive ? 1 : 0.4}>
               {/* Node circle */}
-              <circle cx={pos.x} cy={pos.y} r={14} fill="#111827" stroke={vote ? VERDICT_COLORS[vote.verdict] : nodeColor} strokeWidth="2" filter="url(#glow)" />
-              {/* Status dot inside */}
-              <circle cx={pos.x} cy={pos.y} r={4} fill={isActive ? "#22C55E" : "#EAB308"} />
+              <circle cx={pos.x} cy={pos.y} r={16} fill="#111827" stroke={vote ? VERDICT_COLORS[vote.verdict] : nodeColor} strokeWidth="2" filter="url(#glow)" />
+              {/* Model icon/logo inside node */}
+              <image href={LOGO_SVGS[node.name]} x={pos.x - 8} y={pos.y - 8} width={16} height={16} />
+              {/* Status ring — active = green dot, hibernasi = yellow dot */}
+              {!isActive && (
+                <circle cx={pos.x + 12} cy={pos.y - 12} r={3.5} fill="#EAB308" />
+              )}
               {/* Label */}
               <text x={pos.x} y={pos.y + 26} textAnchor="middle" fill={isActive ? "#9CA3AF" : "#6B7280"} fontSize="7" fontWeight="500">
                 {node.label}
