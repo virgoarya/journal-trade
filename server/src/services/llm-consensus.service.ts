@@ -72,11 +72,65 @@ const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> 
   { name: "claude-opus", label: "Claude Opus 4",    model: "ag/claude-opus-4-6-thinking" },
 ];
 
+/** Models that are rate-limited and should be skipped temporarily */
+const rateLimitedModels = new Set<string>();
+
+/**
+ * Test a single model by sending a minimal prompt.
+ * Returns true if the model responds OK, false if rate-limited/error.
+ */
+async function testModelProvider(m: { name: string; model: string }, baseUrl: string, apiKey: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const r = await fetch(baseUrl + "/chat/completions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: m.model, messages: [{ role: "user", content: "ok" }], max_tokens: 2, stream: false }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (r.status === 429) {
+      silentLogger.warn(`[LLM-HEALTH] ${m.name} (${m.model}) rate-limited (429) — disabling until next server restart`);
+      return false;
+    }
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Startup health check — test all 6 models.
+ * Any model that returns 429 (rate-limited) gets disabled for this session.
+ */
+async function startupHealthCheck(): Promise<void> {
+  const baseUrl = env.NINE_ROUTER_URL;
+  const apiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
+  if (!baseUrl) return;
+
+  silentLogger.info("[LLM-HEALTH] Testing all 6 models (timeout 10s each)...");
+  const results = await Promise.all(
+    NINE_ROUTER_MODELS.map(async (m) => {
+      const ok = await testModelProvider(m, baseUrl, apiKey);
+      if (!ok) rateLimitedModels.add(m.name);
+      return { name: m.name, label: m.label, ok };
+    }),
+  );
+
+  for (const r of results) {
+    if (r.ok) silentLogger.info(`[LLM-HEALTH] ✅ ${r.label} (${r.name}) — OK`);
+    else silentLogger.warn(`[LLM-HEALTH] ❌ ${r.label} (${r.name}) — RATE LIMITED / OFFLINE — disabled`);
+  }
+  silentLogger.info(`[LLM-HEALTH] ${results.filter(r => r.ok).length}/${results.length} models active`);
+}
+
 function getAvailableProviders(): LLMProvider[] {
   const providers: LLMProvider[] = [];
 
   if (env.NINE_ROUTER_URL) {
     for (const m of NINE_ROUTER_MODELS) {
+      if (rateLimitedModels.has(m.name)) continue; // skip rate-limited
       providers.push({
         name: m.name,
         label: m.label,
@@ -267,6 +321,13 @@ class LLMConsensusService {
       consensusReached: finalVerdict !== "SKIP",
       details,
     };
+  }
+
+  /**
+   * Test all models at startup and disable rate-limited ones.
+   */
+  async startupHealthCheck(): Promise<void> {
+    await startupHealthCheck();
   }
 
   /**

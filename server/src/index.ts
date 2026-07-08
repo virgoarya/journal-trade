@@ -23,6 +23,7 @@ import { marketDataService } from "./services/market-data.service";
 import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
+import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import path from "node:path";
@@ -132,6 +133,9 @@ connectDB()
 
       // Initialize MT5 MCP Service (lazy - connects on first use)
       mt5McpService.init().catch((e) => console.warn("MT5 MCP init delayed:", e.message));
+
+      // LLM Health Check — test all 6 models, disable rate-limited ones
+      llmConsensusService.startupHealthCheck?.();
 
       // Apply auth rate limiter to auth endpoints
       app.use("/api/auth", authLimiter);
