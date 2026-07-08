@@ -9,6 +9,7 @@ import {
   TrendingDown,
   Loader2,
   Save,
+  RefreshCw,
 } from "lucide-react";
 
 interface PositionsTableProps {
@@ -17,6 +18,7 @@ interface PositionsTableProps {
   onModify: (ticket: number, sl?: number, tp?: number) => void;
   isLoading: boolean;
   error?: string | null;
+  onRetry?: () => void;
 }
 
 export function PositionsTable({
@@ -25,6 +27,7 @@ export function PositionsTable({
   onModify,
   isLoading,
   error,
+  onRetry,
 }: PositionsTableProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSL, setEditSL] = useState("");
@@ -76,14 +79,19 @@ export function PositionsTable({
       </div>
 
       {error && (
-        <div className="px-4 py-4 text-center text-red-400 text-xs border-b border-gray-800/50">
-          ⚠ {error}
+        <div className="px-4 py-3 text-center text-red-400 text-xs border-b border-gray-800/50 flex items-center justify-center gap-2">
+          <span>⚠ {error}</span>
+          {onRetry && (
+            <button onClick={onRetry} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition">
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          )}
         </div>
       )}
 
-      {positions.length === 0 ? (
+      {positions.length === 0 && !error ? (
         <div className="px-4 py-8 text-center text-gray-500 text-sm">
-          {error ? "Could not load positions" : "No open positions"}
+          No open positions
         </div>
       ) : (
         <div className="overflow-x-auto">

@@ -50,7 +50,7 @@ function AITradingPageContent() {
     useMT5Connection();
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } =
     useAccountInfo();
-  const { positions, isLoading: posLoading, fetchError: posError, closePosition, modifyPosition } =
+  const { positions, isLoading: posLoading, fetchError: posError, closePosition, modifyPosition, refetch: refetchPositions } =
     usePositions(10000, isConnected);
   const {
     status: pipelineStatus,
@@ -179,6 +179,7 @@ function AITradingPageContent() {
               onModify={modifyPosition}
               isLoading={posLoading}
               error={posError}
+              onRetry={refetchPositions}
             />
 
             {pipelineStatus?.running && (
