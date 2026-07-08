@@ -306,6 +306,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                 <th className="text-center px-3 py-2">Method</th>
                 <th className="text-center px-3 py-2">Reason</th>
                 <th className="text-center px-3 py-2">Conf</th>
+                <th className="text-left px-3 py-2">Comment</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-800/50">
                 {result.trades.map((t, i) => (
@@ -320,6 +321,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                     <td className="px-3 py-2 text-center">{(t as any).primaryMethodology && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-400">{(t as any).primaryMethodology}</span>}</td>
                     <td className="px-3 py-2 text-center"><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${t.closeReason === "TP_HIT" ? "bg-green-500/10 text-green-400" : t.closeReason === "SL_HIT" ? "bg-red-500/10 text-red-400" : "bg-gray-500/10 text-gray-400"}`}>{t.closeReason}</span></td>
                     <td className="px-3 py-2 text-center text-gray-300">{t.confidence}%</td>
+                    <td className="px-3 py-2 text-left text-gray-500 text-[10px] max-w-[100px] truncate" title={(t as any).comment || ""}>{(t as any).comment || "—"}</td>
                   </tr>
                 ))}
               </tbody>

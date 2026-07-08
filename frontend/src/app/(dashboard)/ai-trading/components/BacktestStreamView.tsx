@@ -350,7 +350,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-gray-800 rounded-xl p-3">
               <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Equity Curve</p>
-              <div style={{ height: "350px", width: "100%" }}>
+              <div style={{ height: "200px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleTimeString(), equity: p.equity }))}>
                     <defs>

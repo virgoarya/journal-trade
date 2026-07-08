@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Plug, PlugZap, Eye, EyeOff } from "lucide-react";
 
 interface MT5Credentials {
@@ -25,8 +25,17 @@ export function ConnectionPanel({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("mt5_last_server");
+    if (saved) setServer(saved);
+    const savedLogin = localStorage.getItem("mt5_last_login");
+    if (savedLogin) setLogin(savedLogin);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.setItem("mt5_last_server", server);
+    localStorage.setItem("mt5_last_login", login);
     await onConnect({ server, login, password });
   };
 

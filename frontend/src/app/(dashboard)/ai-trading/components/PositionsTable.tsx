@@ -97,6 +97,8 @@ export function PositionsTable({
                 <th className="text-right px-3 py-2">Current</th>
                 <th className="text-right px-3 py-2">SL</th>
                 <th className="text-right px-3 py-2">TP</th>
+                <th className="text-left px-3 py-2">Comment</th>
+                <th className="text-center px-3 py-2">Magic</th>
                 <th className="text-right px-3 py-2">P&L</th>
                 <th className="text-right px-3 py-2">Actions</th>
               </tr>
@@ -172,6 +174,18 @@ export function PositionsTable({
                         {pos.tp ? pos.tp.toFixed(5) : "—"}
                       </span>
                     )}
+                  </td>
+
+                  {/* Comment */}
+                  <td className="px-3 py-2.5 text-left text-gray-400 text-xs max-w-[120px] truncate" title={pos.comment}>
+                    {pos.comment || "—"}
+                  </td>
+
+                  {/* Magic */}
+                  <td className="px-3 py-2.5 text-center">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${pos.magic ? `${pos.magic > 1000 ? "bg-purple-500/10 text-purple-400" : "bg-gray-500/10 text-gray-400"}` : "text-gray-500"}`}>
+                      {pos.magic || "—"}
+                    </span>
                   </td>
 
                   {/* P&L */}

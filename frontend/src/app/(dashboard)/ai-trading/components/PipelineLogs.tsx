@@ -54,7 +54,7 @@ export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-gray-300">{log.message}</p>
                       <p className="text-[10px] text-gray-600 mt-0.5">
-                        {new Date(log.time).toLocaleTimeString()}
+                        {new Date(log.time).toLocaleDateString("en-GB") + " " + new Date(log.time).toLocaleTimeString([], { hour12: false })}
                       </p>
                     </div>
                   </div>

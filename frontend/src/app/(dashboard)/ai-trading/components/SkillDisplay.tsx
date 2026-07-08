@@ -233,6 +233,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
                         {m.totalPnL >= 0 ? "+" : ""}${m.totalPnL.toFixed(0)}
                       </span>
                       <span>{m.avgWinRate.toFixed(1)}%</span>
+                      {m.bestSymbol && <span className="text-[9px] text-gray-600 hidden sm:inline">⭐ {m.bestSymbol}</span>}
                     </div>
                   </div>
                 );

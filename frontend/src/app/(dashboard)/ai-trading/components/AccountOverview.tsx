@@ -110,7 +110,7 @@ export function AccountOverview({
           value={formatMoney(accountInfo.balance, accountInfo.currency)}
           sub={
             accountInfo.equity !== accountInfo.balance
-              ? `Equity: ${formatMoney(accountInfo.equity, accountInfo.currency)}`
+              ? `Equity: ${formatMoney(accountInfo.equity, accountInfo.currency)} (${accountInfo.balance > 0 ? ((accountInfo.equity / accountInfo.balance) * 100).toFixed(1) : "100"}%)`
               : undefined
           }
         />
@@ -132,6 +132,11 @@ export function AccountOverview({
           label="Daily P&L"
           value={formatMoney(accountInfo.dailyPnL, accountInfo.currency)}
           color={dailyPnlColor}
+          sub={
+            accountInfo.balance > 0
+              ? `${(Math.abs(accountInfo.dailyPnL) / accountInfo.balance * 100).toFixed(2)}% of balance`
+              : undefined
+          }
         />
       </div>
 
@@ -154,6 +159,11 @@ export function AccountOverview({
           value={formatMoney(accountInfo.dailyDrawdown, accountInfo.currency)}
           color={
             accountInfo.dailyDrawdown > 0 ? "text-red-400" : "text-gray-400"
+          }
+          sub={
+            accountInfo.balance > 0
+              ? `${(accountInfo.dailyDrawdown / accountInfo.balance * 100).toFixed(2)}%`
+              : undefined
           }
         />
       </div>
