@@ -386,7 +386,7 @@ export function TradingPanel({
           />
           <span className="flex items-center gap-1.5">
             <Brain className="w-3 h-3 text-purple-400" />
-            LLM Consensus Validation
+            AI Trading Consensus
           </span>
         </label>
         {llmEnabled && (
