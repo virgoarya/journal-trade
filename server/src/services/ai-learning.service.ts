@@ -466,11 +466,11 @@ class AILearningService {
     }
 
     // Copy risk settings
-    if (snapshot?.maxRiskPerTrade) {
+    if (snapshot?.maxRiskPerTrade !== undefined) {
       updatedConfig.maxRiskPerTrade = snapshot.maxRiskPerTrade;
       changes.maxRiskPerTrade = snapshot.maxRiskPerTrade;
     }
-    if (snapshot?.maxOpenPositions) {
+    if (snapshot?.maxOpenPositions !== undefined) {
       updatedConfig.maxOpenPositions = snapshot.maxOpenPositions;
     }
 
