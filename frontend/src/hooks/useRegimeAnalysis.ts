@@ -25,7 +25,17 @@ export function useRegimeAnalysis() {
           body: JSON.stringify(params),
         });
 
-        const data = await response.json();
+        const contentType = response.headers.get("content-type");
+        let data: any = null;
+        if (contentType?.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.warn("[RegimeAnalysis] Non-JSON response:", text);
+          setReasoning(`Error API: Server returned non-JSON response. (Regime: ${params.regime})`);
+          setIsAnalyzing(false);
+          return;
+        }
 
         if (data.success && data.reasoning) {
           setReasoning(data.reasoning.trim());
@@ -59,7 +69,17 @@ export function useRegimeAnalysis() {
           body: JSON.stringify(params),
         });
 
-        const data = await response.json();
+        const contentType = response.headers.get("content-type");
+        let data: any = null;
+        if (contentType?.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.warn("[RegimeAnalysis] Non-JSON response:", text);
+          setReasoning("Gagal mendapatkan analisis: server returned non-JSON response.");
+          setIsAnalyzing(false);
+          return;
+        }
 
         if (data.success) {
           setReasoning(data.reasoning);

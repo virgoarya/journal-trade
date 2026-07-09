@@ -4,6 +4,7 @@ import { validate } from "../middleware/validate";
 import { backtestService } from "../services/backtest.service";
 import { aiLearningService } from "../services/ai-learning.service";
 import { BacktestExperience } from "../models/BacktestExperience";
+import { backtestSessionManager } from "../services/backtest-session.manager";
 import { apiResponse } from "../utils/api-response";
 import {
   backtestRunSchema,
@@ -58,6 +59,8 @@ const streamQuerySchema = z.object({
   activeMethodologies: z.string().optional().transform((v) =>
     v ? v.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) : undefined
   ),
+  // If provided, the stream uses pre-loaded session data (two-phase mode)
+  sessionId: z.string().optional(),
 });
 
 /**
@@ -118,7 +121,8 @@ router.get("/stream", async (req: Request, res: Response) => {
     leverage: q.leverage,
     signalInterval: q.signalInterval,
     speedMs: q.speedMs,
-    activeMethodologies: q.activeMethodologies,
+    sessionId: q.sessionId,
+    activeMethodologies: q.activeMethodologies as any,
   };
 
   // ── 4. Track client disconnect + keepalive ──────────────────────
@@ -140,6 +144,9 @@ router.get("/stream", async (req: Request, res: Response) => {
       switch (event.type) {
         case "progress":
           sendSSE(res, "progress", event.data);
+          break;
+        case "data_ready":
+          sendSSE(res, "data_ready", event.data);
           break;
         case "candle":
           sendSSE(res, "candle", event.data);
@@ -172,6 +179,74 @@ router.get("/stream", async (req: Request, res: Response) => {
     if (!aborted) {
       res.end();
     }
+  }
+});
+
+/**
+ * POST /api/v1/backtest/prepare
+ * Phase 1: Fetch historical data and create a prepared session WITHOUT starting simulation.
+ * Returns sessionId + per-symbol summaries. The frontend then connects to /stream?sessionId=...
+ * and starts the simulation via /session/:sessionId/start.
+ */
+router.post("/prepare", validate({ body: backtestRunSchema }), async (req, res, next) => {
+  try {
+    const { symbols, timeframe, fromDate, toDate, initialBalance, entrySettings, trailingStop, maxRiskPerTrade, maxOpenPositions } = req.body;
+    const { sessionId, symbolSummaries } = await backtestService.prepareBacktestData(req.user.id, {
+      symbols,
+      timeframe,
+      fromDate: new Date(fromDate),
+      toDate: new Date(toDate),
+      initialBalance,
+      entrySettings,
+      trailingStop,
+      maxRiskPerTrade,
+      maxOpenPositions,
+    });
+    return apiResponse.success(res, { sessionId, symbolSummaries });
+  } catch (error: any) {
+    if (error.message?.includes("Not enough data") || error.message?.includes("Failed to fetch")) {
+      return apiResponse.error(res, error.message, "BACKTEST_ERROR", 400);
+    }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/v1/backtest/session/:sessionId/start
+ * Phase 2 trigger: begin the simulation for a prepared session.
+ */
+router.post("/session/:sessionId/start", async (req, res, next) => {
+  try {
+    await backtestSessionManager.triggerStart(req.params.sessionId);
+    return apiResponse.success(res, { started: true });
+  } catch (error: any) {
+    return apiResponse.error(res, error.message || "Failed to start session", "SESSION_ERROR", 400);
+  }
+});
+
+/**
+ * POST /api/v1/backtest/session/:sessionId/cancel
+ * Clean up a prepared/cancelled session, or abort a running simulation.
+ */
+router.post("/session/:sessionId/cancel", async (req, res, next) => {
+  try {
+    const session = backtestSessionManager.getSession(req.params.sessionId);
+    if (!session) return apiResponse.success(res, { cancelled: true }); // already gone
+
+    if (session.status === 'prepared') {
+      // Not yet running — just clean up
+      backtestSessionManager.removeSession(req.params.sessionId);
+    } else if (session.status === 'running') {
+      // Mark as aborted — the simulation loop will pick this up
+      backtestSessionManager.markAborted(req.params.sessionId);
+      // Clean up after a short delay to let abort propagate
+      setTimeout(() => backtestSessionManager.removeSession(req.params.sessionId), 2000);
+    } else {
+      backtestSessionManager.removeSession(req.params.sessionId);
+    }
+    return apiResponse.success(res, { cancelled: true });
+  } catch (error: any) {
+    next(error);
   }
 });
 

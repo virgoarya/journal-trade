@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import type { MacroRawInputs } from '@/lib/macro/types';
 import { aggregateMacroScores } from '@/lib/macro/calculations';
 import { classifyMacroRegime } from '@/lib/macro/classifiers';
@@ -8,7 +8,7 @@ const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
 // Cache for FRED series data to prevent hitting rate limits
 const fredCache: Record<string, { data: { date: string; value: number }[]; timestamp: number }> = {};
-const FRED_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes — suitable for institutional macro desk real-time needs
+const FRED_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes â€” suitable for institutional macro desk real-time needs
 
 const SERIES_IDS = {
   // Growth

@@ -1,4 +1,4 @@
-import type { CotItem, MarketPhase } from "@/types/cot";
+﻿import type { CotItem, MarketPhase } from "@/types/cot";
 
 const COT_API_BASE = "https://api.iextrading.com/1/data/CFTC/1";
 const API_KEY = process.env.NASDAQ_API_KEY;

@@ -1,4 +1,5 @@
 import { mt5McpService, type MT5Rate } from "./mt5-mcp.service";
+import { backtestSessionManager, type BacktestSession } from './backtest-session.manager';
 import { aiTradingEngine, type Timeframe, type RSIState, type ATRState } from "./ai-trading-engine.service";
 import { marketStructureService } from "./strategies/market-structure.service";
 import { smcStrategy } from "./strategies/smc.strategy";
@@ -46,6 +47,8 @@ export interface BacktestConfig {
   // NEW: Multi-methodology config
   methodologyWeights?: MethodologyWeights;
   activeMethodologies?: MethodologyName[];
+    /** Session ID for two-phase mode — when set, runBacktestStream uses pre-loaded session data. */
+  sessionId?: string;
 }
 
 export interface SimulatedTrade {
@@ -146,7 +149,7 @@ interface OpenSimTrade {
   methodologyCount?: number;
 }
 
-// Per-symbol state for indicator calculations
+// Per-symbol state for indicator calculations — shared with backtest-session.manager
 interface SymbolState {
   rates: MT5Rate[];
   closes: number[];
@@ -156,6 +159,8 @@ interface SymbolState {
   volumeStep: number;
   candleIndex: number; // how many candles of this symbol we've processed
 }
+
+export type { SymbolState };
 
 interface TimelineCandle {
   time: number;
@@ -168,6 +173,10 @@ export type BacktestStreamEvent =
   | {
       type: "progress";
       data: { currentCandle: number; totalCandles: number; percent: number };
+    }
+  | { // NEW: Event to signal that data is ready
+      type: "data_ready";
+      data: { sessionId: string; symbols: string[]; timeframe: string; fromDate: string; toDate: string; totalCandles: number; totalSymbols: number; };
     }
   | {
       type: "candle";
@@ -231,7 +240,8 @@ export type BacktestStreamEvent =
       data: { message: string };
     };
 
-export type StreamEventCallback = (event: BacktestStreamEvent) => void | Promise<void>;
+export type StreamEventCallback = (event: BacktestStreamEvent) => boolean | void | Promise<boolean | void>;
+/** If the callback returns false, the simulation should abort (client disconnected). */
 
 const DEFAULT_CONFIG: BacktestConfig = {
   symbols: ["EURUSD"],
@@ -263,22 +273,25 @@ const DEFAULT_CONFIG: BacktestConfig = {
 
 class BacktestService {
   async runBacktest(userId: string, config: Partial<BacktestConfig>): Promise<BacktestResult> {
-    return this.runBacktestCore(userId, config);
+    // Synchronous path: prepare data then run simulation immediately
+    const { sessionId } = await this.prepareBacktestData(userId, config);
+    const { backtestSessionManager } = require("./backtest-session.manager");
+    const session = backtestSessionManager.getSession(sessionId);
+    if (!session) throw new Error("Session creation failed");
+    // Auto-start (no waiting) — synchronous run
+    const result = await this.runSimulationCore(userId, session.config, session.symbolStates, () => {});
+    backtestSessionManager.removeSession(sessionId);
+    return result;
   }
 
-  async runBacktestStream(
-    userId: string,
-    config: Partial<BacktestConfig>,
-    onEvent: StreamEventCallback,
-  ): Promise<BacktestResult> {
-    return this.runBacktestCore(userId, config, onEvent);
-  }
-
-  private async runBacktestCore(
-    userId: string,
-    config: Partial<BacktestConfig>,
-    onEvent?: StreamEventCallback,
-  ): Promise<BacktestResult> {
+  /**
+   * Phase 1: Fetch and prepare historical data without starting simulation.
+   * Returns sessionId that can be used to start the simulation later.
+   */
+  async prepareBacktestData(userId: string, config: Partial<BacktestConfig>, emitProgress?: StreamEventCallback): Promise<{
+    sessionId: string;
+    symbolSummaries: Array<{ symbol: string; candles: number; fromDate: string; toDate: string }>;
+  }> {
     const merged: BacktestConfig = {
       ...DEFAULT_CONFIG,
       ...config,
@@ -287,77 +300,66 @@ class BacktestService {
       trailingStop: { ...DEFAULT_CONFIG.trailingStop, ...config.trailingStop },
     };
 
-    const emit = (event: BacktestStreamEvent) => {
-      if (onEvent) {
-        void onEvent(event);
-      }
-    };
-
-    // ── 0. Emit initializing progress ──────────────────────────────
-    emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
-    await new Promise(r => setTimeout(r, 50)); // flush SSE
-
-    // ── 1. Fetch historical data + symbol info for ALL symbols in PARALLEL ──
     const fromTs = Math.floor(merged.fromDate.getTime() / 1000);
     const toTs = Math.floor(merged.toDate.getTime() / 1000);
 
     const symbolStates = new Map<string, SymbolState>();
     const totalSymbols = merged.symbols.length;
 
-    // Fetch all symbols concurrently
-    const fetchResults = await Promise.all(
-      merged.symbols.map(async (sym, idx) => {
-        // Emit progress per symbol
-        emit({
-          type: "progress",
-          data: {
-            currentCandle: idx,
-            totalCandles: totalSymbols,
-            percent: Math.round((idx / totalSymbols) * 10), // 0-10% = loading data
-          },
-        });
+    // Emit helper for progress during fetch
+    const emit = (current: number) => {
+      const percent = Math.min(Math.round((current / totalSymbols) * 10), 10); // 0-10% = fetching
+      if (emitProgress) {
+        emitProgress({ type: "progress", data: { currentCandle: current, totalCandles: totalSymbols, percent } });
+      }
+    };
 
-        let rates: MT5Rate[] = [];
-        try {
-          rates = await mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs);
-        } catch (error: any) {
-          const msg = `Failed to fetch data for ${sym}: ${error.message}`;
-          emit({ type: "error", data: { message: msg } });
-          return { sym, error: msg };
+    // Fetch all symbols sequentially (so progress is real)
+    const fetchResults: Array<{ sym: string; rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; error: string | null }> = [];
+    for (let idx = 0; idx < merged.symbols.length; idx++) {
+      const sym = merged.symbols[idx];
+      emit(idx);
+      let rates: MT5Rate[] = [];
+      try {
+        rates = await mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs);
+      } catch (error: any) {
+        const msg = `Failed to fetch data for ${sym}: ${error.message}`;
+        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, error: msg });
+        continue;
+      }
+
+      if (rates.length < 50) {
+        const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
+        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, error: msg });
+        continue;
+      }
+
+      // Fetch symbol info for broker-agnostic positioning
+      let contractSize = 100000;
+      let volumeMin = 0.01;
+      let volumeMax = 100;
+      let volumeStep = 0.01;
+      try {
+        const info = await mt5McpService.getSymbolInfo(sym);
+        if (info) {
+          contractSize = info.tradeContractSize;
+          volumeMin = info.volumeMin;
+          volumeMax = info.volumeMax;
+          volumeStep = info.volumeStep;
         }
+      } catch {
+        // fallback
+      }
 
-        if (rates.length < 50) {
-          const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
-          emit({ type: "error", data: { message: msg } });
-          return { sym, error: msg };
-        }
-
-        // Fetch symbol info for broker-agnostic positioning
-        let contractSize = 100000;
-        let volumeMin = 0.01;
-        let volumeMax = 100;
-        let volumeStep = 0.01;
-        try {
-          const info = await mt5McpService.getSymbolInfo(sym);
-          if (info) {
-            contractSize = info.tradeContractSize;
-            volumeMin = info.volumeMin;
-            volumeMax = info.volumeMax;
-            volumeStep = info.volumeStep;
-          }
-        } catch {
-          // fallback
-        }
-
-        return {
-          sym, rates, closes: rates.map((r) => r.close),
-          contractSize, volumeMin, volumeMax, volumeStep, error: null,
-        };
-      }),
-    );
+      fetchResults.push({
+        sym, rates, closes: rates.map((r) => r.close),
+        contractSize, volumeMin, volumeMax, volumeStep, error: null,
+      });
+    }
+    emit(totalSymbols); // 100% fetching done
 
     for (const r of fetchResults) {
-      if (r.error) continue;
+      if (r.error || !r.rates || !r.closes) continue;
       symbolStates.set(r.sym, {
         rates: r.rates,
         closes: r.closes,
@@ -373,18 +375,176 @@ class BacktestService {
       throw new Error("No valid symbols with enough data");
     }
 
-    // Emit progress after data loaded
-    const totalDataCandles = Array.from(symbolStates.values()).reduce((sum, s) => sum + s.rates.length, 0);
-    emit({ type: "progress", data: { currentCandle: 0, totalCandles: totalDataCandles, percent: 1 } });
+    // Create session
+    const { backtestSessionManager } = require("./backtest-session.manager");
+    const sessionId = backtestSessionManager.createSession(merged, symbolStates);
 
-    // ── 2. Build interleaved timeline ───────────────────────────────
-    // Get the earliest warmup start for each symbol
+    // Build summaries
+    const symbolSummaries = Array.from(symbolStates.entries()).map(([sym, state]) => ({
+      symbol: sym,
+      candles: state.rates.length,
+      fromDate: new Date(state.rates[0]?.time * 1000).toISOString(),
+      toDate: new Date(state.rates[state.rates.length - 1]?.time * 1000).toISOString(),
+    }));
+
+    return { sessionId, symbolSummaries };
+  }
+
+  async runBacktestStream(
+    userId: string,
+    config: Partial<BacktestConfig>,
+    onEvent: StreamEventCallback,
+  ): Promise<BacktestResult> {
+    // If sessionId is provided in config, run in two-phase mode
+    if (config.sessionId) {
+      return this.runBacktestFromSession(userId, config.sessionId, onEvent);
+    }
+    // ── Unified stream: fetch data WITH progress → data_ready → auto-simulate ──
+    const { sessionId } = await this.prepareBacktestData(userId, config, onEvent);
+
+    const { backtestSessionManager } = require("./backtest-session.manager");
+    const session = backtestSessionManager.getSession(sessionId);
+    if (!session) throw new Error("Session creation failed");
+
+    // Emit data_ready so frontend knows data size
+    const totalDataCandles = Array.from(session.symbolStates.values()).reduce((sum: number, s: any) => sum + s.rates.length, 0);
+    onEvent({
+      type: "data_ready",
+      data: {
+        sessionId,
+        symbols: session.config.symbols,
+        timeframe: session.config.timeframe,
+        fromDate: session.config.fromDate.toISOString(),
+        toDate: session.config.toDate.toISOString(),
+        totalCandles: totalDataCandles,
+        totalSymbols: session.config.symbols.length,
+      },
+    });
+    await new Promise(r => setTimeout(r, 30)); // flush SSE
+
+    // Mark as running and immediately simulate (with abort check)
+    backtestSessionManager.updateStatus(sessionId, 'running');
+    const isAborted = () => backtestSessionManager.isAborted(sessionId);
+    try {
+      return this.runSimulationCore(userId, session.config, session.symbolStates, onEvent, isAborted);
+    } finally {
+      backtestSessionManager.removeSession(sessionId);
+    }
+  }
+
+  /**
+   * Direct streaming path (no prepare phase): data already fetched via prepareBacktestData,
+   * wrap the runSimulationCore to emit through onEvent.
+   */
+  private async runBacktestStreamDirect(
+    userId: string,
+    sessionId: string,
+    onEvent: StreamEventCallback,
+  ): Promise<BacktestResult> {
+    const { backtestSessionManager } = require("./backtest-session.manager");
+    const session = backtestSessionManager.getSession(sessionId);
+    if (!session) throw new Error("Session not found or expired");
+
+    const result = await this.runSimulationCore(userId, session.config, session.symbolStates, onEvent);
+    backtestSessionManager.removeSession(sessionId);
+    return result;
+  }
+
+  /**
+   * Phase 2: Run backtest simulation using pre-loaded session data.
+   * Waits for triggerStart signal before beginning simulation.
+   */
+  private async runBacktestFromSession(
+    userId: string,
+    sessionId: string,
+    onEvent: StreamEventCallback,
+  ): Promise<BacktestResult> {
+    const { backtestSessionManager } = require("./backtest-session.manager");
+    const session = backtestSessionManager.getSession(sessionId);
+
+    if (!session) {
+      throw new Error("Backtest session not found or expired");
+    }
+
+    if (session.status !== 'prepared') {
+      throw new Error("Session is not in prepared state");
+    }
+
+    const merged = session.config;
+    const symbolStates = session.symbolStates;
+
+    // Abort check — checks both signal + session manager flag
+    const isAborted = () => {
+      if (backtestSessionManager.isAborted(sessionId)) return true;
+      return false;
+    };
+
+    const emit = (event: BacktestStreamEvent): boolean => {
+      if (isAborted()) return false;
+      if (onEvent) {
+        void onEvent(event);
+      }
+      return !isAborted();
+    };
+
+    // ── 0. Emit data_ready event ─────────────────────────────────────
+    const totalDataCandles = Array.from(symbolStates.values()).reduce((sum: number, s: any) => sum + s.rates.length, 0);
+    emit({
+      type: "data_ready",
+      data: {
+        sessionId,
+        symbols: merged.symbols,
+        timeframe: merged.timeframe,
+        fromDate: merged.fromDate.toISOString(),
+        toDate: merged.toDate.toISOString(),
+        totalCandles: totalDataCandles,
+        totalSymbols: merged.symbols.length,
+      },
+    });
+    await new Promise(r => setTimeout(r, 30)); // flush SSE
+
+    // Wait for start signal from frontend (or immediate abort)
+    await new Promise<void>((resolve, reject) => {
+      // Poll abort every 500ms while waiting
+      const interval = setInterval(() => {
+        if (isAborted()) {
+          clearInterval(interval);
+          reject(new Error("Backtest cancelled by user"));
+        }
+      }, 500);
+      backtestSessionManager.setStartResolver(sessionId, () => {
+        clearInterval(interval);
+        resolve();
+      });
+    });
+
+    // Mark session as running
+    backtestSessionManager.updateStatus(sessionId, 'running');
+
+    // ── Now run the simulation using pre-loaded data ──
+    return this.runSimulationCore(userId, merged, symbolStates, emit, isAborted);
+  }
+
+  private async runSimulationCore(
+    userId: string,
+    merged: BacktestConfig,
+    symbolStates: Map<string, SymbolState>,
+    emit: StreamEventCallback,
+    /** Optional abort check — return true to stop simulation early */
+    abortCheck?: () => boolean,
+  ): Promise<BacktestResult> {
+
+    // ── Emit sim-start progress ──────────────────────────────
+    emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
+    await new Promise(r => setTimeout(r, 30)); // flush SSE
+
+    // ── Build interleaved timeline ───────────────────────────────
     const RSI_PERIOD = 14;
     const ATR_PERIOD = 14;
     const warmupCandles = Math.max(RSI_PERIOD, ATR_PERIOD) + 2;
+    /** Limit strategy analysis to last N candles for performance */
+    const MAX_STRATEGY_CANDLES = 300;
 
-    // Build timeline: for each time point, which symbols have a candle?
-    // Find the min & max time across all symbols
     let allTimelineCandles: TimelineCandle[] = [];
     for (const [sym, state] of symbolStates) {
       for (let i = warmupCandles; i < state.rates.length; i++) {
@@ -411,7 +571,7 @@ class BacktestService {
       throw new Error("No timeline data available after warmup");
     }
 
-    // ── 3. Simulation state ───────────────────────────────────────────
+    // ── Simulation state ───────────────────────────────────────────
     const tradeResults: SimulatedTrade[] = [];
     const equityCurve: Array<{ time: number; equity: number }> = [];
     let equity = merged.initialBalance;
@@ -461,7 +621,7 @@ class BacktestService {
     // Map of visible symbols (those with enough data)
     const activeSymbols = Array.from(symbolStates.keys());
 
-    // ── 4. Iterate by timeline ───────────────────────────────────────
+    // ── Iterate by timeline ───────────────────────────────────────
     let timelineStep = 0;
 
     // Group timeline candles by unique time
@@ -478,10 +638,17 @@ class BacktestService {
     for (const group of timelineGroups) {
       timelineStep++;
 
+      // Abort check
+      if (abortCheck && abortCheck()) {
+        silentLogger.info(`[BACKTEST] Aborted by user at step ${timelineStep}/${totalTimelineSteps}`);
+        break;
+      }
+
       // Speed control: yield to event loop so SSE flushes
-      if (onEvent && merged.speedMs && merged.speedMs > 0) {
+      if (merged.speedMs && merged.speedMs > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, merged.speedMs!));
-      } else if (onEvent && timelineStep % 100 === 0) {
+      } else {
+        // Yield every step to keep SSE keepalive / event loop responsive
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
 
@@ -623,7 +790,7 @@ class BacktestService {
           const volumeBuy = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "BUY");
           const volumeSell = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "SELL");
 
-          const strategyCandles = symState.rates.slice(0, idx + 1).map((r: MT5Rate) => ({
+          const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1).map((r: MT5Rate) => ({
             time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
           }));
           const ms = marketStructureService.analyzeMarketStructure(strategyCandles);
@@ -826,11 +993,6 @@ class BacktestService {
           floatingPnL: Math.round(floatingPnL * 100) / 100,
         },
       });
-      if (merged.speedMs === 0 && timelineStep % 50 === 0) {
-        await new Promise(r => setTimeout(r, 1));
-      }
-
-      // Progress — emit every 0.25% and after every trade event for smoothness
       const progressPct = Math.round((timelineStep / totalTimelineSteps) * 100);
       if (progressPct - lastProgressPct >= MIN_PROGRESS_INTERVAL_PCT || timelineStep === totalTimelineSteps) {
         lastProgressPct = progressPct;
@@ -842,9 +1004,7 @@ class BacktestService {
             percent: progressPct,
           },
         });
-        if (merged.speedMs === 0) {
-          await new Promise(r => setTimeout(r, PROGRESS_FLUSH_MS));
-        }
+        // Progress flush not needed — every step already yields
       }
 
       // Stop if account blown

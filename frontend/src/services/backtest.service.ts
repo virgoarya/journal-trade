@@ -8,6 +8,16 @@ export interface StreamProgress {
   percent: number;
 }
 
+export interface StreamDataReady {
+  sessionId: string;
+  symbols: string[];
+  timeframe: string;
+  fromDate: string;
+  toDate: string;
+  totalCandles: number;
+  totalSymbols: number;
+}
+
 export interface StreamCandle {
   time: number;
   symbol: string;
@@ -49,6 +59,7 @@ export interface StreamTradeClose {
 
 export type SSEEvent =
   | { type: "progress"; data: StreamProgress }
+  | { type: "data_ready"; data: StreamDataReady }
   | { type: "candle"; data: StreamCandle }
   | { type: "trade_open"; data: StreamTradeOpen }
   | { type: "trade_close"; data: StreamTradeClose }
@@ -81,6 +92,7 @@ export interface BacktestConfig {
   signalInterval: number;
   speedMs?: number;
   activeMethodologies?: string[];
+  sessionId?: string;
 }
 export interface BacktestTrade {
   entryTime: number;
@@ -255,6 +267,9 @@ export function buildStreamUrl(config: BacktestConfig): string {
   if (config.activeMethodologies && config.activeMethodologies.length > 0) {
     p.set("activeMethodologies", config.activeMethodologies.join(","));
   }
+  if (config.sessionId) {
+    p.set("sessionId", config.sessionId);
+  }
   return `/api/v1/backtest/stream?${p.toString()}`;
 }
 
@@ -265,6 +280,40 @@ class BacktestService {
     const res = await apiClient.post<BacktestResult>(
       "/api/v1/backtest/run",
       config,
+    );
+    return res;
+  }
+
+  /**
+   * Phase 1: Prepare historical data without starting simulation.
+   * Returns sessionId for the frontend to start simulation later.
+   */
+  async prepare(config: BacktestConfig) {
+    const res = await apiClient.post<{ sessionId: string; symbolSummaries: Array<{ symbol: string; candles: number; fromDate: string; toDate: string }> }>(
+      "/api/v1/backtest/prepare",
+      config,
+    );
+    return res;
+  }
+
+  /**
+   * Phase 2: Start the simulation for a prepared session.
+   */
+  async startSession(sessionId: string) {
+    const res = await apiClient.post<{ started: boolean }>(
+      `/api/v1/backtest/session/${sessionId}/start`,
+      {},
+    );
+    return res;
+  }
+
+  /**
+   * Cancel a prepared session (cleanup).
+   */
+  async cancelSession(sessionId: string) {
+    const res = await apiClient.post<{ cancelled: boolean }>(
+      `/api/v1/backtest/session/${sessionId}/cancel`,
+      {},
     );
     return res;
   }

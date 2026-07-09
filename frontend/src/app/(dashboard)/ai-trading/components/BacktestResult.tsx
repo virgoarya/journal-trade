@@ -77,7 +77,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
           <div className="p-2 bg-gray-800/80 rounded-lg border border-gray-700/50"><BarChart3 className="w-5 h-5 text-accent-gold" /></div>
           <div>
             <h3 className="text-lg font-semibold text-white tracking-wide">Simulation Results</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{(result.symbols || [result.symbol]).join(", ")} · {result.timeframe} · {result.totalCandles} candles</p>
+            <p className="text-xs text-gray-500 mt-0.5">{(result.symbols || []).join(", ")} · {result.timeframe} · {result.totalCandles} candles</p>
           </div>
         </div>
         {result.backtestId && <div className="text-xs font-mono text-gray-500 bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800">ID: {result.backtestId.substring(0, 8)}</div>}

@@ -9,10 +9,12 @@ import {
   type StreamCandle,
   type StreamTradeOpen,
   type StreamTradeClose,
+  type StreamDataReady,
+  backtestService,
 } from "@/services/backtest.service";
 import {
   Terminal, XCircle, Cpu, TrendingUp, TrendingDown,
-  ArrowRight, Activity, Loader2, BarChart3, Layers, Shield,
+  Activity, Loader2, BarChart3, Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -44,7 +46,10 @@ interface LiveSymbolStat {
   totalPnL: number;
 }
 
+type StreamPhase = "preparing" | "ready" | "running" | "complete";
+
 export function BacktestStreamView({ config, onComplete, onError, onCancel }: Props) {
+  const [phase, setPhase] = useState<StreamPhase>("preparing");
   const [progress, setProgress] = useState<StreamProgress | null>(null);
   const [candle, setCandle] = useState<StreamCandle | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -54,9 +59,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const symbolStatsRef = useRef<Map<string, LiveSymbolStat>>(new Map());
   const [liveMethStats, setLiveMethStats] = useState<Array<{ methodology: string; count: number; pnl: number }>>([]);
   const methStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [dataReadyInfo, setDataReadyInfo] = useState<StreamDataReady | null>(null);
+  const [startingSimulation, setStartingSimulation] = useState(false);
 
   const initLoggedRef = useRef(false);
   const configKeyRef = useRef<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -66,18 +75,32 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
   useEffect(() => {
     let mounted = true;
-    let eventSource: EventSource | null = null;
-    // Detect NEW backtest config (not StrictMode re-mount)
-    const configKey = JSON.stringify(config);
-    if (configKey !== configKeyRef.current) {
-      configKeyRef.current = configKey;
-      initLoggedRef.current = false;
-    }
 
-    const startStream = () => {
+    // Cleanup previous EventSource
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    // Reset state for new config
+    setPhase("preparing");
+    setProgress(null);
+    setCandle(null);
+    setLogs([]);
+    setEquityHistory([]);
+    setLiveSymbolStats([]);
+    symbolStatsRef.current.clear();
+    setLiveMethStats([]);
+    methStatsRef.current.clear();
+    setSessionId(null);
+    setDataReadyInfo(null);
+    setStartingSimulation(false);
+
+    let currentSessionId: string | null = null;
+
+    const startStream = async () => {
       try {
-        const url = buildStreamUrl(config);
-        eventSource = new EventSource(url, { withCredentials: true });
+        // Build config for SSE — open stream directly (no /prepare needed)
+        const streamConfig = { ...config };
 
         const addLog = (type: LogEntry["type"], message: string, details?: any, candleTimestamp?: number) => {
           if (!mounted) return;
@@ -95,16 +118,35 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         // Only log initialization once per stream session
         if (!initLoggedRef.current) {
           initLoggedRef.current = true;
-          addLog("info", `Initializing backtest for ${config.symbols?.join(", ") || "symbols"} (${config.timeframe})...`);
-          addLog("info", `Loading historical data...`);
+          addLog("info", `Fetching historical data for ${config.symbols?.join(", ") || "symbols"} (${config.timeframe})...`);
         }
 
-        eventSource.addEventListener("progress", (e: any) => {
+        // ✅ Open SSE stream directly — backend will emit progress during fetch & simulation
+        const url = buildStreamUrl(streamConfig);
+        const es = new EventSource(url, { withCredentials: true });
+        eventSourceRef.current = es;
+        if (!mounted) { es.close(); return; }
+
+        // Once data_ready arrives, auto-start simulation
+        let autoStarted = false;
+        es.addEventListener("data_ready", (e: any) => {
+          if (!mounted || autoStarted) return;
+          try {
+            const data = JSON.parse(e.data) as StreamDataReady;
+            setSessionId(data.sessionId);
+            setDataReadyInfo(data);
+            setPhase("running"); // move straight to running — no manual action needed
+            addLog("info", `Data loaded: ${data.totalCandles} candles across ${data.totalSymbols} symbol(s). Starting simulation...`);
+            autoStarted = true;
+          } catch {}
+        });
+
+        es.addEventListener("progress", (e: any) => {
           if (!mounted) return;
           try { setProgress(JSON.parse(e.data)); } catch {}
         });
 
-        eventSource.addEventListener("equity", (e: any) => {
+        es.addEventListener("equity", (e: any) => {
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data);
@@ -112,7 +154,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           } catch {}
         });
 
-        eventSource.addEventListener("candle", (e: any) => {
+        es.addEventListener("candle", (e: any) => {
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamCandle;
@@ -120,7 +162,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           } catch {}
         });
 
-        eventSource.addEventListener("trade_open", (e: any) => {
+        es.addEventListener("trade_open", (e: any) => {
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamTradeOpen & { symbol: string; primaryMethodology?: string; time: number };
@@ -144,7 +186,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           } catch {}
         });
 
-        eventSource.addEventListener("trade_close", (e: any) => {
+        es.addEventListener("trade_close", (e: any) => {
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamTradeClose & { symbol: string; primaryMethodology?: string; exitTime: number };
@@ -169,41 +211,41 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           } catch {}
         });
 
-        eventSource.addEventListener("complete", (e: any) => {
+        es.addEventListener("complete", (e: any) => {
           if (!mounted) return;
           try {
             addLog("info", "Backtest complete. Generating report...");
             const data = JSON.parse(e.data) as BacktestResultData;
-            if (eventSource) {
-              eventSource.close();
-              eventSource = null;
-            }
+            es.close();
+            eventSourceRef.current = null;
+            setPhase("complete");
             setTimeout(() => { if (mounted) onComplete(data); }, 1500);
           } catch {}
         });
 
-        eventSource.onerror = () => {
+        es.onerror = () => {
           if (!mounted) return;
-          // EventSource auto-reconnects — ignore CONNECTING state to prevent duplicates
-          if (eventSource?.readyState === EventSource.CONNECTING) return;
-          if (eventSource?.readyState !== EventSource.CLOSED) {
+          if (es.readyState === EventSource.CONNECTING) return;
+          if (es.readyState !== EventSource.CLOSED) {
             addLog("error", "Connection interrupted.");
-            if (eventSource) eventSource.close();
+            es.close();
+            eventSourceRef.current = null;
             setTimeout(() => { if (mounted) onError("Connection lost"); }, 2000);
           }
         };
 
-        eventSource.addEventListener("error", (e: any) => {
+        es.addEventListener("error", (e: any) => {
           if (!mounted) return;
           let msg = "Stream error";
           try { if (e.data) { const d = JSON.parse(e.data); msg = d.message || msg; } } catch {}
           addLog("error", "ERROR: " + msg);
-          if (eventSource) eventSource.close();
+          es.close();
+          eventSourceRef.current = null;
           setTimeout(() => { if (mounted) onError(msg); }, 2000);
         });
 
       } catch (err: any) {
-        if (mounted) onError(err.message || "Failed to establish stream");
+        if (mounted) onError(err.message || "Failed to prepare backtest");
       }
     };
 
@@ -211,7 +253,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
     return () => {
       mounted = false;
-      if (eventSource) eventSource.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, [config, onComplete, onError]);
 
@@ -227,6 +272,36 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         .map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 }))
         .sort((a, b) => b.count - a.count),
     );
+  };
+
+  // Handle cancel during preparation phase
+  const handleCancelPreparation = async () => {
+    if (sessionId) {
+      try {
+        await backtestService.cancelSession(sessionId);
+      } catch (err) {
+        console.error("Failed to cancel session:", err);
+      }
+    }
+    onCancel();
+  };
+
+  // Handle start simulation after data is ready (fallback if auto-start fails)
+  const handleStartSimulation = async () => {
+    if (!sessionId) return;
+    setStartingSimulation(true);
+    try {
+      const res = await backtestService.startSession(sessionId);
+      if (res.success) {
+        setPhase("running");
+      } else {
+        onError(res.error || "Failed to start simulation");
+      }
+    } catch (err: any) {
+      onError(err.message || "Failed to start simulation");
+    } finally {
+      setStartingSimulation(false);
+    }
   };
 
   const progressPercent = progress ? progress.percent : 0;
@@ -250,13 +325,14 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             <span>{config.timeframe}</span>
           </div>
         </div>
-        <button onClick={onCancel} className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-red-400 transition-colors bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800 hover:border-red-900/50">
+        <button onClick={handleCancelPreparation} className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-red-400 transition-colors bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800 hover:border-red-900/50">
           <XCircle className="w-4 h-4" /> Stop
         </button>
       </div>
 
       {/* Main View */}
-      <div className="flex-1 flex flex-col lg:flex-row relative z-10 p-4 gap-4 overflow-hidden">
+      {(phase === "preparing" || phase === "running" || phase === "complete") && (
+        <div className="flex-1 flex flex-col lg:flex-row relative z-10 p-4 gap-4 overflow-hidden">
         {/* Left Panel */}
         <div className="w-full lg:w-72 flex flex-col gap-4 overflow-y-auto">
           {/* Equity Card */}
@@ -419,26 +495,42 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           </div>
         </div>
       </div>
+      )}
 
       {/* Progress Footer */}
       <div className="p-4 bg-gray-900/80 border-t border-gray-800 backdrop-blur-md relative z-10 flex flex-col gap-2">
         <div className="flex justify-between text-xs font-medium font-mono">
           <span className="text-accent-gold flex items-center gap-2">
-            {progressPercent === 0 && !progress ? (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Initializing historical data...</>
-            ) : progressPercent < 100 ? (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Processing...</>
-            ) : "Completed."}
+            {phase === "preparing" && !progress && (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Loading historical data...</>
+            )}
+            {phase === "preparing" && progress && progress.percent < 10 && (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Fetching {config.symbols?.join(",") || ""} data...</>
+            )}
+            {phase === "running" && progress && progress.percent < 10 && (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Data loaded, starting simulation...</>
+            )}
+            {phase === "running" && progress && progress.percent >= 10 && progress.percent < 100 && (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Simulating... {Math.round(progressPercent)}%</>
+            )}
+            {phase === "running" && progress && progress.percent >= 100 && (
+              <>Completed.</>
+            )}
+            {phase === "complete" && <>Completed.</>}
           </span>
           <span className="text-gray-400">
-            {progress ? `${progress.currentCandle} / ${progress.totalCandles}` : "0 / 0"} ({Math.round(progressPercent)}%)
+            {progress ? (
+              `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)`
+            ) : (
+              "loading data..."
+            )}
           </span>
         </div>
         <div className="h-1.5 w-full bg-gray-950 rounded-full overflow-hidden border border-gray-800/50">
           <motion.div
             className="h-full bg-accent-gold rounded-full relative"
             initial={{ width: 0 }}
-            animate={{ width: `${progressPercent}%` }}
+            animate={{ width: `${phase === "complete" || progressPercent >= 100 ? 100 : progressPercent}%` }}
             transition={{ duration: 0.15, ease: "easeOut" }}
           >
             <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>

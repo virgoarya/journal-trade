@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
@@ -210,11 +210,12 @@ export function TerminalChatPanel() {
         throw new Error("Failed to connect to Terminal");
       }
 
-      const data = (await response.json()) as {
-        success?: boolean;
-        reply?: string;
-        error?: string;
-      };
+      const contentType = response.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        const text = await response.text();
+        throw new Error("Server returned non-JSON: " + text.slice(0, 200));
+      }
+      const data = await response.json() as { success?: boolean; reply?: string; error?: string };
 
       stopThinking();
       setThinkingState("responding");
@@ -324,7 +325,7 @@ export function TerminalChatPanel() {
                   <span className="text-[9px] uppercase tracking-widest">
                     {msg.role === "assistant" ? "SYSTEM.AI" : "USER.OP"}
                   </span>
-                  <span className="text-[9px]">—</span>
+                  <span className="text-[9px]">â€”</span>
                   <span className="text-[9px]">
                     {new Date().toLocaleTimeString([], {
                       hour12: false,

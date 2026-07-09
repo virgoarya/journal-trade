@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { geoRiskService } from "./geo-risk.service";
@@ -456,7 +456,7 @@ export const macroAiService = {
       geoRisk?: { scores?: Record<string, number>; topDriver?: string };
     },
   ) {
-    // ── Derive sentiment from regime + liquidity (deterministic, not AI) ──
+    // â”€â”€ Derive sentiment from regime + liquidity (deterministic, not AI) â”€â”€
     let sentiment: "RISK-ON" | "RISK-OFF" | "NEUTRAL" = "NEUTRAL";
     if (calculatedRegime === "Reflation" || calculatedRegime === "Goldilocks") {
       sentiment = liquidityStatus === "Draining" ? "NEUTRAL" : "RISK-ON";
@@ -468,13 +468,13 @@ export const macroAiService = {
       sentiment = liquidityStatus === "Refilling" ? "NEUTRAL" : "RISK-OFF";
     }
 
-    // ── Build key assets map from heatmap data ──
+    // â”€â”€ Build key assets map from heatmap data â”€â”€
     const keyAssets: Record<string, number> = {};
     for (const a of assets) {
       keyAssets[a.ticker] = a.change ?? 0;
     }
 
-    // ── Build unified state JSON using SAME data as classifier (SSOT) ──
+    // â”€â”€ Build unified state JSON using SAME data as classifier (SSOT) â”€â”€
     const stateJson = {
       regime: calculatedRegime ?? "unknown",
       confidence: context?.confidence ?? null,
@@ -1270,16 +1270,16 @@ ATURAN DOMAIN EXPERTISE (SANGAT KRITIS):
 4. SP500 VS LIQUIDITY: Jika SP500 hijau sementara Net Liquidity kontraksi, pasar saham sedang "Defying Gravity" (bergerak naik murni karena momentum, mengabaikan realita likuiditas yang mengering).
 
 TUGAS: Hasilkan analisis desk brief dengan format eksplisit berikut:
-1. ENGINE — driver utama dari liquidity/policy/yield/fear.
-2. SQUEEZE — bottleneck atau tekanan yang paling mungkin memaksa rotasi aset.
-3. FLOW — arah modal institusi berikutnya dan aset yang diuntungkan/rugi.
-4. TRADE RISK — risiko posisi paling mahal jika narasi ini salah.
-5. INVALIDATION TRIGGER — trigger data/event yang membatalkan tesis.
+1. ENGINE â€” driver utama dari liquidity/policy/yield/fear.
+2. SQUEEZE â€” bottleneck atau tekanan yang paling mungkin memaksa rotasi aset.
+3. FLOW â€” arah modal institusi berikutnya dan aset yang diuntungkan/rugi.
+4. TRADE RISK â€” risiko posisi paling mahal jika narasi ini salah.
+5. INVALIDATION TRIGGER â€” trigger data/event yang membatalkan tesis.
 
 JANGAN ulangi semua angka secara kaku. Gunakan angka hanya untuk mendukung narasi tajam Anda. Jangan gunakan kata-kata AI generik (misal: "Kesimpulannya", "Dinamika saat ini"). Langsung menukik ke analisis.`;
 
     const systemPrompt =
-      "ROLE: Senior Institutional Quant Trader. TONE: Tajam, analitis, sedikit sinis jika pasar tidak rasional. WAJIB menggunakan istilah finansial (Bear Steepener, Debasement, Liquidity Drain, Defying Gravity).\n\nBAHASA: WAJIB 100% Bahasa Indonesia profesional. DILARANG KERAS menggunakan bahasa Inggris untuk analisis. Jika ada istilah Inggris, tulis dalam Bahasa Indonesia atau beri padanannya.\n\nFORMAT: Langsung ke inti analisis. Jangan gunakan kata pengantar seperti 'Kesimpulannya', 'Dinamika saat ini', 'Berdasarkan data'. Jangan ulangi semua angka mentah — gunakan angka hanya untuk mendukung insight.";
+      "ROLE: Senior Institutional Quant Trader. TONE: Tajam, analitis, sedikit sinis jika pasar tidak rasional. WAJIB menggunakan istilah finansial (Bear Steepener, Debasement, Liquidity Drain, Defying Gravity).\n\nBAHASA: WAJIB 100% Bahasa Indonesia profesional. DILARANG KERAS menggunakan bahasa Inggris untuk analisis. Jika ada istilah Inggris, tulis dalam Bahasa Indonesia atau beri padanannya.\n\nFORMAT: Langsung ke inti analisis. Jangan gunakan kata pengantar seperti 'Kesimpulannya', 'Dinamika saat ini', 'Berdasarkan data'. Jangan ulangi semua angka mentah â€” gunakan angka hanya untuk mendukung insight.";
 
     const text = await callDualEngine(prompt, systemPrompt, {
       max_output_tokens: 2000,
