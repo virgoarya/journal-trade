@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { type PipelineLog } from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
 import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity } from "lucide-react";
 
 interface PipelineLogsProps {
@@ -20,6 +23,27 @@ const LOG_ICONS: Record<
 };
 
 export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
+  const [filterType, setFilterType] = useState("");
+  const logTypes = ["INFO", "SIGNAL", "TRADE", "ERROR", "TRAILING", "CONFLUENCE"];
+
+  const filteredLogs = filterType
+    ? logs.filter(l => l.type === filterType)
+    : logs;
+
+  if (isLoading) {
+    return <SkeletonLoader type="list" count={5} />;
+  }
+
+  if (logs.length === 0) {
+    return (
+      <EmptyState
+        type="data"
+        title="No Pipeline Logs"
+        description="No pipeline activity logs available yet."
+      />
+    );
+  }
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       {/* Header */}
@@ -28,22 +52,30 @@ export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
           <ScrollText className="w-4 h-4 text-gray-400" />
           Pipeline Activity
         </h3>
-        <span className="text-xs text-gray-500">{logs.length} entries</span>
+        <span className="text-xs text-gray-500">{filteredLogs.length}/{logs.length} entries</span>
+      </div>
+
+      {/* Filter */}
+      <div className="px-4 py-2 border-b border-gray-800/50 flex gap-1.5">
+        {["", ...logTypes].map(type => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className={`px-2 py-0.5 text-[10px] rounded font-medium transition ${
+              filterType === type
+                ? "bg-accent-gold text-black"
+                : "bg-gray-800 text-gray-400 hover:text-white"
+            }`}
+          >
+            {type || "All"}
+          </button>
+        ))}
       </div>
 
       {/* Logs */}
       <div className="max-h-64 overflow-y-auto">
-        {isLoading ? (
-          <div className="px-4 py-8 text-center text-gray-500 text-sm">
-            Loading logs...
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="px-4 py-8 text-center text-gray-500 text-sm">
-            No activity yet. Start the pipeline to see logs.
-          </div>
-        ) : (
           <div className="divide-y divide-gray-800/50">
-            {[...logs].reverse().map((log, i) => {
+            {[...filteredLogs].reverse().map((log, i) => {
               const meta = LOG_ICONS[log.type] || LOG_ICONS.INFO;
               const Icon = meta.icon;
 
@@ -62,7 +94,6 @@ export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
               );
             })}
           </div>
-        )}
       </div>
 
       {/* Color legend */}

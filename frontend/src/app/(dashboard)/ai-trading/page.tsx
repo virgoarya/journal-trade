@@ -11,14 +11,10 @@ import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { BacktestTab } from "./components/BacktestTab";
-import { useMT5Connection } from "./hooks/useMT5Connection";
-import { useAccountInfo } from "./hooks/useAccountInfo";
-import { usePositions } from "./hooks/usePositions";
-import { usePipeline } from "./hooks/usePipeline";
+import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, Activity } from "lucide-react";
 import { Suspense } from "react";
-import type { AIBacktestSkill } from "@/services/ai-trading.service";
 
 type Tab = "trading" | "backtest";
 
@@ -29,7 +25,9 @@ export default function AITradingPage() {
         <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
       </div>
     }>
-      <AITradingPageContent />
+      <AiTradingProvider>
+        <AITradingPageContent />
+      </AiTradingProvider>
     </Suspense>
   );
 }
@@ -40,52 +38,44 @@ function AITradingPageContent() {
   const tabParam = searchParams.get("tab") as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>("trading");
 
+  const {
+    isConnected,
+    isConnecting,
+    connectError,
+    connectMT5,
+    disconnectMT5,
+    accountInfo,
+    accountLoading,
+    positions,
+    positionsLoading,
+    positionsError,
+    closePosition,
+    modifyPosition,
+    refetchPositions,
+    pipelineStatus,
+    pipelineLogs,
+    isPipelineStarting,
+    isPipelineStopping,
+    lastAnalysis,
+    lastLlmVotes,
+    llmModels,
+    skillConfig,
+    setSkillConfig,
+    skillVersion,
+    setSkillVersion,
+    refreshPipelineData,
+  } = useAiTrading();
+
   useEffect(() => {
     if (tabParam === "backtest" || tabParam === "trading") {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
 
-  const { isConnected, isConnecting, error, connect, disconnect } =
-    useMT5Connection();
-  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } =
-    useAccountInfo();
-  const { positions, isLoading: posLoading, fetchError: posError, closePosition, modifyPosition, refetch: refetchPositions } =
-    usePositions(10000);
-  const {
-    status: pipelineStatus,
-    lastAnalysis,
-    logs,
-    isStarting,
-    isStopping,
-    lastLLMVotes,
-    start,
-    stop,
-    pause,
-    resume,
-    refresh: refreshPipeline,
-  } = usePipeline();
-  const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
-  const [skillVersion, setSkillVersion] = useState(0);
-  const [llmModelStatus, setLlmModelStatus] = useState<Array<{ name: string; label: string; model: string; status: string }>>([]);
-
-  // Fetch LLM model status
   useEffect(() => {
-    let mounted = true;
-    import("@/services/ai-trading.service").then(({ aiTradingService }) => {
-      aiTradingService.getLlmStatus().then(res => {
-        if (mounted && res.success && res.data) setLlmModelStatus(res.data);
-      }).catch(() => {});
-    });
-    return () => { mounted = false; };
-  }, [isConnected]);
+    refreshPipelineData();
+  }, [isConnected, refreshPipelineData]);
 
-  // Refresh pipeline state on mount
-  useEffect(() => {
-    refreshPipeline();
-  }, [isConnected, refreshPipeline]);
-
-  // If not connected, show connection panel
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-black">
@@ -99,9 +89,9 @@ function AITradingPageContent() {
           </button>
         </div>
         <ConnectionPanel
-          onConnect={connect}
+          onConnect={connectMT5}
           isConnecting={isConnecting}
-          error={error}
+          error={connectError}
         />
       </div>
     );
@@ -115,7 +105,7 @@ function AITradingPageContent() {
   return (
     <div className="min-h-screen bg-black p-4">
       {/* Top bar */}
-      <div className="flex items-center justify-between mb-4">
+      <header className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/dashboard")}
@@ -129,7 +119,6 @@ function AITradingPageContent() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Tabs */}
           <div className="flex bg-gray-900 rounded-lg p-0.5 border border-gray-800">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -151,23 +140,22 @@ function AITradingPageContent() {
             })}
           </div>
 
-          {/* Disconnect button — only show on trading tab */}
           {activeTab === "trading" && (
             <button
-              onClick={disconnect}
+              onClick={disconnectMT5}
               className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition"
             >
               Disconnect MT5
             </button>
           )}
         </div>
-      </div>
+      </header>
 
       {/* Tab Content */}
       {activeTab === "trading" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* Left: Main content */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="md:col-span-2 xl:col-span-3 space-y-4">
             <AccountOverview
               accountInfo={accountInfo}
               isLoading={accountLoading}
@@ -177,19 +165,19 @@ function AITradingPageContent() {
               positions={positions}
               onClose={closePosition}
               onModify={modifyPosition}
-              isLoading={posLoading}
-              error={posError}
+              isLoading={positionsLoading}
+              error={positionsError}
               onRetry={refetchPositions}
             />
 
             {pipelineStatus?.running && (
               <>
                 <LLMConsensusViz
-                  votes={lastLLMVotes}
-                  modelStatus={llmModelStatus}
+                  votes={lastLlmVotes}
+                  modelStatus={llmModels}
                   threshold={pipelineStatus.config?.llmConsensus?.threshold ?? 0.5}
                 />
-                <PipelineLogs logs={logs} />
+                <PipelineLogs logs={pipelineLogs} />
               </>
             )}
           </div>
@@ -197,19 +185,13 @@ function AITradingPageContent() {
           {/* Right: Trading panel */}
           <div className="space-y-4">
             <TradingPanel
-              isConnected={isConnected}
-              onStartPipeline={start}
-              onStopPipeline={stop}
-              onPausePipeline={pause}
-              onResumePipeline={resume}
               pipelineRunning={pipelineStatus?.running ?? false}
               pipelinePaused={pipelineStatus?.paused ?? false}
-              isStarting={isStarting}
-              isStopping={isStopping}
+              isStarting={isPipelineStarting}
+              isStopping={isPipelineStopping}
               skillConfig={skillConfig}
             />
 
-            {/* Methodology Confluence Display */}
             {lastAnalysis?.confluence && (
               <MethodologyConfluence
                 confluence={lastAnalysis.confluence}
@@ -217,15 +199,12 @@ function AITradingPageContent() {
               />
             )}
 
-            {/* AI Backtest Skill — rankings, verdicts, auto-scan */}
             <SkillDisplay key={skillVersion} onApplySkill={(skill) => {
               setSkillConfig(skill);
             }} />
 
-            {/* Pipeline Performance — live methodology & symbol stats */}
             <PipelinePerformance />
 
-            {/* Pipeline status summary */}
             {pipelineStatus && (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -241,19 +220,12 @@ function AITradingPageContent() {
                   <div>
                     <span className="text-gray-500">Win/Loss</span>
                     <p className="text-white font-medium">
-                      {pipelineStatus.metrics.winningTrades}/
-                      {pipelineStatus.metrics.losingTrades}
+                      {pipelineStatus.metrics.winningTrades}/{pipelineStatus.metrics.losingTrades}
                     </p>
                   </div>
                   <div>
                     <span className="text-gray-500">Total P&L</span>
-                    <p
-                      className={`font-medium ${
-                        pipelineStatus.metrics.totalPnL >= 0
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
+                    <p className={`font-medium ${pipelineStatus.metrics.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
                       ${pipelineStatus.metrics.totalPnL.toFixed(2)}
                     </p>
                   </div>
@@ -270,13 +242,7 @@ function AITradingPageContent() {
                     <span className="text-xs text-gray-500">Last Signal</span>
                     <p className="text-xs text-white mt-0.5">
                       {pipelineStatus.lastSignal.symbol}{" "}
-                      <span
-                        className={
-                          pipelineStatus.lastSignal.direction === "BUY"
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }
-                      >
+                      <span className={pipelineStatus.lastSignal.direction === "BUY" ? "text-green-400" : "text-red-400"}>
                         {pipelineStatus.lastSignal.direction}
                       </span>{" "}
                       · Confidence: {pipelineStatus.lastSignal.confidence}%
@@ -300,7 +266,7 @@ function AITradingPageContent() {
         </div>
       )}
 
-      {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(v => v + 1)} />}
+      {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(skillVersion + 1)} />}
     </div>
   );
 }

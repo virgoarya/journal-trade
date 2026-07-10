@@ -5,6 +5,8 @@ import {
   aiTradingService,
   type PipelinePerformance as PipelinePerformanceData,
 } from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
 import {
   TrendingUp,
   TrendingDown,
@@ -80,29 +82,19 @@ export function PipelinePerformance() {
     return () => clearInterval(interval);
   }, [fetch]);
 
-  if (loading && !data) {
-    return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-accent-gold" />
-        <span className="ml-2 text-sm text-gray-400">Loading performance...</span>
-      </div>
-    );
+  if (loading) {
+    return <SkeletonLoader type="card" />;
   }
 
   if (!data || data.totalTrades === 0) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Activity className="w-4 h-4 text-accent-gold" />
-            Pipeline Performance
-          </h3>
-          <button onClick={fetch} className="text-gray-500 hover:text-white transition">
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <p className="text-xs text-gray-500">No closed trades yet — run the pipeline to see stats.</p>
-      </div>
+      <EmptyState
+        type="data"
+        title="No Pipeline Data"
+        description="No pipeline performance data available yet."
+        actionText="Refresh"
+        onAction={fetch}
+      />
     );
   }
 

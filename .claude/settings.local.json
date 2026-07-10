@@ -36,7 +36,11 @@
       "Bash(findstr -i \"mcp metatrader\")",
       "Bash(npx tsc *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "PowerShell(ps *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(npx tsx *)"
     ]
   }
 }

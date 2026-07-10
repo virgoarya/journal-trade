@@ -6,6 +6,8 @@ import {
   type AIBacktestSkill,
   type AutoBacktestSummary,
 } from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
 import {
   Zap,
   Loader2,
@@ -85,6 +87,22 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       toast.success("AI Skill applied to pipeline configuration");
     }
   };
+
+  if (loading) {
+    return <SkeletonLoader type="card" />;
+  }
+
+  if (!skill || (!skill.symbolRankings?.length && !skill.methodologyRankings?.length)) {
+    return (
+      <EmptyState
+        type="data"
+        title="No AI Skill Data"
+        description="No AI backtest skill data available yet."
+        actionText="Run Auto-Scan"
+        onAction={handleAutoScan}
+      />
+    );
+  }
 
   const userHasData = skill && (skill.symbolRankings?.length > 0 || skill.methodologyRankings?.length > 0);
 

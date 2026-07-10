@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { type Position } from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
 import {
   XCircle,
   Pencil,
@@ -56,13 +58,28 @@ export function PositionsTable({
   };
 
   if (isLoading) {
+    return <SkeletonLoader type="table" count={5} />;
+  }
+
+  if (error) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
-        <div className="flex items-center justify-center">
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-400">Loading positions...</span>
-        </div>
-      </div>
+      <EmptyState
+        type="error"
+        title="Error Loading Positions"
+        description={error}
+        actionText="Retry"
+        onAction={onRetry}
+      />
+    );
+  }
+
+  if (positions.length === 0) {
+    return (
+      <EmptyState
+        type="positions"
+        title="No Open Positions"
+        description="You don't have any open positions at the moment."
+      />
     );
   }
 

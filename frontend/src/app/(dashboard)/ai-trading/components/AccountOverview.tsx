@@ -1,6 +1,8 @@
 "use client";
 
 import { type ACCOUNTInfo } from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
 import {
   Wallet,
   TrendingUp,
@@ -54,22 +56,18 @@ export function AccountOverview({
   isLoading,
 }: AccountOverviewProps) {
   if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse"
-          >
-            <div className="h-3 w-16 bg-gray-800 rounded mb-3" />
-            <div className="h-6 w-24 bg-gray-800 rounded" />
-          </div>
-        ))}
-      </div>
-    );
+    return <SkeletonLoader type="card" />;
   }
 
-  if (!accountInfo) return null;
+  if (!accountInfo) {
+    return (
+      <EmptyState
+        type="data"
+        title="Account Not Connected"
+        description="Please connect to your MT5 account to view account details."
+      />
+    );
+  }
 
   const marginLevelColor =
     accountInfo.marginLevel > 200

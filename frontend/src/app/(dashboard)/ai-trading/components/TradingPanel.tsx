@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { aiTradingService, type SymbolInfo, type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS, DEFAULT_METHODOLOGY_WEIGHTS, type AIBacktestSkill } from "@/services/ai-trading.service";
-import { Play, Square, Pause, RotateCcw, Loader2, Signal, TrendingUp, Brain, Zap, ZapOff } from "lucide-react";
+import { aiTradingService, type SymbolInfo, type MethodologyName, type MethodologyWeights, type AIBacktestSkill } from "@/services/ai-trading.service";
+import { DEFAULT_METHODOLOGY_WEIGHTS, METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types";
+import { useAiTrading } from "../context/AiTradingContext";
+import { SymbolSelector } from "./SymbolSelector";
+import { MethodologyConfig } from "./MethodologyConfig";
+import { RiskSettings } from "./RiskSettings";
+import { TrailingStopConfig } from "./TrailingStopConfig";
+import { LlmConsensusConfig } from "./LlmConsensusConfig";
+import { Play, Square, Pause, RotateCcw, Loader2, Signal, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface TradingPanelProps {
-  isConnected: boolean;
-  onStartPipeline: (config: any) => Promise<boolean>;
-  onStopPipeline: () => Promise<void>;
-  onPausePipeline: () => Promise<void>;
-  onResumePipeline: () => Promise<void>;
   pipelineRunning: boolean;
   pipelinePaused: boolean;
   isStarting: boolean;
@@ -24,17 +26,32 @@ const DEFAULT_SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD"];
 const ALL_METHODOLOGIES: MethodologyName[] = ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"];
 
 export function TradingPanel({
-  isConnected,
-  onStartPipeline,
-  onStopPipeline,
-  onPausePipeline,
-  onResumePipeline,
   pipelineRunning,
   pipelinePaused,
   isStarting,
   isStopping,
   skillConfig,
 }: TradingPanelProps) {
+  const {
+    isConnected,
+    startPipeline,
+    stopPipeline,
+    pausePipeline,
+    resumePipeline,
+    llmModels,
+    llmLoading,
+    activeMethodologies: ctxActiveMethodologies,
+    setActiveMethodologies: ctxSetActiveMethodologies,
+    methodologyWeights: ctxMethodologyWeights,
+    setMethodologyWeights: ctxSetMethodologyWeights,
+    showMethodologyConfig,
+    setShowMethodologyConfig,
+    llmEnabled,
+    setLlmEnabled,
+    llmThreshold,
+    setLlmThreshold,
+  } = useAiTrading();
+
   const [symbols, setSymbols] = useState<string[]>(["EURUSD", "XAUUSD"]);
   const [availableSymbols, setAvailableSymbols] = useState<SymbolInfo[]>([]);
   const [timeframe, setTimeframe] = useState<"M5" | "M15" | "H1">("M15");
@@ -47,27 +64,11 @@ export function TradingPanel({
   const [loadingSymbols, setLoadingSymbols] = useState(false);
   const [symbolInput, setSymbolInput] = useState("");
 
-  // ── NEW: Methodology state ─────────────────────────────────────────
-  const [activeMethodologies, setActiveMethodologies] = useState<MethodologyName[]>([...ALL_METHODOLOGIES]);
-  const [methodologyWeights, setMethodologyWeights] = useState<MethodologyWeights>({ ...DEFAULT_METHODOLOGY_WEIGHTS });
-  const [showMethodologyConfig, setShowMethodologyConfig] = useState(false);
-
-  // ── NEW: LLM Consensus state ───────────────────────────────────────
-  const [llmEnabled, setLlmEnabled] = useState(false);
-  const [llmThreshold, setLlmThreshold] = useState(0.5);
-  const [llmModels, setLlmModels] = useState<Array<{ name: string; label: string; status: string }>>([]);
-  const [llmLoading, setLlmLoading] = useState(false);
-
-  // Fetch LLM model status
-  useEffect(() => {
-    let mounted = true;
-    setLlmLoading(true);
-    aiTradingService.getLlmStatus()
-      .then(res => { if (mounted && res.success && res.data) setLlmModels(res.data); })
-      .catch(() => {})
-      .finally(() => { if (mounted) setLlmLoading(false); });
-    return () => { mounted = false; };
-  }, []);
+  // Use context for methodology config
+  const activeMethodologies = ctxActiveMethodologies;
+  const setActiveMethodologies = ctxSetActiveMethodologies;
+  const methodologyWeights = ctxMethodologyWeights;
+  const setMethodologyWeights = ctxSetMethodologyWeights;
 
   // Load available symbols
   useEffect(() => {
@@ -104,34 +105,7 @@ export function TradingPanel({
       );
     }
     setRiskPerTrade(0.5);
-  }, [skillConfig]);
-
-  const addSymbol = (sym: string) => {
-    const s = sym.toUpperCase().trim();
-    if (s && !symbols.includes(s)) {
-      setSymbols([...symbols, s]);
-    }
-    setSymbolInput("");
-  };
-
-  const removeSymbol = (sym: string) => {
-    setSymbols(symbols.filter((s) => s !== sym));
-  };
-
-  const toggleMethodology = (method: MethodologyName) => {
-    setActiveMethodologies((prev) =>
-      prev.includes(method)
-        ? prev.filter((m) => m !== method)
-        : [...prev, method],
-    );
-  };
-
-  const updateWeight = (method: MethodologyName, weight: number) => {
-    setMethodologyWeights((prev) => ({
-      ...prev,
-      [method]: Math.max(0, Math.min(2, weight)),
-    }));
-  };
+  }, [skillConfig, setActiveMethodologies]);
 
   const handleStart = async () => {
     const config = {
@@ -162,7 +136,34 @@ export function TradingPanel({
         providerTimeoutMs: 8000,
       },
     };
-    await onStartPipeline(config);
+    await startPipeline(config);
+  };
+
+  const addSymbol = (sym: string) => {
+    const s = sym.toUpperCase().trim();
+    if (s && !symbols.includes(s)) {
+      setSymbols([...symbols, s]);
+    }
+    setSymbolInput("");
+  };
+
+  const removeSymbol = (sym: string) => {
+    setSymbols(symbols.filter((s) => s !== sym));
+  };
+
+  const toggleMethodology = (method: MethodologyName) => {
+    setActiveMethodologies((prev) =>
+      prev.includes(method)
+        ? prev.filter((m) => m !== method)
+        : [...prev, method],
+    );
+  };
+
+  const updateWeight = (method: MethodologyName, weight: number) => {
+    setMethodologyWeights((prev) => ({
+      ...prev,
+      [method]: Math.max(0, Math.min(2, weight)),
+    }));
   };
 
   return (
@@ -173,111 +174,24 @@ export function TradingPanel({
           <Signal className="w-4 h-4 text-accent-gold" />
           Trading Panel
         </h3>
-        <button
-          onClick={() => setShowMethodologyConfig(!showMethodologyConfig)}
-          className={`px-2 py-1 rounded text-xs font-medium transition flex items-center gap-1 ${
-            showMethodologyConfig
-              ? "bg-accent-gold text-black font-semibold"
-              : "bg-gray-800 text-gray-400 hover:text-white"
-          }`}
-        >
-          <Brain className="w-3 h-3" />
-          {activeMethodologies.length}/7
-        </button>
+        <MethodologyConfig
+          activeMethodologies={activeMethodologies}
+          methodologyWeights={methodologyWeights}
+          onToggleMethodology={toggleMethodology}
+          onUpdateWeight={updateWeight}
+          showConfig={showMethodologyConfig}
+          onToggleConfig={() => setShowMethodologyConfig(!showMethodologyConfig)}
+        />
       </div>
-
-      {/* ── NEW: Methodology Configuration ─────────────────────────── */}
-      {showMethodologyConfig && (
-        <div className="bg-gray-950 border border-gray-800 rounded-lg p-3 space-y-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-gray-300">Active Methodologies</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setActiveMethodologies([...ALL_METHODOLOGIES])}
-                className="text-[10px] text-gray-500 hover:text-white px-1.5 py-0.5 rounded bg-gray-800"
-              >
-                All
-              </button>
-              <button
-                onClick={() => setActiveMethodologies([])}
-                className="text-[10px] text-gray-500 hover:text-white px-1.5 py-0.5 rounded bg-gray-800"
-              >
-                None
-              </button>
-            </div>
-          </div>
-
-          {ALL_METHODOLOGIES.map((method) => (
-            <div key={method} className="flex items-center gap-2 py-1">
-              <input
-                type="checkbox"
-                checked={activeMethodologies.includes(method)}
-                onChange={() => toggleMethodology(method)}
-                className="rounded bg-gray-800 border-gray-600"
-                style={{ accentColor: METHODOLOGY_COLORS[method] }}
-              />
-              <div
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: METHODOLOGY_COLORS[method] }}
-              />
-              <span className="flex-1 text-xs text-gray-300">
-                {METHODOLOGY_LABELS[method]}
-              </span>
-              <input
-                type="text" inputMode="decimal"
-                value={methodologyWeights[method]}
-                onChange={(e) => updateWeight(method, parseFloat(e.target.value) || 0)}
-                min={0}
-                max={2}
-                disabled={!activeMethodologies.includes(method)}
-                className="w-14 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] text-white text-right disabled:opacity-40"
-              />
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Symbol Selection */}
-      <div>
-        <label className="block text-xs text-gray-400 mb-1.5">Trading Pairs</label>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {symbols.map((sym) => (
-            <span
-              key={sym}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-accent-gold/10 text-accent-gold text-xs rounded-full"
-            >
-              {sym}
-              <button
-                onClick={() => removeSymbol(sym)}
-                className="hover:text-red-400 transition"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-1">
-          <input
-            type="text"
-            value={symbolInput}
-            onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === "Enter" && addSymbol(symbolInput)}
-            placeholder="Add symbol..."
-            className="flex-1 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white placeholder-gray-500 focus:border-accent-gold outline-none"
-          />
-          <button
-            onClick={() => addSymbol(symbolInput)}
-            className="px-2.5 py-1.5 bg-gray-800 text-gray-300 rounded text-xs hover:text-white transition"
-          >
-            +
-          </button>
-        </div>
-        {availableSymbols.length > 0 && (
-          <div className="mt-1 text-xs text-gray-500">
-            {availableSymbols.length} symbols available on broker
-          </div>
-        )}
-      </div>
+      <SymbolSelector
+        symbols={symbols}
+        onAddSymbol={addSymbol}
+        onRemoveSymbol={removeSymbol}
+        availableSymbols={availableSymbols}
+        loadingSymbols={loadingSymbols}
+      />
 
       {/* Timeframe */}
       <div>
@@ -300,199 +214,119 @@ export function TradingPanel({
       </div>
 
       {/* Risk Settings */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">
-            Max Positions
-          </label>
-          <input
-            type="text" inputMode="numeric"
-            value={maxPositions}
-            onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
-            className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">
-            Risk / Trade (%)
-          </label>
-          <input
-            type="text" inputMode="decimal"
-            value={riskPerTrade}
-            onChange={(e) => setRiskPerTrade(parseFloat(e.target.value) || 0)}
-            className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
-          />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1">
-            Max Daily Risk (%)
-          </label>
-          <input
-            type="text" inputMode="decimal"
-            value={maxDailyRisk}
-            onChange={(e) => setMaxDailyRisk(parseFloat(e.target.value) || 0)}
-            className="w-full px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-white"
-          />
-        </div>
-      </div>
+      <RiskSettings
+        maxPositions={maxPositions}
+        riskPerTrade={riskPerTrade}
+        maxDailyRisk={maxDailyRisk}
+        onMaxPositionsChange={setMaxPositions}
+        onRiskPerTradeChange={setRiskPerTrade}
+        onMaxDailyRiskChange={setMaxDailyRisk}
+      />
 
       {/* Trailing Stop */}
-      <div>
-        <label className="flex items-center gap-2 text-xs text-gray-400 mb-1.5">
-          <input
-            type="checkbox"
-            checked={trailingEnabled}
-            onChange={(e) => setTrailingEnabled(e.target.checked)}
-            className="rounded bg-gray-800 border-gray-600"
-          />
-          Trailing Stop
-        </label>
-        {trailingEnabled && (
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div>
-              <label className="block text-xs text-gray-500 mb-0.5">
-                Activation (ATR)
-              </label>
-              <input
-                type="text" inputMode="decimal"
-                value={activationATR}
-                onChange={(e) => setActivationATR(parseFloat(e.target.value) || 0)}
-                className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-0.5">
-                Trail Distance (ATR)
-              </label>
-              <input
-                type="text" inputMode="decimal"
-                value={trailATR}
-                onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
-                className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white"
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      <TrailingStopConfig
+        enabled={trailingEnabled}
+        activationATR={activationATR}
+        trailATR={trailATR}
+        onToggle={setTrailingEnabled}
+        onActivationATRChange={setActivationATR}
+        onTrailATRChange={setTrailATR}
+      />
 
       {/* ── NEW: LLM Consensus Toggle ─────────────────────────────── */}
-      <div className="border-t border-gray-800 pt-3 space-y-2">
-        <label className="flex items-center gap-2 text-xs text-gray-400 mb-1">
-          <input
-            type="checkbox"
-            checked={llmEnabled}
-            onChange={(e) => setLlmEnabled(e.target.checked)}
-            className="rounded bg-gray-800 border-gray-600"
-          />
-          <span className="flex items-center gap-1.5">
-            <Brain className="w-3 h-3 text-purple-400" />
-            AI Trading Consensus
-          </span>
-        </label>
-        {llmEnabled && (
-          <div>
-            <label className="block text-[10px] text-gray-500 mb-1">
-              Approval Threshold ({Math.round(llmThreshold * 100)}%)
-            </label>
-            <input
-              type="range"
-              value={llmThreshold}
-              onChange={(e) => setLlmThreshold(parseFloat(e.target.value))}
-              min={0.3}
-              max={0.9}
-              step={0.05}
-              className="w-full accent-accent-gold"
-            />
-            <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-              <span>30%</span>
-              <span>50%</span>
-              <span>90%</span>
-            </div>
-            <p className="text-[9px] text-gray-600 mt-1.5 leading-tight">
-              Menjalankan 6 LLM via 9Router secara paralel. Eksekusi hanya jika ≥{Math.round(llmThreshold * 100)}% model menyetujui.
-            </p>
-
-            {/* LLM Model Status */}
-            <div className="mt-2 space-y-1">
-              {llmModels.map((m) => (
-                <div key={m.name} className="flex items-center gap-2 text-[10px]">
-                  {m.status === "active" ? (
-                    <Zap className="w-3 h-3 text-green-400" />
-                  ) : (
-                    <ZapOff className="w-3 h-3 text-yellow-500" />
-                  )}
-                  <span className="text-gray-400 flex-1">{m.label}</span>
-                  <span className={`font-medium ${m.status === "active" ? "text-green-400" : "text-yellow-500"}`}>
-                    {m.status === "active" ? "siap" : "zzz"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <LlmConsensusConfig
+        enabled={llmEnabled}
+        threshold={llmThreshold}
+        models={llmModels}
+        loading={llmLoading}
+        onToggle={setLlmEnabled}
+        onThresholdChange={setLlmThreshold}
+      />
 
       {/* Pipeline Controls */}
-      <div className="pt-2 border-t border-gray-800 space-y-2">
+      <div className="pt-2 border-t border-gray-800 space-y-2" role="group" aria-label="Pipeline controls">
         {!pipelineRunning && !pipelinePaused && (
           <button
             onClick={handleStart}
             disabled={isStarting || symbols.length === 0 || activeMethodologies.length === 0}
             className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+            aria-label={isStarting ? "Starting pipeline..." : "Start pipeline"}
+            aria-disabled={isStarting || symbols.length === 0 || activeMethodologies.length === 0}
           >
             {isStarting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                <span className="sr-only">Starting...</span>
+              </>
             ) : (
-              <Play className="w-4 h-4" />
+              <>
+                <Play className="w-4 h-4" aria-hidden="true" />
+                <span>Start Pipeline</span>
+              </>
             )}
-            Start Pipeline
           </button>
         )}
 
         {pipelineRunning && (
-          <div className="flex gap-2">
+          <div className="flex gap-2" role="group" aria-label="Running pipeline actions">
             <button
-              onClick={onPausePipeline}
+              onClick={pausePipeline}
               className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              aria-label="Pause pipeline"
             >
-              <Pause className="w-4 h-4" />
-              Pause
+              <Pause className="w-4 h-4" aria-hidden="true" />
+              <span>Pause</span>
             </button>
             <button
-              onClick={onStopPipeline}
+              onClick={stopPipeline}
               disabled={isStopping}
               className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-800 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              aria-label={isStopping ? "Stopping pipeline..." : "Stop pipeline"}
+              aria-disabled={isStopping}
             >
               {isStopping ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  <span className="sr-only">Stopping...</span>
+                </>
               ) : (
-                <Square className="w-4 h-4" />
+                <>
+                  <Square className="w-4 h-4" aria-hidden="true" />
+                  <span>Stop</span>
+                </>
               )}
-              Stop
             </button>
           </div>
         )}
 
         {pipelinePaused && (
-          <div className="flex gap-2">
+          <div className="flex gap-2" role="group" aria-label="Paused pipeline actions">
             <button
-              onClick={onResumePipeline}
+              onClick={resumePipeline}
               className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              aria-label="Resume pipeline"
             >
-              <RotateCcw className="w-4 h-4" />
-              Resume
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
+              <span>Resume</span>
             </button>
             <button
-              onClick={onStopPipeline}
+              onClick={stopPipeline}
               disabled={isStopping}
               className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-800 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              aria-label={isStopping ? "Stopping pipeline..." : "Stop pipeline"}
+              aria-disabled={isStopping}
             >
               {isStopping ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  <span className="sr-only">Stopping...</span>
+                </>
               ) : (
-                <Square className="w-4 h-4" />
+                <>
+                  <Square className="w-4 h-4" aria-hidden="true" />
+                  <span>Stop</span>
+                </>
               )}
-              Stop
             </button>
           </div>
         )}

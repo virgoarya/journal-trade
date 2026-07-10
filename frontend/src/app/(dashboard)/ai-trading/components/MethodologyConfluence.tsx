@@ -6,10 +6,9 @@ import type {
   MarketStructureSummary,
   MethodologyName,
 } from "@/services/ai-trading.service";
-import {
-  METHODOLOGY_LABELS,
-  METHODOLOGY_COLORS,
-} from "@/services/ai-trading.service";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { EmptyState } from "./EmptyState";
+import { METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types";
 
 interface Props {
   confluence: ConfluenceResult;
@@ -22,6 +21,20 @@ interface Props {
  * the primary methodology, and market structure context.
  */
 export function MethodologyConfluence({ confluence, marketStructure }: Props) {
+  if (!confluence) {
+    return <SkeletonLoader type="card" />;
+  }
+
+  if (!confluence.finalSignal) {
+    return (
+      <EmptyState
+        type="data"
+        title="No Methodology Data"
+        description="No methodology confluence data available yet."
+      />
+    );
+  }
+
   const finalSignal = confluence.finalSignal;
 
   // ── Market Structure Badges ────────────────────────────────────────
