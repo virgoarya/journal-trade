@@ -277,6 +277,18 @@ class MT5MCPService {
     return result as MT5OrderResult;
   }
 
+  /** Dry-run debug: compute order parameters WITHOUT executing. */
+  async debugOrder(params: {
+    symbol: string;
+    action: "BUY" | "SELL";
+    volume: number;
+    sl?: number;
+    tp?: number;
+  }): Promise<any> {
+    const result = await this.call("mt5_debug_order", params);
+    return result;
+  }
+
   /** Close a position. */
   async closePosition(ticket: number): Promise<MT5OrderResult> {
     const result = await this.call("mt5_position_close", { ticket });
@@ -326,6 +338,36 @@ class MT5MCPService {
     silentLogger.error(`[MT5-MCP] All ${maxRetries} init attempts failed — MT5 unavailable`);
   }
 
+  private logError(method: string, error: any, context?: any): void {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+
+    silentLogger.error(`[MT5-MCP] ${method} failed: ${errorMsg}`);
+    if (context) {
+      silentLogger.error(`[MT5-MCP] Context: ${JSON.stringify(context)}`);
+    }
+    if (stack) {
+      silentLogger.error(`[MT5-MCP] Stack: ${stack}`);
+    }
+
+    // Tambahkan log ke file khusus untuk debugging
+    const fs = require('fs');
+    const path = require('path');
+    const logDir = path.join(__dirname, '..', '..', 'logs');
+    const logFile = path.join(logDir, 'mt5-errors.log');
+
+    try {
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+
+      const logEntry = `[${new Date().toISOString()}] ${method} - ${errorMsg}\n${stack ? `Stack: ${stack}\n` : ''}${context ? `Context: ${JSON.stringify(context)}\n` : ''}\n`;
+      fs.appendFileSync(logFile, logEntry);
+    } catch (logError) {
+      silentLogger.error(`[MT5-MCP] Failed to write error log: ${logError.message}`);
+    }
+  }
+
   private async call(tool: string, args: Record<string, any>): Promise<any> {
     await this.ensureClient();
     if (!this.client) throw new Error("MCP client not initialized");
@@ -340,14 +382,56 @@ class MT5MCPService {
       if (data.error) throw new Error(data.error);
       return data;
     } catch (error: any) {
-      // Auto-reset connected flag when MCP call fails (except for connect itself)
-      if (tool !== "mt5_connect") {
-        silentLogger.warn(`[MT5-MCP] Tool ${tool} failed, resetting connected flag: ${error.message}`);
+      // Log error dengan detail
+      this.logError(tool, error, { args });
+
+      // Only reset connected flag on real connection errors, not trade errors
+      // (AutoTrading disabled, SL/TP too close, insufficient margin, etc.)
+      const msg = error.message || "";
+      const isConnError = msg.includes("not connected") || msg.includes("ECONN") || msg.includes("transport") || msg.includes("socket") || msg.includes("timeout");
+      if (isConnError) {
+        silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
         this.connected = false;
         this.accountInfo = null;
+      } else {
+        silentLogger.warn(`[MT5-MCP] ${tool} failed (connection alive): ${error.message}`);
       }
       throw error;
     }
+  }
+
+  /**
+   * Try to re-connect to MT5 with saved credentials from DB.
+   * Called once on server startup.
+   */
+  async tryAutoReconnect(): Promise<boolean> {
+    try {
+      const { MT5Connection } = require("../models/MT5Connection");
+      const connections = await MT5Connection.find({ enabled: true }).lean();
+      for (const conn of connections as any[]) {
+        const doc = await MT5Connection.findById(conn._id);
+        if (!doc) continue;
+        const password = doc.getPassword();
+        if (!password || !conn.server || !conn.login) continue;
+
+        silentLogger.info(`[MT5-MCP] Auto-reconnecting for user ${conn.userId} (${conn.server}/${conn.login})...`);
+        const result = await this.connectToMT5({
+          server: conn.server,
+          login: String(conn.login),
+          password,
+        });
+
+        if (result.success) {
+          silentLogger.info(`[MT5-MCP] Auto-reconnect SUCCESS for user ${conn.userId}`);
+          return true;
+        } else {
+          silentLogger.warn(`[MT5-MCP] Auto-reconnect failed for user ${conn.userId}: ${result.error}`);
+        }
+      }
+    } catch (e: any) {
+      silentLogger.warn(`[MT5-MCP] Auto-reconnect skipped (no saved credentials): ${e.message}`);
+    }
+    return false;
   }
 
   private parseResult(result: any): any {

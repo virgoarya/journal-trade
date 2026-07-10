@@ -5,8 +5,6 @@
 //
 // Minimal token usage per call (~500 in / ~10 out per model).
 
-import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 
@@ -57,19 +55,23 @@ interface LLMProvider {
   name: string;
   label: string;
   model: string;
-  baseUrl?: string;
-  apiKey?: string;
-  /** createOpenAI-compatible or createGoogleGenerativeAI-compatible */
+  baseUrl: string;
+  apiKey: string;
+  isDirect?: boolean;
 }
 
-/** 6 LLM models via 9Router — all run in parallel for consensus */
+/** 6 LLM models via different providers (some via 9Router, some direct) */
 const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> = [
   { name: "deepseek",   label: "DeepSeek V4",      model: "oc/deepseek-v4-flash-free" },
   { name: "qwen",       label: "Qwen 3 32B",       model: "groq/qwen/qwen3-32b" },
-  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gemini/gemini-2.5-flash" },
-  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
-  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
-  { name: "claude-opus", label: "Claude Opus 4",    model: "ag/claude-opus-4-6-thinking" },
+];
+
+/** Additional providers requiring direct API keys */
+const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL: string; apiKeyEnv: string }> = [
+  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gemini/gemini-2.5-flash",    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKeyEnv: "GEMINI_API_KEY" },
+  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest", baseURL: "https://api.mistral.ai", apiKeyEnv: "GROQ_API_KEY" },
+  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b", baseURL: "https://integrate.api.nvidia.com/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
+  { name: "claude-opus", label: "Claude Opus 4",    model: "claude-3-opus-20240229",    baseURL: "https://router.flatkey.ai/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
 ];
 
 /** Models that are rate-limited and should be skipped temporarily */
@@ -91,7 +93,7 @@ async function testModelProvider(m: { name: string; model: string }, baseUrl: st
     });
     clearTimeout(timeout);
     if (r.status === 429) {
-      silentLogger.warn(`[LLM-HEALTH] ${m.name} (${m.model}) rate-limited (429) — disabling until next server restart`);
+      silentLogger.warn(`[LLM-HEALTH] ${m.name} (${m.model}) rate-limited (429) — dinonaktifkan sampai server restart`);
       return false;
     }
     return r.ok;
@@ -105,29 +107,49 @@ async function testModelProvider(m: { name: string; model: string }, baseUrl: st
  * Any model that returns 429 (rate-limited) gets disabled for this session.
  */
 async function startupHealthCheck(): Promise<void> {
-  const baseUrl = env.NINE_ROUTER_URL;
-  const apiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
-  if (!baseUrl) return;
+  silentLogger.info("[LLM-HEALTH] 🔍 Mengecek 6 model (timeout 10s masing-masing)...");
 
-  silentLogger.info("[LLM-HEALTH] Testing all 6 models (timeout 10s each)...");
-  const results = await Promise.all(
-    NINE_ROUTER_MODELS.map(async (m) => {
-      const ok = await testModelProvider(m, baseUrl, apiKey);
-      if (!ok) rateLimitedModels.add(m.name);
-      return { name: m.name, label: m.label, ok };
-    }),
-  );
+  const results: Array<{ name: string; label: string; ok: boolean }> = [];
+
+  // Test 9Router models
+  if (env.NINE_ROUTER_URL) {
+    const baseUrl = env.NINE_ROUTER_URL;
+    const apiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
+    const routerResults = await Promise.all(
+      NINE_ROUTER_MODELS.map(async (m) => {
+        const ok = await testModelProvider(m, baseUrl, apiKey);
+        if (!ok) rateLimitedModels.add(m.name);
+        return { name: m.name, label: m.label, ok };
+      }),
+    );
+    results.push(...routerResults);
+  }
+
+  // Test direct models
+  for (const m of DIRECT_MODELS) {
+    const apiKeyRaw = m.apiKeyEnv ? (env[m.apiKeyEnv as keyof typeof env] ?? "") : "";
+    const apiKey = String(apiKeyRaw);
+    if (!apiKey) {
+      rateLimitedModels.add(m.name);
+      results.push({ name: m.name, label: m.label, ok: false });
+      continue;
+    }
+    const ok = await testModelProvider(m, m.baseURL, apiKey);
+    if (!ok) rateLimitedModels.add(m.name);
+    results.push({ name: m.name, label: m.label, ok });
+  }
 
   for (const r of results) {
     if (r.ok) silentLogger.info(`[LLM-HEALTH] ✅ ${r.label} (${r.name}) — OK`);
-    else silentLogger.warn(`[LLM-HEALTH] ❌ ${r.label} (${r.name}) — RATE LIMITED / OFFLINE — disabled`);
+    else silentLogger.warn(`[LLM-HEALTH] ❌ ${r.label} (${r.name}) — LIMITED / OFFLINE — dinonaktifkan`);
   }
-  silentLogger.info(`[LLM-HEALTH] ${results.filter(r => r.ok).length}/${results.length} models active`);
+  silentLogger.info(`[LLM-HEALTH] ${results.filter(r => r.ok).length}/${results.length} model aktif`);
 }
 
 function getAvailableProviders(): LLMProvider[] {
   const providers: LLMProvider[] = [];
 
+  // 9Router models
   if (env.NINE_ROUTER_URL) {
     for (const m of NINE_ROUTER_MODELS) {
       if (rateLimitedModels.has(m.name)) continue; // skip rate-limited
@@ -141,30 +163,49 @@ function getAvailableProviders(): LLMProvider[] {
     }
   }
 
+  // Direct models (Gemini, Mistral, Nemotron, Claude Opus)
+  for (const m of DIRECT_MODELS) {
+    if (rateLimitedModels.has(m.name)) continue;
+    const apiKeyRaw = m.apiKeyEnv && (env[m.apiKeyEnv as keyof typeof env] || "");
+    const apiKey = String(apiKeyRaw);
+    if (!apiKey || apiKey === "null" || apiKey === "undefined") {
+      silentLogger.warn(`[LLM-CONSENSUS] API key ${m.name} gak ada, skip`);
+      continue;
+    }
+    providers.push({
+      name: m.name,
+      label: m.label,
+      model: m.model,
+      baseUrl: m.baseURL,
+      apiKey,
+      isDirect: true,
+    });
+  }
+
   return providers;
 }
 
 // ─── System Prompt ───────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an expert trading signal validator. Your role is to evaluate a trading signal and respond with ONLY a single JSON object. No other text.
+const SYSTEM_PROMPT = `Halo! Kamu adalah ahli strategi trading yang siap bantu. Tugasmu adalah menganalisis sinyal trading dan kasih respons dalam format JSON aja, nggak pake ngomong yang lain ya.
 
-Analyze the signal using:
-1. **Market Structure** — Is the trend aligned with the signal direction?
-2. **Methodology Confluence** — How many methodologies agree on this direction?
-3. **Risk/Reward** — Is the SL/TP ratio reasonable (≥1:1.5)?
-4. **Price Action** — Is there a valid entry trigger?
+Cek sinyal pakai ini:
+1.  **Market Structure** — Trennya searah sama sinyal nggak?
+2.  **Methodology Confluence** — Berapa banyak metode yang setuju?
+3.  **Risk/Reward** — SL/TP-nya masuk akal kan? (minimal 1:1.5)
+4.  **Price Action** — Ada trigger entry yang oke nggak?
 
-Respond with EXACTLY this JSON format:
+Balasnya cuma pake JSON gini ya:
 {
   "verdict": "GOOD" | "BAD" | "SKIP",
-  "reasoning": "One short sentence explaining your verdict"
+  "reasoning": "Kasih alasan singkat kenapa kamu pilih itu, santai aja bahasanya."
 }
 
-Rules:
-- GOOD = high probability setup with confluence
-- BAD = clear reasons to avoid (wrong trend, no confluence, bad R:R)
-- SKIP = uncertain or insufficient data
-- Be conservative. Default to SKIP if unsure.`;
+Aturannya simpel:
+- GOOD = Sinyal bagus, konvergen, peluang tinggi.
+- BAD = Hindari! Tren lawan, nggak konvergen, R:R jelek.
+- SKIP = Masih ragu, data kurang, atau ada yang aneh.
+- Kalau ragu, mending SKIP aja biar aman.`;
 
 // ─── Prompt Builder ──────────────────────────────────────────────────
 
@@ -196,21 +237,21 @@ function buildSignalPrompt(signal: {
     extra += `\nMethodology PnL: ${signal.methodologyPnL}`;
   }
 
-  return `Evaluate this trading signal. Answer in Bahasa Indonesia.
+  return `Halo! Tolong evaluasi sinyal trading ini. Balas dengan santai ya.
 
 Symbol: ${signal.symbol}
-Direction: ${signal.direction}
+Arah: ${signal.direction}
 Confidence: ${signal.confidence}%
 Entry: ${signal.entry}
 SL: ${signal.sl}
 TP: ${signal.tp}
 R:R: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.tp - signal.entry) / Math.abs(signal.sl - signal.entry)).toFixed(2) : "N/A"}
-Reason: ${signal.reason}
+Alasan: ${signal.reason}
 
-Market Trend: ${signal.marketTrend}
-Methodologies Agreeing: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}
+Tren Market: ${signal.marketTrend}
+Metode yang setuju: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}
 
-Methodology Breakdown:
+Detail Metode:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}
 
 Verdict:`;
@@ -260,13 +301,13 @@ class LLMConsensusService {
         badVotes: 0,
         skipVotes: 0,
         consensusReached: true,
-        details: "LLM Consensus disabled — proceeding with rule-based signal",
+        details: "LLM Consensus dimatikan — pakai sinyal rule-based aja",
       };
     }
 
     const providers = getAvailableProviders();
     if (providers.length < (cfg.minProviders || 2)) {
-      silentLogger.warn(`[LLM-CONSENSUS] Only ${providers.length} providers available (need ${cfg.minProviders}). Falling back to GOOD.`);
+      silentLogger.warn(`[LLM-CONSENSUS] Cuma ${providers.length} provider tersedia (butuh ${cfg.minProviders}). Pakai GOOD aja.`);
       return {
         verdict: "GOOD",
         votes: [],
@@ -283,7 +324,7 @@ class LLMConsensusService {
 
     // Run all providers in PARALLEL with timeout
     const results = await Promise.all(
-      providers.map((p) => this.callProvider(p, prompt, cfg.providerTimeoutMs || 8000)),
+      providers.map((p) => this.callProvider(p, prompt, cfg.providerTimeoutMs || 15000)),
     );
 
     // Aggregate votes
@@ -308,7 +349,7 @@ class LLMConsensusService {
     const details = validVotes.map((v) => `${v.provider}(${v.modelLabel}): ${v.verdict} — ${v.reasoning}`).join(" | ");
 
     silentLogger.info(
-      `[LLM-CONSENSUS] Verdict=${finalVerdict} (G:${goodVotes}/B:${badVotes}/S:${skipVotes}/${totalVotes}) ${signal.symbol} ${signal.direction}`,
+      `[LLM-CONSENSUS] ${finalVerdict} (G:${goodVotes}/B:${badVotes}/S:${skipVotes}/${totalVotes}) ${signal.symbol} ${signal.direction}`,
     );
 
     return {
@@ -327,19 +368,35 @@ class LLMConsensusService {
    * Test all models at startup and disable rate-limited ones.
    */
   async startupHealthCheck(): Promise<void> {
-    await startupHealthCheck();
+    return startupHealthCheck();
   }
 
   /**
    * Get status of all 6 models (active / rate-limited).
    */
   getModelStatus(): Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" }> {
-    return NINE_ROUTER_MODELS.map((m) => ({
-      name: m.name,
-      label: m.label,
-      model: m.model,
-      status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
-    }));
+    const status: Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" }> = [];
+
+    // Tambahkan status untuk model 9Router
+    for (const m of NINE_ROUTER_MODELS) {
+      status.push({
+        name: m.name,
+        label: m.label,
+        model: m.model,
+        status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
+      });
+    }
+
+    // Tambahkan status untuk model langsung
+    for (const m of DIRECT_MODELS) {
+      status.push({
+        name: m.name,
+        label: m.label,
+        model: m.model,
+        status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
+      });
+    }
+    return status;
   }
 
   /**
@@ -373,47 +430,60 @@ class LLMConsensusService {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      let model: any;
-
-      if (provider.name === "gemini") {
-        const google = createGoogleGenerativeAI({ apiKey: provider.apiKey || "" });
-        model = google(provider.model);
-      } else {
-        const openai = createOpenAI({
-          baseURL: provider.baseUrl || "https://openrouter.ai/api/v1",
-          apiKey: provider.apiKey || "",
-        });
-        model = openai.chat(provider.model);
-      }
-
-      const response = await generateText({
-        model,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: prompt }],
-        maxTokens: 80 as any,
-        temperature: 0.1,
-        abortSignal: controller.signal,
-      } as any);
+      // Direct fetch to avoid @ai-sdk/openai parsing issues with non-standard endpoints
+      const res = await fetch(provider.baseUrl + "/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + provider.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 200,
+          temperature: 0.1,
+          stream: false,
+        }),
+        signal: controller.signal,
+      });
 
       clearTimeout(timeout);
 
-      const parsed = this.parseVerdict(response.text);
-      const latencyMs = Date.now() - startTime;
+      if (!res.ok) {
+        const latency = Date.now() - startTime;
+        silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} HTTP ${res.status}`);
+        return {
+          provider: provider.name,
+          modelLabel: provider.label,
+          verdict: "SKIP",
+          reasoning: `HTTP ${res.status}`,
+          latencyMs: latency,
+          error: `HTTP ${res.status}`,
+        };
+      }
+
+      const json: any = await res.json();
+      const rawText = json?.choices?.[0]?.message?.content ?? "";
+      const parsed = this.parseVerdict(rawText);
+      const latency = Date.now() - startTime;
 
       return {
         provider: provider.name,
         modelLabel: provider.label,
         verdict: parsed.verdict,
         reasoning: parsed.reasoning,
-        latencyMs,
+        latencyMs: latency,
       };
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
       const errorMsg = error.name === "AbortError"
-        ? `Timeout after ${timeoutMs}ms`
-        : error.message || "Unknown error";
+        ? `Timeout setelah ${timeoutMs}ms`
+        : error.message || "Error tak diketahui";
 
-      silentLogger.warn(`[LLM-CONSENSUS] ${provider.name}(${provider.label}) failed: ${errorMsg}`);
+      silentLogger.warn(`[LLM-CONSENSUS] ${provider.name}(${provider.label}) gagal: ${errorMsg}`);
 
       return {
         provider: provider.name,
@@ -431,33 +501,82 @@ class LLMConsensusService {
    * Handles both strict JSON and free-form text.
    */
   private parseVerdict(text: string): { verdict: LLMVerdict; reasoning: string } {
-    // Try to extract JSON from the response
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (jsonMatch) {
+    if (!text) return { verdict: "SKIP", reasoning: "Empty response" };
+
+    // Strip markdown code fences (```json ... ```)
+    let cleaned = text.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+    // Strip <think>...</think> reasoning tags (DeepSeek/Qwen style)
+    cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    // Strip ​ (zero-width chars) and other invisible unicode
+    cleaned = cleaned.replace(/[​-‍﻿]/g, "").trim();
+
+    // If after stripping everything is empty, return SKIP
+    if (!cleaned) return { verdict: "SKIP", reasoning: "Empty response after cleaning" };
+
+    const tryParse = (raw: string): { verdict: LLMVerdict; reasoning: string } | null => {
       try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const verdict = (parsed.verdict || "").toUpperCase();
+        // Try to extract just the JSON object from the text if it's embedded
+        const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0] || raw;
+        const parsed = JSON.parse(jsonStr);
+        const verdict = (parsed.verdict || "").toString().toUpperCase();
         if (["GOOD", "BAD", "SKIP"].includes(verdict)) {
+          const reasoning = (parsed.reasoning || "").toString().trim();
           return {
             verdict: verdict as LLMVerdict,
-            reasoning: parsed.reasoning || text.slice(0, 100),
+            reasoning: reasoning || "Model provided verdict without reasoning",
           };
         }
       } catch {
-        // fall through
+        // ignore
       }
+      return null;
+    };
+
+    // 1. Whole cleaned string is valid JSON (greedy match)
+    const whole = tryParse(cleaned);
+    if (whole) return whole;
+
+    // 2. Extract first {...} block (non-greedy)
+    const jsonMatch = cleaned.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      const fromFirst = tryParse(jsonMatch[0]);
+      if (fromFirst) return fromFirst;
     }
 
-    // Fallback: keyword detection
-    const upper = text.toUpperCase();
-    if (upper.includes('"GOOD"') || upper.includes("'GOOD'") || upper.startsWith("GOOD")) {
-      return { verdict: "GOOD", reasoning: text.slice(0, 100) };
-    }
-    if (upper.includes('"BAD"') || upper.includes("'BAD'") || upper.startsWith("BAD")) {
-      return { verdict: "BAD", reasoning: text.slice(0, 100) };
+    // 3. Try greedy match for outermost braces (handles nested quotes)
+    const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (greedyMatch) {
+      const fromGreedy = tryParse(greedyMatch[0]);
+      if (fromGreedy) return fromGreedy;
     }
 
-    return { verdict: "SKIP", reasoning: text.slice(0, 100) };
+    // 4. Fallback: extract verdict and reasoning from free-form text
+    // Look for verdict keywords
+    const upper = cleaned.toUpperCase();
+    let verdict: LLMVerdict | null = null;
+    if (upper.includes("GOOD") || upper.startsWith("GOOD")) {
+      verdict = "GOOD";
+    } else if (upper.includes("BAD") || upper.startsWith("BAD")) {
+      verdict = "BAD";
+    } else if (upper.includes("SKIP") || upper.startsWith("SKIP")) {
+      verdict = "SKIP";
+    }
+
+    if (verdict) {
+      // Try to extract reasoning after the verdict keyword
+      const match = cleaned.match(/(?:GOOD|BAD|SKIP)[:\s-]*(.+)/i);
+      const reasoning = match && match[1] ? match[1].trim().slice(0, 200) : "No reasoning extracted";
+      return { verdict, reasoning: reasoning || "No reasoning provided" };
+    }
+
+    // 5. Last resort: keyword detection
+    if (/\bgood\b/i.test(cleaned)) return { verdict: "GOOD", reasoning: "Detected GOOD from text" };
+    if (/\bbad\b/i.test(cleaned)) return { verdict: "BAD", reasoning: "Detected BAD from text" };
+
+    return { verdict: "SKIP", reasoning: "Could not parse verdict from response" };
   }
 }
 

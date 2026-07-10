@@ -134,6 +134,9 @@ connectDB()
       // Initialize MT5 MCP Service (lazy - connects on first use)
       mt5McpService.init().catch((e) => console.warn("MT5 MCP init delayed:", e.message));
 
+      // Auto-reconnect MT5 with saved credentials if any
+      mt5McpService.tryAutoReconnect().catch((e) => console.warn("[MT5] Auto-reconnect skipped:", e.message));
+
       // LLM Health Check — test all 6 models, disable rate-limited ones
       llmConsensusService.startupHealthCheck?.();
 

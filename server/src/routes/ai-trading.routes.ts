@@ -83,25 +83,23 @@ router.post(
         );
       }
 
-      // Securely save credentials to DB if requested
-      if (save) {
-        try {
-          const { MT5Connection } = require("../models/MT5Connection");
-          await MT5Connection.findOneAndUpdate(
-            { userId: req.user.id },
-            {
-              server,
-              login,
-              enabled: true,
-            },
-            { upsert: true, new: true }
-          ).then(async (doc: any) => {
-            doc.setPassword(password);
-            await doc.save();
-          });
-        } catch (dbErr: any) {
-          console.error(`[MT5-CONNECT] Failed to auto-save credentials: ${dbErr.message}`);
-        }
+      // Securely save credentials to DB for auto-reconnect on restart
+      try {
+        const { MT5Connection } = require("../models/MT5Connection");
+        await MT5Connection.findOneAndUpdate(
+          { userId: req.user.id },
+          {
+            server,
+            login: parseInt(login, 10) || login,
+            enabled: true,
+          },
+          { upsert: true, new: true }
+        ).then(async (doc: any) => {
+          doc.setPassword(password);
+          await doc.save();
+        });
+      } catch (dbErr: any) {
+        console.error(`[MT5-CONNECT] Failed to save credentials: ${dbErr.message}`);
       }
 
       return apiResponse.success(res, {
@@ -136,7 +134,7 @@ router.post("/disconnect", async (req, res, next) => {
 router.get("/status", async (req, res, next) => {
   try {
     const isConnected = mt5McpService.isConnected;
-    const pipelineStatus = tradingPipelineService.getPipelineStatus(
+    const pipelineStatus = await tradingPipelineService.getPipelineStatus(
       req.user.id,
     );
 
@@ -265,6 +263,51 @@ router.get("/debug-positions", async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * POST /api/ai-trading/debug-order
+ * Dry-run: compute order parameters without executing (useful for debugging).
+ */
+router.post(
+  "/debug-order",
+  heavyLimiter,
+  validate({ body: openPositionSchema }),
+  async (req, res, next) => {
+    try {
+      if (!mt5McpService.isConnected) {
+        return apiResponse.error(
+          res,
+          "MT5 not connected",
+          "NOT_CONNECTED",
+          400,
+        );
+      }
+
+      const { symbol, type, volume, sl, tp } = req.body;
+
+      const result = await mt5McpService.debugOrder({
+        symbol,
+        action: type,
+        volume,
+        sl,
+        tp,
+      });
+
+      if (result.error) {
+        return apiResponse.error(
+          res,
+          result.error || "Debug order failed",
+          "DEBUG_ORDER_FAILED",
+          400,
+        );
+      }
+
+      return apiResponse.success(res, result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 /**
  * POST /api/ai-trading/open
@@ -509,7 +552,7 @@ router.post("/pipeline/resume", async (req, res, next) => {
  */
 router.get("/pipeline/status", async (req, res, next) => {
   try {
-    const status = tradingPipelineService.getPipelineStatus(req.user.id);
+    const status = await tradingPipelineService.getPipelineStatus(req.user.id);
     return apiResponse.success(res, status);
   } catch (error) {
     next(error);
@@ -788,7 +831,7 @@ router.get("/news/upcoming", async (req, res, next) => {
  */
 router.get("/news/warnings", async (req, res, next) => {
   try {
-    const ps = tradingPipelineService.getPipelineStatus(req.user.id);
+    const ps = await tradingPipelineService.getPipelineStatus(req.user.id);
     const symbols = ps.config?.symbols || [];
     const warnings = await newsCalendarService.getActiveWarnings(symbols);
     return apiResponse.success(res, { warnings });

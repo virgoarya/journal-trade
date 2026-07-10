@@ -46,6 +46,50 @@ TF_MAP = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+MT5_FILLING_MAP = {
+    "FOK": 1,
+    "IOC": 2,
+    "RETURN": 4,
+}
+
+
+def _get_supported_filling_modes(symbol: str) -> list[str]:
+    """
+    Return list of supported filling modes for a symbol.
+    Prioritas: RETURN > IOC > FOK.
+    """
+    info = mt5.symbol_info(symbol)
+    if info is None:
+        return ["RETURN"]  # fallback ke RETURN (paling aman)
+
+    mask = info.filling_mode
+    supported = []
+
+    if mask & mt5.ORDER_FILLING_RETURN:
+        supported.append("RETURN")
+    if mask & mt5.ORDER_FILLING_IOC:
+        supported.append("IOC")
+    if mask & mt5.ORDER_FILLING_FOK:
+        supported.append("FOK")
+
+    return supported if supported else ["RETURN"]
+
+def _get_filling_mode(symbol: str) -> int:
+    """
+    Get the best supported filling mode for a symbol.
+    Prioritas: RETURN > IOC > FOK.
+    """
+    supported = _get_supported_filling_modes(symbol)
+
+    if "RETURN" in supported:
+        return mt5.ORDER_FILLING_RETURN
+    if "IOC" in supported:
+        return mt5.ORDER_FILLING_IOC
+    if "FOK" in supported:
+        return mt5.ORDER_FILLING_FOK
+
+    return mt5.ORDER_FILLING_RETURN
+
 def _ok(data: Any) -> list[TextContent]:
     """Wrap a JSON-serialisable object as a success response."""
     return [TextContent(type="text", text=json.dumps(data))]
@@ -251,6 +295,25 @@ async def list_tools():
         ),
         # ── Trading ───────────────────────────────────────────────────
         Tool(
+            name="mt5_debug_order",
+            description="Debug order parameters: return all computed values WITHOUT executing the order (dry-run)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Symbol to test"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["BUY", "SELL"],
+                        "description": "Trade direction",
+                    },
+                    "volume": {"type": "number", "description": "Lot size"},
+                    "sl": {"type": "number", "description": "Stop Loss price (optional)"},
+                    "tp": {"type": "number", "description": "Take Profit price (optional)"},
+                },
+                "required": ["symbol", "action", "volume"],
+            },
+        ),
+        Tool(
             name="mt5_order_send",
             description="Open a new market order (BUY or SELL)",
             inputSchema={
@@ -337,12 +400,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             mt5.shutdown()
             mt5_connected = False
 
-        if not mt5.initialize():
+        # Initialize MT5 terminal
+        if not mt5.initialize(login=login, password=password, server=server):
             return _err(f"MT5 initialize failed: {mt5.last_error()}")
-
-        if not mt5.login(login, password, server):
-            mt5.shutdown()
-            return _err(f"MT5 login failed: {mt5.last_error()}")
 
         mt5_connected = True
         mt5_config = {"server": server, "login": login}
@@ -351,6 +411,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if account:
             return _ok({"success": True, "accountInfo": _account_dict(account)})
         return _ok({"success": True})
+
 
     if name == "mt5_disconnect":
         mt5.shutdown()
@@ -539,12 +600,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         tp = arguments.get("tp", 0.0)
         comment = (arguments.get("comment") or "AI-Trade")[:32]
 
+        # Select symbol di MT5 — penting untuk beberapa broker
+        if not mt5.symbol_select(symbol, True):
+            print(f"[MT5-WARN] symbol_select({symbol}) returned False, proceeding anyway", file=sys.stderr)
+
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
             return _err(f"Symbol '{symbol}' not found")
 
         order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
         price = tick.ask if action == "BUY" else tick.bid
+
+        filling_mode = _get_filling_mode(symbol)
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -556,12 +623,62 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             "tp": tp,
             "comment": comment,
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": filling_mode,
         }
 
         result = mt5.order_send(request)
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            return _err(f"Order failed: retcode={result.retcode} comment={result.comment}")
+            # Debug: print full request details
+            print(f"DEBUG: Order request: {request}", file=sys.stderr)
+            print(f"DEBUG: Symbol info: {mt5.symbol_info(symbol)}", file=sys.stderr)
+            print(f"DEBUG: Account info: {mt5.account_info()}", file=sys.stderr)
+
+            # Handle retcode=10030 (Unsupported filling mode) — try ALL other modes
+            if result.retcode == 10030:
+                for try_mode in sorted([mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_FOK]):
+                    if try_mode == filling_mode:
+                        continue  # skip the one that already failed
+                    print(f"[MT5-WARN] Filling mode {filling_mode} failed for {symbol}, retrying with {try_mode}...", file=sys.stderr)
+                    request["type_filling"] = try_mode
+                    result = mt5.order_send(request)
+                    if result.retcode == mt5.TRADE_RETCODE_DONE:
+                        break  # success!
+                else:
+                    # All modes exhausted — report last error with comprehensive details
+                    sym_info = mt5.symbol_info(symbol)
+                    filling_mask = sym_info.filling_mode if sym_info else "N/A"
+                    return _err(
+                        f"Order failed: retcode={result.retcode} "
+                        f"filling_mode_attempted={request['type_filling']} "
+                        f"symbol_filling_mask={filling_mask} "
+                        f"comment={result.comment}"
+                    )
+            else:
+                # Map common retcodes to human-readable messages
+                retcode_msgs = {
+                    10004: "Trade disabled / not allowed (check AutoTrading button in MT5)",
+                    10006: "No connection to trade server (check internet/MT5 terminal)",
+                    10007: "Too many requests (reduce order frequency)",
+                    10014: "Invalid price (slippage too high — try again)",
+                    10015: "Invalid SL/TP values",
+                    10016: "Invalid volume (check min/max lot)",
+                    10017: "Market is closed",
+                    10018: "Not enough money (check margin/free margin)",
+                    10019: "Orders cancelled by dealer",
+                    10020: "Order is locked (already being processed)",
+                    10021: "Modification denied (position too close to market)",
+                    10022: "Too many orders",
+                    10023: "Hedging not allowed",
+                    10024: "Prohibited by FIFO rule",
+                }
+                user_msg = retcode_msgs.get(result.retcode, f"Unknown trade error (retcode={result.retcode})")
+                sym_info = mt5.symbol_info(symbol)
+                filling_mask = sym_info.filling_mode if sym_info else "N/A"
+                return _err(
+                    f"Order failed: retcode={result.retcode} ({user_msg}) "
+                    f"filling_mode={filling_mode} symbol_filling_mask={filling_mask} "
+                    f"comment={result.comment}"
+                )
 
         return _ok({
             "success": True,
@@ -585,6 +702,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
         order_type = mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY
         price = tick.bid if is_buy else tick.ask
+        filling_mode = _get_filling_mode(pos.symbol)
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -595,12 +713,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             "price": price,
             "comment": "Close by MCP",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": filling_mode,
         }
 
         result = mt5.order_send(request)
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            return _err(f"Close failed: retcode={result.retcode} comment={result.comment}")
+            return _err(f"Close failed: retcode={result.retcode} filling_mode={filling_mode} comment={result.comment}")
         return _ok({"success": True, "ticket": result.order, "price": result.price})
 
     if name == "mt5_position_modify":
@@ -655,6 +773,81 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             for d in deals
         ]
         return _ok({"deals": result})
+
+    # ── Debug Order (dry-run, no execution) ──────────────────────────
+    if name == "mt5_debug_order":
+        symbol = arguments["symbol"]
+        action = arguments["action"]
+        volume = arguments["volume"]
+        sl = arguments.get("sl", 0.0)
+        tp = arguments.get("tp", 0.0)
+
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            return _err(f"Symbol '{symbol}' not found in Market Watch")
+
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None:
+            return _err(f"Cannot get tick for '{symbol}'")
+
+        account = mt5.account_info()
+        filling_mask = info.filling_mode
+        supported_modes = _get_supported_filling_modes(symbol)
+        chosen_mode_name = "RETURN" if mt5.ORDER_FILLING_RETURN & filling_mask else (
+            "IOC" if mt5.ORDER_FILLING_IOC & filling_mask else (
+                "FOK" if mt5.ORDER_FILLING_FOK & filling_mask else "RETURN (fallback)"
+            )
+        )
+        chosen_mode_int = _get_filling_mode(symbol)
+
+        # Validasi volume
+        vol_ok = info.volume_min <= volume <= info.volume_max
+        vol_msg = "OK" if vol_ok else f"OUT OF RANGE (min={info.volume_min}, max={info.volume_max}, step={info.volume_step})"
+
+        # Validasi SL/TP
+        sltp_issues = []
+        price = tick.ask if action == "BUY" else tick.bid
+        if sl:
+            sl_dist = abs(price - sl)
+            stops_level = getattr(info, "trade_stops_level", 0) * info.point
+            if sl_dist < stops_level:
+                sltp_issues.append(f"SL too close (dist={sl_dist}, min stops_level={stops_level})")
+        if tp:
+            tp_dist = abs(tp - price)
+            stops_level = getattr(info, "trade_stops_level", 0) * info.point
+            if tp_dist < stops_level:
+                sltp_issues.append(f"TP too close (dist={tp_dist}, min stops_level={stops_level})")
+
+        return _ok({
+            "symbol": symbol,
+            "action": action,
+            "volume": volume,
+            "price": price,
+            "sl": sl,
+            "tp": tp,
+            "tick": {"bid": tick.bid, "ask": tick.ask, "spread": tick.ask - tick.bid},
+            "symbol": {
+                "name": info.name,
+                "digits": info.digits,
+                "point": info.point,
+                "tradeContractSize": info.trade_contract_size,
+                "volumeMin": info.volume_min,
+                "volumeMax": info.volume_max,
+                "volumeStep": info.volume_step,
+                "tradeStopsLevel": getattr(info, "trade_stops_level", 0),
+            },
+            "filling": {
+                "mask": filling_mask,
+                "supportedModes": supported_modes,
+                "chosenModeName": chosen_mode_name,
+                "chosenModeInt": chosen_mode_int,
+            },
+            "account": _account_dict(account) if account else None,
+            "validation": {
+                "volume": vol_msg,
+                "sltp": sltp_issues if sltp_issues else ["OK"],
+            },
+        })
 
     return _err(f"Unknown tool: {name}")
 

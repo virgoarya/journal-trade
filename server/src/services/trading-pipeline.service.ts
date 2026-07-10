@@ -270,7 +270,7 @@ class TradingPipelineService {
     silentLogger.info(`[PIPELINE] Config updated for ${userId}`);
   }
 
-  getPipelineStatus(userId: string): PipelineStatus {
+  async getPipelineStatus(userId: string): Promise<PipelineStatus> {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) {
       return {
@@ -293,19 +293,71 @@ class TradingPipelineService {
       };
     }
 
+    // Query real metrics dari DB + MT5
+    let openPositions = 0;
+    let totalPnL = 0;
+    let totalTrades = 0;
+    let winningTrades = 0;
+    let losingTrades = 0;
+    let dailyPnL = 0;
+    let currentDrawdown = 0;
+
+    try {
+      // Open positions langsung dari MT5
+      const positions = await mt5McpService.getPositions();
+      openPositions = positions.length;
+      // Hitung total floating PnL dari semua posisi
+      totalPnL = positions.reduce((sum, p) => sum + (p.profit || 0), 0);
+
+      // Trade history dari DB (closed trades)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const closedTrades = await AITradeLog.find({
+        userId,
+        closed: true,
+      }).lean();
+
+      totalTrades = closedTrades.length;
+      let allTimePnL = 0;
+      let dailyPnLSum = 0;
+
+      for (const t of closedTrades) {
+        const pnl = (t as any).pnl || 0;
+        allTimePnL += pnl;
+        if (t.executionTime && new Date(t.executionTime) >= today) {
+          dailyPnLSum += pnl;
+        }
+        if (pnl > 0) winningTrades++;
+        else if (pnl < 0) losingTrades++;
+      }
+
+      // Combine floating PnL + closed PnL
+      totalPnL += allTimePnL;
+      dailyPnL = dailyPnLSum;
+
+      // Drawdown sederhana: negatif dari total floating
+      currentDrawdown = positions
+        .filter(p => p.profit < 0)
+        .reduce((sum, p) => sum + Math.abs(p.profit), 0);
+
+    } catch (err) {
+      silentLogger.warn(`[PIPELINE] Status metrics query error: ${err}`);
+    }
+
     return {
       running: pipeline.interval !== null,
       paused: pipeline.interval === null,
       startedAt: null,
       config: pipeline.config,
       metrics: {
-        totalTrades: 0,
-        winningTrades: 0,
-        losingTrades: 0,
-        totalPnL: 0,
-        dailyPnL: 0,
-        openPositions: 0,
-        currentDrawdown: 0,
+        totalTrades,
+        winningTrades,
+        losingTrades,
+        totalPnL: Math.round(totalPnL * 100) / 100,
+        dailyPnL: Math.round(dailyPnL * 100) / 100,
+        openPositions,
+        currentDrawdown: Math.round(currentDrawdown * 100) / 100,
       },
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
@@ -317,6 +369,67 @@ class TradingPipelineService {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return [];
     return pipeline.logs.slice(-limit);
+  }
+
+  // ─── Order Validation ─────────────────────────────────────────────
+
+  private async validateOrderParams(symbol: string, action: "BUY" | "SELL", volume: number, sl?: number, tp?: number): Promise<{ valid: boolean; error?: string }> {
+    try {
+      // 1. Cek symbol ada di broker
+      const symbolInfo = await mt5McpService.getSymbolInfo(symbol);
+      if (!symbolInfo) {
+        return { valid: false, error: `Symbol ${symbol} tidak ditemukan di broker` };
+      }
+
+      // 2. Cek volume sesuai dengan symbol limits
+      if (volume < symbolInfo.volumeMin || volume > symbolInfo.volumeMax) {
+        return { valid: false, error: `Volume ${volume} di luar range (min: ${symbolInfo.volumeMin}, max: ${symbolInfo.volumeMax})` };
+      }
+
+      // 3. Cek SL/TP valid jika disediakan
+      if (sl !== undefined && tp !== undefined) {
+        const tick = await mt5McpService.getTick(symbol);
+        if (!tick) {
+          return { valid: false, error: `Tidak bisa mendapatkan tick untuk ${symbol}` };
+        }
+
+        const entryPrice = action === "BUY" ? tick.ask : tick.bid;
+        const slDistance = Math.abs(entryPrice - sl);
+        const tpDistance = Math.abs(tp - entryPrice);
+
+        // Hitung minimum distance dalam unit HARGA (bukan point!)
+        // spread dari MT5 sudah dalam unit point, kalikan dengan point untuk dapat satuan harga
+        const spreadPrice = symbolInfo.spread * symbolInfo.point;
+        const minSlDistance = Math.max(spreadPrice * 2, symbolInfo.point * 10);
+
+        if (slDistance < minSlDistance) {
+          return {
+            valid: false,
+            error: `Stop Loss terlalu dekat entry (jarak SL=${slDistance.toFixed(symbolInfo.digits)}, min=${minSlDistance.toFixed(symbolInfo.digits)})`,
+          };
+        }
+
+        // TP harus lebih baik dari SL
+        if (action === "BUY" && tp <= sl) {
+          return { valid: false, error: "Take Profit harus di atas Stop Loss untuk posisi BUY" };
+        }
+        if (action === "SELL" && tp >= sl) {
+          return { valid: false, error: "Take Profit harus di bawah Stop Loss untuk posisi SELL" };
+        }
+
+        // Cek R:R ratio minimal 1:1
+        if (slDistance > 0) {
+          const rrRatio = tpDistance / slDistance;
+          if (rrRatio < 1.0) {
+            return { valid: false, error: `Risk:Reward ratio terlalu rendah (${rrRatio.toFixed(2)}:1, minimal 1:1)` };
+          }
+        }
+      }
+
+      return { valid: true };
+    } catch (error: any) {
+      return { valid: false, error: `Validasi gagal: ${error.message}` };
+    }
   }
 
   // ─── Main Pipeline Loop ────────────────────────────────────────────
@@ -603,6 +716,19 @@ class TradingPipelineService {
         }
 
         // Execute trade
+        const validation = await this.validateOrderParams(
+          signal.symbol,
+          signal.direction,
+          volume,
+          signal.sl,
+          signal.tp
+        );
+
+        if (!validation.valid) {
+          this.addLog(userId, "ERROR", `Order dibatalkan: ${validation.error}`);
+          continue;
+        }
+
         const orderResult = await mt5McpService.openOrder({
           symbol: signal.symbol,
           action: signal.direction,
