@@ -77,12 +77,18 @@ export function usePositions(pollInterval = 10000) {
     [fetchPositions],
   );
 
+  const refetch = useCallback(() => {
+    setIsLoading(true);
+    setFetchError(null);
+    fetchPositions();
+  }, [fetchPositions]);
+
   return {
     positions,
     total,
     isLoading,
     fetchError,
-    refetch: fetchPositions,
+    refetch,
     closePosition,
     modifyPosition,
   };

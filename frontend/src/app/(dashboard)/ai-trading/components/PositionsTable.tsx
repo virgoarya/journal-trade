@@ -31,6 +31,13 @@ export function PositionsTable({
   error,
   onRetry,
 }: PositionsTableProps) {
+  const formatPrice = (price?: number | null) => {
+    if (!price) return "";
+    if (price > 1000) return price.toFixed(2);
+    if (price > 10) return price.toFixed(3);
+    return price.toFixed(5);
+  };
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSL, setEditSL] = useState("");
   const [editTP, setEditTP] = useState("");
@@ -42,13 +49,29 @@ export function PositionsTable({
     setEditTP(String(pos.tp || 0));
   };
 
-  const saveEdit = async (ticket: number) => {
-    await onModify(
-      ticket,
-      parseFloat(editSL) || undefined,
-      parseFloat(editTP) || undefined,
-    );
+  const saveEdit = async (pos: Position) => {
+    const parsedSL = editSL !== "" ? parseFloat(editSL) : 0;
+    const parsedTP = editTP !== "" ? parseFloat(editTP) : 0;
+
+    // Prevent calling API if values haven't changed (MT5 retcode 10025)
+    if (parsedSL === (pos.sl || 0) && parsedTP === (pos.tp || 0)) {
+      setEditingId(null);
+      return;
+    }
+
+    await onModify(pos.ticket, parsedSL, parsedTP);
     setEditingId(null);
+  };
+
+  const [isClosingAll, setIsClosingAll] = useState(false);
+  const handleCloseAll = async () => {
+    if (!window.confirm("Are you sure you want to close ALL open positions?")) return;
+    setIsClosingAll(true);
+    // Execute sequentially to avoid overloading the bridge
+    for (const pos of positions) {
+      await onClose(pos.ticket);
+    }
+    setIsClosingAll(false);
   };
 
   const handleClose = async (ticket: number) => {
@@ -86,13 +109,27 @@ export function PositionsTable({
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800">
+      <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
         <h3 className="text-sm font-semibold text-white">
           Open Positions
           <span className="ml-2 text-gray-500 font-normal">
             ({positions.length})
           </span>
         </h3>
+        {positions.length > 0 && (
+          <button
+            onClick={handleCloseAll}
+            disabled={isClosingAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition text-xs font-medium disabled:opacity-50"
+          >
+            {isClosingAll ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <XCircle className="w-3.5 h-3.5" />
+            )}
+            Close All
+          </button>
+        )}
       </div>
 
       {error && (
@@ -115,18 +152,19 @@ export function PositionsTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="text-left px-3 py-2">Symbol</th>
-                <th className="text-left px-3 py-2">Type</th>
-                <th className="text-right px-3 py-2">Volume</th>
-                <th className="text-right px-3 py-2">Entry</th>
-                <th className="text-right px-3 py-2">Current</th>
-                <th className="text-right px-3 py-2">SL</th>
-                <th className="text-right px-3 py-2">TP</th>
-                <th className="text-center px-3 py-2">R:R</th>
-                <th className="text-left px-3 py-2">Comment</th>
-                <th className="text-center px-3 py-2">Magic</th>
-                <th className="text-right px-3 py-2">P&L</th>
-                <th className="text-right px-3 py-2">Actions</th>
+                <th className="text-left px-2 py-2 font-medium">Symbol</th>
+                <th className="text-left px-2 py-2 font-medium">Ticket</th>
+                <th className="text-left px-2 py-2 font-medium">Time</th>
+                <th className="text-left px-2 py-2 font-medium">Type</th>
+                <th className="text-right px-2 py-2 font-medium">Volume</th>
+                <th className="text-right px-2 py-2 font-medium">Price</th>
+                <th className="text-right px-2 py-2 font-medium">S / L</th>
+                <th className="text-right px-2 py-2 font-medium">T / P</th>
+                <th className="text-right px-2 py-2 font-medium">Price</th>
+                <th className="text-right px-2 py-2 font-medium">Swap</th>
+                <th className="text-right px-2 py-2 font-medium">Profit</th>
+                <th className="text-left px-2 py-2 font-medium">Comment</th>
+                <th className="text-right px-2 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -135,125 +173,99 @@ export function PositionsTable({
                   key={pos.ticket}
                   className="border-b border-gray-800/50 hover:bg-gray-800/30 transition"
                 >
-                  <td className="px-3 py-2.5 font-medium text-white">
-                    {pos.symbol}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${
-                        pos.type === "BUY"
-                          ? "bg-green-500/10 text-green-400"
-                          : "bg-red-500/10 text-red-400"
-                      }`}
-                    >
-                      {pos.type === "BUY" ? (
-                        <TrendingUp className="w-3 h-3" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3" />
-                      )}
-                      {pos.type}
+                  <td className="px-2 py-2.5 font-medium text-blue-400">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 border border-blue-500 rounded-sm flex items-center justify-center text-[6px]">↑</span>
+                      {pos.symbol.toLowerCase()}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right text-gray-300">
-                    {pos.volume}
+                  <td className="px-2 py-2.5 text-gray-400 text-xs">
+                    {pos.ticket}
                   </td>
-                  <td className="px-3 py-2.5 text-right text-gray-300">
-                    {pos.priceOpen.toFixed(5)}
+                  <td className="px-2 py-2.5 text-gray-400 text-xs tabular-nums whitespace-nowrap">
+                    {(() => {
+                      const d = new Date(pos.time * 1000);
+                      const pad = (n: number) => n.toString().padStart(2, "0");
+                      return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                    })()}
                   </td>
-                  <td className="px-3 py-2.5 text-right text-gray-300">
-                    {pos.priceCurrent.toFixed(5)}
+                  <td className="px-2 py-2.5 text-gray-300">
+                    {pos.type.toLowerCase()}
+                  </td>
+                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums">
+                    {pos.volume.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums whitespace-nowrap">
+                    {formatPrice(pos.priceOpen)}
                   </td>
 
-                  {/* SL column (editable) */}
-                  <td className="px-3 py-2.5 text-right">
+                  {/* S / L column (editable) */}
+                  <td className="px-2 py-2.5 text-right tabular-nums">
                     {editingId === pos.ticket ? (
                       <input
                         type="number"
                         step="0.00001"
                         value={editSL}
                         onChange={(e) => setEditSL(e.target.value)}
-                        className="w-20 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
+                        className="w-[72px] px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
                       />
                     ) : (
                       <span
                         className={`${pos.sl ? "text-gray-300" : "text-gray-500"}`}
                       >
-                        {pos.sl ? pos.sl.toFixed(5) : "—"}
+                        {pos.sl ? formatPrice(pos.sl) : ""}
                       </span>
                     )}
                   </td>
 
-                  {/* TP column (editable) */}
-                  <td className="px-3 py-2.5 text-right">
+                  {/* T / P column (editable) */}
+                  <td className="px-2 py-2.5 text-right tabular-nums">
                     {editingId === pos.ticket ? (
                       <input
                         type="number"
                         step="0.00001"
                         value={editTP}
                         onChange={(e) => setEditTP(e.target.value)}
-                        className="w-20 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
+                        className="w-[72px] px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
                       />
                     ) : (
                       <span
                         className={`${pos.tp ? "text-gray-300" : "text-gray-500"}`}
                       >
-                        {pos.tp ? pos.tp.toFixed(5) : "—"}
+                        {pos.tp ? formatPrice(pos.tp) : ""}
                       </span>
                     )}
                   </td>
 
-                  {/* R:R column */}
-                  <td className="px-3 py-2.5 text-center font-mono text-xs">
-                    {pos.sl && pos.tp ? (
-                      (() => {
-                        const slDist = Math.abs(pos.priceOpen - pos.sl);
-                        const tpDist = Math.abs(pos.tp - pos.priceOpen);
-                        const ratio = slDist > 0 ? (tpDist / slDist).toFixed(2) : "0.00";
-                        return (
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            parseFloat(ratio) >= 1.5 
-                              ? "bg-green-500/10 text-green-400" 
-                              : parseFloat(ratio) >= 1.0 
-                                ? "bg-yellow-500/10 text-yellow-400" 
-                                : "bg-red-500/10 text-red-400"
-                          }`}>
-                            1:{ratio}
-                          </span>
-                        );
-                      })()
-                    ) : (
-                      <span className="text-gray-500">—</span>
-                    )}
+                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums whitespace-nowrap">
+                    {formatPrice(pos.priceCurrent)}
+                  </td>
+
+                  {/* Swap */}
+                  <td className="px-2 py-2.5 text-right tabular-nums text-gray-400">
+                    {pos.swap ? pos.swap.toFixed(2) : ""}
+                  </td>
+
+                  {/* Profit */}
+                  <td
+                    className={`px-2 py-2.5 text-right font-medium tabular-nums whitespace-nowrap ${
+                      pos.profit >= 0 ? "text-blue-400" : "text-red-400"
+                    }`}
+                  >
+                    {pos.profit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0")}
                   </td>
 
                   {/* Comment */}
-                  <td className="px-3 py-2.5 text-left text-gray-400 text-xs max-w-[120px] truncate" title={pos.comment}>
-                    {pos.comment || "—"}
-                  </td>
-
-                  {/* Magic */}
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${pos.magic ? `${pos.magic > 1000 ? "bg-purple-500/10 text-purple-400" : "bg-gray-500/10 text-gray-400"}` : "text-gray-500"}`}>
-                      {pos.magic || "—"}
-                    </span>
-                  </td>
-
-                  {/* P&L */}
-                  <td
-                    className={`px-3 py-2.5 text-right font-medium ${
-                      pos.profit >= 0 ? "text-green-400" : "text-red-400"
-                    }`}
-                  >
-                    {pos.profit >= 0 ? "+" : ""}
-                    {pos.profit.toFixed(2)}
+                  <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
+                    {pos.comment || ""}
                   </td>
 
                   {/* Actions */}
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-2 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-1">
                       {editingId === pos.ticket ? (
                         <button
-                          onClick={() => saveEdit(pos.ticket)}
+                          onClick={() => saveEdit(pos)}
                           className="p-1.5 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 transition"
                           title="Save"
                         >

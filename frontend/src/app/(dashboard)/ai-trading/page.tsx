@@ -47,6 +47,7 @@ function AITradingPageContent() {
     disconnectMT5,
     accountInfo,
     accountLoading,
+    refetchAccountInfo,
     positions,
     positionsLoading,
     positionsError,
@@ -74,8 +75,12 @@ function AITradingPageContent() {
   }, [tabParam]);
 
   useEffect(() => {
-    refreshPipelineData();
-  }, [isConnected, refreshPipelineData]);
+    if (isConnected) {
+      refetchAccountInfo();
+      refetchPositions();
+      refreshPipelineData();
+    }
+  }, [isConnected, refetchAccountInfo, refetchPositions, refreshPipelineData]);
 
   if (!isConnected) {
     return (

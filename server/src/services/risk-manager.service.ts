@@ -132,9 +132,8 @@ class RiskManagerService {
       for (const pos of positions) {
         const posBase = pos.symbol.substring(0, 3);
         const posQuote = pos.symbol.substring(3, 6);
-        if (posBase === base) baseCount++;
-        if (posQuote === base) baseCount++;
-        if (posQuote === quote) quoteCount++;
+        if (posBase === base || posQuote === base) baseCount++;
+        if (posBase === quote || posQuote === quote) quoteCount++;
       }
 
       if (baseCount >= maxPositionsPerBase) {

@@ -88,11 +88,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const { isConnected, isConnecting, error: connectError, connect, disconnect } = useMT5Connection();
 
   // Account Info
-  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo();
+  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(1000);
 
   // Positions
   const { positions, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
-    usePositions(10000);
+    usePositions(1000);
 
   // LLM Status
   const { models: llmModels, loading: llmLoading, activeCount: llmActiveCount, refresh: refreshLlmStatus } = useLlmStatus();
