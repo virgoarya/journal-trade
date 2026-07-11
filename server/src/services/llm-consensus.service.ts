@@ -7,6 +7,7 @@
 
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
+import { mt5McpService } from "./mt5-mcp.service";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ export const DEFAULT_LLM_CONSENSUS_CONFIG: LLMConsensusConfig = {
   enabled: false,
   minProviders: 4,
   threshold: 0.5,
-  providerTimeoutMs: 15000,
+  providerTimeoutMs: 25000,
 };
 
 // ─── Available Providers ─────────────────────────────────────────────
@@ -88,12 +89,26 @@ async function testModelProvider(m: { name: string; model: string }, baseUrl: st
     const r = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: m.model, messages: [{ role: "user", content: "ok" }], max_tokens: 2, stream: false }),
+      body: JSON.stringify({ model: m.model, messages: [{ role: "user", content: "ok" }], max_tokens: 5, stream: false }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (r.status === 429) {
-      silentLogger.warn(`[LLM-HEALTH] ${m.name} (${m.model}) rate-limited (429) — dinonaktifkan sampai server restart`);
+    let body = "";
+    try {
+      body = await r.text();
+    } catch {}
+    
+    const bodyLower = body.toLowerCase();
+    const isRateLimited = 
+      r.status === 429 || 
+      r.status === 422 ||
+      bodyLower.includes("quota") ||
+      bodyLower.includes("exceeded") ||
+      bodyLower.includes("limit") ||
+      bodyLower.includes("exhausted");
+
+    if (isRateLimited) {
+      silentLogger.warn(`[LLM-HEALTH] ${m.name} (${m.model}) rate-limited — dinonaktifkan sampai server restart`);
       return false;
     }
     return r.ok;
@@ -103,83 +118,93 @@ async function testModelProvider(m: { name: string; model: string }, baseUrl: st
 }
 
 /**
- * Startup health check — test all 6 models.
- * Any model that returns 429 (rate-limited) gets disabled for this session.
+ * Startup health check — test all available models.
+ * Any model that returns 429 (rate-limited) or fails gets disabled for this session.
  */
 async function startupHealthCheck(): Promise<void> {
-  silentLogger.info("[LLM-HEALTH] 🔍 Mengecek 6 model (timeout 10s masing-masing)...");
+  const useNineRouter = !!env.NINE_ROUTER_URL;
+  silentLogger.info(
+    `[LLM-HEALTH] 🔍 Mengecek model (timeout 10s masing-masing) - Mode: ${
+      useNineRouter ? "9Router" : "Direct APIs"
+    }...`
+  );
 
   const results: Array<{ name: string; label: string; ok: boolean }> = [];
+  const providers = getAvailableProviders();
 
-  // Test 9Router models
-  if (env.NINE_ROUTER_URL) {
-    const baseUrl = env.NINE_ROUTER_URL;
-    const apiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
-    const routerResults = await Promise.all(
-      NINE_ROUTER_MODELS.map(async (m) => {
-        const ok = await testModelProvider(m, baseUrl, apiKey);
-        if (!ok) rateLimitedModels.add(m.name);
-        return { name: m.name, label: m.label, ok };
-      }),
-    );
-    results.push(...routerResults);
+  if (providers.length === 0) {
+    silentLogger.warn("[LLM-HEALTH] ⚠️ Tidak ada provider LLM yang terkonfigurasi!");
+    return;
   }
 
-  // Test direct models
-  for (const m of DIRECT_MODELS) {
-    const apiKeyRaw = m.apiKeyEnv ? (env[m.apiKeyEnv as keyof typeof env] ?? "") : "";
-    const apiKey = String(apiKeyRaw);
-    if (!apiKey) {
-      rateLimitedModels.add(m.name);
-      results.push({ name: m.name, label: m.label, ok: false });
-      continue;
-    }
-    const ok = await testModelProvider(m, m.baseURL, apiKey);
-    if (!ok) rateLimitedModels.add(m.name);
-    results.push({ name: m.name, label: m.label, ok });
-  }
+  await Promise.all(
+    providers.map(async (p) => {
+      const ok = await testModelProvider({ name: p.name, model: p.model }, p.baseUrl, p.apiKey);
+      if (!ok) rateLimitedModels.add(p.name);
+      results.push({ name: p.name, label: p.label, ok });
+    })
+  );
 
   for (const r of results) {
     if (r.ok) silentLogger.info(`[LLM-HEALTH] ✅ ${r.label} (${r.name}) — OK`);
     else silentLogger.warn(`[LLM-HEALTH] ❌ ${r.label} (${r.name}) — LIMITED / OFFLINE — dinonaktifkan`);
   }
-  silentLogger.info(`[LLM-HEALTH] ${results.filter(r => r.ok).length}/${results.length} model aktif`);
+  
+  const activeCount = results.filter(r => r.ok).length;
+  silentLogger.info(`[LLM-HEALTH] ${activeCount}/${results.length} model aktif`);
 }
 
 function getAvailableProviders(): LLMProvider[] {
   const providers: LLMProvider[] = [];
+  const useNineRouter = !!env.NINE_ROUTER_URL;
+  const nineRouterUrl = env.NINE_ROUTER_URL;
+  const nineRouterApiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
 
-  // 9Router models
-  if (env.NINE_ROUTER_URL) {
+  // 1. Tambahkan model 9Router spesifik
+  if (useNineRouter) {
     for (const m of NINE_ROUTER_MODELS) {
-      if (rateLimitedModels.has(m.name)) continue; // skip rate-limited
+      if (rateLimitedModels.has(m.name)) continue;
       providers.push({
         name: m.name,
         label: m.label,
         model: m.model,
-        baseUrl: env.NINE_ROUTER_URL,
-        apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
+        baseUrl: nineRouterUrl!,
+        apiKey: nineRouterApiKey,
       });
     }
   }
 
-  // Direct models (Gemini, Mistral, Nemotron, Claude Opus)
+  // 2. Tambahkan model Direct (Gemini, Mistral, Nemotron, Claude Opus)
   for (const m of DIRECT_MODELS) {
     if (rateLimitedModels.has(m.name)) continue;
-    const apiKeyRaw = m.apiKeyEnv && (env[m.apiKeyEnv as keyof typeof env] || "");
-    const apiKey = String(apiKeyRaw);
-    if (!apiKey || apiKey === "null" || apiKey === "undefined") {
-      silentLogger.warn(`[LLM-CONSENSUS] API key ${m.name} gak ada, skip`);
-      continue;
+
+    if (useNineRouter) {
+      // Jika menggunakan 9Router, lewatkan semua model direct melalui 9Router
+      providers.push({
+        name: m.name,
+        label: m.label,
+        model: m.model,
+        baseUrl: nineRouterUrl!,
+        apiKey: nineRouterApiKey,
+        isDirect: false,
+      });
+    } else {
+      // Jika tidak menggunakan 9Router, pakai konfigurasi langsung (direct)
+      const apiKeyRaw = m.apiKeyEnv && (env[m.apiKeyEnv as keyof typeof env] || "");
+      const apiKey = String(apiKeyRaw);
+      if (!apiKey || apiKey === "null" || apiKey === "undefined") {
+        silentLogger.warn(`[LLM-CONSENSUS] API key ${m.name} tidak ditemukan, skip direct call`);
+        continue;
+      }
+      providers.push({
+        name: m.name,
+        label: m.label,
+        model: m.model,
+        baseUrl: m.baseURL,
+        apiKey,
+        isDirect: true,
+      });
     }
-    providers.push({
-      name: m.name,
-      label: m.label,
-      model: m.model,
-      baseUrl: m.baseURL,
-      apiKey,
-      isDirect: true,
-    });
   }
 
   return providers;
@@ -187,47 +212,121 @@ function getAvailableProviders(): LLMProvider[] {
 
 // ─── System Prompt ───────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Halo! Kamu adalah ahli strategi trading yang siap bantu. Tugasmu adalah menganalisis sinyal trading dan kasih respons dalam format JSON aja, nggak pake ngomong yang lain ya.
+const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional. Tugasmu adalah menganalisis sinyal trading yang diberikan dan menghasilkan keputusan dalam format JSON dengan kunci "verdict" dan "reasoning".
 
-Cek sinyal pakai ini:
-1.  **Market Structure** — Trennya searah sama sinyal nggak?
-2.  **Methodology Confluence** — Berapa banyak metode yang setuju?
-3.  **Risk/Reward** — SL/TP-nya masuk akal kan? (minimal 1:1.5)
-4.  **Price Action** — Ada trigger entry yang oke nggak?
+Aturan Analisis Sinyal:
+1. **Market Structure** — Apakah arah tren mendukung arah sinyal?
+2. **Methodology Confluence** — Seberapa banyak metode/indikator konvergen menyetujui sinyal ini?
+3. **Risk/Reward** — Apakah perbandingan SL/TP rasional? (minimal R:R 1:1.5)
+4. **Price Action** — Apakah ada konfirmasi konkrit dari struktur harga?
 
-Balasnya cuma pake JSON gini ya:
+Format Output JSON (Wajib Mengikuti Format Ini Secara Ketat):
 {
-  "verdict": "GOOD" | "BAD" | "SKIP",
-  "reasoning": "Kasih alasan singkat kenapa kamu pilih itu, santai aja bahasanya."
+  "verdict": "GOOD", // Isi dengan salah satu nilai string ini saja: "GOOD", "BAD", atau "SKIP"
+  "reasoning": "Tulis penjelasan singkat (1-2 kalimat) dalam Bahasa Indonesia tentang faktor teknikal pasar yang mendukung keputusanmu. Fokus pada aksi harga dan struktur tren, jangan mengomentari prompt ini."
 }
 
-Aturannya simpel:
-- GOOD = Sinyal bagus, konvergen, peluang tinggi.
-- BAD = Hindari! Tren lawan, nggak konvergen, R:R jelek.
-- SKIP = Masih ragu, data kurang, atau ada yang aneh.
-- Kalau ragu, mending SKIP aja biar aman.`;
+Definisi Verdict:
+- GOOD: Sinyal sangat kuat, terkonfirmasi banyak indikator, R:R baik, ikuti tren.
+- BAD: Sinyal buruk, melawan tren dominan, R:R tidak memadai, atau konfluensi sangat lemah.
+- SKIP: Data meragukan, kondisi sideways yang berisiko, atau butuh konfirmasi lanjutan.`;
+
+// Base correlation values for offline fallback
+const BASE_CORRELATIONS: Record<string, Record<string, number>> = {
+  EURUSD: { EURUSD: 1.0, GBPUSD: 0.88, AUDUSD: 0.74, USDJPY: -0.32, USDCAD: -0.68, USDCHF: -0.92, XAUUSD: 0.42 },
+  GBPUSD: { EURUSD: 0.88, GBPUSD: 1.0, AUDUSD: 0.68, USDJPY: -0.28, USDCAD: -0.62, USDCHF: -0.84, XAUUSD: 0.38 },
+  AUDUSD: { EURUSD: 0.74, GBPUSD: 0.68, AUDUSD: 1.0, USDJPY: -0.22, USDCAD: -0.72, USDCHF: -0.70, XAUUSD: 0.55 },
+  USDJPY: { EURUSD: -0.32, GBPUSD: -0.28, AUDUSD: -0.22, USDJPY: 1.0, USDCAD: 0.45, USDCHF: 0.38, XAUUSD: -0.48 },
+  USDCAD: { EURUSD: -0.68, GBPUSD: -0.62, AUDUSD: -0.72, USDJPY: 0.45, USDCAD: 1.0, USDCHF: 0.65, XAUUSD: -0.35 },
+  USDCHF: { EURUSD: -0.92, GBPUSD: -0.84, AUDUSD: -0.70, USDJPY: 0.38, USDCAD: 0.65, USDCHF: 1.0, XAUUSD: -0.38 },
+  XAUUSD: { EURUSD: 0.42, GBPUSD: 0.38, AUDUSD: 0.55, USDJPY: -0.48, USDCAD: -0.35, USDCHF: -0.38, XAUUSD: 1.0 }
+};
+
+/**
+ * Calculates Pearson correlation coefficient between two symbols based on H1 returns.
+ */
+async function getCorrelationCoefficient(s1: string, s2: string): Promise<number> {
+  if (s1 === s2) return 1.0;
+  try {
+    const [r1, r2] = await Promise.all([
+      mt5McpService.getRates(s1, "H1", 50),
+      mt5McpService.getRates(s2, "H1", 50),
+    ]);
+    if (!r1 || !r2 || r1.length < 10 || r2.length < 10) return 0;
+
+    const closes1 = r1.map(x => x.close);
+    const closes2 = r2.map(x => x.close);
+
+    const getReturns = (closes: number[]) => {
+      const returns: number[] = [];
+      for (let i = 1; i < closes.length; i++) {
+        returns.push(closes[i - 1] === 0 ? 0 : (closes[i] - closes[i - 1]) / closes[i - 1]);
+      }
+      return returns;
+    };
+
+    const ret1 = getReturns(closes1);
+    const ret2 = getReturns(closes2);
+
+    const len = Math.min(ret1.length, ret2.length);
+    const x = ret1.slice(0, len);
+    const y = ret2.slice(0, len);
+
+    const meanX = x.reduce((a, b) => a + b, 0) / len;
+    const meanY = y.reduce((a, b) => a + b, 0) / len;
+
+    let num = 0;
+    let denX = 0;
+    let denY = 0;
+
+    for (let k = 0; k < len; k++) {
+      const diffX = x[k] - meanX;
+      const diffY = y[k] - meanY;
+      num += diffX * diffY;
+      denX += diffX * diffX;
+      denY += diffY * diffY;
+    }
+
+    const den = Math.sqrt(denX * denY);
+    return den === 0 ? 0 : parseFloat((num / den).toFixed(2));
+  } catch {
+    // Fallback to static base correlations
+    const base1 = BASE_CORRELATIONS[s1];
+    if (base1 && base1[s2] !== undefined) {
+      return base1[s2];
+    }
+    const base2 = BASE_CORRELATIONS[s2];
+    if (base2 && base2[s1] !== undefined) {
+      return base2[s1];
+    }
+    return 0;
+  }
+}
 
 // ─── Prompt Builder ──────────────────────────────────────────────────
 
-function buildSignalPrompt(signal: {
-  symbol: string;
-  direction: string;
-  confidence: number;
-  entry: number;
-  sl: number;
-  tp: number;
-  reason: string;
-  marketTrend: string;
-  methodologyBreakdown: Record<string, { confidence: number; weight: number; contribution: number }>;
-  agreeingCount: number;
-  totalMethodologies: number;
-  htfTrend?: string;
-  htfConfidence?: number;
-  symbolScore?: number;
-  methodologyVerdict?: string;
-  methodologyWinRate?: number;
-  methodologyPnL?: number;
-}): string {
+function buildSignalPrompt(
+  signal: {
+    symbol: string;
+    direction: string;
+    confidence: number;
+    entry: number;
+    sl: number;
+    tp: number;
+    reason: string;
+    marketTrend: string;
+    methodologyBreakdown: Record<string, { confidence: number; weight: number; contribution: number }>;
+    agreeingCount: number;
+    totalMethodologies: number;
+    htfTrend?: string;
+    htfConfidence?: number;
+    symbolScore?: number;
+    methodologyVerdict?: string;
+    methodologyWinRate?: number;
+    methodologyPnL?: number;
+  },
+  correlationWarnings?: string
+): string {
   let extra = "";
   if (signal.htfTrend) extra += `\nHTF Trend: ${signal.htfTrend} (confidence: ${signal.htfConfidence}%)`;
   if (signal.symbolScore !== undefined) extra += `\nSymbol Historical Score: ${signal.symbolScore}/100`;
@@ -237,7 +336,7 @@ function buildSignalPrompt(signal: {
     extra += `\nMethodology PnL: ${signal.methodologyPnL}`;
   }
 
-  return `Halo! Tolong evaluasi sinyal trading ini. Balas dengan santai ya.
+  return `Evaluasi sinyal trading berikut secara objektif dan teknikal:
 
 Symbol: ${signal.symbol}
 Arah: ${signal.direction}
@@ -246,15 +345,15 @@ Entry: ${signal.entry}
 SL: ${signal.sl}
 TP: ${signal.tp}
 R:R: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.tp - signal.entry) / Math.abs(signal.sl - signal.entry)).toFixed(2) : "N/A"}
-Alasan: ${signal.reason}
+Alasan Dasar: ${signal.reason}
 
-Tren Market: ${signal.marketTrend}
-Metode yang setuju: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}
+Struktur Tren Market: ${signal.marketTrend}
+Metode Setuju: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}
 
 Detail Metode:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}
 
-Verdict:`;
+Ingat: Berikan keputusan akhir (verdict) dan analisis teknikal (reasoning) eksklusif dalam Bahasa Indonesia. Balas hanya dengan format JSON yang valid, tanpa teks pengantar maupun penutup.`;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -320,36 +419,69 @@ class LLMConsensusService {
       };
     }
 
-    const prompt = buildSignalPrompt(signal);
+    // Fetch active open positions to analyze correlation risk
+    let correlationWarnings = "";
+    try {
+      const isConnected = await mt5McpService.isConnected();
+      if (isConnected) {
+        const positions = await mt5McpService.getPositions();
+        if (positions && positions.length > 0) {
+          const warningsList: string[] = [];
+          for (const pos of positions) {
+            if (pos.symbol === signal.symbol) continue;
 
-    // Run all providers in PARALLEL with timeout
+            const coeff = await getCorrelationCoefficient(signal.symbol, pos.symbol);
+            if (Math.abs(coeff) >= 0.7) {
+              const relation = coeff > 0 ? "Positif Kuat (bergerak searah)" : "Negatif Kuat (bergerak berlawanan)";
+              warningsList.push(
+                `- Posisi Aktif: ${pos.direction} ${pos.symbol} (Korelasi dengan ${signal.symbol}: ${coeff} [${relation}])`
+              );
+            }
+          }
+          if (warningsList.length > 0) {
+            correlationWarnings = `\nPERINGATAN PORTFOLIO CORRELATION RISK (Sinyal memiliki korelasi tinggi dengan posisi terbuka):\n${warningsList.join("\n")}\nEvaluasi apakah mengeksekusi sinyal ${signal.symbol} ini akan melipatgandakan risiko portofolio secara berlebihan. Jika ya, Anda disarankan memilih SKIP atau BAD.`;
+          }
+        }
+      }
+    } catch (e: any) {
+      silentLogger.warn(`[LLM-CONSENSUS] Gagal menganalisis korelasi portofolio: ${e.message}`);
+    }
+
+    const prompt = buildSignalPrompt(signal, correlationWarnings);
+
+    // Run all providers in PARALLEL with timeout (minimum 25s for slow/thinking models)
     const results = await Promise.all(
-      providers.map((p) => this.callProvider(p, prompt, cfg.providerTimeoutMs || 15000)),
+      providers.map((p) => this.callProvider(p, prompt, Math.max(cfg.providerTimeoutMs || 25000, 25000))),
     );
 
     // Aggregate votes
     const validVotes = results.filter((r) => r.verdict !== "SKIP" && !r.error);
-    const goodVotes = validVotes.filter((r) => r.verdict === "GOOD").length;
-    const badVotes = validVotes.filter((r) => r.verdict === "BAD").length;
-    const skipVotes = results.filter((r) => r.verdict === "SKIP").length;
+    const goodVotes = results.filter((r) => r.verdict === "GOOD" && !r.error).length;
+    const badVotes = results.filter((r) => r.verdict === "BAD" && !r.error).length;
+    const skipVotes = results.filter((r) => r.verdict === "SKIP" && !r.error).length;
     const totalVotes = results.length;
-
+    const activeCount = results.filter((r) => !r.error).length;
     const threshold = cfg.threshold ?? 0.5;
-    const goodRatio = validVotes.length > 0 ? goodVotes / (goodVotes + badVotes) : 0;
+    
+    // Approval ratio: Good votes divided by the total number of successfully responded models (including SKIPs)
+    const approvalRatio = activeCount > 0 ? goodVotes / activeCount : 0;
 
     let finalVerdict: LLMVerdict;
     if (badVotes > goodVotes) {
       finalVerdict = "BAD";
-    } else if (validVotes.length > 0 && goodRatio >= threshold) {
+    } else if (activeCount > 0 && approvalRatio >= threshold) {
       finalVerdict = "GOOD";
     } else {
       finalVerdict = "SKIP";
     }
 
-    const details = validVotes.map((v) => `${v.provider}(${v.modelLabel}): ${v.verdict} — ${v.reasoning}`).join(" | ");
+    const ratioPct = Math.round(approvalRatio * 100);
+    const thresholdPct = Math.round(threshold * 100);
+    const details = `Consensus Ratio: ${ratioPct}% / Threshold: ${thresholdPct}% | ` + 
+      validVotes.map((v) => `${v.provider}(${v.modelLabel}): ${v.verdict} — ${v.reasoning}`).join(" | ");
 
     silentLogger.info(
-      `[LLM-CONSENSUS] ${finalVerdict} (G:${goodVotes}/B:${badVotes}/S:${skipVotes}/${totalVotes}) ${signal.symbol} ${signal.direction}`,
+      `[LLM-CONSENSUS] ${finalVerdict} (G:${goodVotes}/B:${badVotes}/S:${skipVotes}/${totalVotes}) [Ratio: ${ratioPct}% vs Threshold: ${thresholdPct}%] ${signal.symbol} ${signal.direction}`,
     );
 
     return {
@@ -443,7 +575,7 @@ class LLMConsensusService {
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: prompt },
           ],
-          max_tokens: 200,
+          max_tokens: 1024,
           temperature: 0.1,
           stream: false,
         }),
@@ -454,19 +586,64 @@ class LLMConsensusService {
 
       if (!res.ok) {
         const latency = Date.now() - startTime;
-        silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} HTTP ${res.status}`);
+        let errorBody = "";
+        try {
+          errorBody = await res.text();
+        } catch {}
+        silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} HTTP ${res.status}: ${errorBody}`);
+
+        // Dynamic rate-limit/quota detection (RESOURCE_EXHAUSTED / 429 / 422 from 9Router)
+        const errLower = errorBody.toLowerCase();
+        const isRateLimited =
+          res.status === 429 ||
+          res.status === 422 ||
+          errLower.includes("resource_exhausted") ||
+          errLower.includes("rate_limit") ||
+          errLower.includes("rate limit") ||
+          errLower.includes("quota") ||
+          errLower.includes("exceeded") ||
+          errLower.includes("credit");
+
+        if (isRateLimited) {
+          rateLimitedModels.add(provider.name);
+          silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} (${provider.modelLabel}) dynamically entered hibernation due to rate limit/quota.`);
+        }
+
+        let friendlyError = `HTTP ${res.status}`;
+        if (errorBody) {
+          try {
+            const parsedErr = JSON.parse(errorBody);
+            const msg = parsedErr.error?.message || parsedErr.message || parsedErr.error;
+            if (typeof msg === "string") {
+              friendlyError = `HTTP ${res.status}: ${msg}`;
+            } else {
+              friendlyError = `HTTP ${res.status}: ${errorBody.slice(0, 80)}`;
+            }
+          } catch {
+            friendlyError = `HTTP ${res.status}: ${errorBody.slice(0, 80)}`;
+          }
+        }
+
         return {
           provider: provider.name,
           modelLabel: provider.label,
           verdict: "SKIP",
-          reasoning: `HTTP ${res.status}`,
+          reasoning: isRateLimited 
+            ? `Hibernasi: Kuota/Rate-Limit terlampaui` 
+            : friendlyError,
           latencyMs: latency,
-          error: `HTTP ${res.status}`,
+          error: errorBody || `HTTP ${res.status}`,
         };
       }
 
       const json: any = await res.json();
-      const rawText = json?.choices?.[0]?.message?.content ?? "";
+      let rawText = json?.choices?.[0]?.message?.content ?? "";
+      if (!rawText && json?.choices?.[0]?.message?.reasoning_content) {
+        rawText = json.choices[0].message.reasoning_content;
+      }
+      if (!rawText && json?.choices?.[0]?.message?.thought) {
+        rawText = json.choices[0].message.thought;
+      }
       const parsed = this.parseVerdict(rawText);
       const latency = Date.now() - startTime;
 
@@ -523,10 +700,13 @@ class LLMConsensusService {
         const parsed = JSON.parse(jsonStr);
         const verdict = (parsed.verdict || "").toString().toUpperCase();
         if (["GOOD", "BAD", "SKIP"].includes(verdict)) {
-          const reasoning = (parsed.reasoning || "").toString().trim();
+          let reasoning = (parsed.reasoning || "").toString().trim();
+          if (reasoning.length < 5 || reasoning === ".") {
+            reasoning = "Analisis teknikal tidak disediakan oleh model.";
+          }
           return {
             verdict: verdict as LLMVerdict,
-            reasoning: reasoning || "Model provided verdict without reasoning",
+            reasoning,
           };
         }
       } catch {
@@ -557,19 +737,28 @@ class LLMConsensusService {
     // Look for verdict keywords
     const upper = cleaned.toUpperCase();
     let verdict: LLMVerdict | null = null;
-    if (upper.includes("GOOD") || upper.startsWith("GOOD")) {
-      verdict = "GOOD";
-    } else if (upper.includes("BAD") || upper.startsWith("BAD")) {
-      verdict = "BAD";
-    } else if (upper.includes("SKIP") || upper.startsWith("SKIP")) {
-      verdict = "SKIP";
+
+    // Ignore template string echoes (containing all 3 keywords) to prevent false-positive parser guessing
+    const hasTemplateEcho = upper.includes("GOOD") && upper.includes("BAD") && upper.includes("SKIP");
+
+    if (!hasTemplateEcho) {
+      if (upper.includes("GOOD") || upper.startsWith("GOOD")) {
+        verdict = "GOOD";
+      } else if (upper.includes("BAD") || upper.startsWith("BAD")) {
+        verdict = "BAD";
+      } else if (upper.includes("SKIP") || upper.startsWith("SKIP")) {
+        verdict = "SKIP";
+      }
     }
 
     if (verdict) {
       // Try to extract reasoning after the verdict keyword
       const match = cleaned.match(/(?:GOOD|BAD|SKIP)[:\s-]*(.+)/i);
-      const reasoning = match && match[1] ? match[1].trim().slice(0, 200) : "No reasoning extracted";
-      return { verdict, reasoning: reasoning || "No reasoning provided" };
+      let reasoning = match && match[1] ? match[1].trim().slice(0, 200) : "No reasoning extracted";
+      if (reasoning.length < 5 || reasoning === ".") {
+        reasoning = "Analisis teknikal tidak disediakan oleh model.";
+      }
+      return { verdict, reasoning };
     }
 
     // 5. Last resort: keyword detection

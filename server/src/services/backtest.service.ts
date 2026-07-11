@@ -276,11 +276,11 @@ class BacktestService {
     // Synchronous path: prepare data then run simulation immediately
     const { sessionId } = await this.prepareBacktestData(userId, config);
     const { backtestSessionManager } = require("./backtest-session.manager");
-    const session = backtestSessionManager.getSession(sessionId);
+    const session = backtestSessionManager.getSession(sessionId, userId);
     if (!session) throw new Error("Session creation failed");
     // Auto-start (no waiting) — synchronous run
     const result = await this.runSimulationCore(userId, session.config, session.symbolStates, () => {});
-    backtestSessionManager.removeSession(sessionId);
+    backtestSessionManager.removeSession(sessionId, userId);
     return result;
   }
 
@@ -377,7 +377,7 @@ class BacktestService {
 
     // Create session
     const { backtestSessionManager } = require("./backtest-session.manager");
-    const sessionId = backtestSessionManager.createSession(merged, symbolStates);
+    const sessionId = backtestSessionManager.createSession(merged, symbolStates, userId);
 
     // Build summaries
     const symbolSummaries = Array.from(symbolStates.entries()).map(([sym, state]) => ({
@@ -403,7 +403,7 @@ class BacktestService {
     const { sessionId } = await this.prepareBacktestData(userId, config, onEvent);
 
     const { backtestSessionManager } = require("./backtest-session.manager");
-    const session = backtestSessionManager.getSession(sessionId);
+    const session = backtestSessionManager.getSession(sessionId, userId);
     if (!session) throw new Error("Session creation failed");
 
     // Emit data_ready so frontend knows data size
@@ -428,7 +428,7 @@ class BacktestService {
     try {
       return this.runSimulationCore(userId, session.config, session.symbolStates, onEvent, isAborted);
     } finally {
-      backtestSessionManager.removeSession(sessionId);
+      backtestSessionManager.removeSession(sessionId, userId);
     }
   }
 
@@ -442,11 +442,11 @@ class BacktestService {
     onEvent: StreamEventCallback,
   ): Promise<BacktestResult> {
     const { backtestSessionManager } = require("./backtest-session.manager");
-    const session = backtestSessionManager.getSession(sessionId);
+    const session = backtestSessionManager.getSession(sessionId, userId);
     if (!session) throw new Error("Session not found or expired");
 
     const result = await this.runSimulationCore(userId, session.config, session.symbolStates, onEvent);
-    backtestSessionManager.removeSession(sessionId);
+    backtestSessionManager.removeSession(sessionId, userId);
     return result;
   }
 
@@ -460,7 +460,7 @@ class BacktestService {
     onEvent: StreamEventCallback,
   ): Promise<BacktestResult> {
     const { backtestSessionManager } = require("./backtest-session.manager");
-    const session = backtestSessionManager.getSession(sessionId);
+    const session = backtestSessionManager.getSession(sessionId, userId);
 
     if (!session) {
       throw new Error("Backtest session not found or expired");
@@ -699,60 +699,86 @@ class BacktestService {
         });
 
         // ── Manage open trades for THIS symbol ───────────────────
-        const toClose: string[] = [];
+        const toClose: Array<{ key: string; exitPrice: number; reason: SimulatedTrade["closeReason"] }> = [];
         for (const [key, trade] of openTrades) {
           if (trade.symbol !== tc.symbol) continue;
           trade.barsHeld++;
 
-          if (trade.direction === "BUY" && currentPrice >= trade.tp) { toClose.push(key); continue; }
-          if (trade.direction === "SELL" && currentPrice <= trade.tp) { toClose.push(key); continue; }
-          if (trade.direction === "BUY" && currentPrice <= trade.sl) { toClose.push(key); continue; }
-          if (trade.direction === "SELL" && currentPrice >= trade.sl) { toClose.push(key); continue; }
+          let hitSL = false;
+          let hitTP = false;
 
-          // Trailing stop (cheap — O(1))
+          // 1. Check Standard SL/TP using candle High/Low (wick)
+          if (trade.direction === "BUY") {
+            if (currentCandle.low <= trade.sl) hitSL = true;
+            if (currentCandle.high >= trade.tp) hitTP = true;
+          } else {
+            if (currentCandle.high >= trade.sl) hitSL = true;
+            if (currentCandle.low <= trade.tp) hitTP = true;
+          }
+
+          if (hitSL && hitTP) {
+            // Both hit in the same candle: assume SL hit (conservative)
+            toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+            continue;
+          } else if (hitSL) {
+            toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+            continue;
+          } else if (hitTP) {
+            toClose.push({ key, exitPrice: trade.tp, reason: "TP_HIT" });
+            continue;
+          }
+
+          // 2. Trailing stop (cheap — O(1))
           if (merged.trailingStop.enabled) {
             const trailResult = aiTradingEngine.calculateTrailingStopSL({
-              positionType: trade.direction, currentPrice,
-              currentSL: trade.sl, atrValue: atr,
+              positionType: trade.direction, 
+              currentPrice, // trail updates based on Close
+              currentSL: trade.sl, 
+              atrValue: atr,
               trailATR: merged.trailingStop.trailATR,
               activationATR: merged.trailingStop.activationATR,
               entryPrice: trade.entryPrice,
             });
             if (trailResult.shouldUpdate) {
+              const oldSL = trade.sl;
               trade.sl = trailResult.newSL;
-              trade.trailingHistory.push({ time: currentCandle.time, oldSL: trade.sl, newSL: trailResult.newSL });
+              trade.trailingHistory.push({ time: currentCandle.time, oldSL, newSL: trailResult.newSL });
             }
-            if (trade.direction === "BUY" && currentPrice <= trade.sl) { toClose.push(key); continue; }
-            if (trade.direction === "SELL" && currentPrice >= trade.sl) { toClose.push(key); continue; }
+
+            // Check if trailing SL is hit using candle High/Low
+            if (trade.direction === "BUY" && currentCandle.low <= trade.sl) {
+              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+              continue;
+            }
+            if (trade.direction === "SELL" && currentCandle.high >= trade.sl) {
+              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+              continue;
+            }
           }
 
-          // Reverse signal
-          if (trade.direction === "BUY" && pattern.type === "BEARISH_ENGULFING") { toClose.push(key); continue; }
-          if (trade.direction === "SELL" && pattern.type === "BULLISH_ENGULFING") { toClose.push(key); continue; }
+          // 3. Reverse signal
+          if (trade.direction === "BUY" && pattern.type === "BEARISH_ENGULFING") {
+            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE" });
+            continue;
+          }
+          if (trade.direction === "SELL" && pattern.type === "BULLISH_ENGULFING") {
+            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE" });
+            continue;
+          }
         }
 
-        for (const key of toClose) {
+        for (const item of toClose) {
+          const { key, exitPrice, reason } = item;
           const trade = openTrades.get(key)!;
-          const pnl = this.calculatePnL(trade.direction, trade.entryPrice, currentPrice, trade.volume, symState.contractSize);
+          const pnl = this.calculatePnL(trade.direction, trade.entryPrice, exitPrice, trade.volume, symState.contractSize);
           const pnlPercent = trade.volume > 0 ? (pnl / (trade.entryPrice * trade.volume)) * 100 : 0;
-
-          let closeReason: SimulatedTrade["closeReason"] = "TP_HIT";
-          if (trade.direction === "BUY") {
-            if (currentPrice <= trade.sl) closeReason = "SL_HIT";
-            else if (currentPrice >= trade.tp) closeReason = "TP_HIT";
-            else closeReason = "SIGNAL_REVERSE";
-          } else {
-            if (currentPrice >= trade.sl) closeReason = "SL_HIT";
-            else if (currentPrice <= trade.tp) closeReason = "TP_HIT";
-            else closeReason = "SIGNAL_REVERSE";
-          }
 
           tradeResults.push({
             entryTime: trade.entryTime, exitTime: currentCandle.time,
             symbol: trade.symbol, direction: trade.direction,
-            entryPrice: trade.entryPrice, exitPrice: currentPrice,
+            entryPrice: trade.entryPrice, exitPrice,
             sl: trade.sl, tp: trade.tp, volume: trade.volume,
-            pnl, pnlPercent, closeReason,
+            pnl, pnlPercent, closeReason: reason,
             rsiAtEntry: trade.rsiAtEntry, atrAtEntry: trade.atrAtEntry,
             pattern: trade.pattern, confidence: trade.confidence,
             trailingHistory: trade.trailingHistory,
@@ -773,8 +799,8 @@ class BacktestService {
             data: {
               entryTime: trade.entryTime, exitTime: currentCandle.time,
               symbol: trade.symbol, direction: trade.direction,
-              entryPrice: trade.entryPrice, exitPrice: currentPrice,
-              pnl, pnlPercent, reason: closeReason, confidence: trade.confidence,
+              entryPrice: trade.entryPrice, exitPrice,
+              pnl, pnlPercent, reason, confidence: trade.confidence,
               primaryMethodology: trade.primaryMethodology,
             },
           });
@@ -1063,6 +1089,16 @@ class BacktestService {
     }
 
     // ── 7. Calculate final metrics ─────────────────────────────────
+    // Emit final progress before calculations
+    emit({
+      type: "progress",
+      data: {
+        currentCandle: totalTimelineSteps,
+        totalCandles: totalTimelineSteps,
+        percent: 100,
+      },
+    });
+
     const totalTrades = tradeResults.length;
     const endEquity = equity;
     const totalPnL = endEquity - merged.initialBalance;

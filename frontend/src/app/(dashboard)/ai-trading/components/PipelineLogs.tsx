@@ -4,7 +4,7 @@ import { useState } from "react";
 import { type PipelineLog } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
-import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity } from "lucide-react";
+import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity, BrainCircuit, Layers } from "lucide-react";
 
 interface PipelineLogsProps {
   logs: PipelineLog[];
@@ -17,18 +17,40 @@ const LOG_ICONS: Record<
 > = {
   INFO: { icon: ScrollText, color: "text-gray-400" },
   SIGNAL: { icon: Signal, color: "text-blue-400" },
+  CONFLUENCE: { icon: BrainCircuit, color: "text-purple-400" },
   TRADE: { icon: ShoppingCart, color: "text-green-400" },
   ERROR: { icon: AlertTriangle, color: "text-red-400" },
   TRAILING: { icon: Activity, color: "text-yellow-400" },
 };
 
-export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
-  const [filterType, setFilterType] = useState("");
-  const logTypes = ["INFO", "SIGNAL", "TRADE", "ERROR", "TRAILING", "CONFLUENCE"];
+interface PipelineStage {
+  status: "pending" | "active" | "success" | "error";
+  message?: string;
+  time?: number;
+}
 
-  const filteredLogs = filterType
-    ? logs.filter(l => l.type === filterType)
-    : logs;
+interface SymbolTrack {
+  symbol: string;
+  direction?: "BUY" | "SELL";
+  lastUpdateTime: number;
+  stages: {
+    INFO: PipelineStage;
+    SIGNAL: PipelineStage;
+    CONFLUENCE: PipelineStage;
+    EXECUTION: PipelineStage;
+    TRAILING: PipelineStage;
+  };
+}
+
+export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
+  const [viewMode, setViewMode] = useState<"cards" | "raw">("cards");
+  const [filterType, setFilterType] = useState("");
+  
+  // State for which step is selected to view details in each symbol card
+  // Map of symbol -> stageKey
+  const [selectedStages, setSelectedStages] = useState<Record<string, string>>({});
+
+  const logTypes = ["INFO", "SIGNAL", "TRADE", "ERROR", "TRAILING", "CONFLUENCE"];
 
   if (isLoading) {
     return <SkeletonLoader type="list" count={5} />;
@@ -38,76 +60,319 @@ export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
     return (
       <EmptyState
         type="data"
-        title="No Pipeline Logs"
+        title="No Pipeline Activity"
         description="No pipeline activity logs available yet."
       />
     );
   }
 
+  // Group logs into tracks (Symbol Sessions)
+  const buildTracksFromLogs = (pipelineLogs: PipelineLog[]): SymbolTrack[] => {
+    const tracksMap: Record<string, SymbolTrack> = {};
+    
+    // Sort oldest first to build state
+    const sorted = [...pipelineLogs].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+    for (const log of sorted) {
+      const symbolMatch = log.message.match(/\b(EURUSD|GBPUSD|AUDUSD|USDJPY|USDCAD|USDCHF|XAUUSD|BTCUSD|USTEC|US500)\b/);
+      if (!symbolMatch) continue;
+      
+      const symbol = symbolMatch[1];
+      
+      let direction: "BUY" | "SELL" | undefined;
+      if (/\bBUY\b/i.test(log.message)) direction = "BUY";
+      else if (/\bSELL\b/i.test(log.message)) direction = "SELL";
+
+      if (!tracksMap[symbol]) {
+        tracksMap[symbol] = {
+          symbol,
+          lastUpdateTime: new Date(log.time).getTime(),
+          stages: {
+            INFO: { status: "pending" },
+            SIGNAL: { status: "pending" },
+            CONFLUENCE: { status: "pending" },
+            EXECUTION: { status: "pending" },
+            TRAILING: { status: "pending" }
+          }
+        };
+      }
+
+      const track = tracksMap[symbol];
+      track.lastUpdateTime = new Date(log.time).getTime();
+      if (direction) track.direction = direction;
+
+      const time = new Date(log.time).getTime();
+
+      if (log.type === "INFO") {
+        track.stages.INFO = { status: "active", message: log.message, time };
+      } else if (log.type === "SIGNAL") {
+        track.stages.SIGNAL = { status: "active", message: log.message, time };
+      } else if (log.type === "CONFLUENCE") {
+        track.stages.CONFLUENCE = { status: "active", message: log.message, time };
+      } else if (log.type === "TRADE") {
+        track.stages.EXECUTION = { status: "success", message: log.message, time };
+      } else if (log.type === "ERROR") {
+        track.stages.EXECUTION = { status: "error", message: log.message, time };
+      } else if (log.type === "TRAILING") {
+        track.stages.TRAILING = { status: "active", message: log.message, time };
+      }
+    }
+
+    return Object.values(tracksMap).sort((a, b) => b.lastUpdateTime - a.lastUpdateTime);
+  };
+
+  const tracks = buildTracksFromLogs(logs);
+
+  const getStepStatus = (
+    track: SymbolTrack,
+    stepKey: string
+  ): { status: "pending" | "active" | "passed" | "success" | "error"; message?: string; time?: number } => {
+    const { stages } = track;
+    
+    if (stepKey === "INFO") {
+      if (stages.INFO.status !== "pending") return { status: "passed", ...stages.INFO };
+      if (stages.SIGNAL.status !== "pending" || stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
+        return { status: "passed", message: "Pipeline initialized." };
+      }
+      return { status: "pending" };
+    }
+    
+    if (stepKey === "SIGNAL") {
+      if (stages.SIGNAL.status !== "pending") return { status: "passed", ...stages.SIGNAL };
+      if (stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
+        return { status: "passed", message: "Signal detected." };
+      }
+      return { status: "pending" };
+    }
+    
+    if (stepKey === "CONFLUENCE") {
+      if (stages.CONFLUENCE.status !== "pending") return { status: "passed", ...stages.CONFLUENCE };
+      if (stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
+        return { status: "passed", message: "Confluence checks completed." };
+      }
+      return { status: "pending" };
+    }
+    
+    if (stepKey === "EXECUTION") {
+      if (stages.EXECUTION.status === "success") return { status: "success", ...stages.EXECUTION };
+      if (stages.EXECUTION.status === "error") return { status: "error", ...stages.EXECUTION };
+      if (stages.TRAILING.status !== "pending") {
+        return { status: "success", message: "Trade executed." };
+      }
+      return { status: "pending" };
+    }
+    
+    if (stepKey === "TRAILING") {
+      if (stages.TRAILING.status !== "pending") return { status: "active", ...stages.TRAILING };
+      return { status: "pending" };
+    }
+
+    return { status: "pending" };
+  };
+
+  const STAGES = [
+    { key: "INFO", label: "Info", icon: ScrollText },
+    { key: "SIGNAL", label: "Signal", icon: Signal },
+    { key: "CONFLUENCE", label: "Confluence", icon: BrainCircuit },
+    { key: "EXECUTION", label: "Execution", icon: ShoppingCart },
+    { key: "TRAILING", label: "Trailing", icon: Activity }
+  ];
+
+  const filteredRawLogs = filterType
+    ? logs.filter(l => l.type === filterType)
+    : logs;
+
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden space-y-4 p-4">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-gray-800 pb-3">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <ScrollText className="w-4 h-4 text-gray-400" />
+          <Layers className="w-4 h-4 text-accent-gold" />
           Pipeline Activity
         </h3>
-        <span className="text-xs text-gray-500">{filteredLogs.length}/{logs.length} entries</span>
-      </div>
-
-      {/* Filter */}
-      <div className="px-4 py-2 border-b border-gray-800/50 flex gap-1.5">
-        {["", ...logTypes].map(type => (
+        
+        {/* Toggle Mode */}
+        <div className="flex bg-gray-950 rounded-lg p-0.5 border border-gray-800">
           <button
-            key={type}
-            onClick={() => setFilterType(type)}
-            className={`px-2 py-0.5 text-[10px] rounded font-medium transition ${
-              filterType === type
+            onClick={() => setViewMode("cards")}
+            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition ${
+              viewMode === "cards"
                 ? "bg-accent-gold text-black"
-                : "bg-gray-800 text-gray-400 hover:text-white"
+                : "text-gray-400 hover:text-white"
             }`}
           >
-            {type || "All"}
+            Active Cards
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode("raw")}
+            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition ${
+              viewMode === "raw"
+                ? "bg-accent-gold text-black"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Raw Logs
+          </button>
+        </div>
       </div>
 
-      {/* Logs */}
-      <div className="max-h-64 overflow-y-auto">
-          <div className="divide-y divide-gray-800/50">
-            {[...filteredLogs].reverse().map((log, i) => {
-              const meta = LOG_ICONS[log.type] || LOG_ICONS.INFO;
-              const Icon = meta.icon;
+      {viewMode === "cards" ? (
+        /* Active Cards View */
+        <div className="space-y-4">
+          {tracks.map((track) => {
+            // Find the latest active/passed step in the track to show by default
+            let latestStepKey = "INFO";
+            for (const stage of STAGES) {
+              const status = getStepStatus(track, stage.key).status;
+              if (status !== "pending") {
+                latestStepKey = stage.key;
+              }
+            }
 
-              return (
-                <div key={i} className="px-4 py-2 hover:bg-gray-800/30 transition">
-                  <div className="flex items-start gap-2">
-                    <Icon className={`w-3.5 h-3.5 mt-0.5 ${meta.color} shrink-0`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-300">{log.message}</p>
-                      <p className="text-[10px] text-gray-600 mt-0.5">
-                        {new Date(log.time).toLocaleDateString("en-GB") + " " + new Date(log.time).toLocaleTimeString([], { hour12: false })}
-                      </p>
+            const currentSelectedStageKey = selectedStages[track.symbol] || latestStepKey;
+            const currentStepDetail = getStepStatus(track, currentSelectedStageKey);
+
+            return (
+              <div key={track.symbol} className="bg-gray-950/40 border border-gray-800 rounded-xl p-4 transition hover:border-gray-700/60">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm font-bold text-white tracking-wider">{track.symbol}</span>
+                    {track.direction && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        track.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
+                      }`}>
+                        {track.direction}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    Updated {new Date(track.lastUpdateTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                  </span>
+                </div>
+
+                {/* Horizontal Stepper */}
+                <div className="relative flex items-center justify-between px-2 mb-4">
+                  {/* Connecting Line */}
+                  <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-[1px] bg-gray-800 -z-10" />
+
+                  {STAGES.map((stage) => {
+                    const stepInfo = getStepStatus(track, stage.key);
+                    const isSelected = currentSelectedStageKey === stage.key;
+                    
+                    let bgClass = "bg-gray-900 border-gray-800 text-gray-600";
+                    let iconColor = "text-gray-600";
+
+                    if (stepInfo.status === "passed") {
+                      bgClass = "bg-accent-gold/10 border-accent-gold text-accent-gold cursor-pointer";
+                      iconColor = "text-accent-gold";
+                    } else if (stepInfo.status === "active") {
+                      bgClass = "bg-accent-gold/25 border-accent-gold text-accent-gold ring-2 ring-accent-gold/20 animate-pulse cursor-pointer";
+                      iconColor = "text-accent-gold";
+                    } else if (stepInfo.status === "success") {
+                      bgClass = "bg-green-500/15 border-green-500 text-green-400 cursor-pointer";
+                      iconColor = "text-green-400";
+                    } else if (stepInfo.status === "error") {
+                      bgClass = "bg-red-500/15 border-red-500 text-red-400 cursor-pointer";
+                      iconColor = "text-red-400";
+                    }
+
+                    const StageIcon = stage.icon;
+
+                    return (
+                      <div
+                        key={stage.key}
+                        onClick={() => {
+                          if (stepInfo.status !== "pending") {
+                            setSelectedStages(prev => ({ ...prev, [track.symbol]: stage.key }));
+                          }
+                        }}
+                        className="flex flex-col items-center gap-1.5 z-10"
+                      >
+                        <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${bgClass} ${
+                          isSelected ? "scale-110 shadow-[0_0_10px_rgba(212,175,55,0.15)] border-2" : ""
+                        }`}>
+                          <StageIcon className={`w-4 h-4 ${iconColor}`} />
+                        </div>
+                        <span className={`text-[9px] font-semibold tracking-wide ${
+                          isSelected ? "text-white" : "text-gray-500"
+                        }`}>
+                          {stage.key === "EXECUTION" 
+                            ? (stepInfo.status === "error" ? "No Trade" : stepInfo.status === "success" ? "Trade" : "Execution")
+                            : stage.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Stage Detail Console */}
+                {currentStepDetail && currentStepDetail.message && (
+                  <div className={`mt-3 p-3 bg-gray-950 rounded-lg border font-mono text-[11px] leading-relaxed transition ${
+                    currentStepDetail.status === "error" 
+                      ? "border-red-900/30 text-red-400/90" 
+                      : currentStepDetail.status === "success" 
+                        ? "border-green-900/30 text-green-400/90" 
+                        : "border-gray-800 text-gray-300"
+                  }`}>
+                    <div className="flex items-center justify-between mb-1.5 opacity-60 text-[9px] uppercase tracking-wider">
+                      <span>Detail: {currentSelectedStageKey}</span>
+                      {currentStepDetail.time && (
+                        <span>{new Date(currentStepDetail.time).toLocaleTimeString([], { hour12: false })}</span>
+                      )}
+                    </div>
+                    <p className="whitespace-pre-wrap">{currentStepDetail.message}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Raw Logs View (Original list) */
+        <div className="space-y-3">
+          {/* Filter */}
+          <div className="flex flex-wrap gap-1.5 pb-2 border-b border-gray-800/60">
+            {["", ...logTypes].map(type => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                className={`px-2 py-0.5 text-[9px] rounded font-medium transition ${
+                  filterType === type
+                    ? "bg-accent-gold text-black"
+                    : "bg-gray-800 text-gray-400 hover:text-white"
+                }`}
+              >
+                {type || "All"}
+              </button>
+            ))}
+          </div>
+
+          {/* Logs scrollable area */}
+          <div className="max-h-80 overflow-y-auto bg-gray-950/40 rounded-lg border border-gray-800">
+            <div className="divide-y divide-gray-800/50">
+              {[...filteredRawLogs].reverse().map((log, i) => {
+                const meta = LOG_ICONS[log.type] || LOG_ICONS.INFO;
+                const Icon = meta.icon;
+
+                return (
+                  <div key={i} className="px-4 py-2 hover:bg-gray-800/30 transition">
+                    <div className="flex items-start gap-2.5">
+                      <Icon className={`w-3.5 h-3.5 mt-0.5 ${meta.color} shrink-0`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-gray-300">{log.message}</p>
+                        <p className="text-[9px] text-gray-600 mt-0.5">
+                          {new Date(log.time).toLocaleDateString("en-GB") + " " + new Date(log.time).toLocaleTimeString([], { hour12: false })}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-      </div>
-
-      {/* Color legend */}
-      <div className="px-4 py-2 border-t border-gray-800 flex gap-3">
-        {Object.entries(LOG_ICONS).map(([type, meta]) => {
-          const Icon = meta.icon;
-          return (
-            <span key={type} className="flex items-center gap-1 text-[10px] text-gray-600">
-              <Icon className={`w-3 h-3 ${meta.color}`} />
-              {type}
-            </span>
-          );
-        })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

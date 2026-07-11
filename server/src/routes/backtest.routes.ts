@@ -230,19 +230,19 @@ router.post("/session/:sessionId/start", async (req, res, next) => {
  */
 router.post("/session/:sessionId/cancel", async (req, res, next) => {
   try {
-    const session = backtestSessionManager.getSession(req.params.sessionId);
+    const session = backtestSessionManager.getSession(req.params.sessionId, req.user.id);
     if (!session) return apiResponse.success(res, { cancelled: true }); // already gone
 
     if (session.status === 'prepared') {
       // Not yet running — just clean up
-      backtestSessionManager.removeSession(req.params.sessionId);
+      backtestSessionManager.removeSession(req.params.sessionId, req.user.id);
     } else if (session.status === 'running') {
       // Mark as aborted — the simulation loop will pick this up
-      backtestSessionManager.markAborted(req.params.sessionId);
+      backtestSessionManager.markAborted(req.params.sessionId, req.user.id);
       // Clean up after a short delay to let abort propagate
-      setTimeout(() => backtestSessionManager.removeSession(req.params.sessionId), 2000);
+      setTimeout(() => backtestSessionManager.removeSession(req.params.sessionId, req.user.id), 2000);
     } else {
-      backtestSessionManager.removeSession(req.params.sessionId);
+      backtestSessionManager.removeSession(req.params.sessionId, req.user.id);
     }
     return apiResponse.success(res, { cancelled: true });
   } catch (error: any) {

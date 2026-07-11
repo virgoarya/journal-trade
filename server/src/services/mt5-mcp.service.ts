@@ -363,7 +363,7 @@ class MT5MCPService {
 
       const logEntry = `[${new Date().toISOString()}] ${method} - ${errorMsg}\n${stack ? `Stack: ${stack}\n` : ''}${context ? `Context: ${JSON.stringify(context)}\n` : ''}\n`;
       fs.appendFileSync(logFile, logEntry);
-    } catch (logError) {
+    } catch (logError: any) {
       silentLogger.error(`[MT5-MCP] Failed to write error log: ${logError.message}`);
     }
   }

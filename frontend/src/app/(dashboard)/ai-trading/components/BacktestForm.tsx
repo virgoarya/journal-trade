@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   type BacktestConfig,
 } from "@/services/backtest.service";
@@ -90,7 +90,15 @@ export function BacktestForm({ onRun, isRunning }: Props) {
     );
   };
 
+  const aiConfigAbortRef = useRef<AbortController | null>(null);
+
   const handleAIConfig = async () => {
+    // Abort any previous request
+    if (aiConfigAbortRef.current) {
+      aiConfigAbortRef.current.abort();
+    }
+    aiConfigAbortRef.current = new AbortController();
+
     try {
       const { aiTradingService } = await import("@/services/ai-trading.service");
       const res = await aiTradingService.getSkill();

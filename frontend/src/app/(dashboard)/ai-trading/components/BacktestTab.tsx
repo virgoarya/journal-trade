@@ -36,30 +36,32 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
   }, []);
 
   const handleStreamComplete = useCallback(async (btResult: BacktestResultData) => {
-    setResult(btResult);
-    setIsStreaming(false);
-    toast.success(
-      `Backtest complete: ${btResult.totalTrades} trades, ${btResult.totalPnLPercent >= 0 ? "+" : ""}${btResult.totalPnLPercent}%`,
-    );
+    if (isStreaming) {
+      setResult(btResult);
+      setIsStreaming(false);
+      toast.success(
+        `Backtest complete: ${btResult.totalTrades} trades, ${btResult.totalPnLPercent >= 0 ? "+" : ""}${btResult.totalPnLPercent}%`,
+      );
 
-    // Auto AI analysis
-    if (btResult.backtestId) {
-      setIsAnalyzing(true);
-      try {
-        const analysisRes = await backtestService.analyze(btResult.backtestId);
-        if (analysisRes.success && analysisRes.data) {
-          setAnalysis(analysisRes.data);
+      // Auto AI analysis
+      if (btResult.backtestId) {
+        setIsAnalyzing(true);
+        try {
+          const analysisRes = await backtestService.analyze(btResult.backtestId);
+          if (analysisRes.success && analysisRes.data) {
+            setAnalysis(analysisRes.data);
+          }
+        } catch {
+          // optional
+        } finally {
+          setIsAnalyzing(false);
         }
-      } catch {
-        // optional
-      } finally {
-        setIsAnalyzing(false);
       }
-    }
 
-    // Notify parent to refresh SkillDisplay (methodology verdicts)
-    onBacktestComplete?.();
-  }, [onBacktestComplete]);
+      // Notify parent to refresh SkillDisplay (methodology verdicts)
+      onBacktestComplete?.();
+    }
+  }, [onBacktestComplete, isStreaming]);
 
   const handleStreamError = useCallback((error: string) => {
     setIsStreaming(false);

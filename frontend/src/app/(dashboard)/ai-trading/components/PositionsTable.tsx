@@ -122,6 +122,7 @@ export function PositionsTable({
                 <th className="text-right px-3 py-2">Current</th>
                 <th className="text-right px-3 py-2">SL</th>
                 <th className="text-right px-3 py-2">TP</th>
+                <th className="text-center px-3 py-2">R:R</th>
                 <th className="text-left px-3 py-2">Comment</th>
                 <th className="text-center px-3 py-2">Magic</th>
                 <th className="text-right px-3 py-2">P&L</th>
@@ -198,6 +199,30 @@ export function PositionsTable({
                       >
                         {pos.tp ? pos.tp.toFixed(5) : "—"}
                       </span>
+                    )}
+                  </td>
+
+                  {/* R:R column */}
+                  <td className="px-3 py-2.5 text-center font-mono text-xs">
+                    {pos.sl && pos.tp ? (
+                      (() => {
+                        const slDist = Math.abs(pos.priceOpen - pos.sl);
+                        const tpDist = Math.abs(pos.tp - pos.priceOpen);
+                        const ratio = slDist > 0 ? (tpDist / slDist).toFixed(2) : "0.00";
+                        return (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            parseFloat(ratio) >= 1.5 
+                              ? "bg-green-500/10 text-green-400" 
+                              : parseFloat(ratio) >= 1.0 
+                                ? "bg-yellow-500/10 text-yellow-400" 
+                                : "bg-red-500/10 text-red-400"
+                          }`}>
+                            1:{ratio}
+                          </span>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-gray-500">—</span>
                     )}
                   </td>
 

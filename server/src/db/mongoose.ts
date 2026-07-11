@@ -3,7 +3,10 @@ import { env } from "../config/env";
 import { MongoClient } from "mongodb";
 
 // Separate MongoClient for Better Auth (not shared with Mongoose)
-export const authMongoClient = new MongoClient(env.DATABASE_URL);
+export const authMongoClient = new MongoClient(env.DATABASE_URL, {
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
+});
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 3000;

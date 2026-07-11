@@ -14,6 +14,8 @@ export interface BacktestSession {
   startResolver?: (value: void | PromiseLike<void>) => void;
   /** Signal that the client has disconnected — simulation should stop early */
   abortFlag?: boolean;
+  /** Owner user ID for session ownership validation */
+  userId?: string;
 }
 
 class BacktestSessionManager {
@@ -25,7 +27,7 @@ class BacktestSessionManager {
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
   }
 
-  createSession(config: BacktestConfig, symbolStates: Map<string, SymbolState>): string {
+  createSession(config: BacktestConfig, symbolStates: Map<string, SymbolState>, userId?: string): string {
     const id = randomUUID();
     this.sessions.set(id, {
       id,
@@ -34,13 +36,18 @@ class BacktestSessionManager {
       status: 'prepared',
       createdAt: new Date(),
       lastAccessed: new Date(),
+      userId,
     });
     return id;
   }
 
-  getSession(id: string): BacktestSession | undefined {
+  getSession(id: string, userId?: string): BacktestSession | undefined {
     const session = this.sessions.get(id);
     if (session) {
+      // Validate ownership if userId provided
+      if (userId && session.userId !== userId) {
+        return undefined;
+      }
       session.lastAccessed = new Date();
     }
     return session;
@@ -60,10 +67,13 @@ class BacktestSessionManager {
     }
   }
 
-  async triggerStart(id: string) {
+  async triggerStart(id: string, userId?: string) {
     const session = this.sessions.get(id);
-    if (!session || session.status !== 'prepared') {
+    if (!session) {
       throw new Error('Session not found or not in prepared state');
+    }
+    if (userId && session.userId !== userId) {
+      throw new Error('Unauthorized: session belongs to different user');
     }
 
     session.status = 'running';
@@ -72,9 +82,12 @@ class BacktestSessionManager {
     }
   }
 
-  markAborted(id: string) {
+  markAborted(id: string, userId?: string) {
     const session = this.sessions.get(id);
     if (session) {
+      if (userId && session.userId !== userId) {
+        return; // Silent ignore unauthorized abort
+      }
       session.abortFlag = true;
       session.status = 'cancelled';
     }
@@ -84,8 +97,44 @@ class BacktestSessionManager {
     return this.sessions.get(id)?.abortFlag ?? false;
   }
 
-  removeSession(id: string) {
+  removeSession(id: string, userId?: string) {
+    const session = this.sessions.get(id);
+    if (session) {
+      if (userId && session.userId !== userId) {
+        return; // Silent ignore unauthorized removal
+      }
+      this.sessions.delete(id);
+    }
+  }
+
+  /**
+   * Force cleanup a session regardless of ownership - for internal cleanup
+   */
+  forceRemoveSession(id: string) {
     this.sessions.delete(id);
+  }
+
+  /**
+   * Get all session IDs for a user
+   */
+  getUserSessions(userId: string): string[] {
+    const ids: string[] = [];
+    for (const [id, session] of this.sessions.entries()) {
+      if (session.userId === userId) {
+        ids.push(id);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Force cleanup all sessions for a user - call on logout/disconnect
+   */
+  cleanupUserSessions(userId: string) {
+    const ids = this.getUserSessions(userId);
+    for (const id of ids) {
+      this.forceRemoveSession(id);
+    }
   }
 
   private cleanup() {

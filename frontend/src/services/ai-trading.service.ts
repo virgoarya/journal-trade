@@ -486,6 +486,14 @@ class AITradingService {
     }>>("/api/v1/ai-trading/llm-status");
     return res;
   }
+
+  async getCorrelation() {
+    const res = await apiClient.get<{
+      source: string;
+      correlations: Record<string, Record<string, number>>;
+    }>("/api/v1/ai-trading/correlation");
+    return res;
+  }
 }
 
 export interface AutoBacktestSummary {

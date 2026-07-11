@@ -117,8 +117,11 @@ class TradingPipelineService {
   async startPipeline(
     userId: string,
     config: Partial<PipelineConfig>,
+    isRecovery = false,
   ): Promise<void> {
-    await this.stopPipeline(userId);
+    if (!isRecovery) {
+      await this.stopPipeline(userId);
+    }
 
     const merged: PipelineConfig = {
       ...DEFAULT_CONFIG,
@@ -170,19 +173,26 @@ class TradingPipelineService {
       intervalMs,
     );
 
-    await AITradingSession.findOneAndUpdate(
-      { userId, status: "RUNNING" },
-      {
-        userId,
-        status: "RUNNING",
-        pipelineConfig: merged as any,
-        startedAt: new Date(),
-        mt5Connected: true,
-      },
-      { upsert: true },
-    );
+    if (!isRecovery) {
+      await AITradingSession.findOneAndUpdate(
+        { userId, status: "RUNNING" },
+        {
+          userId,
+          status: "RUNNING",
+          pipelineConfig: merged as any,
+          startedAt: new Date(),
+          mt5Connected: true,
+        },
+        { upsert: true },
+      );
+    } else {
+      await AITradingSession.findOneAndUpdate(
+        { userId, status: "RUNNING" },
+        { mt5Connected: true }
+      );
+    }
 
-    silentLogger.info(`[PIPELINE] Started for user ${userId} on ${merged.timeframe} with ${merged.activeMethodologies!.length} methodologies`);
+    silentLogger.info(`[PIPELINE] Started for user ${userId} on ${merged.timeframe} with ${merged.activeMethodologies!.length} methodologies (isRecovery=${isRecovery})`);
   }
 
   async stopPipeline(userId: string): Promise<void> {
@@ -201,6 +211,33 @@ class TradingPipelineService {
       { userId, status: "RUNNING" },
       { status: "STOPPED", stoppedAt: new Date() },
     );
+  }
+
+  async recoverPipelines(): Promise<void> {
+    try {
+      const activeSessions = await AITradingSession.find({ status: "RUNNING" }).lean();
+      if (activeSessions.length === 0) {
+        silentLogger.info("[PIPELINE-RECOVERY] No active pipelines found in database to recover.");
+        return;
+      }
+
+      silentLogger.info(`[PIPELINE-RECOVERY] Found ${activeSessions.length} active pipeline(s) to recover.`);
+
+      for (const session of activeSessions) {
+        try {
+          silentLogger.info(`[PIPELINE-RECOVERY] Auto-restoring pipeline for user ${session.userId}...`);
+          
+          // Re-start the pipeline loop with saved config
+          await this.startPipeline(session.userId, session.pipelineConfig as any);
+          
+          this.addLog(session.userId, "INFO", "Pipeline auto-restored after server restart");
+        } catch (err: any) {
+          silentLogger.error(`[PIPELINE-RECOVERY] Failed to restore pipeline for user ${session.userId}: ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      silentLogger.error(`[PIPELINE-RECOVERY] Database lookup error during recovery: ${err.message}`);
+    }
   }
 
   async pausePipeline(userId: string): Promise<void> {
@@ -452,6 +489,14 @@ class TradingPipelineService {
       }
 
       for (const symbol of pipeline.config.symbols) {
+        // Skip Forex/Commodities/Indices on weekends (Saturday & Sunday) to save API tokens and avoid locked market errors
+        const day = new Date().getDay();
+        const isWeekend = day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
+        const isCrypto = /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol);
+        if (isWeekend && !isCrypto) {
+          continue; // Skip non-crypto pairs on weekends
+        }
+
         try {
           const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
           if (rates && rates.length > 0) {
@@ -478,7 +523,8 @@ class TradingPipelineService {
       // ── MARKET REGIME: Detect current market conditions ────────────
       let regimeMult: Record<string, number> = {};
       try {
-        const rates = await mt5McpService.getRates(pipeline.config.symbols[0], pipeline.config.timeframe, 60);
+        const activeSymbolForRegime = symbolsToAnalyze[0] || pipeline.config.symbols[0];
+        const rates = await mt5McpService.getRates(activeSymbolForRegime, pipeline.config.timeframe, 60);
         if (rates && rates.length > 30) {
           const candles: Candle[] = rates.map((r: any) => ({
             time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
@@ -564,8 +610,13 @@ class TradingPipelineService {
         pipeline.lastSignal = signal;
 
         // Log confluence breakdown
+        const slDist = Math.abs(signal.entry - signal.sl);
+        const tpDist = Math.abs(signal.tp - signal.entry);
+        const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
+
         this.addLog(userId, "CONFLUENCE",
           `${signal.direction} ${signal.symbol} @ ${signal.entry.toFixed(5)} | ` +
+          `R:R: 1:${rrRatio.toFixed(2)} | ` +
           `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${signal.confidence}% | ` +
           `Primary: ${analysis.confluence.finalSignal.primaryMethodology} | ` +
           `Agree: ${analysis.confluence.finalSignal.totalAgreeing}/7`,
@@ -592,7 +643,19 @@ class TradingPipelineService {
 
         // ── CORRELATION: Prevent over-exposure to single currency ──────
         try {
-          const corrCheck = await riskManagerService.checkCorrelationRisk(signal.symbol);
+          const symbolsCount = pipeline.config.symbols.length;
+          const maxBase = symbolsCount <= 1 
+            ? pipeline.config.maxOpenPositions 
+            : Math.max(2, Math.ceil(pipeline.config.maxOpenPositions * 0.7));
+          const maxQuote = symbolsCount <= 1
+            ? pipeline.config.maxOpenPositions
+            : Math.max(3, Math.ceil(pipeline.config.maxOpenPositions * 0.8));
+
+          const corrCheck = await riskManagerService.checkCorrelationRisk(
+            signal.symbol,
+            maxBase,
+            maxQuote
+          );
           if (!corrCheck.allowed) {
             this.addLog(userId, "ERROR", `[RISK] Skipped ${signal.symbol}: ${corrCheck.reason}`);
             continue;
@@ -739,8 +802,12 @@ class TradingPipelineService {
         });
 
         if (orderResult.success) {
+          const slDist = Math.abs(signal.entry - signal.sl);
+          const tpDist = Math.abs(signal.tp - signal.entry);
+          const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
+
           this.addLog(userId, "TRADE",
-            `Opened ${signal.direction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} [${analysis.confluence.finalSignal.primaryMethodology}]`,
+            `Opened ${signal.direction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${analysis.confluence.finalSignal.primaryMethodology}]`,
             { signal, orderResult, confluence: analysis.confluence },
           );
 

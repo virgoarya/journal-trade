@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   type BacktestConfig,
   type BacktestResult as BacktestResultData,
@@ -66,6 +66,28 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const initLoggedRef = useRef(false);
   const configKeyRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const completedRef = useRef(false);
+
+  // Config change detection — ensures proper reset on re-run
+  const newKey = `${config.symbols.join(",")}|${config.timeframe}|${config.fromDate}|${config.toDate}|${config.initialBalance}|${config.maxRiskPerTrade}|${config.maxOpenPositions}|${config.leverage}|${config.signalInterval}|${config.entrySettings.rsiOversold}|${config.entrySettings.rsiOverbought}|${config.entrySettings.atrMultiplierSL}|${config.entrySettings.atrMultiplierTP}|${config.trailingStop.enabled}|${config.trailingStop.activationATR}|${config.trailingStop.trailATR}`;
+
+  useEffect(() => {
+    if (configKeyRef.current && configKeyRef.current !== newKey) {
+      initLoggedRef.current = false; // reset log flag on config change
+      setLogs([]);
+      setEquityHistory([]);
+      symbolStatsRef.current.clear();
+      methStatsRef.current.clear();
+      setLiveSymbolStats([]);
+      setLiveMethStats([]);
+      setCandle(null);
+      setProgress(null);
+      setSessionId(null);
+      setDataReadyInfo(null);
+      setStartingSimulation(false);
+    }
+    configKeyRef.current = newKey;
+  }, [newKey]);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -81,26 +103,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
-    // Reset state for new config
-    setPhase("preparing");
-    setProgress(null);
-    setCandle(null);
-    setLogs([]);
-    setEquityHistory([]);
-    setLiveSymbolStats([]);
-    symbolStatsRef.current.clear();
-    setLiveMethStats([]);
-    methStatsRef.current.clear();
-    setSessionId(null);
-    setDataReadyInfo(null);
-    setStartingSimulation(false);
-
-    let currentSessionId: string | null = null;
 
     const startStream = async () => {
       try {
-        // Build config for SSE — open stream directly (no /prepare needed)
         const streamConfig = { ...config };
+        const url = buildStreamUrl(streamConfig);
 
         const addLog = (type: LogEntry["type"], message: string, details?: any, candleTimestamp?: number) => {
           if (!mounted) return;
@@ -115,19 +122,15 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           }]);
         };
 
-        // Only log initialization once per stream session
         if (!initLoggedRef.current) {
           initLoggedRef.current = true;
           addLog("info", `Fetching historical data for ${config.symbols?.join(", ") || "symbols"} (${config.timeframe})...`);
         }
 
-        // ✅ Open SSE stream directly — backend will emit progress during fetch & simulation
-        const url = buildStreamUrl(streamConfig);
         const es = new EventSource(url, { withCredentials: true });
         eventSourceRef.current = es;
         if (!mounted) { es.close(); return; }
 
-        // Once data_ready arrives, auto-start simulation
         let autoStarted = false;
         es.addEventListener("data_ready", (e: any) => {
           if (!mounted || autoStarted) return;
@@ -135,7 +138,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             const data = JSON.parse(e.data) as StreamDataReady;
             setSessionId(data.sessionId);
             setDataReadyInfo(data);
-            setPhase("running"); // move straight to running — no manual action needed
+            setPhase("running");
             addLog("info", `Data loaded: ${data.totalCandles} candles across ${data.totalSymbols} symbol(s). Starting simulation...`);
             autoStarted = true;
           } catch {}
@@ -176,13 +179,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               symbolStatsRef.current.set(sym, { symbol: sym, totalTrades: 0, wins: 0, losses: 0, totalPnL: 0 });
             }
             symbolStatsRef.current.get(sym)!.totalTrades++;
-            flushStats();
+            setLiveSymbolStats(Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades));
             const meth = data.primaryMethodology || "unknown";
             if (!methStatsRef.current.has(meth)) {
               methStatsRef.current.set(meth, { count: 0, pnl: 0 });
             }
             methStatsRef.current.get(meth)!.count++;
-            flushMethStats();
+            setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
           } catch {}
         });
 
@@ -201,31 +204,38 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               const s = symbolStatsRef.current.get(sym)!;
               if (data.pnl >= 0) s.wins++; else s.losses++;
               s.totalPnL += data.pnl;
-              flushStats();
+              setLiveSymbolStats(Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades));
             }
             const meth = data.primaryMethodology || "unknown";
             if (methStatsRef.current.has(meth)) {
               methStatsRef.current.get(meth)!.pnl += data.pnl;
-              flushMethStats();
+              setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
           } catch {}
         });
 
         es.addEventListener("complete", (e: any) => {
-          if (!mounted) return;
+          if (!mounted || completedRef.current) return;
           try {
+            completedRef.current = true;
             addLog("info", "Backtest complete. Generating report...");
             const data = JSON.parse(e.data) as BacktestResultData;
             es.close();
             eventSourceRef.current = null;
             setPhase("complete");
             setTimeout(() => { if (mounted) onComplete(data); }, 1500);
-          } catch {}
+          } catch (err) {
+            console.error("Complete handler error:", err);
+          }
         });
 
         es.onerror = () => {
-          if (!mounted) return;
-          if (es.readyState === EventSource.CONNECTING) return;
+          if (!mounted || completedRef.current) return;
+          // Prevent EventSource auto-reconnect
+          if (es.readyState === EventSource.CONNECTING) {
+            es.close();
+            return;
+          }
           if (es.readyState !== EventSource.CLOSED) {
             addLog("error", "Connection interrupted.");
             es.close();
@@ -258,23 +268,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         eventSourceRef.current = null;
       }
     };
-  }, [config, onComplete, onError]);
+  }, [newKey, onComplete, onError]);
 
-  const flushStats = () => {
-    setLiveSymbolStats(
-      Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades),
-    );
-  };
-  const flushMethStats = () => {
-    setLiveMethStats(
-      Array.from(methStatsRef.current.entries())
-        .filter(([m]) => m !== "unknown")
-        .map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 }))
-        .sort((a, b) => b.count - a.count),
-    );
-  };
-
-  // Handle cancel during preparation phase
   const handleCancelPreparation = async () => {
     if (sessionId) {
       try {
@@ -286,7 +281,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
     onCancel();
   };
 
-  // Handle start simulation after data is ready (fallback if auto-start fails)
   const handleStartSimulation = async () => {
     if (!sessionId) return;
     setStartingSimulation(true);
@@ -354,9 +348,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
           {/* Price Card */}
           <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1">
-              <Activity className="w-3 h-3" /> Live Quote
-            </p>
+            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Activity className="w-3 h-3" /> Live Quote</p>
             <div className="space-y-1 font-mono text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">Close</span>
@@ -393,9 +385,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {/* Live Symbol Stats */}
           {liveSymbolStats.length > 0 && (
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1">
-                <BarChart3 className="w-3 h-3" /> Symbols
-              </p>
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
               <div className="space-y-2">
                 {liveSymbolStats.map((s) => (
                   <div key={s.symbol} className="text-xs">
@@ -418,9 +408,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {/* Live Methodology Stats */}
           {liveMethStats.length > 0 && (
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1">
-                <Layers className="w-3 h-3" /> Methodologies
-              </p>
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Layers className="w-3 h-3" /> Methodologies</p>
               <div className="space-y-2">
                 {liveMethStats.map((m) => (
                   <div key={m.methodology} className="text-xs">
@@ -440,13 +428,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
         {/* Right Panel: Equity Curve + Journal */}
         <div className="flex-1 flex flex-col gap-4">
-          {/* Equity Curve Chart (above journal) */}
+          {/* Equity Curve Chart */}
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-gray-800 rounded-xl p-3">
               <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Equity Curve</p>
               <div style={{ height: "200px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleTimeString(), equity: p.equity }))}>
+                  <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), equity: p.equity }))}>
                     <defs>
                       <linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} />
@@ -513,10 +501,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             {phase === "running" && progress && progress.percent >= 10 && progress.percent < 100 && (
               <><Loader2 className="w-3 h-3 animate-spin" /> Simulating... {Math.round(progressPercent)}%</>
             )}
-            {phase === "running" && progress && progress.percent >= 100 && (
-              <>Completed.</>
-            )}
-            {phase === "complete" && <>Completed.</>}
+            {phase === "running" && progress && progress.percent >= 100 && (<>Completed.</>)}
+            {phase === "complete" && (<>Completed.</>)}
           </span>
           <span className="text-gray-400">
             {progress ? (

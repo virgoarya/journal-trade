@@ -11,6 +11,7 @@ import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { BacktestTab } from "./components/BacktestTab";
+import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, Activity } from "lucide-react";
@@ -170,14 +171,79 @@ function AITradingPageContent() {
               onRetry={refetchPositions}
             />
 
+            <CorrelationHeatmap />
+
             {pipelineStatus?.running && (
               <>
+                <PipelineLogs logs={pipelineLogs} />
+
                 <LLMConsensusViz
                   votes={lastLlmVotes}
                   modelStatus={llmModels}
                   threshold={pipelineStatus.config?.llmConsensus?.threshold ?? 0.5}
                 />
-                <PipelineLogs logs={pipelineLogs} />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <PipelinePerformance />
+
+                  {pipelineStatus && (
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2 h-fit">
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Pipeline Stats
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500">Total Trades</span>
+                          <p className="text-white font-medium">
+                            {pipelineStatus.metrics.totalTrades}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Win/Loss</span>
+                          <p className="text-white font-medium">
+                            {pipelineStatus.metrics.winningTrades}/{pipelineStatus.metrics.losingTrades}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Total P&L</span>
+                          <p className={`font-medium ${pipelineStatus.metrics.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
+                            ${pipelineStatus.metrics.totalPnL.toFixed(2)}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Open Positions</span>
+                          <p className="text-white font-medium">
+                            {pipelineStatus.metrics.openPositions}
+                          </p>
+                        </div>
+                      </div>
+
+                      {pipelineStatus.lastSignal && (
+                        <div className="pt-2 border-t border-gray-800">
+                          <span className="text-xs text-gray-500">Last Signal</span>
+                          <p className="text-xs text-white mt-0.5 font-mono">
+                            {pipelineStatus.lastSignal.symbol}{" "}
+                            <span className={pipelineStatus.lastSignal.direction === "BUY" ? "text-green-400" : "text-red-400"}>
+                              {pipelineStatus.lastSignal.direction}
+                            </span>{" "}
+                            · Conf: {pipelineStatus.lastSignal.confidence}%
+                          </p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {pipelineStatus.lastSignal.reason}
+                          </p>
+                        </div>
+                      )}
+
+                      {pipelineStatus.lastError && (
+                        <div className="pt-2 border-t border-gray-800">
+                          <span className="text-xs text-red-400">
+                            Last Error: {pipelineStatus.lastError}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -202,66 +268,7 @@ function AITradingPageContent() {
             <SkillDisplay key={skillVersion} onApplySkill={(skill) => {
               setSkillConfig(skill);
             }} />
-
-            <PipelinePerformance />
-
-            {pipelineStatus && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Pipeline Stats
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-gray-500">Total Trades</span>
-                    <p className="text-white font-medium">
-                      {pipelineStatus.metrics.totalTrades}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Win/Loss</span>
-                    <p className="text-white font-medium">
-                      {pipelineStatus.metrics.winningTrades}/{pipelineStatus.metrics.losingTrades}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Total P&L</span>
-                    <p className={`font-medium ${pipelineStatus.metrics.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      ${pipelineStatus.metrics.totalPnL.toFixed(2)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Open Positions</span>
-                    <p className="text-white font-medium">
-                      {pipelineStatus.metrics.openPositions}
-                    </p>
-                  </div>
-                </div>
-
-                {pipelineStatus.lastSignal && (
-                  <div className="pt-2 border-t border-gray-800">
-                    <span className="text-xs text-gray-500">Last Signal</span>
-                    <p className="text-xs text-white mt-0.5">
-                      {pipelineStatus.lastSignal.symbol}{" "}
-                      <span className={pipelineStatus.lastSignal.direction === "BUY" ? "text-green-400" : "text-red-400"}>
-                        {pipelineStatus.lastSignal.direction}
-                      </span>{" "}
-                      · Confidence: {pipelineStatus.lastSignal.confidence}%
-                    </p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      {pipelineStatus.lastSignal.reason}
-                    </p>
-                  </div>
-                )}
-
-                {pipelineStatus.lastError && (
-                  <div className="pt-2 border-t border-gray-800">
-                    <span className="text-xs text-red-400">
-                      Last Error: {pipelineStatus.lastError}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Performance and Stats have been moved to the main column below AI Consensus */}
           </div>
         </div>
       )}

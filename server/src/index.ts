@@ -25,6 +25,7 @@ import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
+import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import path from "node:path";
 
@@ -93,7 +94,7 @@ connectDB()
       const auth = createAuth();
       setAuthInstance(auth);
       const authHandler = toNodeHandler(auth);
-      await startMt5AutoSync();
+      startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
 
       // Register Multi-MCP Servers
       if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {
@@ -134,8 +135,17 @@ connectDB()
       // Initialize MT5 MCP Service (lazy - connects on first use)
       mt5McpService.init().catch((e) => console.warn("MT5 MCP init delayed:", e.message));
 
-      // Auto-reconnect MT5 with saved credentials if any
-      mt5McpService.tryAutoReconnect().catch((e) => console.warn("[MT5] Auto-reconnect skipped:", e.message));
+      // Auto-reconnect MT5 with saved credentials if any and restore active pipelines
+      mt5McpService.tryAutoReconnect()
+        .then(async () => {
+          console.log("🚀 [MT5] Connected/Checked credentials. Restoring pipelines...");
+          await tradingPipelineService.recoverPipelines();
+        })
+        .catch((e) => {
+          console.warn("⚠️ [MT5] Auto-reconnect skipped:", e.message);
+          // Still try to recover the pipelines so they run and can wait/reconnect
+          tradingPipelineService.recoverPipelines().catch((err) => console.error("⚠️ Pipeline recovery failed:", err));
+        });
 
       // LLM Health Check — test all 6 models, disable rate-limited ones
       llmConsensusService.startupHealthCheck?.();
@@ -171,6 +181,34 @@ connectDB()
         console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
         console.log(`WebSocket server running on port ${PORT}`);
       });
+
+      // Graceful shutdown handling to prevent EADDRINUSE
+      const gracefulShutdown = () => {
+        console.log("Shutting down gracefully...");
+        
+        // Stop stream timers
+        stopMacroMarketStream();
+
+        // Close WebSocket Server
+        wss.close(() => {
+          console.log("WebSocket server closed.");
+          
+          // Close HTTP Server
+          server.close(() => {
+            console.log("HTTP server closed.");
+            process.exit(0);
+          });
+        });
+
+        // Force exit after 5 seconds if not closed
+        setTimeout(() => {
+          console.error("Forcefully shutting down because connections took too long to close");
+          process.exit(1);
+        }, 5000);
+      };
+
+      process.on("SIGTERM", gracefulShutdown);
+      process.on("SIGINT", gracefulShutdown);
     } catch (e) {
       console.error("Init failed:", e);
       process.exit(1);

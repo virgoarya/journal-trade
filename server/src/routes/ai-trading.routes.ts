@@ -838,4 +838,145 @@ router.get("/news/warnings", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+/**
+ * GET /api/ai-trading/correlation
+ * Calculate Pearson correlation matrix for main Forex pairs and Gold in real-time from MT5 rates.
+ */
+router.get("/correlation", async (req, res, next) => {
+  try {
+    const PAIRS = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCAD", "USDCHF", "XAUUSD"];
+    
+    // Check if MT5 is connected
+    const isConnected = await mt5McpService.isConnected();
+    if (!isConnected) {
+      // Fallback to BASE_CORRELATIONS if not connected
+      return apiResponse.success(res, { 
+        source: "fallback_offline",
+        correlations: {
+          EURUSD: { EURUSD: 1.0, GBPUSD: 0.88, AUDUSD: 0.74, USDJPY: -0.32, USDCAD: -0.68, USDCHF: -0.92, XAUUSD: 0.42 },
+          GBPUSD: { EURUSD: 0.88, GBPUSD: 1.0, AUDUSD: 0.68, USDJPY: -0.28, USDCAD: -0.62, USDCHF: -0.84, XAUUSD: 0.38 },
+          AUDUSD: { EURUSD: 0.74, GBPUSD: 0.68, AUDUSD: 1.0, USDJPY: -0.22, USDCAD: -0.72, USDCHF: -0.70, XAUUSD: 0.55 },
+          USDJPY: { EURUSD: -0.32, GBPUSD: -0.28, AUDUSD: -0.22, USDJPY: 1.0, USDCAD: 0.45, USDCHF: 0.38, XAUUSD: -0.48 },
+          USDCAD: { EURUSD: -0.68, GBPUSD: -0.62, AUDUSD: -0.72, USDJPY: 0.45, USDCAD: 1.0, USDCHF: 0.65, XAUUSD: -0.35 },
+          USDCHF: { EURUSD: -0.92, GBPUSD: -0.84, AUDUSD: -0.70, USDJPY: 0.38, USDCAD: 0.65, USDCHF: 1.0, XAUUSD: -0.38 },
+          XAUUSD: { EURUSD: 0.42, GBPUSD: 0.38, AUDUSD: 0.55, USDJPY: -0.48, USDCAD: -0.35, USDCHF: -0.38, XAUUSD: 1.0 }
+        }
+      });
+    }
+
+    // Fetch H1 rates for all pairs (last 50 candles)
+    const ratesPromises = PAIRS.map(async (sym) => {
+      try {
+        const rates = await mt5McpService.getRates(sym, "H1", 50);
+        return { symbol: sym, rates };
+      } catch (err) {
+        return { symbol: sym, rates: [] };
+      }
+    });
+
+    const results = await Promise.all(ratesPromises);
+    
+    // Check if we got enough valid data
+    const validResults = results.filter(r => r.rates && r.rates.length >= 10);
+    
+    if (validResults.length < 2) {
+      // Fallback if not enough data
+      return apiResponse.success(res, {
+        source: "fallback_low_data",
+        correlations: {
+          EURUSD: { EURUSD: 1.0, GBPUSD: 0.88, AUDUSD: 0.74, USDJPY: -0.32, USDCAD: -0.68, USDCHF: -0.92, XAUUSD: 0.42 },
+          GBPUSD: { EURUSD: 0.88, GBPUSD: 1.0, AUDUSD: 0.68, USDJPY: -0.28, USDCAD: -0.62, USDCHF: -0.84, XAUUSD: 0.38 },
+          AUDUSD: { EURUSD: 0.74, GBPUSD: 0.68, AUDUSD: 1.0, USDJPY: -0.22, USDCAD: -0.72, USDCHF: -0.70, XAUUSD: 0.55 },
+          USDJPY: { EURUSD: -0.32, GBPUSD: -0.28, AUDUSD: -0.22, USDJPY: 1.0, USDCAD: 0.45, USDCHF: 0.38, XAUUSD: -0.48 },
+          USDCAD: { EURUSD: -0.68, GBPUSD: -0.62, AUDUSD: -0.72, USDJPY: 0.45, USDCAD: 1.0, USDCHF: 0.65, XAUUSD: -0.35 },
+          USDCHF: { EURUSD: -0.92, GBPUSD: -0.84, AUDUSD: -0.70, USDJPY: 0.38, USDCAD: 0.65, USDCHF: 1.0, XAUUSD: -0.38 },
+          XAUUSD: { EURUSD: 0.42, GBPUSD: 0.38, AUDUSD: 0.55, USDJPY: -0.48, USDCAD: -0.35, USDCHF: -0.38, XAUUSD: 1.0 }
+        }
+      });
+    }
+
+    const symbolRates: Record<string, number[]> = {};
+    for (const r of validResults) {
+      symbolRates[r.symbol] = r.rates.map(x => x.close);
+    }
+
+    // Compute returns
+    const symbolReturns: Record<string, number[]> = {};
+    const symbols = Object.keys(symbolRates);
+    for (const s of symbols) {
+      const closes = symbolRates[s];
+      const returns: number[] = [];
+      for (let i = 1; i < closes.length; i++) {
+        if (closes[i - 1] === 0) returns.push(0);
+        else returns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
+      }
+      symbolReturns[s] = returns;
+    }
+
+    // Build matrix
+    const matrix: Record<string, Record<string, number>> = {};
+    for (const s of PAIRS) {
+      matrix[s] = {};
+    }
+
+    for (let i = 0; i < PAIRS.length; i++) {
+      const s1 = PAIRS[i];
+      matrix[s1][s1] = 1.0;
+
+      for (let j = i + 1; j < PAIRS.length; j++) {
+        const s2 = PAIRS[j];
+        
+        const r1 = symbolReturns[s1];
+        const r2 = symbolReturns[s2];
+
+        if (!r1 || !r2) {
+          matrix[s1][s2] = 0;
+          matrix[s2][s1] = 0;
+          continue;
+        }
+
+        const len = Math.min(r1.length, r2.length);
+        if (len < 5) {
+          matrix[s1][s2] = 0;
+          matrix[s2][s1] = 0;
+          continue;
+        }
+
+        const x = r1.slice(0, len);
+        const y = r2.slice(0, len);
+
+        const meanX = x.reduce((a, b) => a + b, 0) / len;
+        const meanY = y.reduce((a, b) => a + b, 0) / len;
+
+        let num = 0;
+        let denX = 0;
+        let denY = 0;
+
+        for (let k = 0; k < len; k++) {
+          const diffX = x[k] - meanX;
+          const diffY = y[k] - meanY;
+          num += diffX * diffY;
+          denX += diffX * diffX;
+          denY += diffY * diffY;
+        }
+
+        const den = Math.sqrt(denX * denY);
+        const correlation = den === 0 ? 0 : num / den;
+
+        // Round to 2 decimal places to match base format
+        const rounded = parseFloat(correlation.toFixed(2));
+        matrix[s1][s2] = rounded;
+        matrix[s2][s1] = rounded;
+      }
+    }
+
+    return apiResponse.success(res, {
+      source: "mt5_live",
+      correlations: matrix
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

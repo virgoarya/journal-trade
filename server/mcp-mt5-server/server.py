@@ -56,37 +56,42 @@ MT5_FILLING_MAP = {
 def _get_supported_filling_modes(symbol: str) -> list[str]:
     """
     Return list of supported filling modes for a symbol.
-    Prioritas: RETURN > IOC > FOK.
     """
     info = mt5.symbol_info(symbol)
     if info is None:
-        return ["RETURN"]  # fallback ke RETURN (paling aman)
+        return ["RETURN"]
 
     mask = info.filling_mode
     supported = []
 
-    if mask & mt5.ORDER_FILLING_RETURN:
-        supported.append("RETURN")
-    if mask & mt5.ORDER_FILLING_IOC:
-        supported.append("IOC")
-    if mask & mt5.ORDER_FILLING_FOK:
-        supported.append("FOK")
+    try:
+        # mt5.SYMBOL_FILLING_FOK is 1, mt5.SYMBOL_FILLING_IOC is 2
+        if mask & mt5.SYMBOL_FILLING_FOK:
+            supported.append("FOK")
+        if mask & mt5.SYMBOL_FILLING_IOC:
+            supported.append("IOC")
+    except AttributeError:
+        # Fallback to standard bitmask values if attributes are missing
+        if mask & 1:
+            supported.append("FOK")
+        if mask & 2:
+            supported.append("IOC")
 
     return supported if supported else ["RETURN"]
 
 def _get_filling_mode(symbol: str) -> int:
     """
     Get the best supported filling mode for a symbol.
-    Prioritas: RETURN > IOC > FOK.
+    Priority: IOC > FOK > RETURN.
     """
     supported = _get_supported_filling_modes(symbol)
 
-    if "RETURN" in supported:
-        return mt5.ORDER_FILLING_RETURN
     if "IOC" in supported:
         return mt5.ORDER_FILLING_IOC
     if "FOK" in supported:
         return mt5.ORDER_FILLING_FOK
+    if "RETURN" in supported:
+        return mt5.ORDER_FILLING_RETURN
 
     return mt5.ORDER_FILLING_RETURN
 
