@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
@@ -59,7 +59,7 @@ router.patch("/", validateRequest({ body: updateSettingsSchema }), async (req, r
           ...(notifications && { notifications })
         } 
       },
-      { new: true, upsert: true }
+      { returnDocument: "after", upsert: true }
     );
     
     return apiResponse.success(res, settings);

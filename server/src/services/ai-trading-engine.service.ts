@@ -364,7 +364,16 @@ class AITradingEngine {
     }
 
     const rounded = Math.floor(lotSize / volumeStep) * volumeStep;
-    return Math.max(volumeMin, Math.min(volumeMax, rounded));
+    
+    // Jika lot hasil perhitungan berada di bawah lot terkecil broker,
+    // kembalikan 0 agar pipeline membatalkan eksekusi,
+    // daripada memaksa entry dengan lot minimum yang berakibat
+    // resiko kerugian dolar akan melebihi maxRiskPerTrade.
+    if (rounded < volumeMin) {
+      return 0;
+    }
+    
+    return Math.min(volumeMax, rounded);
   }
 
   /**
@@ -410,9 +419,10 @@ class AITradingEngine {
         : currentPrice + trailDist;
 
     let shouldUpdate = false;
-    if (positionType === "BUY" && newSL > currentSL) {
+    const EPSILON = 0.00001; // Toleransi pembulatan mikro
+    if (positionType === "BUY" && newSL > currentSL + EPSILON) {
       shouldUpdate = true;
-    } else if (positionType === "SELL" && (newSL < currentSL || currentSL === 0)) {
+    } else if (positionType === "SELL" && (newSL < currentSL - EPSILON || currentSL === 0)) {
       shouldUpdate = true;
     }
 

@@ -276,7 +276,7 @@ export const macroDataService = {
                         releaseDate: new Date(e.date),
                       },
                     },
-                    { upsert: true, new: true }
+                    { upsert: true, returnDocument: "after" }
                   );
                 }
               })

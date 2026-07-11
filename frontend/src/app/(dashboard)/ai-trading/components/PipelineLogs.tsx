@@ -8,6 +8,7 @@ import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity, BrainCircuit
 
 interface PipelineLogsProps {
   logs: PipelineLog[];
+  config?: any;
   isLoading?: boolean;
 }
 
@@ -42,7 +43,7 @@ interface SymbolTrack {
   };
 }
 
-export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
+export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
   const [viewMode, setViewMode] = useState<"cards" | "raw">("cards");
   const [filterType, setFilterType] = useState("");
   
@@ -67,61 +68,91 @@ export function PipelineLogs({ logs, isLoading }: PipelineLogsProps) {
   }
 
   // Group logs into tracks (Symbol Sessions)
-  const buildTracksFromLogs = (pipelineLogs: PipelineLog[]): SymbolTrack[] => {
+  const buildTracksFromLogs = (pipelineLogs: PipelineLog[], config: any): SymbolTrack[] => {
     const tracksMap: Record<string, SymbolTrack> = {};
+    const activeSymbols = config?.symbols || [];
+
+    // Initialize tracks based on active config (from Trading Panel)
+    for (const sym of activeSymbols) {
+      tracksMap[sym] = {
+        symbol: sym,
+        lastUpdateTime: Date.now(),
+        stages: {
+          INFO: { status: "pending" },
+          SIGNAL: { status: "pending" },
+          CONFLUENCE: { status: "pending" },
+          EXECUTION: { status: "pending" },
+          TRAILING: { status: "pending" }
+        }
+      };
+    }
     
     // Sort oldest first to build state
     const sorted = [...pipelineLogs].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
     for (const log of sorted) {
-      const symbolMatch = log.message.match(/\b(EURUSD|GBPUSD|AUDUSD|USDJPY|USDCAD|USDCHF|XAUUSD|BTCUSD|USTEC|US500)\b/);
-      if (!symbolMatch) continue;
+      // Check if it's a global pipeline start message
+      const isGlobalStart = log.message.startsWith("Pipeline started:");
       
-      const symbol = symbolMatch[1];
+      const symbolMatch = log.message.match(/\b(EURUSD|GBPUSD|AUDUSD|USDJPY|USDCAD|USDCHF|XAUUSD|BTCUSD|USTEC|US500)\b/);
+      const symbol = symbolMatch ? symbolMatch[1] : null;
       
       let direction: "BUY" | "SELL" | undefined;
       if (/\bBUY\b/i.test(log.message)) direction = "BUY";
       else if (/\bSELL\b/i.test(log.message)) direction = "SELL";
 
-      if (!tracksMap[symbol]) {
-        tracksMap[symbol] = {
-          symbol,
-          lastUpdateTime: new Date(log.time).getTime(),
-          stages: {
-            INFO: { status: "pending" },
-            SIGNAL: { status: "pending" },
-            CONFLUENCE: { status: "pending" },
-            EXECUTION: { status: "pending" },
-            TRAILING: { status: "pending" }
-          }
-        };
-      }
-
-      const track = tracksMap[symbol];
-      track.lastUpdateTime = new Date(log.time).getTime();
-      if (direction) track.direction = direction;
-
       const time = new Date(log.time).getTime();
 
-      if (log.type === "INFO") {
-        track.stages.INFO = { status: "active", message: log.message, time };
-      } else if (log.type === "SIGNAL") {
-        track.stages.SIGNAL = { status: "active", message: log.message, time };
-      } else if (log.type === "CONFLUENCE") {
-        track.stages.CONFLUENCE = { status: "active", message: log.message, time };
-      } else if (log.type === "TRADE") {
-        track.stages.EXECUTION = { status: "success", message: log.message, time };
-      } else if (log.type === "ERROR") {
-        track.stages.EXECUTION = { status: "error", message: log.message, time };
-      } else if (log.type === "TRAILING") {
-        track.stages.TRAILING = { status: "active", message: log.message, time };
+      // Function to apply log stage to a specific track
+      const applyStage = (sym: string) => {
+        if (!tracksMap[sym] && activeSymbols.length > 0) return; // Ignore symbols not in current config
+        
+        if (!tracksMap[sym]) {
+          tracksMap[sym] = {
+            symbol: sym,
+            lastUpdateTime: time,
+            stages: {
+              INFO: { status: "pending" },
+              SIGNAL: { status: "pending" },
+              CONFLUENCE: { status: "pending" },
+              EXECUTION: { status: "pending" },
+              TRAILING: { status: "pending" }
+            }
+          };
+        }
+
+        const track = tracksMap[sym];
+        track.lastUpdateTime = time;
+        if (direction) track.direction = direction;
+
+        if (log.type === "INFO") {
+          track.stages.INFO = { status: "active", message: log.message, time };
+        } else if (log.type === "SIGNAL") {
+          track.stages.SIGNAL = { status: "active", message: log.message, time };
+        } else if (log.type === "CONFLUENCE") {
+          track.stages.CONFLUENCE = { status: "active", message: log.message, time };
+        } else if (log.type === "TRADE") {
+          track.stages.EXECUTION = { status: "success", message: log.message, time };
+        } else if (log.type === "ERROR") {
+          track.stages.EXECUTION = { status: "error", message: log.message, time };
+        } else if (log.type === "TRAILING") {
+          track.stages.TRAILING = { status: "success", message: log.message, time };
+        }
+      };
+
+      if (isGlobalStart && activeSymbols.length > 0) {
+        // Apply global start info to all active configured symbols
+        activeSymbols.forEach(applyStage);
+      } else if (symbol) {
+        // Apply to specific matched symbol
+        applyStage(symbol);
       }
     }
 
     return Object.values(tracksMap).sort((a, b) => b.lastUpdateTime - a.lastUpdateTime);
   };
 
-  const tracks = buildTracksFromLogs(logs);
+  const tracks = buildTracksFromLogs(logs, config || null);
 
   const getStepStatus = (
     track: SymbolTrack,

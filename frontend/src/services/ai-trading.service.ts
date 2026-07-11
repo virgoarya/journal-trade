@@ -23,6 +23,7 @@ export interface ACCOUNTInfo {
 
   // Risk metrics
   dailyPnL: number;
+  monthlyPnL: number;
   dailyDrawdown: number;
   openRisk: number;
   openPositions: number;

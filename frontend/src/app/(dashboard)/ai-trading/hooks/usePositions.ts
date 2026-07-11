@@ -14,32 +14,46 @@ export function usePositions(pollInterval = 10000) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchPositions = useCallback(async () => {
+  const fetchPositions = useCallback(async (): Promise<boolean> => {
     try {
       const result = await aiTradingService.getPositions();
       if (result.success && result.data) {
         setPositions(result.data.positions);
         setTotal(result.data.total);
         setFetchError(null);
+        return true;
       } else {
         setFetchError(result.error || "Failed to fetch positions");
+        return false;
       }
     } catch (e: any) {
       if (e.message !== "Request was aborted") {
         setFetchError(e.message || "Network error");
       }
+      return false;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const tick = async () => {
+      const isSuccess = await fetchPositions();
+      if (isMounted) {
+        timeoutId = setTimeout(tick, isSuccess ? pollInterval : 10000);
+      }
+    };
+
     setIsLoading(true);
     setFetchError(null);
-    fetchPositions();
-    intervalRef.current = setInterval(fetchPositions, pollInterval);
+    tick();
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [fetchPositions, pollInterval]);
 

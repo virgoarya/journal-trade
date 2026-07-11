@@ -11,6 +11,7 @@ import {
   Percent,
   DollarSign,
   Activity,
+  Calendar,
 } from "lucide-react";
 
 interface AccountOverviewProps {
@@ -139,7 +140,7 @@ export function AccountOverview({
       </div>
 
       {/* Additional row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard
           icon={TrendingUp}
           label="Open Risk"
@@ -161,6 +162,17 @@ export function AccountOverview({
           sub={
             accountInfo.balance > 0
               ? `${(accountInfo.dailyDrawdown / accountInfo.balance * 100).toFixed(2)}%`
+              : undefined
+          }
+        />
+        <MetricCard
+          icon={Calendar}
+          label="Monthly P&L"
+          value={formatMoney(accountInfo.monthlyPnL ?? 0, accountInfo.currency)}
+          color={(accountInfo.monthlyPnL ?? 0) >= 0 ? "text-green-400" : "text-red-400"}
+          sub={
+            accountInfo.balance > 0
+              ? `${(Math.abs(accountInfo.monthlyPnL ?? 0) / accountInfo.balance * 100).toFixed(2)}% of balance`
               : undefined
           }
         />

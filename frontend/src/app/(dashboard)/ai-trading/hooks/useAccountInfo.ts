@@ -9,25 +9,39 @@ export function useAccountInfo(pollInterval = 10000) {
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchInfo = useCallback(async () => {
+  const fetchInfo = useCallback(async (): Promise<boolean> => {
     try {
       const result = await aiTradingService.getAccountInfo();
       if (result.success && result.data) {
         setAccountInfo(result.data);
         setError(null);
+        return true;
       }
+      return false;
     } catch (e: any) {
       setError(e.message);
+      return false;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchInfo();
-    intervalRef.current = setInterval(fetchInfo, pollInterval);
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const tick = async () => {
+      const isSuccess = await fetchInfo();
+      if (isMounted) {
+        timeoutId = setTimeout(tick, isSuccess ? pollInterval : 10000);
+      }
+    };
+
+    tick();
+    
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [fetchInfo, pollInterval]);
 

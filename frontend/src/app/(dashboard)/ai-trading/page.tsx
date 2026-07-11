@@ -176,11 +176,11 @@ function AITradingPageContent() {
               onRetry={refetchPositions}
             />
 
-            <CorrelationHeatmap />
+            {/* <CorrelationHeatmap /> */}
 
             {pipelineStatus?.running && (
               <>
-                <PipelineLogs logs={pipelineLogs} />
+                <PipelineLogs logs={pipelineLogs} config={pipelineStatus.config} />
 
                 <LLMConsensusViz
                   votes={lastLlmVotes}

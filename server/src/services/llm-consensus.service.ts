@@ -75,8 +75,21 @@ const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL
   { name: "claude-opus", label: "Claude Opus 4",    model: "claude-3-opus-20240229",    baseURL: "https://router.flatkey.ai/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
 ];
 
-/** Models that are rate-limited and should be skipped temporarily */
-const rateLimitedModels = new Set<string>();
+// Cache untuk menyimpan status rate-limit LLM beserta timestamp kapan terkena limit
+const rateLimitedModels = new Map<string, number>();
+const RATE_LIMIT_COOLDOWN_MS = 1000 * 60 * 30; // 30 Menit
+
+/** Mengecek apakah model masih dalam masa penalti (hibernasi) */
+function isRateLimited(name: string): boolean {
+  if (!rateLimitedModels.has(name)) return false;
+  const bannedAt = rateLimitedModels.get(name)!;
+  if (Date.now() - bannedAt > RATE_LIMIT_COOLDOWN_MS) {
+    rateLimitedModels.delete(name);
+    silentLogger.info(`[LLM-HEALTH] 🔄 Model ${name} bangun dari hibernasi (cooldown selesai).`);
+    return false;
+  }
+  return true;
+}
 
 /**
  * Test a single model by sending a minimal prompt.
@@ -140,7 +153,7 @@ async function startupHealthCheck(): Promise<void> {
   await Promise.all(
     providers.map(async (p) => {
       const ok = await testModelProvider({ name: p.name, model: p.model }, p.baseUrl, p.apiKey);
-      if (!ok) rateLimitedModels.add(p.name);
+      if (!ok) rateLimitedModels.set(p.name, Date.now());
       results.push({ name: p.name, label: p.label, ok });
     })
   );
@@ -163,7 +176,7 @@ function getAvailableProviders(): LLMProvider[] {
   // 1. Tambahkan model 9Router spesifik
   if (useNineRouter) {
     for (const m of NINE_ROUTER_MODELS) {
-      if (rateLimitedModels.has(m.name)) continue;
+      if (isRateLimited(m.name)) continue;
       providers.push({
         name: m.name,
         label: m.label,
@@ -176,7 +189,7 @@ function getAvailableProviders(): LLMProvider[] {
 
   // 2. Tambahkan model Direct (Gemini, Mistral, Nemotron, Claude Opus)
   for (const m of DIRECT_MODELS) {
-    if (rateLimitedModels.has(m.name)) continue;
+    if (isRateLimited(m.name)) continue;
 
     if (useNineRouter) {
       // Jika menggunakan 9Router, lewatkan semua model direct melalui 9Router
@@ -220,13 +233,16 @@ Aturan Analisis Sinyal:
 3. **Risk/Reward** — Apakah perbandingan SL/TP rasional? (minimal R:R 1:1.5)
 4. **Price Action** — Apakah ada konfirmasi konkrit dari struktur harga?
 
-Format Output JSON (Wajib Mengikuti Format Ini Secara Ketat):
+Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks lain):
+\`\`\`json
 {
-  "verdict": "GOOD", // Isi dengan salah satu nilai string ini saja: "GOOD", "BAD", atau "SKIP"
-  "reasoning": "Tulis penjelasan singkat (1-2 kalimat) dalam Bahasa Indonesia tentang faktor teknikal pasar yang mendukung keputusanmu. Fokus pada aksi harga dan struktur tren, jangan mengomentari prompt ini."
+  "verdict": "GOOD",
+  "reasoning": "Tren besar searah sinyal. Konfluensi 3 metode mendukung. Risk/Reward 1:2 rasional."
 }
+\`\`\`
+PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan harus singkat (maksimal 2 kalimat) tentang faktor teknikal pasar pendukung.
 
-Definisi Verdict:
+Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
 - GOOD: Sinyal sangat kuat, terkonfirmasi banyak indikator, R:R baik, ikuti tren.
 - BAD: Sinyal buruk, melawan tren dominan, R:R tidak memadai, atau konfluensi sangat lemah.
 - SKIP: Data meragukan, kondisi sideways yang berisiko, atau butuh konfirmasi lanjutan.`;
@@ -422,7 +438,7 @@ class LLMConsensusService {
     // Fetch active open positions to analyze correlation risk
     let correlationWarnings = "";
     try {
-      const isConnected = await mt5McpService.isConnected();
+      const isConnected = mt5McpService.isConnected;
       if (isConnected) {
         const positions = await mt5McpService.getPositions();
         if (positions && positions.length > 0) {
@@ -434,7 +450,7 @@ class LLMConsensusService {
             if (Math.abs(coeff) >= 0.7) {
               const relation = coeff > 0 ? "Positif Kuat (bergerak searah)" : "Negatif Kuat (bergerak berlawanan)";
               warningsList.push(
-                `- Posisi Aktif: ${pos.direction} ${pos.symbol} (Korelasi dengan ${signal.symbol}: ${coeff} [${relation}])`
+                `- Posisi Aktif: ${pos.type} ${pos.symbol} (Korelasi dengan ${signal.symbol}: ${coeff} [${relation}])`
               );
             }
           }
@@ -515,7 +531,7 @@ class LLMConsensusService {
         name: m.name,
         label: m.label,
         model: m.model,
-        status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
+        status: isRateLimited(m.name) ? "hibernasi" as const : "active" as const,
       });
     }
 
@@ -525,7 +541,7 @@ class LLMConsensusService {
         name: m.name,
         label: m.label,
         model: m.model,
-        status: rateLimitedModels.has(m.name) ? "hibernasi" as const : "active" as const,
+        status: isRateLimited(m.name) ? "hibernasi" as const : "active" as const,
       });
     }
     return status;
@@ -605,8 +621,8 @@ class LLMConsensusService {
           errLower.includes("credit");
 
         if (isRateLimited) {
-          rateLimitedModels.add(provider.name);
-          silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} (${provider.modelLabel}) dynamically entered hibernation due to rate limit/quota.`);
+          rateLimitedModels.set(provider.name, Date.now());
+          silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} (${provider.label}) dynamically entered hibernation due to rate limit/quota.`);
         }
 
         let friendlyError = `HTTP ${res.status}`;
@@ -680,12 +696,13 @@ class LLMConsensusService {
   private parseVerdict(text: string): { verdict: LLMVerdict; reasoning: string } {
     if (!text) return { verdict: "SKIP", reasoning: "Empty response" };
 
-    // Strip markdown code fences (```json ... ```)
-    let cleaned = text.trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-
     // Strip <think>...</think> reasoning tags (DeepSeek/Qwen style)
+    let cleaned = text.trim();
     cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    // Strip markdown code fences (```json ... ```)
+    // Jangan gunakan ^ agar teks pengantar atau backtick di tengah teks tetap terhapus
+    cleaned = cleaned.replace(/```(?:json)?\s*/gi, "").replace(/\s*```/gi, "").trim();
 
     // Strip ​ (zero-width chars) and other invisible unicode
     cleaned = cleaned.replace(/[​-‍﻿]/g, "").trim();
@@ -734,38 +751,36 @@ class LLMConsensusService {
     }
 
     // 4. Fallback: extract verdict and reasoning from free-form text
-    // Look for verdict keywords
-    const upper = cleaned.toUpperCase();
     let verdict: LLMVerdict | null = null;
 
-    // Ignore template string echoes (containing all 3 keywords) to prevent false-positive parser guessing
-    const hasTemplateEcho = upper.includes("GOOD") && upper.includes("BAD") && upper.includes("SKIP");
-
-    if (!hasTemplateEcho) {
-      if (upper.includes("GOOD") || upper.startsWith("GOOD")) {
-        verdict = "GOOD";
-      } else if (upper.includes("BAD") || upper.startsWith("BAD")) {
-        verdict = "BAD";
-      } else if (upper.includes("SKIP") || upper.startsWith("SKIP")) {
-        verdict = "SKIP";
-      }
+    if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*GOOD/i.test(cleaned) || /^\s*[\*\-]*\s*GOOD\b/i.test(cleaned)) {
+      verdict = "GOOD";
+    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*BAD/i.test(cleaned) || /^\s*[\*\-]*\s*BAD\b/i.test(cleaned)) {
+      verdict = "BAD";
+    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*SKIP/i.test(cleaned) || /^\s*[\*\-]*\s*SKIP\b/i.test(cleaned)) {
+      verdict = "SKIP";
     }
 
     if (verdict) {
-      // Try to extract reasoning after the verdict keyword
-      const match = cleaned.match(/(?:GOOD|BAD|SKIP)[:\s-]*(.+)/i);
-      let reasoning = match && match[1] ? match[1].trim().slice(0, 200) : "No reasoning extracted";
+      let reasoning = "";
+      const reasonMatch = cleaned.match(/(?:REASONING|ALASAN|PENJELASAN|KARENA)[*\s:\-]*([\s\S]+)/i);
+      
+      if (reasonMatch && reasonMatch[1] && reasonMatch[1].length > 5) {
+        reasoning = reasonMatch[1].trim();
+      } else {
+        // Ambil sisa teks setelah membersihkan kata kunci verdict di depan
+        reasoning = cleaned.replace(/^(?:\s*[\*\-]*\s*(?:VERDICT|KEPUTUSAN|KESIMPULAN)?[*\s:\-]*(?:GOOD|BAD|SKIP)\b)/i, '').trim();
+      }
+      
+      reasoning = reasoning.replace(/[\n\r]+/g, ' ').slice(0, 300);
       if (reasoning.length < 5 || reasoning === ".") {
         reasoning = "Analisis teknikal tidak disediakan oleh model.";
       }
       return { verdict, reasoning };
     }
 
-    // 5. Last resort: keyword detection
-    if (/\bgood\b/i.test(cleaned)) return { verdict: "GOOD", reasoning: "Detected GOOD from text" };
-    if (/\bbad\b/i.test(cleaned)) return { verdict: "BAD", reasoning: "Detected BAD from text" };
-
-    return { verdict: "SKIP", reasoning: "Could not parse verdict from response" };
+    // Jika kita tidak bisa menyimpulkan sinyal dengan format baku/pasti, lebih baik kembalikan SKIP daripada false positive.
+    return { verdict: "SKIP", reasoning: "Could not parse valid JSON or strict verdict from response" };
   }
 }
 

@@ -93,7 +93,7 @@ router.post(
             login: parseInt(login, 10) || login,
             enabled: true,
           },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: "after" }
         ).then(async (doc: any) => {
           doc.setPassword(password);
           await doc.save();
@@ -169,7 +169,10 @@ router.get("/account", async (req, res, next) => {
       ...accountInfo,
       ...riskMetrics,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && error.message.includes("not connected")) {
+      return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
+    }
     next(error);
   }
 });
@@ -241,7 +244,10 @@ router.get("/positions", async (req, res, next) => {
       positions,
       total: positions.length,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && error.message.includes("not connected")) {
+      return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
+    }
     next(error);
   }
 });
@@ -847,7 +853,7 @@ router.get("/correlation", async (req, res, next) => {
     const PAIRS = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCAD", "USDCHF", "XAUUSD"];
     
     // Check if MT5 is connected
-    const isConnected = await mt5McpService.isConnected();
+    const isConnected = mt5McpService.isConnected;
     if (!isConnected) {
       // Fallback to BASE_CORRELATIONS if not connected
       return apiResponse.success(res, { 

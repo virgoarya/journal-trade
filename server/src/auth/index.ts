@@ -10,10 +10,10 @@ export const createAuth = () => {
   const auth = betterAuth({
     database: mongodbAdapter(db, {
       client: authMongoClient,
-      debugLogs: true,
+      debugLogs: false,
       transaction: false, // Atlas free tier does not support transactions
     }),
-    debug: true,
+    debug: false,
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: [

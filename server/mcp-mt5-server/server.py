@@ -577,7 +577,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     if name == "mt5_positions_get":
         total = mt5.positions_total()
         err_info = mt5.last_error()
-        print(f"[MT5-DEBUG] positions_total()={total}, last_error()={err_info}", file=sys.stderr)
+        # Debugging print removed
         positions = mt5.positions_get()
         if positions is None:
             err = mt5.last_error()
@@ -585,7 +585,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return _ok({"positions": [], "total": 0})
         if isinstance(positions, tuple):
             # positions_get returns a tuple; we check it
-            print(f"[MT5-DEBUG] mt5.positions_get() type=tuple len={len(positions)}", file=sys.stderr)
+            pass
         result = [_pos_dict(p) for p in positions]
         return _ok({"positions": result, "total": len(result)})
 

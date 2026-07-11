@@ -13,6 +13,7 @@ export interface RiskCheck {
 
 export interface RiskMetrics {
   dailyPnL: number;
+  monthlyPnL: number;
   dailyDrawdown: number;
   maxDrawdown: number;
   openRisk: number;
@@ -91,16 +92,6 @@ class RiskManagerService {
         }
       }
 
-      // ── 6. Check per-trade risk ──────────────────────────────────────
-      const tradeRisk = Math.abs(signal.entry - signal.sl);
-      const riskPercent = (tradeRisk / accountInfo.balance) * 100;
-      if (riskPercent > pipelineConfig.maxRiskPerTrade) {
-        return {
-          allowed: false,
-          reason: `Trade risk ${riskPercent.toFixed(2)}% exceeds max ${pipelineConfig.maxRiskPerTrade}%`,
-          warnings,
-        };
-      }
 
       return { allowed: true, warnings };
     } catch (error: any) {
@@ -168,6 +159,7 @@ class RiskManagerService {
 
     return {
       dailyPnL: todayMetrics?.dailyPnL ?? accountInfo.profit ?? 0,
+      monthlyPnL: todayMetrics?.monthlyPnL ?? accountInfo.profit ?? 0,
       dailyDrawdown: todayMetrics?.dailyDrawdown ?? 0,
       maxDrawdown: 0, // TODO: track from DB
       openRisk,
@@ -183,6 +175,7 @@ class RiskManagerService {
   async getDailyMetrics(userId: string): Promise<{
     dailyPnL: number;
     dailyDrawdown: number;
+    monthlyPnL: number;
   } | null> {
     try {
       // Get today's timestamp
@@ -194,23 +187,30 @@ class RiskManagerService {
       );
       const todayTs = Math.floor(todayStart.getTime() / 1000);
 
-      // Get today's MT5 deals
-      const deals = await mt5McpService.getHistory(todayTs);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthTs = Math.floor(monthStart.getTime() / 1000);
 
-      // Total profit from today's closed deals
-      let dailyPnL = deals.reduce((sum, d) => sum + d.profit, 0);
+      // Get this month's MT5 deals to calculate both monthly and daily PnL
+      const deals = await mt5McpService.getHistory(monthTs);
 
       // Add current floating PnL from open positions
       const positions = await mt5McpService.getPositions();
-      const floatingPnL = positions.reduce(
-        (sum, p) => sum + p.profit,
-        0,
-      );
-      dailyPnL += floatingPnL;
+      const floatingPnL = positions.reduce((sum, p) => sum + p.profit, 0);
+
+      let dailyPnL = floatingPnL;
+      let monthlyPnL = floatingPnL;
+
+      for (const d of deals) {
+        monthlyPnL += d.profit;
+        if (d.time >= todayTs) {
+          dailyPnL += d.profit;
+        }
+      }
 
       return {
         dailyPnL,
         dailyDrawdown: dailyPnL < 0 ? Math.abs(dailyPnL) : 0,
+        monthlyPnL,
       };
     } catch {
       return null;

@@ -609,21 +609,19 @@ class TradingPipelineService {
 
         pipeline.lastSignal = signal;
 
-        // Log confluence breakdown
-        const slDist = Math.abs(signal.entry - signal.sl);
-        const tpDist = Math.abs(signal.tp - signal.entry);
-        const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
-
-        this.addLog(userId, "CONFLUENCE",
-          `${signal.direction} ${signal.symbol} @ ${signal.entry.toFixed(5)} | ` +
-          `R:R: 1:${rrRatio.toFixed(2)} | ` +
-          `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${signal.confidence}% | ` +
-          `Primary: ${analysis.confluence.finalSignal.primaryMethodology} | ` +
-          `Agree: ${analysis.confluence.finalSignal.totalAgreeing}/7`,
-          analysis.confluence.methodologyBreakdown,
-        );
+        // Ambil current positions
+        let currentPosCount = 0;
+        let symbolPosCount = 0;
+        try {
+          const positions = await mt5McpService.getPositions();
+          currentPosCount = positions.length;
+          symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
+        } catch {}
 
         // Risk check
+        this.addLog(userId, "INFO", 
+          `Menghitung risk per trade (Max ${pipeline.config.maxRiskPerTrade}%) dan total open positions (Akun: ${currentPosCount}/${pipeline.config.maxOpenPositions}, Pair ${signal.symbol}: ${symbolPosCount}).`
+        );
         const riskCheck = await riskManagerService.checkTradeAllowed(
           userId,
           signal,
@@ -640,6 +638,21 @@ class TradingPipelineService {
           );
           continue;
         }
+
+        // Log confluence breakdown (Signal Direction)
+        const slDist = Math.abs(signal.entry - signal.sl);
+        const tpDist = Math.abs(signal.tp - signal.entry);
+        const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
+
+        this.addLog(userId, "SIGNAL",
+          `Arah signal ${signal.symbol} ${signal.direction === "BUY" ? "BULLISH" : "BEARISH"} sesuai regime market. ` +
+          `R:R: 1:${rrRatio.toFixed(2)} | ` +
+          `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${signal.confidence}% | ` +
+          `Primary: ${analysis.confluence.finalSignal.primaryMethodology}`,
+          analysis.confluence.methodologyBreakdown,
+        );
+
+
 
         // ── CORRELATION: Prevent over-exposure to single currency ──────
         try {
@@ -690,18 +703,18 @@ class TradingPipelineService {
             signal.symbol, pipeline.config.timeframe, signal.direction,
           );
           if (!htfCheck.isAligned && htfCheck.confidence < 50) {
-            this.addLog(userId, "INFO", `[HTF] Skipped ${signal.symbol} ${signal.direction} — HTF conflict (${htfCheck.details})`);
+            this.addLog(userId, "SIGNAL", `[HTF] Skipped ${signal.symbol} ${signal.direction} — HTF conflict (${htfCheck.details})`);
             continue;
           }
           if (htfCheck.confidence < 80) {
-            this.addLog(userId, "CONFLUENCE", `[HTF] ${signal.symbol} ${signal.direction} — ${htfCheck.details}`);
+            this.addLog(userId, "SIGNAL", `[HTF] ${signal.symbol} ${signal.direction} — ${htfCheck.details}`);
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
         // ── OPTIONAL: LLM Consensus validation ─────────────────────
         if (pipeline.config.llmConsensus?.enabled) {
-          this.addLog(userId, "INFO",
-            `LLM Consensus: Validating ${signal.symbol} ${signal.direction} signal across providers...`,
+          this.addLog(userId, "CONFLUENCE",
+            `Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
           );
 
           // ── HTF conformance data ──
@@ -738,24 +751,14 @@ class TradingPipelineService {
           );
 
           // Log LLM result
-          this.addLog(userId, "CONFLUENCE",
-            `LLM Consensus: ${llmResult.verdict} (G:${llmResult.goodVotes}/B:${llmResult.badVotes}/S:${llmResult.skipVotes}/${llmResult.totalVotes}) — ${llmResult.details}`,
+          const isTrade = llmResult.verdict === "GOOD";
+          this.addLog(userId, isTrade ? "CONFLUENCE" : "ERROR",
+            `LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
             { llmConsensus: llmResult },
           );
 
-          // If LLMs say BAD, skip the trade
-          if (llmResult.verdict === "BAD") {
-            this.addLog(userId, "ERROR",
-              `LLM rejected ${signal.symbol}: ${llmResult.details}`,
-            );
-            continue;
-          }
-
-          // If consensus says SKIP (uncertain), proceed with reduced volume or skip
-          if (llmResult.verdict === "SKIP" && !llmResult.consensusReached) {
-            this.addLog(userId, "ERROR",
-              `LLM uncertain ${signal.symbol}: insufficient consensus — skipping`,
-            );
+          // If LLMs say BAD or SKIP, skip the trade
+          if (!isTrade) {
             continue;
           }
         }
@@ -776,7 +779,15 @@ class TradingPipelineService {
             volumeMax: symbolInfo.volumeMax,
             volumeStep: symbolInfo.volumeStep,
           });
+
+          if (volume === 0) {
+            this.addLog(userId, "ERROR",
+              `Risk rejected ${signal.symbol}: Stop Loss terlalu jauh (${Math.abs(signal.entry - signal.sl).toFixed(5)} poin). Lot terkecil (${symbolInfo.volumeMin}) akan mengakibatkan kerugian melebihi max risk per trade (${pipeline.config.maxRiskPerTrade}%).`
+            );
+            continue;
+          }
         }
+
 
         // Execute trade
         const validation = await this.validateOrderParams(
@@ -851,6 +862,7 @@ class TradingPipelineService {
   }
 
   // ─── Position Management (Trailing Stop) ───────────────────────────
+  private marketClosedCache = new Map<string, number>();
 
   private async managePositions(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
@@ -860,6 +872,12 @@ class TradingPipelineService {
       const positions = await mt5McpService.getPositions();
 
       for (const pos of positions) {
+        // Cek cooldown market closed (30 menit)
+        const closedTime = this.marketClosedCache.get(pos.symbol);
+        if (closedTime && Date.now() - closedTime < 1000 * 60 * 30) {
+          continue; 
+        }
+
         const rates = await mt5McpService.getRates(
           pos.symbol,
           pipeline.config.timeframe,
@@ -873,54 +891,49 @@ class TradingPipelineService {
         const breakevenDistance = atrValue * 1.0;
         let shouldBreakeven = false;
 
+        // Memberikan toleransi floating point MT5 untuk mencegah spam 'No changes'
+        const EPSILON = 0.00001;
         if (pos.type === "BUY" && pos.priceCurrent >= pos.priceOpen + breakevenDistance) {
-          if (pos.sl < pos.priceOpen) {
+          if (pos.sl < pos.priceOpen - EPSILON) {
             shouldBreakeven = true;
           }
         } else if (pos.type === "SELL" && pos.priceCurrent <= pos.priceOpen - breakevenDistance) {
-          if (pos.sl > pos.priceOpen) {
+          if (pos.sl > pos.priceOpen + EPSILON) {
             shouldBreakeven = true;
           }
         }
 
+        // Helper untuk mencegah spam saat gagal
+        const safeMt5Call = async (callFn: () => Promise<any>): Promise<boolean> => {
+          try {
+            await callFn();
+            return true;
+          } catch (err: any) {
+            const msg = err.message || "";
+            if (msg.includes("Market closed") || msg.includes("10018")) {
+              this.marketClosedCache.set(pos.symbol, Date.now());
+              silentLogger.warn(`[Pipeline] Market closed untuk ${pos.symbol}, menunda operasi selama 30 menit.`);
+            } else if (msg.includes("10025") || msg.includes("No changes")) {
+              // Jika tidak ada perubahan SL/TP karena harganya sama persis, abaikan secara diam-diam.
+              return true;
+            } else {
+              silentLogger.error(`[Pipeline] Failed MT5 operation pada tiket ${pos.ticket}: ${msg}`);
+            }
+            return false;
+          }
+        };
+
         if (shouldBreakeven) {
-          await mt5McpService.modifyPosition(pos.ticket, pos.priceOpen, pos.tp);
-          this.addLog(userId, "TRAILING",
-            `Breakeven ${pos.symbol} ticket=${pos.ticket}: SL moved to entry ${pos.priceOpen.toFixed(5)}`,
-            { ticket: pos.ticket, newSL: pos.priceOpen },
-          );
+          const success = await safeMt5Call(() => mt5McpService.modifyPosition(pos.ticket, pos.priceOpen, pos.tp));
+          if (success) {
+            this.addLog(userId, "TRAILING",
+              `Trailing: Memodifikasi posisi nomor ticket ${pos.ticket} (${pos.symbol}) — Breakeven, SL digeser ke entry ${pos.priceOpen.toFixed(5)}`,
+              { ticket: pos.ticket, newSL: pos.priceOpen },
+            );
+          }
           continue; // Skip trailing this cycle — breakeven happens first
         }
 
-        // ── PARTIAL TP: Evaluasi exit strategy (partial take-profit) ──
-        const partialAction = tradeExitStrategyService.evaluate(
-          { symbol: pos.symbol, type: pos.type, priceOpen: pos.priceOpen, priceCurrent: pos.priceCurrent, sl: pos.sl, tp: pos.tp, volume: pos.volume, ticket: pos.ticket },
-          atrValue,
-        );
-
-        if (partialAction.action === "CLOSE_PARTIAL" && partialAction.closePercent) {
-          // Close partial position at market
-          const closeVolume = Math.round(pos.volume * partialAction.closePercent * 100) / 100;
-          if (closeVolume > 0) {
-            await mt5McpService.closePosition(pos.ticket);
-            this.addLog(userId, "TRADE",
-              `TP1 Partial ${pos.symbol} ticket=${pos.ticket}: closed ${(partialAction.closePercent * 100).toFixed(0)}% — ${partialAction.reason}`,
-            );
-          }
-          // Move SL to breakeven on remaining position (done via modify)
-          if (partialAction.newSL) {
-            await mt5McpService.modifyPosition(pos.ticket, partialAction.newSL, pos.tp);
-          }
-          continue;
-        }
-
-        if (partialAction.action === "MODIFY_SL" && partialAction.newSL) {
-          await mt5McpService.modifyPosition(pos.ticket, partialAction.newSL, pos.tp);
-          this.addLog(userId, "TRAILING",
-            `Trailing ${pos.symbol} ticket=${pos.ticket}: ${partialAction.reason}`,
-          );
-          continue;
-        }
 
         // ── TRAILING STOP: Geser SL mengikuti harga (existing logic) ──────
         const result = aiTradingEngine.calculateTrailingStopSL({
@@ -934,11 +947,13 @@ class TradingPipelineService {
         });
 
         if (result.shouldUpdate) {
-          await mt5McpService.modifyPosition(pos.ticket, result.newSL, pos.tp);
-          this.addLog(userId, "TRAILING",
-            `Trailing ${pos.symbol} ticket=${pos.ticket}: ${result.reason}`,
-            { ticket: pos.ticket, newSL: result.newSL },
-          );
+          const success = await safeMt5Call(() => mt5McpService.modifyPosition(pos.ticket, result.newSL!, pos.tp));
+          if (success) {
+            this.addLog(userId, "TRAILING",
+              `Trailing: Memodifikasi posisi nomor ticket ${pos.ticket} (${pos.symbol}) — ${result.reason}`,
+              { ticket: pos.ticket, newSL: result.newSL },
+            );
+          }
         }
       }
     } catch (error: any) {

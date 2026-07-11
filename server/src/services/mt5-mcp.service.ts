@@ -236,9 +236,7 @@ class MT5MCPService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const result = await this.call("mt5_positions_get", {});
-        silentLogger.info(`[MT5-MCP] Raw result from mt5_positions_get: ${JSON.stringify(result)}`);
         const positions = (result as any).positions ?? [];
-        silentLogger.info(`[MT5-MCP] getPositions: ${positions.length} positions returned (attempt ${attempt})`);
         return positions;
       } catch (error: any) {
         silentLogger.warn(`[MT5-MCP] getPositions attempt ${attempt}/${maxRetries} failed: ${error.message}`);
@@ -342,15 +340,20 @@ class MT5MCPService {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;
 
-    silentLogger.error(`[MT5-MCP] ${method} failed: ${errorMsg}`);
-    if (context) {
-      silentLogger.error(`[MT5-MCP] Context: ${JSON.stringify(context)}`);
-    }
-    if (stack) {
-      silentLogger.error(`[MT5-MCP] Stack: ${stack}`);
-    }
-
-    // Tambahkan log ke file khusus untuk debugging
+    const isConnError = errorMsg.includes("not connected") || errorMsg.includes("Call mt5_connect");
+    const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
+    
+    if (!isConnError && !isExpectedError) {
+      silentLogger.error(`[MT5-MCP] ${method} failed: ${errorMsg}`);
+      if (context) {
+        silentLogger.error(`[MT5-MCP] Context: ${JSON.stringify(context)}`);
+      }
+      if (stack) {
+        silentLogger.error(`[MT5-MCP] Stack: ${stack}`);
+      }
+    } else if (isExpectedError) {
+      // Mute completely. Spamming these logs pollutes the console.
+    }    // Tambahkan log ke file khusus untuk debugging
     const fs = require('fs');
     const path = require('path');
     const logDir = path.join(__dirname, '..', '..', 'logs');
@@ -388,12 +391,14 @@ class MT5MCPService {
       // Only reset connected flag on real connection errors, not trade errors
       // (AutoTrading disabled, SL/TP too close, insufficient margin, etc.)
       const msg = error.message || "";
+      const isExpectedError = msg.includes("10025") || msg.includes("No changes") || msg.includes("10018") || msg.includes("Market closed");
       const isConnError = msg.includes("not connected") || msg.includes("ECONN") || msg.includes("transport") || msg.includes("socket") || msg.includes("timeout");
+
       if (isConnError) {
         silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
         this.connected = false;
         this.accountInfo = null;
-      } else {
+      } else if (!isExpectedError) {
         silentLogger.warn(`[MT5-MCP] ${tool} failed (connection alive): ${error.message}`);
       }
       throw error;
