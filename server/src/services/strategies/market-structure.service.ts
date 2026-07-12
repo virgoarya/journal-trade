@@ -13,6 +13,16 @@ export interface Candle {
   close: number;
 }
 
+export interface FractalContext {
+  direction: Candle[];
+  setup: Candle[];
+  entry: Candle[];
+  directionStr: MarketStructure;
+  setupStr: MarketStructure;
+  entryStr: MarketStructure;
+  isAligned: boolean;
+}
+
 export interface SwingHigh {
   index: number;
   price: number;

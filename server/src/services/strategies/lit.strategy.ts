@@ -29,8 +29,13 @@ class LITStrategy {
   /**
    * Full LIT analysis.
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): LITSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext): LITSignal[] {
     const signals: LITSignal[] = [];
+
+    if (!fractal.isAligned) return signals;
+
+    const candles = fractal.entry;
+    const marketStructure = fractal.entryStr;
 
     // 1. Inducement Pattern
     const inducementSignal = this.detectInducement(candles, marketStructure);

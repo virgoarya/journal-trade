@@ -83,7 +83,7 @@ export interface SymbolAnalysis {
   symbolInfo: MT5Symbol | null;
 }
 
-export type Timeframe = "M5" | "M15" | "H1";
+export type Timeframe = "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1";
 
 // ─── NEW: Multi-Strategy Analysis Types ─────────────────────────────
 
@@ -124,10 +124,17 @@ const ATR_TP_MULTIPLIER = 1.5;
 // ─── Service ─────────────────────────────────────────────────────────
 
 class AITradingEngine {
-  /**
-   * Analyze a single symbol using ALL active methodologies.
-   * This is the new main entry point.
-   */
+  getFractalTimeframes(baseTf: Timeframe): { direction: Timeframe; setup: Timeframe; entry: Timeframe } {
+    switch (baseTf) {
+      case "H4": return { direction: "H4", setup: "H1", entry: "M15" };
+      case "H1": return { direction: "H1", setup: "M15", entry: "M5" };
+      case "M30": return { direction: "M30", setup: "M5", entry: "M1" };
+      case "M15": return { direction: "M15", setup: "M5", entry: "M1" };
+      case "M5": return { direction: "M5", setup: "M1", entry: "M1" };
+      default: return { direction: baseTf, setup: baseTf, entry: baseTf };
+    }
+  }
+
   async analyzeSymbol(
     symbol: string,
     timeframe: Timeframe,
@@ -135,117 +142,85 @@ class AITradingEngine {
     methodologyWeights?: MethodologyWeights,
     activeMethodologies?: MethodologyName[],
   ): Promise<MultiStrategySymbolAnalysis> {
-    const rates = await mt5McpService.getRates(symbol, timeframe, 100);
-    if (rates.length < RSI_PERIOD + 2) {
+    const fractals = this.getFractalTimeframes(timeframe);
+    const [directionRates, setupRates, entryRates] = await Promise.all([
+      mt5McpService.getRates(symbol, fractals.direction, 100),
+      mt5McpService.getRates(symbol, fractals.setup, 100),
+      mt5McpService.getRates(symbol, fractals.entry, 100)
+    ]);
+
+    if (directionRates.length < RSI_PERIOD + 2 || setupRates.length < 10 || entryRates.length < 10) {
       return {
         symbol,
         marketStructure: null as any,
-        methodologySignals: {
-          smc: [],
-          ict: [],
-          msnr: [],
-          crt: [],
-          quarterly: [],
-          lit: [],
-          rsiEngulf: null,
-        },
-        confluence: {
-          finalSignal: null,
-          allSignals: [],
-          methodologyBreakdown: {},
-          conflictDetected: false,
-          reason: "Insufficient data",
-        },
-        signal: this.emptySignal(rates),
+        methodologySignals: { smc: [], ict: [], msnr: [], crt: [], quarterly: [], lit: [], rsiEngulf: null },
+        confluence: { finalSignal: null, allSignals: [], methodologyBreakdown: {}, conflictDetected: false, reason: "Insufficient data" },
+        signal: this.emptySignal(directionRates),
       };
     }
 
-    const candles: Candle[] = rates.map((r) => ({
-      time: r.time,
-      open: r.open,
-      high: r.high,
-      low: r.low,
-      close: r.close,
-    }));
+    const directionCandles: Candle[] = directionRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    const setupCandles: Candle[] = setupRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    const entryCandles: Candle[] = entryRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
 
-    const closes = rates.map((r) => r.close);
+    const closes = directionRates.map((r) => r.close);
     const rsi = this.calculateRSI(closes, RSI_PERIOD);
-    const atrPattern = atrService.calculate(rates);
-    const pattern = this.detectEngulfing(candles);
-    const currentPrice = closes[closes.length - 1];
-    const symbolInfo = await mt5McpService.getSymbolInfo(symbol);
+    const atrPattern = atrService.calculate(directionRates);
+    const pattern = this.detectEngulfing(directionCandles);
+    const currentPrice = entryCandles[entryCandles.length - 1].close; // Use entry TF for most precise current price
 
-    // ── 1. Market Structure Analysis ───────────────────────────────
-    const marketStructure = marketStructureService.analyzeMarketStructure(candles);
+    // ── 1. Market Structure Analysis & Alignment ───────────────────
+    const directionStructure = marketStructureService.analyzeMarketStructure(directionCandles);
+    const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
+    const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);
+
+    const isAligned = directionStructure.trend.direction === setupStructure.trend.direction && 
+                      setupStructure.trend.direction === entryStructure.trend.direction;
+
+    // Build fractal object to pass into methodologies
+    const fractalCtx = { 
+      direction: directionCandles, 
+      setup: setupCandles, 
+      entry: entryCandles, 
+      directionStr: directionStructure,
+      setupStr: setupStructure,
+      entryStr: entryStructure,
+      isAligned 
+    };
 
     // ── 2. Run all 7 strategies in parallel ────────────────────────
     const [smcSignals, ictSignals, msnrSignals, crtSignals, quarterlySignals, litSignals] =
       await Promise.all([
-        Promise.resolve(smcStrategy.analyze(candles, marketStructure)),
-        Promise.resolve(ictStrategy.analyze(candles, marketStructure)),
-        Promise.resolve(msnrStrategy.analyze(candles, marketStructure)),
-        Promise.resolve(crtStrategy.analyze(candles, marketStructure)),
-        Promise.resolve(quarterlyTheoryStrategy.analyze(candles, marketStructure)),
-        Promise.resolve(litStrategy.analyze(candles, marketStructure)),
+        Promise.resolve(smcStrategy.analyze(fractalCtx)),
+        Promise.resolve(ictStrategy.analyze(fractalCtx)),
+        Promise.resolve(msnrStrategy.analyze(fractalCtx)),
+        Promise.resolve(crtStrategy.analyze(fractalCtx)),
+        Promise.resolve(quarterlyTheoryStrategy.analyze(fractalCtx)),
+        Promise.resolve(litStrategy.analyze(fractalCtx)),
       ]);
 
     // ── 3. RSI+Engulfing (legacy, now methodology #7) ─────────────
-    const rsiEngulfSignal = this.detectRSIEngulfing(
-      rsi, pattern, currentPrice, atrPattern, marketStructure,
-    );
+    const rsiEngulfSignal = this.detectRSIEngulfing(rsi, pattern, currentPrice, atrPattern, directionStructure);
 
     // ── 4. Run Confluence Engine ───────────────────────────────────
     const confluence = confluenceEngine.calculateConfluence(
-      {
-        smc: smcSignals[0] ?? null,
-        ict: ictSignals[0] ?? null,
-        msnr: msnrSignals[0] ?? null,
-        crt: crtSignals[0] ?? null,
-        quarterly: quarterlySignals[0] ?? null,
-        lit: litSignals[0] ?? null,
-        rsiEngulf: rsiEngulfSignal,
-      },
+      { smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null, msnr: msnrSignals[0] ?? null, crt: crtSignals[0] ?? null, quarterly: quarterlySignals[0] ?? null, lit: litSignals[0] ?? null, rsiEngulf: rsiEngulfSignal },
       methodologyWeights,
       activeMethodologies,
     );
 
-    // ── 5. Build legacy signal (best single method) ────────────────
     const legacySignal = confluence.finalSignal
       ? {
-          symbol,
-          direction: confluence.finalSignal.direction,
-          confidence: confluence.finalSignal.confidence,
-          entry: confluence.finalSignal.entry,
-          sl: confluence.finalSignal.sl,
-          tp: confluence.finalSignal.tp,
-          reason: confluence.reason,
-          riskPercent,
-          timeframe,
-          indicators: { rsi, atr: atrPattern },
-          pattern: `MULTI_STRATEGY_${confluence.finalSignal.primaryMethodology.toUpperCase()}`,
+          symbol, direction: confluence.finalSignal.direction, confidence: confluence.finalSignal.confidence, entry: confluence.finalSignal.entry, sl: confluence.finalSignal.sl, tp: confluence.finalSignal.tp, reason: confluence.reason, riskPercent, timeframe, indicators: { rsi, atr: atrPattern }, pattern: `MULTI_STRATEGY_${confluence.finalSignal.primaryMethodology.toUpperCase()}`,
         }
       : null;
 
     return {
       symbol,
-      marketStructure,
-      methodologySignals: {
-        smc: smcSignals,
-        ict: ictSignals,
-        msnr: msnrSignals,
-        crt: crtSignals,
-        quarterly: quarterlySignals,
-        lit: litSignals,
-        rsiEngulf: rsiEngulfSignal,
-      },
+      marketStructure: directionStructure,
+      methodologySignals: { smc: smcSignals, ict: ictSignals, msnr: msnrSignals, crt: crtSignals, quarterly: quarterlySignals, lit: litSignals, rsiEngulf: rsiEngulfSignal },
       confluence,
-      signal: {
-        rsi,
-        atr: atrPattern,
-        pattern: pattern.type,
-        currentPrice,
-        signal: legacySignal,
-      },
+      signal: { rsi, atr: atrPattern, pattern: pattern.type, currentPrice, signal: legacySignal },
     };
   }
 

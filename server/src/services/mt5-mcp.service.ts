@@ -107,6 +107,10 @@ class MT5MCPService {
     return this.connected;
   }
 
+  forceDisconnect() {
+    this.connected = false;
+  }
+
   get account(): MT5AccountInfo | null {
     return this.accountInfo;
   }
@@ -262,11 +266,12 @@ class MT5MCPService {
     }
   }
 
-  /** Open a market order. */
+  /** Open a market or pending order. */
   async openOrder(params: {
     symbol: string;
-    action: "BUY" | "SELL";
+    action: "BUY" | "SELL" | "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP";
     volume: number;
+    price?: number;
     sl?: number;
     tp?: number;
     comment?: string;
@@ -371,10 +376,10 @@ class MT5MCPService {
     }
   }
 
-  private async call(tool: string, args: Record<string, any>): Promise<any> {
-    await this.ensureClient();
-    if (!this.client) throw new Error("MCP client not initialized");
-
+  async call(tool: string, args: any): Promise<any> {
+    if (!this.client) {
+      throw new Error("MCP Client not initialized");
+    }
     if (!this.connected && tool !== "mt5_connect") {
       throw new Error("MT5 not connected");
     }

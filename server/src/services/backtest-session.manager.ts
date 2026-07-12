@@ -16,6 +16,16 @@ export interface BacktestSession {
   abortFlag?: boolean;
   /** Owner user ID for session ownership validation */
   userId?: string;
+  /** Lightweight checkpoint for progress tracking on reconnect */
+  checkpoint?: {
+    progressPercent: number;
+    timelineStep: number;
+    totalSteps: number;
+    lastEquity: number;
+    openTradeCount: number;
+    completedTradeCount: number;
+    updatedAt: Date;
+  };
 }
 
 class BacktestSessionManager {
@@ -112,6 +122,30 @@ class BacktestSessionManager {
    */
   forceRemoveSession(id: string) {
     this.sessions.delete(id);
+  }
+
+  /**
+   * Save a lightweight checkpoint for progress tracking
+   */
+  saveCheckpoint(id: string, data: {
+    progressPercent: number;
+    timelineStep: number;
+    totalSteps: number;
+    lastEquity: number;
+    openTradeCount: number;
+    completedTradeCount: number;
+  }) {
+    const session = this.sessions.get(id);
+    if (session) {
+      session.checkpoint = { ...data, updatedAt: new Date() };
+    }
+  }
+
+  /**
+   * Get last checkpoint for a session (useful for reconnect progress display)
+   */
+  getCheckpoint(id: string): BacktestSession['checkpoint'] | undefined {
+    return this.sessions.get(id)?.checkpoint;
   }
 
   /**

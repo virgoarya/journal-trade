@@ -26,25 +26,29 @@ const MIN_CONFIDENCE = 50;
 
 class SMCStrategy {
   /**
-   * Analyze market structure through the SMC lens.
+   * Analyze market structure through the SMC lens using Fractal Timeframes.
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): SMCSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext): SMCSignal[] {
     const signals: SMCSignal[] = [];
 
+    if (!fractal.isAligned) {
+      return signals; // Tolak mentah-mentah jika arah H4, H1, M15 (atau TF bersangkutan) berlawanan!
+    }
+
     // 1. Market Structure Shift (MSS) / Change of Character (CHOCH)
-    const mssSignal = this.detectMSS(candles, marketStructure);
+    const mssSignal = this.detectMSS(fractal);
     if (mssSignal) signals.push(mssSignal);
 
     // 2. Order Block mitigation
-    const obSignal = this.detectOrderBlockEntry(candles, marketStructure);
+    const obSignal = this.detectOrderBlockEntry(fractal);
     if (obSignal) signals.push(obSignal);
 
     // 3. Breaker Block
-    const breakerSignal = this.detectBreakerEntry(candles, marketStructure);
+    const breakerSignal = this.detectBreakerEntry(fractal);
     if (breakerSignal) signals.push(breakerSignal);
 
     // 4. Liquidity Grab
-    const lgSignal = this.detectLiquidityGrab(candles, marketStructure);
+    const lgSignal = this.detectLiquidityGrab(fractal);
     if (lgSignal) signals.push(lgSignal);
 
     // Sort by confidence descending
@@ -60,34 +64,34 @@ class SMCStrategy {
    * BUY MSS: price breaks above recent swing high with momentum
    * SELL MSS: price breaks below recent swing low with momentum
    */
-  private detectMSS(candles: Candle[], ms: MarketStructure): SMCSignal | null {
+  private detectMSS(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
+    const candles = fractal.setup;
+    const ms = fractal.setupStr;
+    const entryCandles = fractal.entry;
+
     if (candles.length < 3) return null;
 
     const last = candles[candles.length - 1];
     const prev = candles[candles.length - 2];
 
+    const atrEntry = atrService.calculate(entryCandles);
+    const avgRangeEntry = atrEntry > 0 ? atrEntry : this.avgCandleRange(entryCandles, 5);
+    const buffer = avgRangeEntry * 0.5;
+
     // Look for a swing high that was just broken upward
     const recentHighs = ms.swingHighs.filter((s) => s.index >= candles.length - 10);
     for (const swing of recentHighs) {
-      // Price broke above this swing high
       if (last.close > swing.price && last.high > swing.price) {
-        // Check if it was a decisive break (body above the level)
-        const bodyTop = Math.max(last.open, last.close);
         const bodyBottom = Math.min(last.open, last.close);
-
         if (bodyBottom > swing.price) {
-          // Break of Structure to the upside
-          const atr = atrService.calculate(candles);
-          const avgRange = atr > 0 ? atr : this.avgCandleRange(candles, 5);
-
           return {
             direction: "BUY",
-            entry: last.close,
-            sl: last.close - avgRange * 1.5,
-            tp: last.close + avgRange * 2.0,
+            entry: swing.price, // Pending BUY Limit on retest
+            sl: swing.price - buffer, // Tight SL below the broken structure using M5 ATR
+            tp: swing.price + buffer * 4.0,
             breachType: "MSS",
-            confidence: this.scoreMSS(ms, swing, last, avgRange, "BUY"),
-            reason: `MSS BUY: Price broke above swing high ${swing.price.toFixed(5)} with momentum`,
+            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY"),
+            reason: `Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL tight by Entry TF ATR)`,
           };
         }
       }
@@ -98,20 +102,15 @@ class SMCStrategy {
     for (const swing of recentLows) {
       if (last.close < swing.price && last.low < swing.price) {
         const bodyTop = Math.max(last.open, last.close);
-        const bodyBottom = Math.min(last.open, last.close);
-
         if (bodyTop < swing.price) {
-          const atr = atrService.calculate(candles);
-          const avgRange = atr > 0 ? atr : this.avgCandleRange(candles, 5);
-
           return {
             direction: "SELL",
-            entry: last.close,
-            sl: last.close + avgRange * 1.5,
-            tp: last.close - avgRange * 2.0,
+            entry: swing.price, // Pending SELL Limit on retest
+            sl: swing.price + buffer, // Tight SL above the broken structure using M5 ATR
+            tp: swing.price - buffer * 4.0,
             breachType: "MSS",
-            confidence: this.scoreMSS(ms, swing, last, avgRange, "SELL"),
-            reason: `MSS SELL: Price broke below swing low ${swing.price.toFixed(5)} with momentum`,
+            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL"),
+            reason: `Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL tight by Entry TF ATR)`,
           };
         }
       }
@@ -122,50 +121,46 @@ class SMCStrategy {
 
   // ── Order Block Mitigation Entry ───────────────────────────────────
 
-  /**
-   * Price returning to an Order Block zone = potential entry.
-   * The best OBs are those that preceded strong impulse moves.
-   */
-  private detectOrderBlockEntry(candles: Candle[], ms: MarketStructure): SMCSignal | null {
+  private detectOrderBlockEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
+    const candles = fractal.entry;
+    const ms = fractal.entryStr;
+
     if (candles.length < 2) return null;
 
     const last = candles[candles.length - 1];
     const atr = atrService.calculate(candles);
     const avgRange = atr > 0 ? atr : this.avgCandleRange(candles, 5);
+    // Buffer for spread and padding (approx. 10% of ATR or small pip value)
+    const buffer = avgRange * 0.2;
 
     for (const ob of ms.orderBlocks) {
-      // Skip if already mitigated
       if (ob.mitigated) continue;
 
-      // Check if price is currently within the OB zone
-      const inZone = last.low <= ob.top && last.high >= ob.bottom;
-      if (!inZone) continue;
-
-      // BULLISH OB: price dipped into the zone → BUY
+      // BULLISH OB: pending BUY LIMIT order at OB Top
       if (ob.type === "BULLISH") {
         return {
           direction: "BUY",
-          entry: last.close,
-          sl: ob.bottom - avgRange * 0.5,
-          tp: last.close + avgRange * 2.0,
+          entry: ob.top, // Pending order price (Limit)
+          sl: ob.bottom - buffer, // SL tightly below OB + buffer
+          tp: ob.top + (ob.top - ob.bottom) * 2, // 1:2 RR approx
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `OB Mitigation BUY: Price returned to bullish OB [${ob.bottom.toFixed(5)}-${ob.top.toFixed(5)}]`,
+          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${ob.bottom.toFixed(5)})`,
         };
       }
 
-      // BEARISH OB: price rose into the zone → SELL
+      // BEARISH OB: pending SELL LIMIT order at OB Bottom
       if (ob.type === "BEARISH") {
         return {
           direction: "SELL",
-          entry: last.close,
-          sl: ob.top + avgRange * 0.5,
-          tp: last.close - avgRange * 2.0,
+          entry: ob.bottom, // Pending order price (Limit)
+          sl: ob.top + buffer, // SL tightly above OB + buffer
+          tp: ob.bottom - (ob.top - ob.bottom) * 2, // 1:2 RR approx
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `OB Mitigation SELL: Price returned to bearish OB [${ob.bottom.toFixed(5)}-${ob.top.toFixed(5)}]`,
+          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${ob.top.toFixed(5)})`,
         };
       }
     }
@@ -175,7 +170,10 @@ class SMCStrategy {
 
   // ── Breaker Block Entry ────────────────────────────────────────────
 
-  private detectBreakerEntry(candles: Candle[], ms: MarketStructure): SMCSignal | null {
+  private detectBreakerEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
+    const candles = fractal.entry;
+    const ms = fractal.entryStr;
+
     if (candles.length < 2 || ms.breakerBlocks.length === 0) return null;
 
     const last = candles[candles.length - 1];
@@ -225,7 +223,10 @@ class SMCStrategy {
    * A liquidity grab = false breakout. Price briefly exceeds a swing high
    * (or low) then closes back inside, trapping breakout traders.
    */
-  private detectLiquidityGrab(candles: Candle[], ms: MarketStructure): SMCSignal | null {
+  private detectLiquidityGrab(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
+    const candles = fractal.entry;
+    const ms = fractal.entryStr;
+
     if (candles.length < 3) return null;
 
     const last = candles[candles.length - 1];

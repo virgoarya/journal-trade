@@ -298,6 +298,22 @@ async def list_tools():
                 "required": ["ticket"],
             },
         ),
+        Tool(
+            name="mt5_orders_get",
+            description="Get all active pending orders",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="mt5_order_cancel",
+            description="Cancel an active pending order by ticket number",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket": {"type": "integer", "description": "Order ticket number"}
+                },
+                "required": ["ticket"],
+            },
+        ),
         # ── Trading ───────────────────────────────────────────────────
         Tool(
             name="mt5_debug_order",
@@ -320,23 +336,21 @@ async def list_tools():
         ),
         Tool(
             name="mt5_order_send",
-            description="Open a new market order (BUY or SELL)",
+            description="Open a market or pending order",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "symbol": {"type": "string", "description": "Symbol to trade"},
+                    "symbol": {"type": "string", "description": "Symbol name"},
                     "action": {
                         "type": "string",
-                        "enum": ["BUY", "SELL"],
-                        "description": "Trade direction",
+                        "enum": ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"],
+                        "description": "Order direction / type",
                     },
                     "volume": {"type": "number", "description": "Lot size"},
-                    "sl": {"type": "number", "description": "Stop Loss price (optional)"},
-                    "tp": {"type": "number", "description": "Take Profit price (optional)"},
-                    "comment": {
-                        "type": "string",
-                        "description": "Optional comment (max 32 chars)",
-                    },
+                    "price": {"type": "number", "description": "Entry price (required for pending orders)"},
+                    "sl": {"type": "number", "description": "Stop Loss price"},
+                    "tp": {"type": "number", "description": "Take Profit price"},
+                    "comment": {"type": "string", "description": "Order comment"},
                 },
                 "required": ["symbol", "action", "volume"],
             },
@@ -596,6 +610,49 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return _err(f"Position {ticket} not found")
         return _ok(_pos_dict(positions[0]))
 
+    if name == "mt5_orders_get":
+        orders = mt5.orders_get()
+        if orders is None:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] mt5.orders_get() returned None: {err}", file=sys.stderr)
+            return _ok([])
+        
+        result = []
+        for o in orders:
+            result.append({
+                "ticket": o.ticket,
+                "symbol": o.symbol,
+                "type": o.type, # 2=BuyLimit, 3=SellLimit, 4=BuyStop, 5=SellStop
+                "volume_initial": o.volume_initial,
+                "volume_current": o.volume_current,
+                "price_open": o.price_open,
+                "sl": o.sl,
+                "tp": o.tp,
+                "time_setup": o.time_setup
+            })
+        return _ok(result)
+
+    if name == "mt5_order_cancel":
+        ticket = arguments.get("ticket")
+        if not ticket:
+            return _err("ticket is required")
+        
+        request = {
+            "action": mt5.TRADE_ACTION_REMOVE,
+            "order": ticket,
+        }
+        
+        result = mt5.order_send(request)
+        if result is None:
+            err = mt5.last_error()
+            print(f"[MT5-ERROR] order_cancel order_send returned None: {err}", file=sys.stderr)
+            return _err(f"order_send failed: {err}")
+            
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            return _err(f"Cancel failed: {result.retcode} - {result.comment}")
+            
+        return _ok({"ticket": ticket, "success": True})
+
     # ── Trading ───────────────────────────────────────────────────────
     if name == "mt5_order_send":
         symbol = arguments["symbol"]
@@ -613,13 +670,36 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if tick is None:
             return _err(f"Symbol '{symbol}' not found")
 
-        order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
-        price = tick.ask if action == "BUY" else tick.bid
+        trade_action = mt5.TRADE_ACTION_DEAL
+        if action == "BUY":
+            order_type = mt5.ORDER_TYPE_BUY
+            price = tick.ask
+        elif action == "SELL":
+            order_type = mt5.ORDER_TYPE_SELL
+            price = tick.bid
+        elif action == "BUY_LIMIT":
+            trade_action = mt5.TRADE_ACTION_PENDING
+            order_type = mt5.ORDER_TYPE_BUY_LIMIT
+            price = arguments.get("price", tick.ask)
+        elif action == "SELL_LIMIT":
+            trade_action = mt5.TRADE_ACTION_PENDING
+            order_type = mt5.ORDER_TYPE_SELL_LIMIT
+            price = arguments.get("price", tick.bid)
+        elif action == "BUY_STOP":
+            trade_action = mt5.TRADE_ACTION_PENDING
+            order_type = mt5.ORDER_TYPE_BUY_STOP
+            price = arguments.get("price", tick.ask)
+        elif action == "SELL_STOP":
+            trade_action = mt5.TRADE_ACTION_PENDING
+            order_type = mt5.ORDER_TYPE_SELL_STOP
+            price = arguments.get("price", tick.bid)
+        else:
+            return _err(f"Invalid action '{action}'")
 
         filling_mode = _get_filling_mode(symbol)
 
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": trade_action,
             "symbol": symbol,
             "volume": volume,
             "type": order_type,

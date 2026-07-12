@@ -31,8 +31,14 @@ class CRTStrategy {
   /**
    * Full CRT analysis.
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): CRTSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext): CRTSignal[] {
     const signals: CRTSignal[] = [];
+
+    if (!fractal.isAligned) return signals;
+
+    const candles = fractal.entry;
+    const marketStructure = fractal.entryStr;
+
     if (candles.length < RANGE_LOOKBACK) return signals;
 
     const ranges = marketStructure.candleRanges;

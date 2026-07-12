@@ -42,32 +42,59 @@ class MarketRegimeService {
     const avgATR = recentATRs.reduce((a, b) => a + b, 0) / recentATRs.length;
     const isHighVol = avgATR > 0 && atr > avgATR * 1.5;
 
-    // Direction: compare EMA cross or linear regression slope
+    // Direction: Compare EMA as fallback
     const ema10 = this.calculateEMA(closes, 10);
     const ema30 = this.calculateEMA(closes, 30);
-    const direction = ema10 > ema30 ? "BULL" : ema10 < ema30 ? "BEAR" : "SIDEWAYS";
+    let fallbackDirection: "BULL" | "BEAR" | "SIDEWAYS" = ema10 > ema30 ? "BULL" : ema10 < ema30 ? "BEAR" : "SIDEWAYS";
 
-    // Determine regime
-    let regime: MarketRegime;
+    // ── MARKET STRUCTURE SHIFT / BOS (Order Flow Bias) ──
+    const pivots: { type: 'H'|'L', price: number, time: number }[] = [];
+    for (let i = 2; i < candles.length - 2; i++) {
+       const isHigh = candles[i].high > candles[i-1].high && candles[i].high > candles[i-2].high &&
+                      candles[i].high > candles[i+1].high && candles[i].high > candles[i+2].high;
+       const isLow = candles[i].low < candles[i-1].low && candles[i].low < candles[i-2].low &&
+                     candles[i].low < candles[i+1].low && candles[i].low < candles[i+2].low;
+       if (isHigh) pivots.push({ type: 'H', price: candles[i].high, time: candles[i].time });
+       if (isLow) pivots.push({ type: 'L', price: candles[i].low, time: candles[i].time });
+    }
+
+    let orderFlow: "BULL" | "BEAR" | "SIDEWAYS" = "SIDEWAYS";
     let confidence = 0;
+    
+    if (pivots.length >= 4) {
+      const recentPivots = pivots.slice(-6);
+      const highs = recentPivots.filter(p => p.type === 'H');
+      const lows = recentPivots.filter(p => p.type === 'L');
+      
+      if (highs.length >= 2 && lows.length >= 2) {
+        const lastH = highs[highs.length-1].price;
+        const prevH = highs[highs.length-2].price;
+        const lastL = lows[lows.length-1].price;
+        const prevL = lows[lows.length-2].price;
 
-    if (isHighVol && adx > 25) {
-      // Trending with high volatility
-      regime = direction === "BULL" ? "TRENDING_BULL" : "TRENDING_BEAR";
-      confidence = Math.min(100, Math.round(adx * 1.5));
-    } else if (isSqueeze && adx < 25) {
-      regime = "RANGING";
-      confidence = Math.min(100, Math.round((1 - bandwidth / 0.05) * 80));
-    } else if (adx >= 25) {
-      // Trending but normal volatility
-      regime = direction === "BULL" ? "TRENDING_BULL" : "TRENDING_BEAR";
-      confidence = Math.min(100, Math.round(adx * 1.2));
+        if (lastH > prevH && lastL > prevL) { orderFlow = "BULL"; confidence = 85; }       // HH + HL = Bullish BOS
+        else if (lastH < prevH && lastL < prevL) { orderFlow = "BEAR"; confidence = 85; }  // LH + LL = Bearish BOS
+        else if (lastH < prevH && lastL > prevL) { orderFlow = "SIDEWAYS"; confidence = 60; } // Symmetrical Triangle
+      }
+    }
+
+    const direction = orderFlow !== "SIDEWAYS" ? orderFlow : fallbackDirection;
+    let regime: MarketRegime;
+
+    if (orderFlow === "BULL") {
+       regime = "TRENDING_BULL";
+    } else if (orderFlow === "BEAR") {
+       regime = "TRENDING_BEAR";
     } else if (isHighVol) {
-      regime = "HIGH_VOLATILITY";
-      confidence = Math.min(100, Math.round((atr / avgATR) * 60));
+       regime = "HIGH_VOLATILITY";
+       confidence = Math.min(100, Math.round((atr / avgATR) * 60));
+    } else if (isSqueeze || adx < 25) {
+       regime = "RANGING";
+       confidence = confidence || Math.min(100, Math.round((25 - adx) * 2));
     } else {
-      regime = "RANGING";
-      confidence = Math.min(100, Math.round((25 - adx) * 2));
+       // Fallback ke ADX/EMA jika order flow tidak terdeteksi jelas (Sideways) tapi ADX tinggi
+       regime = fallbackDirection === "BULL" ? "TRENDING_BULL" : "TRENDING_BEAR";
+       confidence = Math.min(100, Math.round(adx * 1.5));
     }
 
     return { regime, adx: Math.round(adx * 100) / 100, volatility: Math.round(volatility * 100) / 100, isSqueeze, direction, confidence };
@@ -116,8 +143,9 @@ class MarketRegimeService {
 
   private calculateADX(candles: Candle[]): number {
     const period = this.ADX_PERIOD;
-    if (candles.length < period * 2) return 25;
+    if (candles.length < period * 2 + 1) return 25;
 
+    // Step 1: Calculate raw TR, +DM, -DM per bar
     const tr: number[] = [];
     const plusDM: number[] = [];
     const minusDM: number[] = [];
@@ -130,19 +158,43 @@ class MarketRegimeService {
       const prevLow = candles[i - 1].low;
 
       tr.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
-      plusDM.push(high - prevHigh > prevLow - low ? Math.max(high - prevHigh, 0) : 0);
-      minusDM.push(prevLow - low > high - prevHigh ? Math.max(prevLow - low, 0) : 0);
+      
+      const upMove = high - prevHigh;
+      const downMove = prevLow - low;
+      plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+      minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
     }
 
-    const atr = tr.slice(-period).reduce((a, b) => a + b, 0) / period;
-    const avgPlusDM = plusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
-    const avgMinusDM = minusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
+    if (tr.length < period * 2) return 25;
 
-    const plusDI = atr > 0 ? (avgPlusDM / atr) * 100 : 0;
-    const minusDI = atr > 0 ? (avgMinusDM / atr) * 100 : 0;
-    const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI || 1) * 100;
+    // Step 2: First smoothed ATR, +DM, -DM using Wilder's method (SMA for seed)
+    let smoothTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+    let smoothPlusDM = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+    let smoothMinusDM = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
 
-    return dx;
+    // Step 3: Calculate DX values using Wilder's smoothing
+    const dxValues: number[] = [];
+    for (let i = period; i < tr.length; i++) {
+      smoothTR = smoothTR - (smoothTR / period) + tr[i];
+      smoothPlusDM = smoothPlusDM - (smoothPlusDM / period) + plusDM[i];
+      smoothMinusDM = smoothMinusDM - (smoothMinusDM / period) + minusDM[i];
+
+      const pDI = smoothTR > 0 ? (smoothPlusDM / smoothTR) * 100 : 0;
+      const mDI = smoothTR > 0 ? (smoothMinusDM / smoothTR) * 100 : 0;
+      const diSum = pDI + mDI;
+      const dx = diSum > 0 ? (Math.abs(pDI - mDI) / diSum) * 100 : 0;
+      dxValues.push(dx);
+    }
+
+    if (dxValues.length < period) return 25;
+
+    // Step 4: Smooth DX into ADX using Wilder's method
+    let adx = dxValues.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < dxValues.length; i++) {
+      adx = (adx * (period - 1) + dxValues[i]) / period;
+    }
+
+    return adx;
   }
 
   private calculateBollingerBands(closes: number[]): { upper: number; lower: number; middle: number } {

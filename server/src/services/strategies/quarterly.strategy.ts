@@ -26,8 +26,13 @@ class QuarterlyTheoryStrategy {
   /**
    * Full quarterly analysis.
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): QuarterlySignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext): QuarterlySignal[] {
     const signals: QuarterlySignal[] = [];
+    
+    if (!fractal.isAligned) return signals;
+
+    const candles = fractal.entry;
+    const marketStructure = fractal.entryStr;
     if (candles.length < 2) return signals;
 
     const qp = marketStructure.quarterlyPivots;

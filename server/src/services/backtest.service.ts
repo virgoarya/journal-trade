@@ -44,6 +44,8 @@ export interface BacktestConfig {
   signalInterval: number;
   /** Spread in pips simulated on entry/exit (e.g. 1.5 pips). Default is 0. */
   spreadPips?: number;
+  /** Slippage in pips simulated on entry and adverse exits (e.g. 0.5 pips). Default is 0. */
+  slippagePips?: number;
   // NEW: Multi-methodology config
   methodologyWeights?: MethodologyWeights;
   activeMethodologies?: MethodologyName[];
@@ -123,7 +125,7 @@ export interface BacktestResult {
   largestWin: number;
   largestLoss: number;
   averageBarsHeld: number;
-  equityCurve: Array<{ time: number; equity: number }>;
+  equityCurve: Array<{ time: number; equity: number; floatingPnL: number; openTrades: number }>;
   trades: SimulatedTrade[];
   symbolStats: SymbolStat[];
   methodologyStats: MethodologyStat[];
@@ -267,6 +269,7 @@ const DEFAULT_CONFIG: BacktestConfig = {
   signalInterval: 4,
   speedMs: 0,
   spreadPips: 2.0,
+  slippagePips: 0.5,
 };
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -573,7 +576,7 @@ class BacktestService {
 
     // ── Simulation state ───────────────────────────────────────────
     const tradeResults: SimulatedTrade[] = [];
-    const equityCurve: Array<{ time: number; equity: number }> = [];
+    const equityCurve: Array<{ time: number; equity: number; floatingPnL: number; openTrades: number }> = [];
     let equity = merged.initialBalance;
     let peakEquity = equity;
     let maxDrawdown = 0;
@@ -707,24 +710,45 @@ class BacktestService {
           let hitSL = false;
           let hitTP = false;
 
-          // 1. Check Standard SL/TP using candle High/Low (wick)
+          // Spread + slippage for exit simulation
+          const spreadVal = (merged.spreadPips || 0) * 0.0001;
+          const slippageVal = (merged.slippagePips || 0) * 0.0001;
+
+          // 1. Check Standard SL/TP using accurate Bid/Ask representation
+          // In MT5, OHLC is based on Bid prices.
+          const candleLowBid = currentCandle.low;
+          const candleHighBid = currentCandle.high;
+          const candleLowAsk = currentCandle.low + spreadVal;
+          const candleHighAsk = currentCandle.high + spreadVal;
+
           if (trade.direction === "BUY") {
-            if (currentCandle.low <= trade.sl) hitSL = true;
-            if (currentCandle.high >= trade.tp) hitTP = true;
+            // BUY closed by selling at BID
+            if (candleLowBid <= trade.sl) hitSL = true;
+            if (candleHighBid >= trade.tp) hitTP = true;
           } else {
-            if (currentCandle.high >= trade.sl) hitSL = true;
-            if (currentCandle.low <= trade.tp) hitTP = true;
+            // SELL closed by buying at ASK
+            if (candleHighAsk >= trade.sl) hitSL = true;
+            if (candleLowAsk <= trade.tp) hitTP = true;
           }
 
           if (hitSL && hitTP) {
             // Both hit in the same candle: assume SL hit (conservative)
-            toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+            // The SL price is already the trigger price, just add adverse slippage
+            const slExit = trade.direction === "BUY"
+              ? trade.sl - slippageVal  // closed at BID, worse
+              : trade.sl + slippageVal; // closed at ASK, worse
+            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT" });
             continue;
           } else if (hitSL) {
-            toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+            const slExit = trade.direction === "BUY"
+              ? trade.sl - slippageVal
+              : trade.sl + slippageVal;
+            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT" });
             continue;
           } else if (hitTP) {
-            toClose.push({ key, exitPrice: trade.tp, reason: "TP_HIT" });
+            // TP hit exactly at TP price (no slippage on favorable exit)
+            const tpExit = trade.tp;
+            toClose.push({ key, exitPrice: tpExit, reason: "TP_HIT" });
             continue;
           }
 
@@ -819,14 +843,40 @@ class BacktestService {
           const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1).map((r: MT5Rate) => ({
             time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
           }));
-          const ms = marketStructureService.analyzeMarketStructure(strategyCandles);
+
+          // Build proper fractal context for multi-timeframe approximation
+          // In backtest we don't have separate TF data, so we simulate:
+          //   - direction: full candle window (HTF perspective)
+          //   - setup: last 2/3 of candles (MTF perspective)
+          //   - entry: last 1/3 of candles (LTF perspective)
+          const dirCandles = strategyCandles;
+          const setupCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3)));
+          const entryCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3)));
+
+          const dirMs = marketStructureService.analyzeMarketStructure(dirCandles);
+          const setupMs = marketStructureService.analyzeMarketStructure(setupCandles);
+          const entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
+
+          // Compute alignment properly instead of hardcoding true
+          const isAligned = dirMs.trend.direction === setupMs.trend.direction &&
+                            setupMs.trend.direction === entryMs.trend.direction;
+
+          const fractalCtx = {
+            direction: dirCandles,
+            setup: setupCandles,
+            entry: entryCandles,
+            directionStr: dirMs,
+            setupStr: setupMs,
+            entryStr: entryMs,
+            isAligned,
+          };
           const [smcSignals, ictSignals, msnrSignals, crtSignals, quarterlySignals, litSignals] = [
-            smcStrategy.analyze(strategyCandles, ms),
-            ictStrategy.analyze(strategyCandles, ms),
-            msnrStrategy.analyze(strategyCandles, ms),
-            crtStrategy.analyze(strategyCandles, ms),
-            quarterlyTheoryStrategy.analyze(strategyCandles, ms),
-            litStrategy.analyze(strategyCandles, ms),
+            smcStrategy.analyze(fractalCtx),
+            ictStrategy.analyze(fractalCtx),
+            msnrStrategy.analyze(fractalCtx),
+            crtStrategy.analyze(fractalCtx),
+            quarterlyTheoryStrategy.analyze(fractalCtx),
+            litStrategy.analyze(fractalCtx),
           ];
 
           let rsiEngulfSignal: any = null;
@@ -862,9 +912,12 @@ class BacktestService {
             const fs = confluence.finalSignal;
             const dirOk = fs.direction === "BUY" ? volumeBuy : volumeSell;
             if (dirOk) {
-              // Apply spread to entry price
+              // Apply spread + slippage to entry price
               const spreadValue = (merged.spreadPips || 0) * 0.0001;
-              const simulatedEntry = fs.direction === "BUY" ? fs.entry + spreadValue : fs.entry - spreadValue;
+              const slippageValue = (merged.slippagePips || 0) * 0.0001;
+              const simulatedEntry = fs.direction === "BUY"
+                ? fs.entry + spreadValue + slippageValue
+                : fs.entry - spreadValue - slippageValue;
               const vol = aiTradingEngine.calculatePositionSize({
                 accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
                 entryPrice: simulatedEntry, stopLoss: fs.sl,
@@ -1007,6 +1060,8 @@ class BacktestService {
       const equityPoint = {
         time: group.time,
         equity: Math.round(currentEquity * 100) / 100,
+        floatingPnL: Math.round(floatingPnL * 100) / 100,
+        openTrades: openTrades.size,
       };
       equityCurve.push(equityPoint);
 
@@ -1022,6 +1077,19 @@ class BacktestService {
       const progressPct = Math.round((timelineStep / totalTimelineSteps) * 100);
       if (progressPct - lastProgressPct >= MIN_PROGRESS_INTERVAL_PCT || timelineStep === totalTimelineSteps) {
         lastProgressPct = progressPct;
+
+        if (merged.sessionId) {
+          const { backtestSessionManager } = require('./backtest-session.manager');
+          backtestSessionManager.saveCheckpoint(merged.sessionId, {
+            progressPercent: progressPct,
+            timelineStep,
+            totalSteps: totalTimelineSteps,
+            lastEquity: Math.round(currentEquity * 100) / 100,
+            openTradeCount: openTrades.size,
+            completedTradeCount: tradeResults.length,
+          });
+        }
+
         emit({
           type: "progress",
           data: {

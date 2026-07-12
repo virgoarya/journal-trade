@@ -35,6 +35,7 @@ export interface StreamCandle {
 
 export interface StreamTradeOpen {
   time: number;
+  symbol: string;
   direction: string;
   entryPrice: number;
   sl: number;
@@ -43,11 +44,13 @@ export interface StreamTradeOpen {
   confidence: number;
   rsi: number;
   pattern: string;
+  primaryMethodology?: string;
 }
 
 export interface StreamTradeClose {
   entryTime: number;
   exitTime: number;
+  symbol: string;
   direction: string;
   entryPrice: number;
   exitPrice: number;
@@ -55,6 +58,7 @@ export interface StreamTradeClose {
   pnlPercent: number;
   reason: string;
   confidence: number;
+  primaryMethodology?: string;
 }
 
 export type SSEEvent =
@@ -111,6 +115,9 @@ export interface BacktestTrade {
   atrAtEntry: number;
   pattern: string;
   confidence: number;
+  primaryMethodology?: string;
+  methodologyConfidence?: number;
+  methodologyCount?: number;
 }
 
 export interface BacktestResult {
@@ -135,7 +142,7 @@ export interface BacktestResult {
   averageLoss: number;
   largestWin: number;
   largestLoss: number;
-  equityCurve: Array<{ time: number; equity: number }>;
+  equityCurve: Array<{ time: number; equity: number; floatingPnL?: number; openTrades?: number }>;
   trades: BacktestTrade[];
   symbolStats?: Array<{
     symbol: string;

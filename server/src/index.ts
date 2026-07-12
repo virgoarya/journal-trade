@@ -218,3 +218,7 @@ connectDB()
     console.error("DB connection failed:", e);
     process.exit(1);
   });
+
+// Trigger tsx watch restart
+
+// Trigger restart for rate limit fix

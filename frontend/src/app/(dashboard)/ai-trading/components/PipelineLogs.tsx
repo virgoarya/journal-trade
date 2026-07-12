@@ -51,7 +51,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
   // Map of symbol -> stageKey
   const [selectedStages, setSelectedStages] = useState<Record<string, string>>({});
 
-  const logTypes = ["INFO", "SIGNAL", "TRADE", "ERROR", "TRAILING", "CONFLUENCE"];
+  const logTypes = ["INFO", "SIGNAL", "CONFLUENCE", "TRADE", "TRAILING", "ERROR"];
 
   if (isLoading) {
     return <SkeletonLoader type="list" count={5} />;
@@ -129,12 +129,25 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
           track.stages.INFO = { status: "active", message: log.message, time };
         } else if (log.type === "SIGNAL") {
           track.stages.SIGNAL = { status: "active", message: log.message, time };
+          // Siklus baru: reset tahapan berikutnya
+          track.stages.CONFLUENCE = { status: "pending" };
+          track.stages.EXECUTION = { status: "pending" };
+          track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "CONFLUENCE") {
-          track.stages.CONFLUENCE = { status: "active", message: log.message, time };
+          let status: "active" | "error" | "success" = "active";
+          if (log.message.includes("LLM Consensus Result: NO TRADE")) status = "error";
+          else if (log.message.includes("LLM Consensus Result: TRADE")) status = "success";
+          
+          track.stages.CONFLUENCE = { status, message: log.message, time };
+          // Reset tahapan berikutnya
+          track.stages.EXECUTION = { status: "pending" };
+          track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "TRADE") {
           track.stages.EXECUTION = { status: "success", message: log.message, time };
+          track.stages.TRAILING = { status: "pending" }; // Reset trailing untuk trade baru
         } else if (log.type === "ERROR") {
           track.stages.EXECUTION = { status: "error", message: log.message, time };
+          track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "TRAILING") {
           track.stages.TRAILING = { status: "success", message: log.message, time };
         }

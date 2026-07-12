@@ -14,6 +14,7 @@ interface ParamCombination {
   trailingStop: { enabled: boolean; activationATR: number; trailATR: number; breakEven: boolean };
   maxRiskPerTrade: number;
   signalInterval: number;
+  activeMethodologies?: import("./strategies/index").MethodologyName[];
 }
 
 const TRAINING_MONTHS = 4;
@@ -47,6 +48,8 @@ class WalkForwardService {
         leverage: 100,
         signalInterval: params.signalInterval,
         spreadPips: 2.0,
+        slippagePips: 0.5,
+        activeMethodologies: params.activeMethodologies,
       };
 
       try {
@@ -88,10 +91,21 @@ class WalkForwardService {
 
   private generateParamSpace(): ParamCombination[] {
     const combos: ParamCombination[] = [];
+    
+    // Methodology subsets to test (from most selective to most inclusive)
+    const methodologySets: Array<import("./strategies/index").MethodologyName[]> = [
+      ["smc", "ict", "lit"],                                    // Trend-following only
+      ["msnr", "crt"],                                          // Mean-reversion only
+      ["smc", "ict", "msnr", "lit"],                            // Core 4
+      ["smc", "ict", "msnr", "crt", "quarterly", "lit"],        // All 6 advanced
+      ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"], // All 7
+    ];
+
     for (const os of [25, 30, 35]) {
       for (const ob of [65, 70, 75]) {
         for (const sl of [1.0, 1.5, 2.0]) {
           for (const tp of [1.5, 2.0, 2.5]) {
+            // Test default methodology set for all param combinations
             combos.push({
               entrySettings: { rsiOversold: os, rsiOverbought: ob, atrMultiplierSL: sl, atrMultiplierTP: tp },
               trailingStop: { enabled: true, activationATR: 1.0, trailATR: 0.5, breakEven: false },
@@ -102,6 +116,18 @@ class WalkForwardService {
         }
       }
     }
+    
+    // Also test methodology subset variations with mid-range params
+    for (const methSet of methodologySets) {
+      combos.push({
+        entrySettings: { rsiOversold: 30, rsiOverbought: 70, atrMultiplierSL: 1.5, atrMultiplierTP: 2.0 },
+        trailingStop: { enabled: true, activationATR: 1.0, trailATR: 0.5, breakEven: false },
+        maxRiskPerTrade: 0.5,
+        signalInterval: 4,
+        activeMethodologies: methSet,
+      });
+    }
+
     return combos;
   }
 

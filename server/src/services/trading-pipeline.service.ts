@@ -103,12 +103,16 @@ class TradingPipelineService {
     {
       config: PipelineConfig;
       interval: NodeJS.Timeout | null;
+      trailingInterval: NodeJS.Timeout | null;
       logs: PipelineLog[];
       lastSignal: TradingSignal | null;
       lastAnalysis: MultiStrategySymbolAnalysis | null;
       lastError: string | null;
       lastAnalyzedCandleTimes?: Map<string, number>;
+      waitingReconnect?: boolean;
       paused: boolean;
+      /** Track pending orders for expiry management */
+      pendingOrders: Map<number, { symbol: string; placedAt: number; expiryAt: number }>;
     }
   > = new Map();
 
@@ -154,23 +158,44 @@ class TradingPipelineService {
     const pipeline = {
       config: merged,
       interval: null as NodeJS.Timeout | null,
+      trailingInterval: null as NodeJS.Timeout | null,
       logs: [] as PipelineLog[],
       lastSignal: null as TradingSignal | null,
       lastAnalysis: null as MultiStrategySymbolAnalysis | null,
       lastError: null as string | null,
       lastAnalyzedCandleTimes: new Map<string, number>(),
+      waitingReconnect: false,
       paused: false,
+      pendingOrders: new Map<number, { symbol: string; placedAt: number; expiryAt: number }>(),
     };
 
     this.activePipelines.set(userId, pipeline);
 
-    this.addLog(userId, "INFO",
-      `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies]`
-    );
+    try {
+      const accountInfo = await mt5McpService.getAccountInfo();
+      const positions = await mt5McpService.getPositions();
+      const symbolPositions = positions.filter(p => merged.symbols.includes(p.symbol));
+      this.addLog(userId, "INFO",
+        `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | Balance: $${accountInfo?.balance?.toFixed(2) || 0} | Positions: ${symbolPositions.length}/${merged.maxOpenPositions}`
+      );
+    } catch (e: any) {
+      this.addLog(userId, "INFO",
+        `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | MT5 Info unavailable`
+      );
+    }
+
+    // Trigger the first execution immediately instead of waiting for the first interval tick
+    setTimeout(() => this.pipelineLoop(userId), 0);
 
     pipeline.interval = setInterval(
       () => this.pipelineLoop(userId),
       intervalMs,
+    );
+
+    // Trailing stop & pending order management runs more frequently (every 10s)
+    pipeline.trailingInterval = setInterval(
+      () => this.managePositions(userId),
+      10_000,
     );
 
     if (!isRecovery) {
@@ -199,6 +224,9 @@ class TradingPipelineService {
     const pipeline = this.activePipelines.get(userId);
     if (pipeline?.interval) {
       clearInterval(pipeline.interval);
+    }
+    if (pipeline?.trailingInterval) {
+      clearInterval(pipeline.trailingInterval);
     }
 
     if (pipeline) {
@@ -476,6 +504,18 @@ class TradingPipelineService {
     if (!pipeline) return;
 
     try {
+      // Handle MT5 disconnections by auto-pausing without killing the timer
+      if (!mt5McpService.isConnected) {
+        if (!pipeline.waitingReconnect) {
+          pipeline.waitingReconnect = true;
+          this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
+        }
+        return; // Skip this tick silently
+      } else if (pipeline.waitingReconnect) {
+        pipeline.waitingReconnect = false;
+        this.addLog(userId, "INFO", `[PIPELINE] Koneksi MT5 pulih. Pipeline dilanjutkan (Auto-resume).`);
+      }
+
       if (!this.isWithinTradingHours(pipeline.config)) return;
 
       await this.managePositions(userId);
@@ -503,10 +543,10 @@ class TradingPipelineService {
             const latestCandleTime = rates[rates.length - 1].time;
             latestCandleTimes.set(symbol, latestCandleTime);
 
-            const lastAnalyzedTime = pipeline.lastAnalyzedCandleTimes.get(symbol);
-            if (lastAnalyzedTime === undefined || latestCandleTime !== lastAnalyzedTime) {
-              symbolsToAnalyze.push(symbol);
-            }
+            // ALWAYS push the symbol for analysis in fractal strategies.
+            // The underlying engine needs to check smaller timeframes (M15, M5) 
+            // inside the H1 candle for dynamic entries (e.g. MSNR Top-Down).
+            symbolsToAnalyze.push(symbol);
           } else {
             symbolsToAnalyze.push(symbol);
           }
@@ -531,20 +571,49 @@ class TradingPipelineService {
           }));
           const regimeResult = marketRegimeService.analyze(candles);
           regimeMult = marketRegimeService.getRegimeMultipliers(regimeResult.regime);
-          this.addLog(userId, "CONFLUENCE",
+          this.addLog(userId, "SIGNAL",
             `[REGIME] ${regimeResult.regime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
           );
         }
       } catch (e: any) { silentLogger.warn(`[PIPELINE] Regime check error: ${e.message}`); }
 
-      // Use multi-methodology analysis only for symbols with new candles
-      const analyses = await aiTradingEngine.analyzeSymbols(
-        symbolsToAnalyze,
-        pipeline.config.timeframe,
-        pipeline.config.maxRiskPerTrade,
-        pipeline.config.methodologyWeights,
-        pipeline.config.activeMethodologies,
+      // ── Apply regime multipliers to methodology weights ────────────
+      let adjustedWeights = pipeline.config.methodologyWeights;
+      if (Object.keys(regimeMult).length > 0 && adjustedWeights) {
+        adjustedWeights = { ...adjustedWeights };
+        for (const [key, mult] of Object.entries(regimeMult)) {
+          if (key in adjustedWeights) {
+            (adjustedWeights as any)[key] = ((adjustedWeights as any)[key] || 1.0) * mult;
+          }
+        }
+        this.addLog(userId, "SIGNAL",
+          `[REGIME] Adjusted weights: ${Object.entries(adjustedWeights).map(([k, v]) => `${k}=${(v as number).toFixed(2)}`).join(", ")}`
+        );
+      }
+
+      // Provide visual feedback for scanning process in the UI
+      this.addLog(userId, "SIGNAL",
+        `Scanning ${symbolsToAnalyze.join(", ")} using ${pipeline.config.activeMethodologies?.length || 0} methodologies...`
       );
+
+      let analyses: MultiStrategySymbolAnalysis[] = [];
+      try {
+        // Use multi-methodology analysis with regime-adjusted weights
+        analyses = await aiTradingEngine.analyzeSymbols(
+          symbolsToAnalyze,
+          pipeline.config.timeframe,
+          pipeline.config.maxRiskPerTrade,
+          adjustedWeights,
+          pipeline.config.activeMethodologies,
+        );
+      } catch (err: any) {
+        silentLogger.error(`[PIPELINE] Error analyzing symbols: ${err.message}`);
+        // Jika error jaringan MT5, putuskan status agar tick berikutnya masuk ke Auto-Pause
+        if (err.message.includes("MT5") || err.message.includes("connect") || err.message.includes("timeout") || err.message.includes("32001")) {
+          mt5McpService.forceDisconnect();
+        }
+        return; // Abort this iteration gracefully
+      }
 
       for (const analysis of analyses) {
         // Store analysis for status display
@@ -589,6 +658,11 @@ class TradingPipelineService {
               `No trade: ${analysis.confluence.reason}`,
               analysis.confluence.methodologyBreakdown,
             );
+          } else {
+            const min = new Date().getMinutes();
+            if (min % 15 === 0 && !pipeline.logs.find(l => l.message.includes(`[${analysis.symbol}] Memantau market`) && new Date(l.time).getTime() > Date.now() - 60000)) {
+               this.addLog(userId, "INFO", `[${analysis.symbol}] Memantau market... menunggu setup teknikal valid.`);
+            }
           }
           continue;
         }
@@ -714,7 +788,7 @@ class TradingPipelineService {
         // ── OPTIONAL: LLM Consensus validation ─────────────────────
         if (pipeline.config.llmConsensus?.enabled) {
           this.addLog(userId, "CONFLUENCE",
-            `Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
+            `[${signal.symbol}] Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
           );
 
           // ── HTF conformance data ──
@@ -752,8 +826,8 @@ class TradingPipelineService {
 
           // Log LLM result
           const isTrade = llmResult.verdict === "GOOD";
-          this.addLog(userId, isTrade ? "CONFLUENCE" : "ERROR",
-            `LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
+          this.addLog(userId, "CONFLUENCE",
+            `[${signal.symbol}] LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
             { llmConsensus: llmResult },
           );
 
@@ -803,10 +877,39 @@ class TradingPipelineService {
           continue;
         }
 
+        // ── Tentukan Jenis Order (Market / Limit / Stop) berdasarkan Tick ──
+        let finalAction: any = signal.direction;
+        let orderPrice: number | undefined = undefined;
+
+        try {
+          const tickData = await mt5McpService.call("mt5_symbol_tick", { symbol: signal.symbol });
+          const currentPrice = signal.direction === "BUY" ? tickData.ask : tickData.bid;
+          const pointDist = Math.abs(currentPrice - signal.entry);
+          
+          // Threshold: hanya jadikan pending order jika jarak entry > 3× spread
+          // Jika dekat, gunakan market order langsung agar tidak miss entry
+          const symInfoForThreshold = await mt5McpService.getSymbolInfo(signal.symbol);
+          const minPendingDist = symInfoForThreshold
+            ? symInfoForThreshold.spread * symInfoForThreshold.point * 3
+            : 0.0003; // fallback ~3 pips
+          
+          if (pointDist > minPendingDist) { 
+            if (signal.direction === "BUY") {
+              finalAction = currentPrice > signal.entry ? "BUY_LIMIT" : "BUY_STOP";
+            } else {
+              finalAction = currentPrice < signal.entry ? "SELL_LIMIT" : "SELL_STOP";
+            }
+            orderPrice = signal.entry;
+          }
+        } catch (e: any) {
+          silentLogger.warn(`[Pipeline] Gagal mendapatkan tick untuk ${signal.symbol}, fallback ke Market Order. Error: ${e.message}`);
+        }
+
         const orderResult = await mt5McpService.openOrder({
           symbol: signal.symbol,
-          action: signal.direction,
+          action: finalAction,
           volume,
+          price: orderPrice,
           sl: signal.sl,
           tp: signal.tp,
           comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
@@ -817,10 +920,21 @@ class TradingPipelineService {
           const tpDist = Math.abs(signal.tp - signal.entry);
           const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
 
+          const isPending = finalAction !== signal.direction; // BUY_LIMIT/BUY_STOP etc
           this.addLog(userId, "TRADE",
-            `Opened ${signal.direction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${analysis.confluence.finalSignal.primaryMethodology}]`,
+            `${isPending ? "Placed pending" : "Opened"} ${finalAction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${analysis.confluence.finalSignal.primaryMethodology}]`,
             { signal, orderResult, confluence: analysis.confluence },
           );
+
+          // Track pending orders for expiry management
+          if (isPending && orderResult.ticket) {
+            const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60; // 2 candles worth in real time
+            pipeline.pendingOrders.set(orderResult.ticket, {
+              symbol: signal.symbol,
+              placedAt: Date.now(),
+              expiryAt: Date.now() + expiryMs,
+            });
+          }
 
           await AITradeLog.create({
             userId,
@@ -861,12 +975,45 @@ class TradingPipelineService {
     }
   }
 
-  // ─── Position Management (Trailing Stop) ───────────────────────────
+  // ─── Position & Pending Order Management ──────────────────────────
   private marketClosedCache = new Map<string, number>();
 
   private async managePositions(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
-    if (!pipeline || !pipeline.config.trailingStop.enabled) return;
+    if (!pipeline) return;
+
+    // ── Pending Order Expiry Management ──────────────────────────────
+    if (pipeline.pendingOrders.size > 0) {
+      try {
+        const orders = await mt5McpService.call("mt5_orders_get", {});
+        const activeTickets = new Set((orders || []).map((o: any) => o.ticket));
+
+        for (const [ticket, info] of pipeline.pendingOrders) {
+          // Remove if already filled (no longer in pending orders list)
+          if (!activeTickets.has(ticket)) {
+            pipeline.pendingOrders.delete(ticket);
+            continue;
+          }
+          // Cancel if expired
+          if (Date.now() >= info.expiryAt) {
+            try {
+              await mt5McpService.call("mt5_order_cancel", { ticket });
+              this.addLog(userId, "INFO",
+                `[EXPIRY] Pending order #${ticket} (${info.symbol}) expired after 2 candles — cancelled.`
+              );
+            } catch (cancelErr: any) {
+              silentLogger.warn(`[PIPELINE] Failed to cancel expired order #${ticket}: ${cancelErr.message}`);
+            }
+            pipeline.pendingOrders.delete(ticket);
+          }
+        }
+      } catch (e: any) {
+        silentLogger.warn(`[PIPELINE] Pending order check error: ${e.message}`);
+      }
+    }
+
+    // ── Trailing Stop Management ─────────────────────────────────────
+    if (!pipeline.config.trailingStop.enabled) return;
 
     try {
       const positions = await mt5McpService.getPositions();
@@ -985,11 +1132,15 @@ class TradingPipelineService {
   }
 
   private getIntervalMs(timeframe: string): number {
+    // Signal analysis interval — check ~2× per candle (trailing runs separately at 10s)
     switch (timeframe) {
-      case "M5": return 5_000;
-      case "M15": return 15_000;
-      case "H1": return 60_000;
-      default: return 15_000;
+      case "M1": return 15_000;    // 15s — check 4× per M1 candle
+      case "M5": return 60_000;    // 60s — check ~5× per M5 candle
+      case "M15": return 120_000;  // 120s — check ~7× per M15 candle
+      case "M30": return 180_000;  // 180s — check ~10× per M30 candle
+      case "H1": return 300_000;   // 300s — check ~12× per H1 candle
+      case "H4": return 600_000;   // 600s — check ~24× per H4 candle
+      default: return 120_000;
     }
   }
 

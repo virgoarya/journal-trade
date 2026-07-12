@@ -23,11 +23,13 @@ export interface HTFConfluenceResult {
 class MultiTimeframeService {
   /**
    * Check if a trading signal on `timeframe` is aligned with higher timeframe trends.
+   * @param preloadedRates Optional pre-fetched rate data to avoid duplicate MT5 API calls
    */
   async checkConfluence(
     symbol: string,
     timeframe: string,
     direction: "BUY" | "SELL",
+    preloadedRates?: Map<string, Candle[]>,
   ): Promise<HTFConfluenceResult> {
     const higherTfs = TIMEFRAME_HIERARCHY[timeframe] || [];
     if (higherTfs.length === 0) {
@@ -43,19 +45,25 @@ class MultiTimeframeService {
 
     for (const htf of higherTfs) {
       try {
-        const rates = await mt5McpService.getRates(symbol, htf as any, 60);
-        if (!rates || rates.length < 30) continue;
+        // Use preloaded data if available, otherwise fetch from MT5
+        let candles: Candle[];
+        const cacheKey = `${symbol}_${htf}`;
+        if (preloadedRates?.has(cacheKey)) {
+          candles = preloadedRates.get(cacheKey)!;
+        } else {
+          const rates = await mt5McpService.getRates(symbol, htf as any, 60);
+          if (!rates || rates.length < 30) continue;
+          candles = rates.map((r: any) => ({
+            time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
+          }));
+        }
 
-        const candles: Candle[] = rates.map((r: any) => ({
-          time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
-        }));
+        if (candles.length < 30) continue;
         const closes = candles.map(c => c.close);
 
         // EMA cross trend detection
         const ema20 = this.calculateEMA(closes, 20);
         const ema50 = this.calculateEMA(closes, 50);
-        const prevEma20 = this.calculateEMA(closes.slice(0, -1), 20);
-        const prevEma50 = this.calculateEMA(closes.slice(0, -1), 50);
 
         const currentTrend = ema20 > ema50 ? "BULL" : "BEAR";
 

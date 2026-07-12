@@ -13,7 +13,7 @@ export interface MSNRSignal {
   tp: number;
   keyLevel: KeyLevel;
   levelStrength: number; // 1–5
-  signalType: "BOUNCE" | "BREAK_RETEST" | "STRUCTURE_BREAK";
+  signalType: "BOUNCE" | "BREAK_RETEST" | "STRUCTURE_BREAK" | "SBR" | "RBS" | "QML";
   fibLevel?: number;
   reason: string;
 }
@@ -30,22 +30,92 @@ class MSNRStrategy {
   /**
    * Full MSNR analysis.
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): MSNRSignal[] {
-    const signals: MSNRSignal[] = [];
+  analyze(fractal: import("./market-structure.service").FractalContext): MSNRSignal[] {
+    const rawSignals: MSNRSignal[] = [];
+
+    if (!fractal.isAligned) return rawSignals;
+
+    // ─── TAHAP 1: Cari Setup / Penolakan di Timeframe SETUP (M15) ───
+    const setupCandles = fractal.setup;
+    const setupStructure = fractal.setupStr;
 
     // 1. Key level bounce
-    const bounceSignals = this.detectLevelBounce(candles, marketStructure);
-    signals.push(...bounceSignals);
+    const bounceSignals = this.detectLevelBounce(setupCandles, setupStructure);
+    rawSignals.push(...bounceSignals);
 
-    // 2. Break + retest
-    const retestSignals = this.detectBreakRetest(candles, marketStructure);
-    signals.push(...retestSignals);
+    // 2. SBR / RBS
+    const sbrRbsSignals = this.detectSBR_RBS(setupCandles, setupStructure);
+    rawSignals.push(...sbrRbsSignals);
 
-    // 3. Structure break (level violation with conviction)
-    const breakSignals = this.detectStructureBreak(candles, marketStructure);
-    signals.push(...breakSignals);
+    // 2b. Quasimodo Level (QML)
+    const qmlSignals = this.detectQML(setupCandles, setupStructure);
+    rawSignals.push(...qmlSignals);
 
-    return signals.sort((a, b) => b.confidence - a.confidence);
+    // 3. Structure break
+    const breakSignals = this.detectStructureBreak(setupCandles, setupStructure);
+    rawSignals.push(...breakSignals);
+
+    // ─── TAHAP 2: Konfirmasi Pola Engulfing di Timeframe ENTRY (M5) ───
+    const confirmedSignals = this.confirmWithEntryTF(rawSignals, fractal.entry);
+
+    return confirmedSignals.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Filter sinyal potensial M15 dengan memastikan ada Engulfing/Reversal Candle di M5
+   */
+  private confirmWithEntryTF(signals: MSNRSignal[], entryCandles: Candle[]): MSNRSignal[] {
+    if (entryCandles.length < 2) return [];
+    const confirmed: MSNRSignal[] = [];
+    const last = entryCandles[entryCandles.length - 1];
+    const prev = entryCandles[entryCandles.length - 2];
+
+    const isBullishEngulfing =
+      prev.close < prev.open && // prev bearish
+      last.close > last.open && // last bullish
+      last.close > prev.open && // body engulf
+      last.open <= prev.close;
+
+    const isBearishEngulfing =
+      prev.close > prev.open && // prev bullish
+      last.close < last.open && // last bearish
+      last.close < prev.open && // body engulf
+      last.open >= prev.close;
+
+    const atr = atrService.calculate(entryCandles);
+    const m5Atr = atr > 0 ? atr : this.avgRange(entryCandles, 5);
+
+    for (const sig of signals) {
+      if (sig.direction === "BUY" && isBullishEngulfing) {
+        const confirmedEntry = last.close;
+        const engulfingLow = Math.min(last.low, prev.low);
+        const newSl = engulfingLow - m5Atr * 0.5;
+
+        confirmed.push({
+          ...sig,
+          entry: confirmedEntry,
+          sl: newSl,
+          reason: sig.reason + ` [CONFIRMED by M5 Bullish Engulfing]`,
+          confidence: Math.min(95, sig.confidence + 15),
+        });
+      }
+
+      if (sig.direction === "SELL" && isBearishEngulfing) {
+        const confirmedEntry = last.close;
+        const engulfingHigh = Math.max(last.high, prev.high);
+        const newSl = engulfingHigh + m5Atr * 0.5;
+
+        confirmed.push({
+          ...sig,
+          entry: confirmedEntry,
+          sl: newSl,
+          reason: sig.reason + ` [CONFIRMED by M5 Bearish Engulfing]`,
+          confidence: Math.min(95, sig.confidence + 15),
+        });
+      }
+    }
+
+    return confirmed;
   }
 
   // ── Level Bounce ───────────────────────────────────────────────────
@@ -124,12 +194,9 @@ class MSNRStrategy {
     return signals;
   }
 
-  // ── Break + Retest ─────────────────────────────────────────────────
+  // ── SBR / RBS (Support Become Resistance / Resistance Become Support) ──
 
-  /**
-   * Price breaks a key level, then returns to retest it as the opposite role.
-   */
-  private detectBreakRetest(candles: Candle[], ms: MarketStructure): MSNRSignal[] {
+  private detectSBR_RBS(candles: Candle[], ms: MarketStructure): MSNRSignal[] {
     const signals: MSNRSignal[] = [];
     if (candles.length < 3 || ms.keyLevels.length === 0) return signals;
 
@@ -142,44 +209,110 @@ class MSNRStrategy {
     for (const level of ms.keyLevels) {
       if (level.strength < 2) continue;
 
-      // RESISTANCE break + retest: price broke above resistance, now retesting
+      // RESISTANCE break + retest (RBS - Resistance Become Support)
       if (level.type === "RESISTANCE") {
-        const brokeAbove = preprev.close > level.price || preprev.high > level.price;
+        const brokeAbove = preprev.close > level.price; 
         const retesting = Math.abs(last.close - level.price) / level.price < 0.002;
 
         if (brokeAbove && retesting) {
           signals.push({
             direction: "BUY",
             entry: last.close,
-            sl: level.price - avgRange * 1.2,
-            tp: last.close + avgRange * 2.0,
+            sl: level.price - avgRange * 1.5,
+            tp: last.close + avgRange * 2.5,
             keyLevel: level,
             levelStrength: level.strength,
-            signalType: "BREAK_RETEST",
-            confidence: Math.min(85, 65 + level.strength * 4),
-            reason: `MSNR Break+Retest BUY: Resistance ${level.price.toFixed(5)} → flipped to support`,
+            signalType: "RBS",
+            confidence: Math.min(90, 70 + level.strength * 4),
+            reason: `RBS BUY: Resistance ${level.price.toFixed(5)} broken and retested as support`,
           });
         }
       }
 
-      // SUPPORT break + retest: price broke below support, now retesting
+      // SUPPORT break + retest (SBR - Support Become Resistance)
       if (level.type === "SUPPORT") {
-        const brokeBelow = preprev.close < level.price || preprev.low < level.price;
+        const brokeBelow = preprev.close < level.price;
         const retesting = Math.abs(last.close - level.price) / level.price < 0.002;
 
         if (brokeBelow && retesting) {
           signals.push({
             direction: "SELL",
             entry: last.close,
-            sl: level.price + avgRange * 1.2,
-            tp: last.close - avgRange * 2.0,
+            sl: level.price + avgRange * 1.5,
+            tp: last.close - avgRange * 2.5,
             keyLevel: level,
             levelStrength: level.strength,
-            signalType: "BREAK_RETEST",
-            confidence: Math.min(85, 65 + level.strength * 4),
-            reason: `MSNR Break+Retest SELL: Support ${level.price.toFixed(5)} → flipped to resistance`,
+            signalType: "SBR",
+            confidence: Math.min(90, 70 + level.strength * 4),
+            reason: `SBR SELL: Support ${level.price.toFixed(5)} broken and retested as resistance`,
           });
         }
+      }
+    }
+
+    return signals;
+  }
+
+  // ── QML (Quasimodo Level) ──────────────────────────────────────────
+
+  private detectQML(candles: Candle[], ms: MarketStructure): MSNRSignal[] {
+    const signals: MSNRSignal[] = [];
+    if (candles.length < 10) return signals;
+    if (ms.swingHighs.length < 2 || ms.swingLows.length < 2) return signals;
+
+    const last = candles[candles.length - 1];
+    const atr = atrService.calculate(candles);
+    const avgRange = atr > 0 ? atr : this.avgRange(candles, 5);
+
+    const swings = [
+      ...ms.swingHighs.map(s => ({ ...s, type: 'HIGH' })),
+      ...ms.swingLows.map(s => ({ ...s, type: 'LOW' }))
+    ].sort((a, b) => a.index - b.index);
+
+    if (swings.length < 4) return signals;
+    const [s1, s2, s3, s4] = swings.slice(-4);
+
+    // BULLISH QML (Inverted H&S / Low - High - Lower Low - Higher High)
+    if (s1.type === "LOW" && s2.type === "HIGH" && s3.type === "LOW" && s4.type === "HIGH") {
+      const isHeadLower = s3.price < s1.price; 
+      const isQmBroken = s4.price > s2.price; 
+      const isRetestingLeftShoulder = Math.abs(last.close - s1.price) / s1.price < 0.0025; 
+      const notViolated = last.close > s3.price; 
+
+      if (isHeadLower && isQmBroken && isRetestingLeftShoulder && notViolated) {
+        signals.push({
+          direction: "BUY",
+          entry: last.close,
+          sl: s3.price - avgRange * 0.5,
+          tp: s4.price + avgRange * 1.5,
+          keyLevel: { price: s1.price, strength: 4, type: "SUPPORT", lastTested: last.time },
+          levelStrength: 4,
+          signalType: "QML",
+          confidence: 88,
+          reason: `Bullish QML BUY: Left Shoulder retest at ${s1.price.toFixed(5)} after LL & HH`,
+        });
+      }
+    }
+
+    // BEARISH QML (H&S / High - Low - Higher High - Lower Low)
+    if (s1.type === "HIGH" && s2.type === "LOW" && s3.type === "HIGH" && s4.type === "LOW") {
+      const isHeadHigher = s3.price > s1.price; 
+      const isQmBroken = s4.price < s2.price; 
+      const isRetestingLeftShoulder = Math.abs(last.close - s1.price) / s1.price < 0.0025; 
+      const notViolated = last.close < s3.price;
+
+      if (isHeadHigher && isQmBroken && isRetestingLeftShoulder && notViolated) {
+        signals.push({
+          direction: "SELL",
+          entry: last.close,
+          sl: s3.price + avgRange * 0.5,
+          tp: s4.price - avgRange * 1.5,
+          keyLevel: { price: s1.price, strength: 4, type: "RESISTANCE", lastTested: last.time },
+          levelStrength: 4,
+          signalType: "QML",
+          confidence: 88,
+          reason: `Bearish QML SELL: Left Shoulder retest at ${s1.price.toFixed(5)} after HH & LL`,
+        });
       }
     }
 

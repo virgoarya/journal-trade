@@ -39,10 +39,15 @@ const KILLZONES = {
 
 class ICTStrategy {
   /**
-   * Full ICT analysis for a given symbol.
+   * Full ICT analysis for a given symbol using Fractal Timeframes (Fallback to Entry TF).
    */
-  analyze(candles: Candle[], marketStructure: MarketStructure): ICTSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext): ICTSignal[] {
     const signals: ICTSignal[] = [];
+    
+    if (!fractal.isAligned) return signals;
+    
+    const candles = fractal.entry;
+    const marketStructure = fractal.entryStr;
     const currentKillzone = this.getCurrentKillzone();
 
     // 1. FVG detection + mitigation status

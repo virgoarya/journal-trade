@@ -62,13 +62,23 @@ class RiskManagerService {
         };
       }
 
-      // ── 4. Check duplicate symbol ────────────────────────────────────
-      const hasDuplicate = positions.some(
-        (p) => p.symbol === signal.symbol,
+      // ── 4. Check duplicate symbol (same direction = reject, opposite = allow hedging) ──
+      const sameDirectionDuplicate = positions.some(
+        (p) => p.symbol === signal.symbol && p.type === signal.direction,
       );
-      if (hasDuplicate) {
+      if (sameDirectionDuplicate) {
+        return {
+          allowed: false,
+          reason: `Already have a ${signal.direction} position on ${signal.symbol} — concentrated risk`,
+          warnings,
+        };
+      }
+      const oppositeDirectionExists = positions.some(
+        (p) => p.symbol === signal.symbol && p.type !== signal.direction,
+      );
+      if (oppositeDirectionExists) {
         warnings.push(
-          `Already have an open position on ${signal.symbol}`,
+          `Hedging: existing opposite position on ${signal.symbol}`,
         );
       }
 
