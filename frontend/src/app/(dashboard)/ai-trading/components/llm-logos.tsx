@@ -19,99 +19,120 @@ interface LogoProps {
 /** DeepSeek — two nested downward V-shapes suggesting depth / data layers */
 function DeepSeekLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#1e1b4b" />
-      {/* Outer V */}
-      <path d="M10 12L20 30L30 12" stroke="#818cf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      {/* Inner V */}
-      <path d="M14 17L20 26L26 17" stroke="#4F46E5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#4d6bfe] shadow-[0_0_15px_rgba(77,107,254,0.5)] border border-[#4d6bfe]/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/deepseek.png" 
+        alt="DeepSeek" 
+        className="w-full h-full object-cover p-1.5"
+        onError={(e) => {
+          // Fallback to official deepseek logo if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://chat.deepseek.com/favicon.svg";
+        }}
+      />
+    </div>
   );
 }
 
 /** Qwen — stylized "Q" with ring and small tail */
 function QwenLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#172554" stroke="#3B82F6" strokeWidth="2" />
-      {/* Ring node with 5 small connection dots (neural motif) */}
-      <circle cx="16" cy="16" r="7" stroke="#60a5fa" strokeWidth="2" fill="none" />
-      <circle cx="12" cy="14" r="1.5" fill="#3B82F6" />
-      <circle cx="18" cy="10" r="1.5" fill="#3B82F6" />
-      <circle cx="20" cy="18" r="1.5" fill="#3B82F6" />
-      <circle cx="15" cy="21" r="1.5" fill="#3B82F6" />
-      <circle cx="11" cy="18" r="1.5" fill="#3B82F6" />
-      {/* Dot in center */}
-      <circle cx="16" cy="16" r="2" fill="#3B82F6" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#6366f1] shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-[#6366f1]/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/qwen.png" 
+        alt="Qwen" 
+        className="w-full h-full object-cover p-1"
+        onError={(e) => {
+          // Fallback to official Qwen avatar if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/148330874?v=4";
+        }}
+      />
+    </div>
   );
 }
 
 /** Gemini — 4-point sparkle star */
 function GeminiLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#052e16" stroke="#10B981" strokeWidth="2" />
-      {/* 4-point star (Gemini) */}
-      <path d="M20 6 L23 17 L34 20 L23 23 L20 34 L17 23 L6 20 L17 17 Z"
-        fill="#34d399" stroke="#10B981" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-white shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-white/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/gemini.png" 
+        alt="Gemini" 
+        className="w-full h-full object-cover p-1"
+        onError={(e) => {
+          // Fallback to official Gemini sparkle if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg";
+        }}
+      />
+    </div>
   );
 }
 
 /** Mistral — 3 horizontal wind bars fanning right */
 function MistralLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#1c1917" stroke="#F59E0B" strokeWidth="2" />
-      {/* 3 wind bars, shortest at top, longest at bottom */}
-      <path d="M10 12L26 12" stroke="#fbbf24" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M10 20L30 20" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M10 28L22 28" stroke="#fcd34d" strokeWidth="3" strokeLinecap="round" fill="none" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#fbbf24] shadow-[0_0_15px_rgba(251,191,36,0.5)] border border-[#fbbf24]/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/mistral.png" 
+        alt="Mistral" 
+        className="w-full h-full object-cover p-1"
+        onError={(e) => {
+          // Fallback to official Mistral avatar if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/132470725?v=4";
+        }}
+      />
+    </div>
   );
 }
 
 /** Nemotron — stylized processor chip with center dot */
 function NemotronLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#1f1111" stroke="#EF4444" strokeWidth="2" />
-      {/* Processor chip shape */}
-      <rect x="11" y="11" width="18" height="18" rx="3" stroke="#f87171" strokeWidth="2" fill="none" />
-      {/* Center dot */}
-      <circle cx="20" cy="20" r="4" fill="#EF4444" />
-      {/* 4 corner pins */}
-      <circle cx="11" cy="11" r="1.5" fill="#fca5a5" />
-      <circle cx="29" cy="11" r="1.5" fill="#fca5a5" />
-      <circle cx="11" cy="29" r="1.5" fill="#fca5a5" />
-      <circle cx="29" cy="29" r="1.5" fill="#fca5a5" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#76b900] shadow-[0_0_15px_rgba(118,185,0,0.5)] border border-[#76b900]/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/nemotron.png" 
+        alt="Nemotron" 
+        className="w-full h-full object-cover p-1"
+        onError={(e) => {
+          // Fallback to official NVIDIA avatar if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/1728152?v=4";
+        }}
+      />
+    </div>
   );
 }
 
 /** Claude — sunburst / radiating lines */
 function ClaudeLogo({ size = 40, className }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#1a1206" stroke="#D4AF37" strokeWidth="2" />
-      {/* Radiating sunburst */}
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
-        <line
-          key={angle}
-          x1={20}
-          y1={20}
-          x2={20 + 12 * Math.cos((angle * Math.PI) / 180)}
-          y2={20 + 12 * Math.sin((angle * Math.PI) / 180)}
-          stroke="#D4AF37"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity={0.6}
-        />
-      ))}
-      {/* Center circle */}
-      <circle cx="20" cy="20" r="4" fill="#D4AF37" />
-    </svg>
+    <div 
+      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.5)] border border-[#d4af37]/50", className)} 
+      style={{ width: size, height: size }}
+    >
+      <img 
+        src="/claude.png" 
+        alt="Claude" 
+        className="w-full h-full object-cover p-1"
+        onError={(e) => {
+          // Fallback to official Anthropic avatar if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/84511046?v=4";
+        }}
+      />
+    </div>
   );
 }
 

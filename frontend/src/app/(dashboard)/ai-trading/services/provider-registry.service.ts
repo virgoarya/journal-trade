@@ -12,7 +12,7 @@ const DEFAULT_PROVIDERS: LlmProviderConfig[] = [
   { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", color: MODEL_COLORS.gemini, status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", color: MODEL_COLORS.mistral, status: "active" },
   { name: "nemotron", label: "Nemotron 3 Ultra", model: "nemotron-4-340b-instruct", color: MODEL_COLORS.nemotron, status: "active" },
-  { name: "claude-opus", label: "Claude Opus 4", model: "claude-3-opus-20240229", color: MODEL_COLORS["claude-opus"], status: "active" },
+  { name: "claude-opus", label: "Claude Opus 4.6", model: "claude-3-opus-20240229", color: MODEL_COLORS["claude-opus"], status: "active" },
 ];
 
 /**

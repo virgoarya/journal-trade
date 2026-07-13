@@ -81,18 +81,21 @@ class MarketRegimeService {
     const direction = orderFlow !== "SIDEWAYS" ? orderFlow : fallbackDirection;
     let regime: MarketRegime;
 
-    if (orderFlow === "BULL") {
-       regime = "TRENDING_BULL";
-    } else if (orderFlow === "BEAR") {
-       regime = "TRENDING_BEAR";
-    } else if (isHighVol) {
+    if (isHighVol) {
        regime = "HIGH_VOLATILITY";
        confidence = Math.min(100, Math.round((atr / avgATR) * 60));
     } else if (isSqueeze || adx < 25) {
        regime = "RANGING";
-       confidence = confidence || Math.min(100, Math.round((25 - adx) * 2));
+       // Use ADX weakness or Squeeze to define ranging confidence
+       confidence = Math.max(confidence, Math.min(100, Math.round((25 - adx) * 4)));
+    } else if (orderFlow === "BULL") {
+       regime = "TRENDING_BULL";
+       confidence = confidence || Math.min(100, Math.round(adx * 2));
+    } else if (orderFlow === "BEAR") {
+       regime = "TRENDING_BEAR";
+       confidence = confidence || Math.min(100, Math.round(adx * 2));
     } else {
-       // Fallback ke ADX/EMA jika order flow tidak terdeteksi jelas (Sideways) tapi ADX tinggi
+       // Fallback ke ADX/EMA jika order flow tidak terdeteksi jelas (Sideways) tapi ADX tinggi (>= 25)
        regime = fallbackDirection === "BULL" ? "TRENDING_BULL" : "TRENDING_BEAR";
        confidence = Math.min(100, Math.round(adx * 1.5));
     }

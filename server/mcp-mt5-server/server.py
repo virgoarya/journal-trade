@@ -658,9 +658,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         symbol = arguments["symbol"]
         action = arguments["action"]
         volume = arguments["volume"]
-        sl = arguments.get("sl", 0.0)
-        tp = arguments.get("tp", 0.0)
+        sl_raw = arguments.get("sl", 0.0)
+        tp_raw = arguments.get("tp", 0.0)
         comment = (arguments.get("comment") or "AI-Trade")[:32]
+        
+        symbol_info = mt5.symbol_info(symbol)
+        digits = symbol_info.digits if symbol_info else 5
 
         # Select symbol di MT5 — penting untuk beberapa broker
         if not mt5.symbol_select(symbol, True):
@@ -695,6 +698,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             price = arguments.get("price", tick.bid)
         else:
             return _err(f"Invalid action '{action}'")
+            
+        sl = round(float(sl_raw), digits) if sl_raw != 0 else 0.0
+        tp = round(float(tp_raw), digits) if tp_raw != 0 else 0.0
+        price = round(float(price), digits)
 
         filling_mode = _get_filling_mode(symbol)
 
@@ -813,12 +820,19 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return _err(f"Position {ticket} not found")
 
         pos = positions[0]
-        sl = arguments.get("sl", pos.sl or 0)
-        tp = arguments.get("tp", pos.tp or 0)
+        symbol_info = mt5.symbol_info(pos.symbol)
+        digits = symbol_info.digits if symbol_info else 5
+        
+        sl_raw = arguments.get("sl", pos.sl or 0)
+        tp_raw = arguments.get("tp", pos.tp or 0)
+        
+        sl = round(float(sl_raw), digits) if sl_raw != 0 else 0.0
+        tp = round(float(tp_raw), digits) if tp_raw != 0 else 0.0
+        
         if sl == 0:
-            sl = pos.sl or 0
+            sl = round(float(pos.sl or 0), digits)
         if tp == 0:
-            tp = pos.tp or 0
+            tp = round(float(pos.tp or 0), digits)
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,

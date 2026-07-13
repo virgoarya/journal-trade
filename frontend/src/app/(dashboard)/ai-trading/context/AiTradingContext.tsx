@@ -130,9 +130,9 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
 
   // LLM Consensus Config (synced with backend)
   const [llmEnabled, setLlmEnabled] = useState(false);
-  const [llmThreshold, setLlmThreshold] = useState(0.5);
-  const [llmMinProviders, setLlmMinProviders] = useState(2);
-  const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(8000);
+  const [llmThreshold, setLlmThreshold] = useState(0.7);
+  const [llmMinProviders, setLlmMinProviders] = useState(3);
+  const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(25000);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Load AI trading settings from backend on mount
@@ -144,9 +144,9 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
           setActiveMethodologies(res.data.activeMethodologies || []);
           setMethodologyWeights(res.data.methodologyWeights || { ...DEFAULT_METHODOLOGY_WEIGHTS });
           setLlmEnabled(res.data.llmConsensus?.enabled || false);
-          setLlmThreshold(res.data.llmConsensus?.threshold || 0.5);
-          setLlmMinProviders(res.data.llmConsensus?.minProviders || 2);
-          setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 8000);
+          setLlmThreshold(res.data.llmConsensus?.threshold || 0.7);
+          setLlmMinProviders(res.data.llmConsensus?.minProviders || 3);
+          setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 25000);
         }
       } catch (e) {
         console.warn("Failed to load AI trading settings:", e);

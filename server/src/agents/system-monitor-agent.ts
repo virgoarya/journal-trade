@@ -499,8 +499,8 @@ export class SystemMonitorAgent {
       // Cleanup old reports (keep last 48)
       await this.cleanupOldReports();
 
-      // Send alert webhook if critical issues found
-      if (report.criticalIssues.length > 0 && this.alertWebhook) {
+      // Send alert webhook automatically
+      if (this.config.alertWebhook) {
         await this.sendAlert(report);
       }
     } catch (e: any) {
@@ -546,7 +546,24 @@ export class SystemMonitorAgent {
         return "";
       }
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        // Robust fallback: try to extract valid JSON block if there's trailing garbage
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            data = JSON.parse(jsonMatch[0]);
+          } catch (e) {
+            throw new Error(`Regex extracted JSON also failed to parse: ${rawText.substring(0, 100)}...`);
+          }
+        } else {
+          throw parseErr;
+        }
+      }
+
       const content = data.choices?.[0]?.message?.content?.trim();
       return content || "";
     } catch (e: any) {
@@ -747,8 +764,10 @@ Berikan 3-5 actionable insights dalam Bahasa Indonesia untuk perbaikan sistem. F
   private async sendAlert(report: SystemReport): Promise<void> {
     if (!this.config.alertWebhook) return;
     try {
+      const isCritical = report.criticalIssues.length > 0;
+      const statusIcon = isCritical ? "🚨" : report.warnings.length > 0 ? "⚠️" : "✅";
       const payload = {
-        text: `🚨 *AI Trading System Alert*\n${report.criticalIssues.length} critical issue(s)\n${report.warnings.length} warning(s)\n\nLatest report: ${this.config.reportDir}/latest.md`,
+        content: `${statusIcon} *AI Monitoring Report*\n**Critical Issues:** ${report.criticalIssues.length}\n**Warnings:** ${report.warnings.length}\n\n*Check the server's \`monitoring-reports\` directory for full details.*`,
       };
       await fetch(this.config.alertWebhook, {
         method: "POST",

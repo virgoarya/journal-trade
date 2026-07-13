@@ -45,8 +45,8 @@ export interface LLMConsensusConfig {
 
 export const DEFAULT_LLM_CONSENSUS_CONFIG: LLMConsensusConfig = {
   enabled: false,
-  minProviders: 4,
-  threshold: 0.5,
+  minProviders: 3,
+  threshold: 0.7,
   providerTimeoutMs: 25000,
 };
 
@@ -61,19 +61,17 @@ interface LLMProvider {
   isDirect?: boolean;
 }
 
-/** 6 LLM models via different providers (some via 9Router, some direct) */
 const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> = [
   { name: "deepseek",   label: "DeepSeek V4",      model: "oc/deepseek-v4-flash-free" },
   { name: "qwen",       label: "Qwen 3 32B",       model: "groq/qwen/qwen3-32b" },
+  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash" },
+  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
+  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
+  { name: "claude-opus", label: "Claude Opus 4.6",    model: "kc/kilo-auto/free" },
 ];
 
 /** Additional providers requiring direct API keys */
-const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL: string; apiKeyEnv: string }> = [
-  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash",    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKeyEnv: "GEMINI_API_KEY" },
-  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest", baseURL: "https://api.mistral.ai", apiKeyEnv: "GROQ_API_KEY" },
-  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b", baseURL: "https://integrate.api.nvidia.com/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
-  { name: "claude-opus", label: "Claude Opus 4",    model: "groq/llama-3.3-70b-versatile",    baseURL: "https://api.groq.com/openai/v1", apiKeyEnv: "GROQ_API_KEY" },
-];
+const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL: string; apiKeyEnv: string }> = [];
 
 // Cache untuk menyimpan status rate-limit LLM beserta timestamp kapan terkena limit
 const rateLimitedModels = new Map<string, number>();
@@ -542,9 +540,9 @@ class LLMConsensusService {
 
     const prompt = buildSignalPrompt(signal, correlationWarnings);
 
-    // Run all providers in PARALLEL with timeout (minimum 25s for slow/thinking models)
+    // Run all providers in PARALLEL with timeout (minimum 15s, maximum 25s for slow/thinking models)
     const results = await Promise.all(
-      providers.map((p) => this.callProvider(p, prompt, Math.max(cfg.providerTimeoutMs || 25000, 25000))),
+      providers.map((p) => this.callProvider(p, prompt, Math.min(Math.max(cfg.providerTimeoutMs || 25000, 15000), 25000))),
     );
 
     // Aggregate votes
@@ -611,8 +609,8 @@ class LLMConsensusService {
   getModelStatus(): Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" | "circuit_open" }> {
     const status: Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" | "circuit_open" }> = [];
 
-    const allProviders = getAvailableProviders();
-    for (const m of allProviders) {
+    const allModels = [...NINE_ROUTER_MODELS, ...DIRECT_MODELS];
+    for (const m of allModels) {
       const circuit = this.providerCircuitBreakers.get(m.name);
       let s: "active" | "hibernasi" | "circuit_open" = "active";
       if (isRateLimited(m.name)) {
@@ -748,7 +746,7 @@ isAvailable(): boolean {
             ? `Hibernasi: Kuota/Rate-Limit terlampaui` 
             : friendlyError,
           latencyMs: latency,
-          error: errorBody || `HTTP ${res.status}`,
+          error: friendlyError,
         };
       }
 

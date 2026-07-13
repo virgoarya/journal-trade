@@ -65,6 +65,8 @@ export function LLMProviderCard({ provider, vote, color }: LLMProviderCardProps)
                 Waiting...
               </>
             ) : (
+              provider.status === "hibernasi" ? "Rate Limited" :
+              provider.status === "circuit_open" ? "Error/Timeout" :
               "Inactive"
             )}
           </span>

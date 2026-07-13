@@ -274,6 +274,7 @@ function AITradingPageContent() {
               <MethodologyConfluence
                 confluence={lastAnalysis.confluence}
                 marketStructure={lastAnalysis.marketStructure}
+                symbol={lastAnalysis.symbol}
               />
             )}
 

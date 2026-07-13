@@ -210,6 +210,7 @@ export interface MethodologyBreakdown {
     confidence: number;
     weight: number;
     contribution: number;
+    direction?: string;
   };
 }
 

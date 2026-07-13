@@ -50,7 +50,8 @@ export interface MethodologyBreakdown {
   [key: string]: {
     confidence: number;
     weight: number;
-    contribution: number; // weighted contribution to final score
+    contribution: number;
+    direction?: string;
   };
 }
 
@@ -261,6 +262,7 @@ class ConfluenceEngine {
         contribution: signal
           ? Math.round((signal.confidence * signal.weight) / (weights[methodology] || 1))
           : 0,
+        direction: signal?.direction,
       };
     }
 
