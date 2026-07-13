@@ -854,6 +854,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 "swap": d.swap or 0,
                 "time": d.time,
                 "comment": d.comment or "",
+                "position_id": getattr(d, "position_id", 0) or 0,
+                "entry": getattr(d, "entry", 0) or 0,
             }
             for d in deals
         ]

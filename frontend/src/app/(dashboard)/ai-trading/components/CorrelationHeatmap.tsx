@@ -22,13 +22,13 @@ export function CorrelationHeatmap() {
   const [dataSource, setDataSource] = useState("fallback");
 
   // Fetch actual correlations from backend
-  const fetchCorrelations = async () => {
+const fetchCorrelations = async () => {
     try {
       setIsLoading(true);
       const res = await aiTradingService.getCorrelation();
-      if (res && res.correlations) {
-        setCorrelations(res.correlations);
-        setDataSource(res.source || "mt5_live");
+      if (res && res.success && res.data && res.data.correlations) {
+        setCorrelations(res.data.correlations);
+        setDataSource(res.data.source || "mt5_live");
       }
     } catch (err) {
       console.error("Failed to fetch correlation matrix:", err);

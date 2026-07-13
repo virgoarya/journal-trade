@@ -10,7 +10,7 @@ import { TradingAccount } from "../models/TradingAccount";
 import { Playbook } from "../models/Playbook";
 import { AiReview } from "../models/AiReview";
 import { DailySnapshot } from "../models/DailySnapshot";
-import { UserSettings } from "../models/UserSettings";
+import { UserSettings, DEFAULT_METHODOLOGY_WEIGHTS, DEFAULT_ACTIVE_METHODOLOGIES, type MethodologyName } from "../models/UserSettings";
 
 const updateSettingsSchema = z.object({
   appearance: z.object({
@@ -23,6 +23,17 @@ const updateSettingsSchema = z.object({
     aiReviews: z.boolean(),
     weeklyReports: z.boolean(),
     achievements: z.boolean(),
+  }).optional(),
+});
+
+const aiTradingSettingsSchema = z.object({
+  methodologyWeights: z.record(z.string(), z.number()).optional(),
+  activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"])).optional(),
+  llmConsensus: z.object({
+    enabled: z.boolean().optional(),
+    minProviders: z.number().int().min(1).max(6).optional(),
+    threshold: z.number().min(0.1).max(1.0).optional(),
+    providerTimeoutMs: z.number().int().min(1000).max(30000).optional(),
   }).optional(),
 });
 
@@ -43,6 +54,49 @@ router.get("/", async (req, res, next) => {
     }
     
     return apiResponse.success(res, settings);
+  } catch (error) { next(error); }
+});
+
+// NEW: Get AI Trading settings
+router.get("/ai-trading", async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    let settings = await UserSettings.findOne({ userId });
+    
+    if (!settings) {
+      settings = await UserSettings.create({ userId });
+    }
+    
+    return apiResponse.success(res, {
+      methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
+      activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
+      llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+    });
+  } catch (error) { next(error); }
+});
+
+// NEW: Update AI Trading settings
+router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { methodologyWeights, activeMethodologies, llmConsensus } = req.body;
+    
+    const update: any = {};
+    if (methodologyWeights) update["aiTrading.methodologyWeights"] = methodologyWeights;
+    if (activeMethodologies) update["aiTrading.activeMethodologies"] = activeMethodologies;
+    if (llmConsensus) update["aiTrading.llmConsensus"] = llmConsensus;
+    
+    const settings = await UserSettings.findOneAndUpdate(
+      { userId },
+      { $set: update },
+      { returnDocument: "after", upsert: true }
+    );
+    
+    return apiResponse.success(res, {
+      methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
+      activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
+      llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+    });
   } catch (error) { next(error); }
 });
 

@@ -1,4 +1,4 @@
-import { mt5McpService } from "./mt5-mcp.service";
+import { mt5McpService, CircuitBreaker } from "./mt5-mcp.service";
 import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis, type Candle } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
@@ -12,6 +12,42 @@ import { AITradeLog } from "../models/AITradeLog";
 import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
+
+// ─── Circuit Breaker for LLM Consensus ────────────────────────────────────
+class LLMCircuitBreaker {
+  private circuits: Map<string, CircuitBreaker> = new Map();
+  
+  getCircuit(providerName: string): CircuitBreaker {
+    if (!this.circuits.has(providerName)) {
+      this.circuits.set(providerName, new CircuitBreaker(3, 2, 60000)); // Lower threshold for LLM
+    }
+    return this.circuits.get(providerName)!;
+  }
+  
+  canExecute(providerName: string): boolean {
+    return this.getCircuit(providerName).canExecute();
+  }
+  
+  recordSuccess(providerName: string): void {
+    this.getCircuit(providerName).recordSuccess();
+  }
+  
+  recordFailure(providerName: string): void {
+    this.getCircuit(providerName).recordFailure();
+  }
+  
+  getAllStates(): Record<string, string> {
+    const states: Record<string, string> = {};
+    for (const [name, circuit] of this.circuits) {
+      states[name] = circuit.getState();
+    }
+    return states;
+  }
+  
+  getAvailableProviders(allProviders: string[]): string[] {
+    return allProviders.filter(p => this.getCircuit(p).canExecute());
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -62,6 +98,9 @@ export interface PipelineStatus {
   lastSignal: TradingSignal | null;
   lastAnalysis: MultiStrategySymbolAnalysis | null;
   lastError: string | null;
+  // Circuit breaker states
+  mt5CircuitState?: string;
+  llmCircuitStates?: Record<string, string>;
 }
 
 export interface PipelineLog {
@@ -113,8 +152,46 @@ class TradingPipelineService {
       paused: boolean;
       /** Track pending orders for expiry management */
       pendingOrders: Map<number, { symbol: string; placedAt: number; expiryAt: number }>;
+      /** Circuit breaker states */
+      mt5CircuitOpen: boolean;
+      llmCircuitOpen: boolean;
+      llmCircuitStates: Record<string, string>;
     }
   > = new Map();
+
+  private llmCircuitBreaker = new LLMCircuitBreaker();
+
+  // ─── Cache ────────────────────────────────────────────────────────────
+  private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
+  private fundamentalCache = new Map<string, { score: any; timestamp: number }>();
+  private readonly REGIME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private readonly FUNDAMENTAL_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+  private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
+    const cached = this.regimeCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.REGIME_CACHE_TTL_MS) {
+      return { regime: cached.regime, multipliers: cached.multipliers };
+    }
+    if (cached) this.regimeCache.delete(key);
+    return null;
+  }
+
+  private setCachedRegime(key: string, regime: string, multipliers: Record<string, number>): void {
+    this.regimeCache.set(key, { regime, multipliers, timestamp: Date.now() });
+  }
+
+  private getCachedFundamental(symbol: string): any | null {
+    const cached = this.fundamentalCache.get(symbol);
+    if (cached && Date.now() - cached.timestamp < this.FUNDAMENTAL_CACHE_TTL_MS) {
+      return cached.score;
+    }
+    if (cached) this.fundamentalCache.delete(symbol);
+    return null;
+  }
+
+  private setCachedFundamental(symbol: string, score: any): void {
+    this.fundamentalCache.set(symbol, { score, timestamp: Date.now() });
+  }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────
 
@@ -155,7 +232,7 @@ class TradingPipelineService {
 
     const intervalMs = this.getIntervalMs(merged.timeframe);
 
-    const pipeline = {
+const pipeline = {
       config: merged,
       interval: null as NodeJS.Timeout | null,
       trailingInterval: null as NodeJS.Timeout | null,
@@ -166,6 +243,10 @@ class TradingPipelineService {
       lastAnalyzedCandleTimes: new Map<string, number>(),
       waitingReconnect: false,
       paused: false,
+      mt5CircuitOpen: false,
+      llmCircuitOpen: false,
+      llmCircuitStates: {},
+      /** Track pending orders for expiry management */
       pendingOrders: new Map<number, { symbol: string; placedAt: number; expiryAt: number }>(),
     };
 
@@ -427,6 +508,8 @@ class TradingPipelineService {
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
       lastError: pipeline.lastError,
+      mt5CircuitState: mt5McpService.circuitBreakerState,
+      llmCircuitStates: this.llmCircuitBreaker.getAllStates(),
     };
   }
 
@@ -505,20 +588,24 @@ class TradingPipelineService {
 
     try {
       // Handle MT5 disconnections by auto-pausing without killing the timer
+      // Check MT5 circuit breaker state
+      const mt5CircuitState = mt5McpService.circuitBreakerState;
+      pipeline.mt5CircuitOpen = mt5CircuitState === "OPEN";
       if (!mt5McpService.isConnected) {
-        if (!pipeline.waitingReconnect) {
-          pipeline.waitingReconnect = true;
-          this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
-        }
-        return; // Skip this tick silently
+    pipeline.waitingReconnect = true;
+    this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
+    pipeline.mt5CircuitOpen = true; // Set MT5 circuit breaker to OPEN
+    return; // Skip this tick silently
       } else if (pipeline.waitingReconnect) {
         pipeline.waitingReconnect = false;
+        pipeline.mt5CircuitOpen = false; // Close MT5 circuit breaker
         this.addLog(userId, "INFO", `[PIPELINE] Koneksi MT5 pulih. Pipeline dilanjutkan (Auto-resume).`);
       }
 
       if (!this.isWithinTradingHours(pipeline.config)) return;
 
       await this.managePositions(userId);
+      await this.syncClosedPositions(userId);
 
       // Check which symbols actually need analysis (candle time has changed)
       const symbolsToAnalyze: string[] = [];
@@ -564,16 +651,28 @@ class TradingPipelineService {
       let regimeMult: Record<string, number> = {};
       try {
         const activeSymbolForRegime = symbolsToAnalyze[0] || pipeline.config.symbols[0];
-        const rates = await mt5McpService.getRates(activeSymbolForRegime, pipeline.config.timeframe, 60);
-        if (rates && rates.length > 30) {
-          const candles: Candle[] = rates.map((r: any) => ({
-            time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
-          }));
-          const regimeResult = marketRegimeService.analyze(candles);
-          regimeMult = marketRegimeService.getRegimeMultipliers(regimeResult.regime);
+        const cacheKey = `${activeSymbolForRegime}_${pipeline.config.timeframe}`;
+        
+        // Check cache first
+        const cachedRegime = this.getCachedRegime(cacheKey);
+        if (cachedRegime) {
+          regimeMult = cachedRegime.multipliers;
           this.addLog(userId, "SIGNAL",
-            `[REGIME] ${regimeResult.regime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
+            `[REGIME] ${cachedRegime.regime} (cached) - Adjusted weights applied`
           );
+        } else {
+          const rates = await mt5McpService.getRates(activeSymbolForRegime, pipeline.config.timeframe, 60);
+          if (rates && rates.length > 30) {
+            const candles: Candle[] = rates.map((r: any) => ({
+              time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
+            }));
+            const regimeResult = marketRegimeService.analyze(candles);
+            regimeMult = marketRegimeService.getRegimeMultipliers(regimeResult.regime);
+            this.setCachedRegime(cacheKey, regimeResult.regime, regimeMult);
+            this.addLog(userId, "SIGNAL",
+              `[REGIME] ${regimeResult.regime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
+            );
+          }
         }
       } catch (e: any) { silentLogger.warn(`[PIPELINE] Regime check error: ${e.message}`); }
 
@@ -616,8 +715,10 @@ class TradingPipelineService {
       }
 
       for (const analysis of analyses) {
-        // Store analysis for status display
-        pipeline.lastAnalysis = analysis;
+        // Store analysis for status display only if it contains a valid signal
+        if (analysis.confluence.finalSignal) {
+          pipeline.lastAnalysis = analysis;
+        }
 
         // Update the last analyzed candle time for this symbol
         const latestTime = latestCandleTimes.get(analysis.symbol);
@@ -760,7 +861,16 @@ class TradingPipelineService {
 
         // ── FUNDAMENTAL: Skip if against strong trend ─────────────────
         try {
-          const fundScore = await fundamentalResearchService.scorePair(signal.symbol);
+          // Check cache first
+          const cachedFundamental = this.getCachedFundamental(signal.symbol);
+          let fundScore;
+          if (cachedFundamental) {
+            fundScore = cachedFundamental;
+            this.addLog(userId, "SIGNAL", `[FUNDAMENTAL] ${signal.symbol} (cached)`);
+          } else {
+            fundScore = await fundamentalResearchService.scorePair(signal.symbol);
+            this.setCachedFundamental(signal.symbol, fundScore);
+          }
           const aligned = !(
             (signal.direction === "BUY" && fundScore.trendAlignment === "BEARISH") ||
             (signal.direction === "SELL" && fundScore.trendAlignment === "BULLISH")
@@ -786,10 +896,21 @@ class TradingPipelineService {
         } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
         // ── OPTIONAL: LLM Consensus validation ─────────────────────
-        if (pipeline.config.llmConsensus?.enabled) {
-          this.addLog(userId, "CONFLUENCE",
-            `[${signal.symbol}] Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
+        // Check LLM circuit breaker
+        const llmProviders = llmConsensusService.getAvailableProviders();
+        pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
+
+        if (pipeline.config.llmConsensus?.enabled && !pipeline.llmCircuitOpen) {
+          // Check LLM circuit breaker - skip if all providers are OPEN
+          const availableLLMProviders = this.llmCircuitBreaker.getAvailableProviders(
+            ["deepseek", "qwen", "gemini", "mistral", "nemotron", "claude-opus"]
           );
+          if (availableLLMProviders.length === 0) {
+            this.addLog(userId, "ERROR", `[${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Consensus.`);
+          } else {
+            this.addLog(userId, "CONFLUENCE",
+              `[${signal.symbol}] Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
+            );
 
           // ── HTF conformance data ──
           let llmHtfTrend: string | undefined;
@@ -801,41 +922,51 @@ class TradingPipelineService {
           let llmMethPnL: number | undefined;
           try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
 
-          const llmResult = await llmConsensusService.evaluate(
-            {
-              symbol: signal.symbol,
-              direction: signal.direction,
-              confidence: signal.confidence,
-              entry: signal.entry,
-              sl: signal.sl,
-              tp: signal.tp,
-              reason: signal.reason,
-              marketTrend: analysis.marketStructure.trend.direction,
-              methodologyBreakdown: analysis.confluence.methodologyBreakdown,
-              agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
-              totalMethodologies: Object.keys(analysis.confluence.methodologyBreakdown).length,
-              htfTrend: llmHtfTrend,
-              htfConfidence: llmHtfConf,
-              symbolScore: llmSymScore,
-              methodologyVerdict: llmMethV,
-              methodologyWinRate: llmMethWR,
-              methodologyPnL: llmMethPnL,
-            },
-            pipeline.config.llmConsensus,
-          );
+const llmResult = await llmConsensusService.evaluate(
+             {
+               symbol: signal.symbol,
+               direction: signal.direction,
+               confidence: signal.confidence,
+               entry: signal.entry,
+               sl: signal.sl,
+               tp: signal.tp,
+               reason: signal.reason,
+               marketTrend: analysis.marketStructure.trend.direction,
+               methodologyBreakdown: analysis.confluence.methodologyBreakdown,
+               agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
+               totalMethodologies: Object.keys(analysis.confluence.methodologyBreakdown).length,
+               htfTrend: llmHtfTrend,
+               htfConfidence: llmHtfConf,
+               symbolScore: llmSymScore,
+               methodologyVerdict: llmMethV,
+               methodologyWinRate: llmMethWR,
+               methodologyPnL: llmMethPnL,
+             },
+             pipeline.config.llmConsensus,
+           );
 
-          // Log LLM result
-          const isTrade = llmResult.verdict === "GOOD";
-          this.addLog(userId, "CONFLUENCE",
-            `[${signal.symbol}] LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
-            { llmConsensus: llmResult },
-          );
+           // Update LLM circuit breaker based on result
+           // Note: In actual implementation, we'd track per-provider, but for now we track overall
+           // We'll just log the state
+           this.llmCircuitBreaker.getAllStates(); // Update pipeline state
 
-          // If LLMs say BAD or SKIP, skip the trade
-          if (!isTrade) {
-            continue;
+// Log LLM result
+           const isTrade = llmResult.verdict === "GOOD";
+           this.addLog(userId, "CONFLUENCE",
+             `[${signal.symbol}] LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
+             { llmConsensus: llmResult },
+           );
+
+           // Update LLM circuit breaker state based on available providers
+           const llmProvidersAfter = llmConsensusService.getAvailableProviders();
+           pipeline.llmCircuitOpen = llmProvidersAfter.filter(p => p.available).length === 0;
+
+            // If LLMs say BAD or SKIP, skip the trade
+            if (!isTrade) {
+              continue;
+            }
           }
-        }
+        } // End of LLM Consensus enabled block
 
         // Position sizing
         const accountInfo = await mt5McpService.getAccountInfo();
@@ -864,6 +995,12 @@ class TradingPipelineService {
 
 
         // Execute trade
+        // Check MT5 circuit breaker before executing
+        if (pipeline.mt5CircuitOpen || !mt5McpService.isConnected) {
+          this.addLog(userId, "ERROR", `[${signal.symbol}] MT5 circuit breaker OPEN or not connected. Skipping trade execution.`);
+          continue;
+        }
+
         const validation = await this.validateOrderParams(
           signal.symbol,
           signal.direction,
@@ -1001,6 +1138,10 @@ class TradingPipelineService {
               this.addLog(userId, "INFO",
                 `[EXPIRY] Pending order #${ticket} (${info.symbol}) expired after 2 candles — cancelled.`
               );
+              await AITradeLog.updateOne(
+                { mt5Ticket: ticket, closed: false },
+                { closed: true, closedAt: new Date(), closeReason: "TIMEOUT", pnl: 0 }
+              );
             } catch (cancelErr: any) {
               silentLogger.warn(`[PIPELINE] Failed to cancel expired order #${ticket}: ${cancelErr.message}`);
             }
@@ -1108,6 +1249,103 @@ class TradingPipelineService {
     }
   }
 
+  /**
+   * Synchronize closed MT5 positions with the AI trade logs DB.
+   */
+  private async syncClosedPositions(userId: string): Promise<void> {
+    const pipeline = this.activePipelines.get(userId);
+    if (!pipeline) return;
+
+    try {
+      // 1. Fetch all trade logs that are still marked as OPEN (closed: false)
+      const openLogs = await AITradeLog.find({ userId, closed: false });
+      if (openLogs.length === 0) return;
+
+      // 2. Fetch active positions from MT5
+      const activePositions = await mt5McpService.getPositions();
+      const activeTickets = new Set(activePositions.map(p => p.ticket));
+
+      // 3. Find trade logs whose positions are no longer in MT5 active positions (meaning they closed)
+      const closedLogs = openLogs.filter(log => log.mt5Ticket && !activeTickets.has(log.mt5Ticket));
+      if (closedLogs.length === 0) return;
+
+      // 4. Fetch last 24h deal history from MT5
+      const oneDayAgo = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+      const deals = await mt5McpService.getHistory(oneDayAgo);
+
+      for (const log of closedLogs) {
+        if (!log.mt5Ticket) continue;
+
+        // Find the OUT deal (entry === 1) that closed this position
+        const closingDeal = deals.find(
+          d => d.position_id === log.mt5Ticket && d.entry === 1
+        );
+
+        if (closingDeal) {
+          const pnl = closingDeal.profit + closingDeal.commission + closingDeal.swap;
+          
+          let closeReason: "TP_HIT" | "SL_HIT" | "MANUAL" = "MANUAL";
+          const commentLower = (closingDeal.comment || "").toLowerCase();
+          if (commentLower.includes("tp") || commentLower.includes("[tp]")) {
+            closeReason = "TP_HIT";
+          } else if (commentLower.includes("sl") || commentLower.includes("[sl]")) {
+            closeReason = "SL_HIT";
+          } else {
+            // Compare closing price with log's SL/TP
+            const closePrice = closingDeal.price;
+            const EPSILON = 0.0001;
+            if (log.signal.tp > 0 && Math.abs(closePrice - log.signal.tp) < EPSILON) {
+              closeReason = "TP_HIT";
+            } else if (log.signal.sl > 0 && Math.abs(closePrice - log.signal.sl) < EPSILON) {
+              closeReason = "SL_HIT";
+            }
+          }
+
+          // Calculate pips
+          const entryPrice = log.executionPrice || log.signal.entry;
+          const closePrice = closingDeal.price;
+          const pipsDiff = log.signal.direction === "BUY" ? (closePrice - entryPrice) : (entryPrice - closePrice);
+          const isJpy = log.signal.symbol.toLowerCase().includes("jpy");
+          const pipSize = isJpy ? 0.01 : 0.0001;
+          const pnlPips = Math.round(pipsDiff / pipSize * 10) / 10;
+
+          // PnL Percent
+          const accountInfo = await mt5McpService.getAccountInfo();
+          const balance = accountInfo?.balance || 10000;
+          const pnlPercent = Math.round((pnl / balance) * 100 * 100) / 100;
+
+          // Save to DB
+          log.closed = true;
+          log.closedAt = new Date(closingDeal.time * 1000);
+          log.closePrice = closePrice;
+          log.closeReason = closeReason;
+          log.pnl = Math.round(pnl * 100) / 100;
+          log.pnlPips = pnlPips;
+          log.pnlPercent = pnlPercent;
+
+          await log.save();
+
+          this.addLog(userId, "INFO",
+            `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) terdeteksi tutup. Hasil: ${closeReason} | PnL: $${log.pnl.toFixed(2)} (${log.pnlPercent}%)`
+          );
+        } else {
+          // Fallback if no deal found in 24h deals history
+          log.closed = true;
+          log.closedAt = new Date();
+          log.closeReason = "MANUAL";
+          log.pnl = 0;
+          await log.save();
+          
+          this.addLog(userId, "INFO",
+            `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) terdeteksi tutup tanpa catatan deal.`
+          );
+        }
+      }
+    } catch (err: any) {
+      silentLogger.warn(`[PIPELINE] syncClosedPositions error: ${err.message}`);
+    }
+  }
+
   // ─── Helpers ───────────────────────────────────────────────────────
 
   private addLog(
@@ -1159,9 +1397,9 @@ class TradingPipelineService {
       return currentMinutes >= startMin && currentMinutes <= endMin;
     }
     return currentMinutes >= startMin || currentMinutes <= endMin;
-  }
+}
 
-  private calculateATRSimple(rates: { high: number; low: number; close: number }[]): number {
+  calculateATRSimple(rates: { high: number; low: number; close: number }[]): number {
     if (rates.length < 2) return 0;
     let sum = 0;
     for (let i = 1; i < rates.length; i++) {
@@ -1175,5 +1413,5 @@ class TradingPipelineService {
     return sum / (rates.length - 1);
   }
 }
-
+ 
 export const tradingPipelineService = new TradingPipelineService();

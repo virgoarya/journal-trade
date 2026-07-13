@@ -346,7 +346,7 @@ class AITradingService {
 
   // ── Positions ──────────────────────────────────────────────────────
   async getPositions() {
-    const res = await apiClient.get<{ positions: Position[]; total: number }>(
+    const res = await apiClient.get<{ positions: Position[]; orders?: any[]; total: number }>(
       "/api/v1/ai-trading/positions",
     );
     return res;
@@ -454,6 +454,15 @@ class AITradingService {
     return res;
   }
 
+  /** Combined endpoint: status + logs in one request */
+  async getPipelineStatusWithLogs(limit = 100) {
+    const res = await apiClient.get<{
+      status: PipelineStatus;
+      logs: PipelineLog[];
+    }>(`/api/v1/ai-trading/pipeline/status-with-logs?limit=${limit}`);
+    return res;
+  }
+
   // ── Performance ──────────────────────────────────────────────────
   async getPerformance() {
     const res = await apiClient.get<PipelinePerformance>(
@@ -493,6 +502,44 @@ class AITradingService {
       source: string;
       correlations: Record<string, Record<string, number>>;
     }>("/api/v1/ai-trading/correlation");
+    return res;
+  }
+
+  // ── AI Trading Settings ────────────────────────────────────────────
+  async getAiTradingSettings() {
+    const res = await apiClient.get<{
+      methodologyWeights: MethodologyWeights;
+      activeMethodologies: MethodologyName[];
+      llmConsensus: {
+        enabled: boolean;
+        minProviders: number;
+        threshold: number;
+        providerTimeoutMs: number;
+      };
+    }>("/api/v1/settings/ai-trading");
+    return res;
+  }
+
+  async updateAiTradingSettings(params: {
+    methodologyWeights?: MethodologyWeights;
+    activeMethodologies?: MethodologyName[];
+    llmConsensus?: {
+      enabled?: boolean;
+      minProviders?: number;
+      threshold?: number;
+      providerTimeoutMs?: number;
+    };
+  }) {
+    const res = await apiClient.patch<{
+      methodologyWeights: MethodologyWeights;
+      activeMethodologies: MethodologyName[];
+      llmConsensus: {
+        enabled: boolean;
+        minProviders: number;
+        threshold: number;
+        providerTimeoutMs: number;
+      };
+    }>("/api/v1/settings/ai-trading", params);
     return res;
   }
 }

@@ -238,11 +238,15 @@ router.get("/positions", async (req, res, next) => {
       return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
     }
 
-    const positions = await mt5McpService.getPositions();
+    const [positions, orders] = await Promise.all([
+      mt5McpService.getPositions().catch(() => [] as any[]),
+      mt5McpService.call("mt5_orders_get", {}).catch(() => [] as any[]),
+    ]);
 
     return apiResponse.success(res, {
       positions,
-      total: positions.length,
+      orders: orders || [],
+      total: positions.length + (orders ? orders.length : 0),
     });
   } catch (error: any) {
     if (error.message && error.message.includes("not connected")) {
@@ -407,12 +411,31 @@ router.post(
       }
 
       const { ticket } = req.body;
-      const result = await mt5McpService.closePosition(ticket);
+
+      const [positions, orders] = await Promise.all([
+        mt5McpService.getPositions().catch(() => [] as any[]),
+        mt5McpService.call("mt5_orders_get", {}).catch(() => [] as any[]),
+      ]);
+
+      const isPendingOrder = orders && orders.some((o: any) => o.ticket === ticket);
+
+      let result;
+      if (isPendingOrder) {
+        result = await mt5McpService.call("mt5_order_cancel", { ticket });
+        if (result && result.success) {
+          await AITradeLog.updateOne(
+            { mt5Ticket: ticket, closed: false },
+            { closed: true, closedAt: new Date(), closeReason: "MANUAL", pnl: 0 }
+          );
+        }
+      } else {
+        result = await mt5McpService.closePosition(ticket);
+      }
 
       if (!result.success) {
         return apiResponse.error(
           res,
-          result.error || "Close failed",
+          result.error || "Close/Cancel failed",
           "CLOSE_FAILED",
           400,
         );
@@ -560,6 +583,23 @@ router.get("/pipeline/status", async (req, res, next) => {
   try {
     const status = await tradingPipelineService.getPipelineStatus(req.user.id);
     return apiResponse.success(res, status);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/ai-trading/pipeline/status-with-logs
+ * Get pipeline status and logs in a single request (batch endpoint).
+ */
+router.get("/pipeline/status-with-logs", async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const [status, logs] = await Promise.all([
+      tradingPipelineService.getPipelineStatus(req.user.id),
+      Promise.resolve(tradingPipelineService.getPipelineLogs(req.user.id, limit)),
+    ]);
+    return apiResponse.success(res, { status, logs });
   } catch (error) {
     next(error);
   }

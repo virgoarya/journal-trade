@@ -50,6 +50,10 @@ export function TradingPanel({
     setLlmEnabled,
     llmThreshold,
     setLlmThreshold,
+    llmMinProviders,
+    setLlmMinProviders,
+    llmProviderTimeoutMs,
+    setLlmProviderTimeoutMs,
   } = useAiTrading();
 
   const [symbols, setSymbols] = useState<string[]>(["EURUSD", "XAUUSD"]);
@@ -132,8 +136,8 @@ export function TradingPanel({
       llmConsensus: {
         enabled: llmEnabled,
         threshold: llmThreshold,
-        minProviders: 2,
-        providerTimeoutMs: 8000,
+        minProviders: llmMinProviders,
+        providerTimeoutMs: llmProviderTimeoutMs,
       },
     };
     await startPipeline(config);
@@ -237,10 +241,14 @@ export function TradingPanel({
       <LlmConsensusConfig
         enabled={llmEnabled}
         threshold={llmThreshold}
+        minProviders={llmMinProviders}
+        providerTimeoutMs={llmProviderTimeoutMs}
         models={llmModels}
         loading={llmLoading}
         onToggle={setLlmEnabled}
         onThresholdChange={setLlmThreshold}
+        onMinProvidersChange={setLlmMinProviders}
+        onProviderTimeoutChange={setLlmProviderTimeoutMs}
       />
 
       {/* Pipeline Controls */}

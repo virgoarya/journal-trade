@@ -1,23 +1,31 @@
 "use client";
 
-import { Zap, ZapOff, Brain } from "lucide-react";
+import { Zap, ZapOff, Brain, Clock, Users } from "lucide-react";
 
 interface LlmConsensusConfigProps {
   enabled: boolean;
   threshold: number;
+  minProviders: number;
+  providerTimeoutMs: number;
   models: Array<{ name: string; label: string; status: string }>;
   loading: boolean;
   onToggle: (enabled: boolean) => void;
   onThresholdChange: (value: number) => void;
+  onMinProvidersChange: (value: number) => void;
+  onProviderTimeoutChange: (value: number) => void;
 }
 
 export function LlmConsensusConfig({
   enabled,
   threshold,
+  minProviders,
+  providerTimeoutMs,
   models,
   loading,
   onToggle,
   onThresholdChange,
+  onMinProvidersChange,
+  onProviderTimeoutChange,
 }: LlmConsensusConfigProps) {
   return (
     <div className="border-t border-gray-800 pt-3 space-y-2">
@@ -34,30 +42,73 @@ export function LlmConsensusConfig({
         </span>
       </label>
       {enabled && (
-        <div>
-          <label className="block text-[10px] text-gray-500 mb-1">
-            Approval Threshold ({Math.round(threshold * 100)}%)
-          </label>
-          <input
-            type="range"
-            value={threshold}
-            onChange={(e) => onThresholdChange(parseFloat(e.target.value))}
-            min={0.3}
-            max={0.9}
-            step={0.05}
-            className="w-full accent-accent-gold"
-          />
-          <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-            <span>30%</span>
-            <span>50%</span>
-            <span>90%</span>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-1">
+              Approval Threshold ({Math.round(threshold * 100)}%)
+            </label>
+            <input
+              type="range"
+              value={threshold}
+              onChange={(e) => onThresholdChange(parseFloat(e.target.value))}
+              min={0.3}
+              max={0.9}
+              step={0.05}
+              className="w-full accent-accent-gold"
+            />
+            <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+              <span>30%</span>
+              <span>50%</span>
+              <span>90%</span>
+            </div>
           </div>
-          <p className="text-[9px] text-gray-600 mt-1.5 leading-tight">
-            Menjalankan 6 LLM via 9Router secara paralel. Eksekusi hanya jika ≥{Math.round(threshold * 100)}% model menyetujui.
+
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-1">
+              Minimum Providers ({minProviders})
+            </label>
+            <input
+              type="range"
+              value={minProviders}
+              onChange={(e) => onMinProvidersChange(parseInt(e.target.value))}
+              min={1}
+              max={6}
+              step={1}
+              className="w-full accent-accent-gold"
+            />
+            <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+              <span>1</span>
+              <span>3</span>
+              <span>6</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-1">
+              Provider Timeout ({(providerTimeoutMs / 1000).toFixed(0)}s)
+            </label>
+            <input
+              type="range"
+              value={providerTimeoutMs}
+              onChange={(e) => onProviderTimeoutChange(parseInt(e.target.value))}
+              min={5000}
+              max={30000}
+              step={1000}
+              className="w-full accent-accent-gold"
+            />
+            <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+              <span>5s</span>
+              <span>15s</span>
+              <span>30s</span>
+            </div>
+          </div>
+
+          <p className="text-[9px] text-gray-600 leading-tight">
+            Menjalankan {minProviders}+ LLM via 9Router secara paralel. Timeout {providerTimeoutMs / 1000}s per model. Eksekusi hanya jika ≥{Math.round(threshold * 100)}% model menyetujui.
           </p>
 
           {/* LLM Model Status */}
-          <div className="mt-2 space-y-1">
+          <div className="space-y-1">
             {loading ? (
               <div className="text-[10px] text-gray-500">Loading model status...</div>
             ) : (

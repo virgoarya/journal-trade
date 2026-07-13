@@ -93,20 +93,15 @@ export function usePipeline() {
     if (status?.running) {
       pollRef.current = setInterval(async () => {
         try {
-          const [statusRes, logsRes] = await Promise.all([
-            aiTradingService.getPipelineStatus(),
-            aiTradingService.getPipelineLogs(100),
-          ]);
-          if (statusRes.success && statusRes.data) {
-            setStatus(statusRes.data);
-            if (statusRes.data.lastAnalysis) {
-              setLastAnalysis(statusRes.data.lastAnalysis);
+          const res = await aiTradingService.getPipelineStatusWithLogs(100);
+          if (res.success && res.data) {
+            setStatus(res.data.status);
+            if (res.data.status.lastAnalysis) {
+              setLastAnalysis(res.data.status.lastAnalysis);
             }
-          }
-          if (logsRes.success && logsRes.data) {
-            setLogs(logsRes.data.logs);
+            setLogs(res.data.logs);
             // Extract latest LLM consensus from CONFLUENCE logs
-            const llmLogs = logsRes.data.logs.filter(
+            const llmLogs = res.data.logs.filter(
               (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
             );
             if (llmLogs.length > 0) {
@@ -128,19 +123,14 @@ export function usePipeline() {
   // Initial fetch
   const refresh = useCallback(async () => {
     try {
-      const [statusRes, logsRes] = await Promise.all([
-        aiTradingService.getPipelineStatus(),
-        aiTradingService.getPipelineLogs(100),
-      ]);
-      if (statusRes.success && statusRes.data) {
-        setStatus(statusRes.data);
-        if (statusRes.data.lastAnalysis) {
-          setLastAnalysis(statusRes.data.lastAnalysis);
+      const res = await aiTradingService.getPipelineStatusWithLogs(100);
+      if (res.success && res.data) {
+        setStatus(res.data.status);
+        if (res.data.status.lastAnalysis) {
+          setLastAnalysis(res.data.status.lastAnalysis);
         }
-      }
-      if (logsRes.success && logsRes.data) {
-        setLogs(logsRes.data.logs);
-        const llmLogs = logsRes.data.logs.filter(
+        setLogs(res.data.logs);
+        const llmLogs = res.data.logs.filter(
           (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
         );
         if (llmLogs.length > 0) {

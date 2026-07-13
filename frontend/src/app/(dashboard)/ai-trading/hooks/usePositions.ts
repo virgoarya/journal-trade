@@ -6,20 +6,23 @@ import {
   type Position,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
+import { useMT5Connection } from "./useMT5Connection";
 
 export function usePositions(pollInterval = 10000) {
   const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { isConnected } = useMT5Connection();
 
   const fetchPositions = useCallback(async (): Promise<boolean> => {
     try {
       const result = await aiTradingService.getPositions();
       if (result.success && result.data) {
-        setPositions(result.data.positions);
-        setTotal(result.data.total);
+        setPositions(result.data.positions || []);
+        setOrders(result.data.orders || []);
+        setTotal(result.data.total || 0);
         setFetchError(null);
         return true;
       } else {
@@ -41,6 +44,11 @@ export function usePositions(pollInterval = 10000) {
     let timeoutId: NodeJS.Timeout;
 
     const tick = async () => {
+      if (!isConnected) {
+        timeoutId = setTimeout(tick, 5000);
+        return;
+      }
+
       const isSuccess = await fetchPositions();
       if (isMounted) {
         timeoutId = setTimeout(tick, isSuccess ? pollInterval : 10000);
@@ -55,7 +63,7 @@ export function usePositions(pollInterval = 10000) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [fetchPositions, pollInterval]);
+  }, [fetchPositions, pollInterval, isConnected]);
 
   const closePosition = useCallback(
     async (ticket: number) => {
@@ -91,14 +99,15 @@ export function usePositions(pollInterval = 10000) {
     [fetchPositions],
   );
 
-  const refetch = useCallback(() => {
+  const refetch = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setFetchError(null);
-    fetchPositions();
+    await fetchPositions();
   }, [fetchPositions]);
 
   return {
     positions,
+    orders,
     total,
     isLoading,
     fetchError,

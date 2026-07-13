@@ -2,6 +2,133 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
+import fs from "node:fs";
+
+// ─── Circuit Breaker ────────────────────────────────────────────────────
+export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
+
+export class CircuitBreaker {
+  private state: CircuitState = "CLOSED";
+  private failureCount = 0;
+  private successCount = 0;
+  private lastFailureTime = 0;
+  private readonly failureThreshold: number;
+  private readonly successThreshold: number;
+  private readonly timeoutMs: number;
+
+  constructor(
+    failureThreshold = 5,
+    successThreshold = 2,
+    timeoutMs = 30000
+  ) {
+    this.failureThreshold = failureThreshold;
+    this.successThreshold = successThreshold;
+    this.timeoutMs = timeoutMs;
+  }
+
+  getState(): CircuitState {
+    if (this.state === "OPEN") {
+      if (Date.now() - this.lastFailureTime >= this.timeoutMs) {
+        this.state = "HALF_OPEN";
+        this.successCount = 0;
+      }
+    }
+    return this.state;
+  }
+
+  recordSuccess(): void {
+    this.failureCount = 0;
+    if (this.state === "HALF_OPEN") {
+      this.successCount++;
+      if (this.successCount >= this.successThreshold) {
+        this.state = "CLOSED";
+      }
+    }
+  }
+
+  recordFailure(): void {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+    if (this.state === "HALF_OPEN") {
+      this.state = "OPEN";
+      this.successCount = 0;
+    } else if (this.failureCount >= this.failureThreshold) {
+      this.state = "OPEN";
+    }
+  }
+
+  canExecute(): boolean {
+    return this.getState() !== "OPEN";
+  }
+}
+
+// ─── Retry Helper ───────────────────────────────────────────────────────
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelayMs = 1000,
+  isRetryable: (error: Error) => boolean = () => true
+): Promise<T> {
+  let lastError: Error;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxRetries && isRetryable(lastError)) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        silentLogger.warn(`[MT5-MCP] Retry ${attempt}/${maxRetries} after ${delay}ms: ${lastError.message}`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw lastError;
+      }
+    }
+  }
+  throw lastError!;
+}
+
+// ─── Structured Logging ─────────────────────────────────────────────────
+export function logErrorStructured(
+  method: string,
+  error: any,
+  context?: any,
+  level: "error" | "warn" | "info" = "error"
+): void {
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    source: "MT5-MCP",
+    method,
+    message: errorMsg,
+    context,
+    stack,
+  };
+
+  const logLine = JSON.stringify(logEntry);
+
+  if (level === "error") {
+    silentLogger.error(logLine);
+  } else if (level === "warn") {
+    silentLogger.warn(logLine);
+  } else {
+    silentLogger.info(logLine);
+  }
+
+  // Also append to file
+  try {
+    const logDir = path.join(__dirname, "..", "..", "logs");
+    const logFile = path.join(logDir, "mt5-errors.log");
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(logFile, logLine + "\n");
+  } catch {
+    // ignore file write errors
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -94,6 +221,8 @@ export interface MT5Deal {
   swap: number;
   time: number;
   comment: string;
+  position_id?: number;
+  entry?: number;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -102,9 +231,22 @@ class MT5MCPService {
   private client: Client | null = null;
   private connected = false;
   private accountInfo: MT5AccountInfo | null = null;
+  private _circuitBreaker: CircuitBreaker;
+
+  constructor() {
+    this._circuitBreaker = new CircuitBreaker();
+  }
 
   get isConnected(): boolean {
     return this.connected;
+  }
+
+  get circuitBreakerState(): string {
+    return this._circuitBreaker.getState();
+  }
+
+  get circuitBreaker(): CircuitBreaker {
+    return this._circuitBreaker;
   }
 
   forceDisconnect() {
@@ -150,14 +292,19 @@ class MT5MCPService {
     await this.ensureClient();
 
     try {
-      const result = await this.client!.callTool({
-        name: "mt5_connect",
-        arguments: {
-          server: config.server,
-          login: config.login,
-          password: config.password,
-        },
-      });
+      const result = await withRetry(
+        () => this.client!.callTool({
+          name: "mt5_connect",
+          arguments: {
+            server: config.server,
+            login: config.login,
+            password: config.password,
+          },
+        }),
+        3, // max retries
+        2000, // base delay 2s
+        (e) => !e.message.includes("invalid credentials") // retry on non-credential errors
+      );
 
       const data = this.parseResult(result);
       if (data.error) {
@@ -170,6 +317,7 @@ class MT5MCPService {
       this.connected = true;
       return { success: true, accountInfo: this.accountInfo ?? undefined };
     } catch (error: any) {
+      logErrorStructured("connectToMT5", error, { config }, "error");
       return { success: false, error: error.message };
     }
   }
@@ -190,78 +338,72 @@ class MT5MCPService {
 
   /** Refresh account info from MT5. */
   async getAccountInfo(): Promise<MT5AccountInfo> {
-    const result = await this.call("mt5_account_info", {});
+    const result = await this.callWithCircuit("mt5_account_info", {});
     this.accountInfo = result as MT5AccountInfo;
     return this.accountInfo;
   }
 
   /** Get tradable symbols (optionally filtered). */
   async getSymbols(group?: string): Promise<MT5Symbol[]> {
-    const result = await this.call("mt5_symbols_get", { group: group ?? "" });
+    const result = await this.callWithCircuit("mt5_symbols_get", { group: group ?? "" });
     return (result as any).symbols ?? [];
   }
 
   /** Get symbol details. */
   async getSymbolInfo(symbol: string): Promise<MT5Symbol | null> {
     try {
-      const result = await this.call("mt5_symbol_info", { symbol });
+      const result = await this.callWithCircuit("mt5_symbol_info", { symbol });
       return result as MT5Symbol;
-    } catch {
+    } catch (error) {
+      logErrorStructured("getSymbolInfo", error, { symbol }, "warn");
       return null;
     }
   }
 
   /** Fetch OHLCV rates. */
   async getRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
-    const result = await this.call("mt5_copy_rates", { symbol, timeframe, count });
+    const result = await this.callWithCircuit("mt5_copy_rates", { symbol, timeframe, count });
     return (result as any).rates ?? [];
   }
 
   /** Fetch OHLCV rates within a date range (for backtesting). */
   async getRatesRange(symbol: string, timeframe: string, from: number, to: number): Promise<MT5Rate[]> {
-    const result = await this.call("mt5_copy_rates_range", { symbol, timeframe, from, to });
+    const result = await this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to });
     return (result as any).rates ?? [];
   }
 
   /** Get current tick. */
   async getTick(symbol: string): Promise<MT5Tick | null> {
     try {
-      const result = await this.call("mt5_symbol_tick", { symbol });
+      const result = await this.callWithCircuit("mt5_symbol_tick", { symbol });
       return result as MT5Tick;
-    } catch {
+    } catch (error) {
+      logErrorStructured("getTick", error, { symbol }, "warn");
       return null;
     }
   }
 
   /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
-    const maxRetries = 3;
-    const delays = [1000, 2000, 4000];
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await this.call("mt5_positions_get", {});
-        const positions = (result as any).positions ?? [];
-        return positions;
-      } catch (error: any) {
-        silentLogger.warn(`[MT5-MCP] getPositions attempt ${attempt}/${maxRetries} failed: ${error.message}`);
-        if (attempt < maxRetries) {
-          await new Promise(r => setTimeout(r, delays[attempt - 1]));
-        } else {
-          throw error;
-        }
-      }
-    }
-    throw new Error("getPositions exhausted retries");
+    return withRetry(
+      async () => {
+        const result = await this.callWithCircuit("mt5_positions_get", {});
+        return (result as any).positions ?? [];
+      },
+      3, // maxRetries
+      1000, // baseDelayMs
+      (e) => !e.message.includes("MT5 not connected") // only retry if MT5 is actually connected
+    );
   }
 
   /** Debug — get raw MT5 diagnostic info about positions. */
   async debugInfo(): Promise<any> {
     try {
-      const result = await this.call("mt5_debug_info", {});
+      const result = await this.callWithCircuit("mt5_debug_info", {});
       silentLogger.info(`[MT5-MCP] debugInfo: ${JSON.stringify(result)}`);
       return result;
     } catch (error: any) {
-      silentLogger.error(`[MT5-MCP] debugInfo failed: ${error.message}`);
+      logErrorStructured("debugInfo", error, {}, "error");
       return { error: error.message };
     }
   }
@@ -276,8 +418,7 @@ class MT5MCPService {
     tp?: number;
     comment?: string;
   }): Promise<MT5OrderResult> {
-    const result = await this.call("mt5_order_send", params);
-    return result as MT5OrderResult;
+    return await this.callWithCircuit("mt5_order_send", params);
   }
 
   /** Dry-run debug: compute order parameters WITHOUT executing. */
@@ -288,14 +429,12 @@ class MT5MCPService {
     sl?: number;
     tp?: number;
   }): Promise<any> {
-    const result = await this.call("mt5_debug_order", params);
-    return result;
+    return await this.callWithCircuit("mt5_debug_order", params);
   }
 
   /** Close a position. */
   async closePosition(ticket: number): Promise<MT5OrderResult> {
-    const result = await this.call("mt5_position_close", { ticket });
-    return result as MT5OrderResult;
+    return await this.callWithCircuit("mt5_position_close", { ticket });
   }
 
   /** Modify SL/TP. */
@@ -303,8 +442,7 @@ class MT5MCPService {
     const args: any = { ticket };
     if (sl !== undefined) args.sl = sl;
     if (tp !== undefined) args.tp = tp;
-    const result = await this.call("mt5_position_modify", args);
-    return result as MT5OrderResult;
+    return await this.callWithCircuit("mt5_position_modify", args);
   }
 
   /** Get historical deals. */
@@ -312,7 +450,7 @@ class MT5MCPService {
     const args: any = {};
     if (from) args.from = from;
     if (to) args.to = to;
-    const result = await this.call("mt5_history_deals_get", args);
+    const result = await this.callWithCircuit("mt5_history_deals_get", args);
     return (result as any).deals ?? [];
   }
 
@@ -341,71 +479,80 @@ class MT5MCPService {
     silentLogger.error(`[MT5-MCP] All ${maxRetries} init attempts failed — MT5 unavailable`);
   }
 
-  private logError(method: string, error: any, context?: any): void {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-
-    const isConnError = errorMsg.includes("not connected") || errorMsg.includes("Call mt5_connect");
-    const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
-    
-    if (!isConnError && !isExpectedError) {
-      silentLogger.error(`[MT5-MCP] ${method} failed: ${errorMsg}`);
-      if (context) {
-        silentLogger.error(`[MT5-MCP] Context: ${JSON.stringify(context)}`);
-      }
-      if (stack) {
-        silentLogger.error(`[MT5-MCP] Stack: ${stack}`);
-      }
-    } else if (isExpectedError) {
-      // Mute completely. Spamming these logs pollutes the console.
-    }    // Tambahkan log ke file khusus untuk debugging
-    const fs = require('fs');
-    const path = require('path');
-    const logDir = path.join(__dirname, '..', '..', 'logs');
-    const logFile = path.join(logDir, 'mt5-errors.log');
-
-    try {
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-      }
-
-      const logEntry = `[${new Date().toISOString()}] ${method} - ${errorMsg}\n${stack ? `Stack: ${stack}\n` : ''}${context ? `Context: ${JSON.stringify(context)}\n` : ''}\n`;
-      fs.appendFileSync(logFile, logEntry);
-    } catch (logError: any) {
-      silentLogger.error(`[MT5-MCP] Failed to write error log: ${logError.message}`);
-    }
+  private logError(method: string, error: any, context?: any, level: "error" | "warn" | "info" = "error"): void {
+    logErrorStructured(method, error, context, level);
   }
 
   async call(tool: string, args: any): Promise<any> {
+    return this.callWithCircuit(tool, args);
+  }
+
+  // New method to wrap actual call with circuit breaker logic
+  private async callWithCircuit(tool: string, args: any): Promise<any> {
     if (!this.client) {
-      throw new Error("MCP Client not initialized");
+      // If MCP client is not initialized, throw an error immediately.
+      // This should ideally be caught and handled by the caller (e.g., with retry or graceful degradation).
+      const errorMessage = "MCP Client not initialized";
+      logErrorStructured(tool, new Error(errorMessage), { args }, "error");
+      throw new Error(errorMessage);
     }
-    if (!this.connected && tool !== "mt5_connect") {
-      throw new Error("MT5 not connected");
+
+    // Check circuit breaker state before attempting any MT5 operation
+    if (!this.circuitBreaker.canExecute() && tool !== "mt5_connect") {
+      // If circuit is open, fast-fail unless it's a connect attempt
+      const errorMessage = `Circuit breaker OPEN for MT5 service (tool: ${tool}). Fast-failing.`;
+      logErrorStructured(tool, new Error(errorMessage), { args }, "warn");
+      throw new Error(errorMessage);
     }
 
     try {
-      const result = await this.client.callTool({ name: tool, arguments: args });
-      const data = this.parseResult(result);
-      if (data.error) throw new Error(data.error);
-      return data;
-    } catch (error: any) {
-      // Log error dengan detail
-      this.logError(tool, error, { args });
+      const result = await withRetry(
+        async () => {
+          if (!this.connected && tool !== "mt5_connect") {
+            // If MT5 got disconnected in the meantime, throw error to trigger retry/breaker logic
+            throw new Error("MT5 not connected");
+          }
+          // Execute the actual tool call
+          return await this.client!.callTool({ name: tool, arguments: args });
+        },
+        3, // maxRetries
+        1000, // baseDelayMs
+        (e) => {
+          // Define which errors are retryable
+          const errMsg = e.message || "";
+          return !errMsg.includes("not connected") && !errMsg.includes("ECONN") && !errMsg.includes("socket") && !errMsg.includes("timeout") && !errMsg.includes("32001"); // Retry unless it's a connection error or credential error
+        }
+      );
 
-      // Only reset connected flag on real connection errors, not trade errors
-      // (AutoTrading disabled, SL/TP too close, insufficient margin, etc.)
-      const msg = error.message || "";
-      const isExpectedError = msg.includes("10025") || msg.includes("No changes") || msg.includes("10018") || msg.includes("Market closed");
-      const isConnError = msg.includes("not connected") || msg.includes("ECONN") || msg.includes("transport") || msg.includes("socket") || msg.includes("timeout");
+      const data = this.parseResult(result);
+      if (data.error) {
+        // If the tool call returned a business logic error (e.g., invalid order parameters)
+        throw new Error(data.error);
+      }
+      
+      // If call was successful and no business error, record success for circuit breaker
+      this.circuitBreaker.recordSuccess();
+      return data;
+
+    } catch (error: any) {
+      // Record failure in circuit breaker on any caught error (including retried ones)
+      this.circuitBreaker.recordFailure();
+      
+      const errorMsg = error.message || "";
+      const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
+      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("timeout") || errorMsg.includes("32001"); // MT5_RET_NO_CONNECTION
 
       if (isConnError) {
+        logErrorStructured(tool, error, { args }, "error");
         silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
         this.connected = false;
         this.accountInfo = null;
       } else if (!isExpectedError) {
-        silentLogger.warn(`[MT5-MCP] ${tool} failed (connection alive): ${error.message}`);
+        logErrorStructured(tool, error, { args }, "warn");
+      } else {
+        logErrorStructured(tool, error, { args }, "info");
       }
+      
       throw error;
     }
   }

@@ -29,6 +29,9 @@ import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import path from "node:path";
 
+// System Monitor Agent
+import { systemMonitorAgent } from "./agents/system-monitor-agent";
+
 // nextapp
 const nextAppDir = path.join(__dirname, "..", "..", "frontend");
 const isDev = process.env.NODE_ENV !== 'production';
@@ -147,8 +150,11 @@ connectDB()
           tradingPipelineService.recoverPipelines().catch((err) => console.error("⚠️ Pipeline recovery failed:", err));
         });
 
-      // LLM Health Check — test all 6 models, disable rate-limited ones
+// LLM Health Check — test all 6 models, disable rate-limited ones
       llmConsensusService.startupHealthCheck?.();
+
+      // System Monitor Agent — periodic health checks & hourly reports
+      await systemMonitorAgent.start();
 
       // Apply auth rate limiter to auth endpoints
       app.use("/api/auth", authLimiter);
@@ -182,17 +188,20 @@ connectDB()
         console.log(`WebSocket server running on port ${PORT}`);
       });
 
-      // Graceful shutdown handling to prevent EADDRINUSE
+// Graceful shutdown handling to prevent EADDRINUSE
       const gracefulShutdown = () => {
         console.log("Shutting down gracefully...");
-        
+
+        // Stop system monitor agent
+        systemMonitorAgent.stop().catch((e: any) => console.error("Monitor agent stop error:", e));
+
         // Stop stream timers
         stopMacroMarketStream();
 
         // Close WebSocket Server
         wss.close(() => {
           console.log("WebSocket server closed.");
-          
+
           // Close HTTP Server
           server.close(() => {
             console.log("HTTP server closed.");

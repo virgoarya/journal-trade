@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ConnectionPanel } from "./components/ConnectionPanel";
 import { AccountOverview } from "./components/AccountOverview";
 import { PositionsTable } from "./components/PositionsTable";
+import { PendingOrdersTable } from "./components/PendingOrdersTable";
 import { TradingPanel } from "./components/TradingPanel";
 import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
@@ -49,6 +50,7 @@ function AITradingPageContent() {
     accountLoading,
     refetchAccountInfo,
     positions,
+    orders,
     positionsLoading,
     positionsError,
     closePosition,
@@ -174,6 +176,11 @@ function AITradingPageContent() {
               isLoading={positionsLoading}
               error={positionsError}
               onRetry={refetchPositions}
+            />
+
+            <PendingOrdersTable
+              orders={orders}
+              onCancel={closePosition}
             />
 
             {/* <CorrelationHeatmap /> */}

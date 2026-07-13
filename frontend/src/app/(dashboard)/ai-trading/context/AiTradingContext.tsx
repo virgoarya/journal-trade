@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import {
   type AIBacktestSkill,
   type PipelineConfig,
@@ -19,6 +19,7 @@ import { usePositions } from "../hooks/usePositions";
 import { usePipeline } from "../hooks/usePipeline";
 import { useLlmStatus } from "../hooks/useLlmStatus";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "../types";
+import { aiTradingService } from "@/services/ai-trading.service";
 
 interface AiTradingContextType {
   // MT5 Connection
@@ -35,6 +36,7 @@ interface AiTradingContextType {
 
   // Positions
   positions: any[];
+  orders: any[];
   positionsLoading: boolean;
   positionsError: string | null;
   closePosition: (ticket: number) => Promise<void>;
@@ -60,13 +62,13 @@ interface AiTradingContextType {
   llmActiveCount: number;
   refreshLlmStatus: () => void;
 
-  // AI Skill (Backtest)
+  // AI Skill (from Backtest)
   skillConfig: AIBacktestSkill | null;
   setSkillConfig: (skill: AIBacktestSkill | null) => void;
   skillVersion: number;
   setSkillVersion: (version: number) => void;
 
-  // Methodology Config (local state for TradingPanel to manage)
+  // Methodology Config (synced with backend)
   activeMethodologies: MethodologyName[];
   setActiveMethodologies: React.Dispatch<React.SetStateAction<MethodologyName[]>>;
   methodologyWeights: MethodologyWeights;
@@ -74,11 +76,16 @@ interface AiTradingContextType {
   showMethodologyConfig: boolean;
   setShowMethodologyConfig: React.Dispatch<React.SetStateAction<boolean>>;
 
-  // LLM Consensus Config (local state for TradingPanel to manage)
+  // LLM Consensus Config (synced with backend)
   llmEnabled: boolean;
   setLlmEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   llmThreshold: number;
   setLlmThreshold: React.Dispatch<React.SetStateAction<number>>;
+  llmMinProviders: number;
+  setLlmMinProviders: React.Dispatch<React.SetStateAction<number>>;
+  llmProviderTimeoutMs: number;
+  setLlmProviderTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
+  isSavingSettings: boolean;
 }
 
 const AiTradingContext = createContext<AiTradingContextType | undefined>(undefined);
@@ -91,7 +98,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(1000);
 
   // Positions
-  const { positions, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
+  const { positions, orders, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
     usePositions(1000);
 
   // LLM Status
@@ -116,22 +123,64 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
   const [skillVersion, setSkillVersion] = useState(0);
 
-  // Methodology Config (local state, managed by context but primarily for TradingPanel)
-  const [activeMethodologies, setActiveMethodologies] = useState<MethodologyName[]>([
-    "smc",
-    "ict",
-    "msnr",
-    "crt",
-    "quarterly",
-    "lit",
-    "rsiEngulf",
-  ]);
+  // Methodology Config (synced with backend)
+  const [activeMethodologies, setActiveMethodologies] = useState<MethodologyName[]>([]);
   const [methodologyWeights, setMethodologyWeights] = useState<MethodologyWeights>({ ...DEFAULT_METHODOLOGY_WEIGHTS });
   const [showMethodologyConfig, setShowMethodologyConfig] = useState(false);
 
-  // LLM Consensus Config (local state, managed by context but primarily for TradingPanel)
+  // LLM Consensus Config (synced with backend)
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [llmThreshold, setLlmThreshold] = useState(0.5);
+  const [llmMinProviders, setLlmMinProviders] = useState(2);
+  const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(8000);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Load AI trading settings from backend on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await aiTradingService.getAiTradingSettings();
+        if (res.success && res.data) {
+          setActiveMethodologies(res.data.activeMethodologies || []);
+          setMethodologyWeights(res.data.methodologyWeights || { ...DEFAULT_METHODOLOGY_WEIGHTS });
+          setLlmEnabled(res.data.llmConsensus?.enabled || false);
+          setLlmThreshold(res.data.llmConsensus?.threshold || 0.5);
+          setLlmMinProviders(res.data.llmConsensus?.minProviders || 2);
+          setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 8000);
+        }
+      } catch (e) {
+        console.warn("Failed to load AI trading settings:", e);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Save settings to backend when they change
+  const saveSettings = useCallback(async () => {
+    setIsSavingSettings(true);
+    try {
+      await aiTradingService.updateAiTradingSettings({
+        activeMethodologies,
+        methodologyWeights,
+        llmConsensus: {
+          enabled: llmEnabled,
+          threshold: llmThreshold,
+          minProviders: llmMinProviders,
+          providerTimeoutMs: llmProviderTimeoutMs,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to save AI trading settings:", e);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs]);
+
+  // Debounced save when settings change
+  useEffect(() => {
+    const timer = setTimeout(saveSettings, 1000);
+    return () => clearTimeout(timer);
+  }, [saveSettings]);
 
   // Handlers for Pipeline actions (passed from usePipeline)
   const startPipeline = start;
@@ -156,6 +205,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       refetchAccountInfo: refetchAccount,
 
       positions,
+      orders,
       positionsLoading,
       positionsError,
       closePosition,
@@ -195,6 +245,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setLlmEnabled,
       llmThreshold,
       setLlmThreshold,
+      llmMinProviders,
+      setLlmMinProviders,
+      llmProviderTimeoutMs,
+      setLlmProviderTimeoutMs,
+      isSavingSettings,
     }),
     [
       isConnected,
@@ -240,6 +295,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setLlmEnabled,
       llmThreshold,
       setLlmThreshold,
+      llmMinProviders,
+      setLlmMinProviders,
+      llmProviderTimeoutMs,
+      setLlmProviderTimeoutMs,
+      isSavingSettings,
     ]
   );
 

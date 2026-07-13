@@ -161,7 +161,7 @@ export const ALL_LLM_PROVIDERS: LlmModelNode[] = [
   { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", status: "active" },
   { name: "nemotron", label: "Nemotron 3 Ultra", model: "nemotron-4-340b-instruct", status: "active" },
-  { name: "claude-opus", label: "Claude Opus 4", model: "claude-3-opus-20240229", status: "active" },
+  { name: "claude-opus", label: "Claude Opus 4", model: "llama-3.3-70b-versatile", status: "active" },
 ];
 
 /**

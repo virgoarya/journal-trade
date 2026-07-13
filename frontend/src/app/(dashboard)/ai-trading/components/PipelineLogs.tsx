@@ -174,7 +174,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     const { stages } = track;
     
     if (stepKey === "INFO") {
-      if (stages.INFO.status !== "pending") return { status: "passed", ...stages.INFO };
+      if (stages.INFO.status !== "pending") return { ...stages.INFO, status: "passed" };
       if (stages.SIGNAL.status !== "pending" || stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
         return { status: "passed", message: "Pipeline initialized." };
       }
@@ -182,7 +182,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "SIGNAL") {
-      if (stages.SIGNAL.status !== "pending") return { status: "passed", ...stages.SIGNAL };
+      if (stages.SIGNAL.status !== "pending") return { ...stages.SIGNAL, status: "passed" };
       if (stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
         return { status: "passed", message: "Signal detected." };
       }
@@ -190,7 +190,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "CONFLUENCE") {
-      if (stages.CONFLUENCE.status !== "pending") return { status: "passed", ...stages.CONFLUENCE };
+      if (stages.CONFLUENCE.status !== "pending") return { ...stages.CONFLUENCE, status: "passed" };
       if (stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
         return { status: "passed", message: "Confluence checks completed." };
       }
@@ -198,8 +198,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "EXECUTION") {
-      if (stages.EXECUTION.status === "success") return { status: "success", ...stages.EXECUTION };
-      if (stages.EXECUTION.status === "error") return { status: "error", ...stages.EXECUTION };
+      if (stages.EXECUTION.status === "success") return { ...stages.EXECUTION, status: "success" };
+      if (stages.EXECUTION.status === "error") return { ...stages.EXECUTION, status: "error" };
       if (stages.TRAILING.status !== "pending") {
         return { status: "success", message: "Trade executed." };
       }
@@ -207,7 +207,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "TRAILING") {
-      if (stages.TRAILING.status !== "pending") return { status: "active", ...stages.TRAILING };
+      if (stages.TRAILING.status !== "pending") return { ...stages.TRAILING, status: "active" };
       return { status: "pending" };
     }
 

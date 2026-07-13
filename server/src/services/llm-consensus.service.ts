@@ -7,7 +7,7 @@
 
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
-import { mt5McpService } from "./mt5-mcp.service";
+import { mt5McpService, CircuitBreaker } from "./mt5-mcp.service";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -69,15 +69,40 @@ const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> 
 
 /** Additional providers requiring direct API keys */
 const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL: string; apiKeyEnv: string }> = [
-  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gemini/gemini-2.5-flash",    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKeyEnv: "GEMINI_API_KEY" },
+  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash",    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKeyEnv: "GEMINI_API_KEY" },
   { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest", baseURL: "https://api.mistral.ai", apiKeyEnv: "GROQ_API_KEY" },
   { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b", baseURL: "https://integrate.api.nvidia.com/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
-  { name: "claude-opus", label: "Claude Opus 4",    model: "claude-3-opus-20240229",    baseURL: "https://router.flatkey.ai/v1", apiKeyEnv: "ANTHROPIC_AUTH_TOKEN" },
+  { name: "claude-opus", label: "Claude Opus 4",    model: "groq/llama-3.3-70b-versatile",    baseURL: "https://api.groq.com/openai/v1", apiKeyEnv: "GROQ_API_KEY" },
 ];
 
 // Cache untuk menyimpan status rate-limit LLM beserta timestamp kapan terkena limit
 const rateLimitedModels = new Map<string, number>();
 const RATE_LIMIT_COOLDOWN_MS = 1000 * 60 * 30; // 30 Menit
+
+// Provider reliability tracking
+const providerReliability = new Map<string, { success: number; total: number; lastError: number }>();
+
+/** Update provider reliability metrics */
+function updateProviderReliability(name: string, success: boolean): void {
+  const current = providerReliability.get(name) || { success: 0, total: 0, lastError: 0 };
+  current.total++;
+  if (success) current.success++;
+  else current.lastError = Date.now();
+  providerReliability.set(name, current);
+}
+
+/** Get provider reliability score (0-1) */
+function getProviderReliability(name: string): number {
+  const stats = providerReliability.get(name);
+  if (!stats || stats.total < 3) return 1.0; // Default to 1.0 for new/untested providers
+  return stats.success / stats.total;
+}
+
+/** Check if provider is reliable enough to use */
+function isProviderReliable(name: string): boolean {
+  const reliability = getProviderReliability(name);
+  return reliability >= 0.5; // At least 50% success rate
+}
 
 /** Mengecek apakah model masih dalam masa penalti (hibernasi) */
 function isRateLimited(name: string): boolean {
@@ -176,7 +201,7 @@ function getAvailableProviders(): LLMProvider[] {
   // 1. Tambahkan model 9Router spesifik
   if (useNineRouter) {
     for (const m of NINE_ROUTER_MODELS) {
-      if (isRateLimited(m.name)) continue;
+      if (isRateLimited(m.name) || !isProviderReliable(m.name)) continue;
       providers.push({
         name: m.name,
         label: m.label,
@@ -189,7 +214,7 @@ function getAvailableProviders(): LLMProvider[] {
 
   // 2. Tambahkan model Direct (Gemini, Mistral, Nemotron, Claude Opus)
   for (const m of DIRECT_MODELS) {
-    if (isRateLimited(m.name)) continue;
+    if (isRateLimited(m.name) || !isProviderReliable(m.name)) continue;
 
     if (useNineRouter) {
       // Jika menggunakan 9Router, lewatkan semua model direct melalui 9Router
@@ -209,10 +234,21 @@ function getAvailableProviders(): LLMProvider[] {
         silentLogger.warn(`[LLM-CONSENSUS] API key ${m.name} tidak ditemukan, skip direct call`);
         continue;
       }
+
+      // Bersihkan awalan model jika panggilan langsung (direct)
+      let directModel = m.model;
+      if (m.name === "gemini") {
+        directModel = "gemini-2.5-flash";
+      } else if (directModel.startsWith("groq/")) {
+        directModel = directModel.replace("groq/", "");
+      } else if (directModel.startsWith("mistral/")) {
+        directModel = directModel.replace("mistral/", "");
+      }
+
       providers.push({
         name: m.name,
         label: m.label,
-        model: m.model,
+        model: directModel,
         baseUrl: m.baseURL,
         apiKey,
         isDirect: true,
@@ -223,15 +259,39 @@ function getAvailableProviders(): LLMProvider[] {
   return providers;
 }
 
+/** Periodic health check - can be called during runtime */
+export async function periodicHealthCheck(): Promise<void> {
+  const useNineRouter = !!env.NINE_ROUTER_URL;
+  const nineRouterUrl = env.NINE_ROUTER_URL;
+  const nineRouterApiKey = env.NINE_ROUTER_API_KEY || "sk-9router-local";
+  const providers = getAvailableProviders();
+
+  await Promise.all(
+    providers.map(async (p) => {
+      const ok = await testModelProvider({ name: p.name, model: p.model }, p.baseUrl, p.apiKey);
+      updateProviderReliability(p.name, ok);
+      if (!ok) {
+        rateLimitedModels.set(p.name, Date.now());
+        silentLogger.warn(`[LLM-HEALTH] ${p.name} failed periodic check — moved to hibernation`);
+      } else {
+        silentLogger.info(`[LLM-HEALTH] ${p.name} periodic check — OK (reliability: ${getProviderReliability(p.name).toFixed(2)})`);
+      }
+    })
+  );
+}
+
 // ─── System Prompt ───────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional. Tugasmu adalah menganalisis sinyal trading yang diberikan dan menghasilkan keputusan dalam format JSON dengan kunci "verdict" dan "reasoning".
+const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional dengan pengalaman 15+ tahun. Tugasmu adalah menganalisis sinyal trading yang diberikan dan menghasilkan keputusan dalam format JSON dengan kunci "verdict" dan "reasoning".
 
-Aturan Analisis Sinyal:
-1. **Market Structure** — Apakah arah tren mendukung arah sinyal?
-2. **Methodology Confluence** — Seberapa banyak metode/indikator konvergen menyetujui sinyal ini?
-3. **Risk/Reward** — Apakah perbandingan SL/TP rasional? (minimal R:R 1:1.5)
-4. **Price Action** — Apakah ada konfirmasi konkrit dari struktur harga?
+Aturan Analisis Sinyal (WAJIB diikuti):
+1. **Struktur Pasar (Market Structure)** — Apakah arah tren mendukung arah sinyal? (BULL/BEAR/SIDEWAYS)
+2. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode/indikator yang setuju dengan sinyal ini? (minimal 3 untuk GOOD)
+3. **Rasio Risiko/Hasil (Risk/Reward)** — Apakah perbandingan SL/TP masuk akal? (minimal R:R 1:1.5 untuk GOOD, 1:1 untuk SKIP)
+4. **Aksi Harga (Price Action)** — Apakah ada konfirmasi nyata dari struktur harga? (breakout, penolakan/rejection, pola harga)
+5. **Risiko Korelasi (Correlation Risk)** — Apakah sinyal ini berkorelasi tinggi dengan posisi terbuka lainnya?
+6. **Keselarasan Fundamental (Fundamental Alignment)** — Apakah sentimen fundamental mendukung arah teknikal?
+7. **Konfirmasi Timeframe Lebih Tinggi (HTF Confirmation)** — Apakah timeframe yang lebih besar mengkonfirmasi arah sinyal?
 
 Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks lain):
 \`\`\`json
@@ -241,11 +301,12 @@ Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks la
 }
 \`\`\`
 PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan harus singkat (maksimal 2 kalimat) tentang faktor teknikal pasar pendukung.
+ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan kesimpulan akhir yang padat.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
-- GOOD: Sinyal sangat kuat, terkonfirmasi banyak indikator, R:R baik, ikuti tren.
-- BAD: Sinyal buruk, melawan tren dominan, R:R tidak memadai, atau konfluensi sangat lemah.
-- SKIP: Data meragukan, kondisi sideways yang berisiko, atau butuh konfirmasi lanjutan.`;
+- GOOD: Sinyal sangat kuat, terkonfirmasi banyak indikator, R:R >= 1:1.5, ikuti tren, HTF konfirmasi.
+- BAD: Sinyal buruk, melawan tren dominan, R:R < 1:1, konfluensi lemah (< 2 metode), atau korelasi berisiko.
+- SKIP: Data meragukan, kondisi sideways berisiko, R:R 1:1-1:1.5, butuh konfirmasi lanjutan, atau fundamental bertentangan.`;
 
 // Base correlation values for offline fallback
 const BASE_CORRELATIONS: Record<string, Record<string, number>> = {
@@ -344,29 +405,29 @@ function buildSignalPrompt(
   correlationWarnings?: string
 ): string {
   let extra = "";
-  if (signal.htfTrend) extra += `\nHTF Trend: ${signal.htfTrend} (confidence: ${signal.htfConfidence}%)`;
-  if (signal.symbolScore !== undefined) extra += `\nSymbol Historical Score: ${signal.symbolScore}/100`;
+  if (signal.htfTrend) extra += `\nTren HTF (Timeframe Tinggi): ${signal.htfTrend} (keyakinan: ${signal.htfConfidence}%)`;
+  if (signal.symbolScore !== undefined) extra += `\nSkor Historis Simbol: ${signal.symbolScore}/100`;
   if (signal.methodologyVerdict) {
-    extra += `\nMethodology Verdict from Backtest: ${signal.methodologyVerdict}`;
-    extra += `\nMethodology Win Rate: ${signal.methodologyWinRate}%`;
-    extra += `\nMethodology PnL: ${signal.methodologyPnL}`;
+    extra += `\nHasil Keputusan Backtest Metodologi: ${signal.methodologyVerdict}`;
+    extra += `\nWin Rate Metodologi: ${signal.methodologyWinRate}%`;
+    extra += `\nPnL Metodologi: ${signal.methodologyPnL}`;
   }
 
   return `Evaluasi sinyal trading berikut secara objektif dan teknikal:
 
-Symbol: ${signal.symbol}
-Arah: ${signal.direction}
-Confidence: ${signal.confidence}%
-Entry: ${signal.entry}
-SL: ${signal.sl}
-TP: ${signal.tp}
-R:R: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.tp - signal.entry) / Math.abs(signal.sl - signal.entry)).toFixed(2) : "N/A"}
+Simbol/Aset: ${signal.symbol}
+Arah Posisi: ${signal.direction}
+Tingkat Keyakinan (Confidence): ${signal.confidence}%
+Entry Price: ${signal.entry}
+Stop Loss (SL): ${signal.sl}
+Take Profit (TP): ${signal.tp}
+Rasio Risk/Reward: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.tp - signal.entry) / Math.abs(signal.sl - signal.entry)).toFixed(2) : "N/A"}
 Alasan Dasar: ${signal.reason}
 
 Struktur Tren Market: ${signal.marketTrend}
-Metode Setuju: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}
+Jumlah Metode yang Menyetujui: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}
 
-Detail Metode:
+Rincian Detail Metode:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}
 
 Ingat: Berikan keputusan akhir (verdict) dan analisis teknikal (reasoning) eksklusif dalam Bahasa Indonesia. Balas hanya dengan format JSON yang valid, tanpa teks pengantar maupun penutup.`;
@@ -375,6 +436,15 @@ Ingat: Berikan keputusan akhir (verdict) dan analisis teknikal (reasoning) ekskl
 // ─── Service ─────────────────────────────────────────────────────────
 
 class LLMConsensusService {
+  private providerCircuitBreakers: Map<string, CircuitBreaker> = new Map();
+  
+  constructor() {
+    // Initialize circuit breakers for all known providers
+    const allProviders = getAvailableProviders(); // Note: This gets ALL providers, active or not
+    for (const p of allProviders) {
+      this.providerCircuitBreakers.set(p.name, new CircuitBreaker(3, 2, 60000)); // 3 failures, 2 successes, 60s timeout
+    }
+  }
   /**
    * Run parallel LLM consensus for a trading signal.
    * All selected providers are called simultaneously via Promise.all.
@@ -420,18 +490,22 @@ class LLMConsensusService {
       };
     }
 
-    const providers = getAvailableProviders();
+    const providers = getAvailableProviders().filter(p => {
+      const circuit = this.providerCircuitBreakers.get(p.name);
+      // Provider is usable if it's not rate-limited AND its circuit breaker is not OPEN
+      return !isRateLimited(p.name) && circuit?.canExecute();
+    });
     if (providers.length < (cfg.minProviders || 2)) {
-      silentLogger.warn(`[LLM-CONSENSUS] Cuma ${providers.length} provider tersedia (butuh ${cfg.minProviders}). Pakai GOOD aja.`);
+      silentLogger.warn(`[LLM-CONSENSUS] Cuma ${providers.length} provider tersedia (butuh ${cfg.minProviders}). SKIP trade.`);
       return {
-        verdict: "GOOD",
+        verdict: "SKIP",
         votes: [],
         totalVotes: 0,
         goodVotes: 0,
         badVotes: 0,
         skipVotes: 0,
-        consensusReached: true,
-        details: `Insufficient providers (${providers.length}/${cfg.minProviders}) — proceeding without LLM validation`,
+        consensusReached: false,
+        details: `Insufficient active providers (${providers.length}/${cfg.minProviders}) — skipping trade due to missing LLM validation`,
       };
     }
 
@@ -516,32 +590,38 @@ class LLMConsensusService {
    * Test all models at startup and disable rate-limited ones.
    */
   async startupHealthCheck(): Promise<void> {
-    return startupHealthCheck();
+    await startupHealthCheck();
+    // After health check, update circuit breakers based on rateLimitedModels
+    const allProviders = getAvailableProviders();
+    for (const p of allProviders) {
+      if (isRateLimited(p.name)) {
+        this.providerCircuitBreakers.get(p.name)?.recordFailure();
+      } else {
+        this.providerCircuitBreakers.get(p.name)?.recordSuccess();
+      }
+    }
   }
 
   /**
    * Get status of all 6 models (active / rate-limited).
    */
-  getModelStatus(): Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" }> {
-    const status: Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" }> = [];
+  getModelStatus(): Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" | "circuit_open" }> {
+    const status: Array<{ name: string; label: string; model: string; status: "active" | "hibernasi" | "circuit_open" }> = [];
 
-    // Tambahkan status untuk model 9Router
-    for (const m of NINE_ROUTER_MODELS) {
+    const allProviders = getAvailableProviders();
+    for (const m of allProviders) {
+      const circuit = this.providerCircuitBreakers.get(m.name);
+      let s: "active" | "hibernasi" | "circuit_open" = "active";
+      if (isRateLimited(m.name)) {
+        s = "hibernasi";
+      } else if (circuit?.getState() === "OPEN") {
+        s = "circuit_open";
+      }
       status.push({
         name: m.name,
         label: m.label,
         model: m.model,
-        status: isRateLimited(m.name) ? "hibernasi" as const : "active" as const,
-      });
-    }
-
-    // Tambahkan status untuk model langsung
-    for (const m of DIRECT_MODELS) {
-      status.push({
-        name: m.name,
-        label: m.label,
-        model: m.model,
-        status: isRateLimited(m.name) ? "hibernasi" as const : "active" as const,
+        status: s,
       });
     }
     return status;
@@ -550,19 +630,21 @@ class LLMConsensusService {
   /**
    * Get list of available providers with their status.
    */
-  getAvailableProviders(): { name: string; label: string; available: boolean }[] {
-    return getAvailableProviders().map((p) => ({
+  getAvailableProviders(): { name: string; label: string; available: boolean; reliability: number }[] {
+    const allProviders = getAvailableProviders();
+    return allProviders.map((p) => ({
       name: p.name,
       label: p.label,
-      available: true,
+      available: (this.providerCircuitBreakers.get(p.name)?.canExecute() ?? true) && isProviderReliable(p.name),
+      reliability: getProviderReliability(p.name),
     }));
   }
 
   /**
    * Check if LLM consensus is possible (enough providers configured).
    */
-  isAvailable(): boolean {
-    return getAvailableProviders().length >= 2;
+isAvailable(): boolean {
+    return this.getAvailableProviders().filter(p => p.available).length >= 2;
   }
 
   // ─── Single Provider Call ──────────────────────────────────────────
@@ -573,6 +655,20 @@ class LLMConsensusService {
     timeoutMs: number,
   ): Promise<LLMConsensusVote> {
     const startTime = Date.now();
+    const circuit = this.providerCircuitBreakers.get(provider.name)!;
+
+    if (!circuit.canExecute()) {
+      const errorMessage = `Circuit breaker OPEN for LLM provider ${provider.name}. Fast-failing.`;
+      silentLogger.warn(`[LLM-CONSENSUS] ${errorMessage}`);
+      return {
+        provider: provider.name,
+        modelLabel: provider.label,
+        verdict: "SKIP",
+        reasoning: `Circuit breaker OPEN: ${errorMessage}`,
+        latencyMs: Date.now() - startTime,
+        error: errorMessage,
+      };
+    }
 
     try {
       const controller = new AbortController();
@@ -591,7 +687,7 @@ class LLMConsensusService {
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: prompt },
           ],
-          max_tokens: 1024,
+          max_tokens: 4096,
           temperature: 0.1,
           stream: false,
         }),
@@ -622,6 +718,7 @@ class LLMConsensusService {
 
         if (isRateLimited) {
           rateLimitedModels.set(provider.name, Date.now());
+          updateProviderReliability(provider.name, false);
           silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} (${provider.label}) dynamically entered hibernation due to rate limit/quota.`);
         }
 
@@ -663,6 +760,9 @@ class LLMConsensusService {
       const parsed = this.parseVerdict(rawText);
       const latency = Date.now() - startTime;
 
+      circuit.recordSuccess(); // Record success
+      updateProviderReliability(provider.name, true); // Track reliability
+
       return {
         provider: provider.name,
         modelLabel: provider.label,
@@ -675,6 +775,9 @@ class LLMConsensusService {
       const errorMsg = error.name === "AbortError"
         ? `Timeout setelah ${timeoutMs}ms`
         : error.message || "Error tak diketahui";
+
+      circuit.recordFailure(); // Record failure
+      updateProviderReliability(provider.name, false); // Track reliability
 
       silentLogger.warn(`[LLM-CONSENSUS] ${provider.name}(${provider.label}) gagal: ${errorMsg}`);
 
