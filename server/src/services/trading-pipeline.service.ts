@@ -141,7 +141,7 @@ class TradingPipelineService {
     string,
     {
       config: PipelineConfig;
-      interval: NodeJS.Timeout | null;
+      intervals: Map<string, NodeJS.Timeout>;
       trailingInterval: NodeJS.Timeout | null;
       logs: PipelineLog[];
       lastSignal: TradingSignal | null;
@@ -234,7 +234,7 @@ class TradingPipelineService {
 
 const pipeline = {
       config: merged,
-      interval: null as NodeJS.Timeout | null,
+      intervals: new Map<string, NodeJS.Timeout>(),
       trailingInterval: null as NodeJS.Timeout | null,
       logs: [] as PipelineLog[],
       lastSignal: null as TradingSignal | null,
@@ -266,16 +266,26 @@ const pipeline = {
     }
 
     // Trigger the first execution immediately instead of waiting for the first interval tick
-    setTimeout(() => this.pipelineLoop(userId), 0);
+    merged.symbols.forEach((symbol, index) => {
+      // Stagger execution by 1.5s per symbol
+      setTimeout(() => {
+        const p = this.activePipelines.get(userId);
+        if (p) this.pipelineLoop(userId, symbol);
+      }, index * 1500);
 
-    pipeline.interval = setInterval(
-      () => this.pipelineLoop(userId),
-      intervalMs,
-    );
+      const intervalId = setInterval(
+        () => this.pipelineLoop(userId, symbol),
+        intervalMs,
+      );
+      pipeline.intervals.set(symbol, intervalId);
+    });
 
     // Trailing stop & pending order management runs more frequently (every 10s)
     pipeline.trailingInterval = setInterval(
-      () => this.managePositions(userId),
+      async () => {
+        await this.managePositions(userId);
+        await this.syncClosedPositions(userId);
+      },
       10_000,
     );
 
@@ -303,8 +313,11 @@ const pipeline = {
 
   async stopPipeline(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
-    if (pipeline?.interval) {
-      clearInterval(pipeline.interval);
+    if (pipeline?.intervals) {
+      for (const interval of pipeline.intervals.values()) {
+        clearInterval(interval);
+      }
+      pipeline.intervals.clear();
     }
     if (pipeline?.trailingInterval) {
       clearInterval(pipeline.trailingInterval);
@@ -351,9 +364,12 @@ const pipeline = {
 
   async pausePipeline(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
-    if (pipeline?.interval) {
-      clearInterval(pipeline.interval);
-      pipeline.interval = null;
+    if (pipeline?.intervals) {
+      for (const interval of pipeline.intervals.values()) {
+        clearInterval(interval);
+      }
+      pipeline.intervals.clear();
+      pipeline.paused = true;
     }
     this.addLog(userId, "INFO", "Pipeline paused");
   }
@@ -365,10 +381,13 @@ const pipeline = {
     }
 
     const intervalMs = this.getIntervalMs(pipeline.config.timeframe);
-    pipeline.interval = setInterval(
-      () => this.pipelineLoop(userId),
-      intervalMs,
-    );
+    pipeline.config.symbols.forEach((symbol, index) => {
+      const intervalId = setInterval(
+        () => this.pipelineLoop(userId, symbol),
+        intervalMs,
+      );
+      pipeline.intervals.set(symbol, intervalId);
+    });
     pipeline.paused = false;
 
     this.addLog(userId, "INFO", "Pipeline resumed");
@@ -492,8 +511,8 @@ const pipeline = {
     }
 
     return {
-      running: pipeline.interval !== null,
-      paused: pipeline.interval === null,
+      running: pipeline.intervals.size > 0 && !pipeline.paused,
+      paused: pipeline.paused,
       startedAt: null,
       config: pipeline.config,
       metrics: {
@@ -582,7 +601,7 @@ const pipeline = {
 
   // ─── Main Pipeline Loop ────────────────────────────────────────────
 
-  private async pipelineLoop(userId: string): Promise<void> {
+  private async pipelineLoop(userId: string, symbol: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
 
@@ -592,20 +611,23 @@ const pipeline = {
       const mt5CircuitState = mt5McpService.circuitBreakerState;
       pipeline.mt5CircuitOpen = mt5CircuitState === "OPEN";
       if (!mt5McpService.isConnected) {
-    pipeline.waitingReconnect = true;
-    this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
-    pipeline.mt5CircuitOpen = true; // Set MT5 circuit breaker to OPEN
-    return; // Skip this tick silently
+        pipeline.waitingReconnect = true;
+        if (pipeline.config.symbols[0] === symbol) {
+          this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
+        }
+        pipeline.mt5CircuitOpen = true; // Set MT5 circuit breaker to OPEN
+        return; // Skip this tick silently
       } else if (pipeline.waitingReconnect) {
         pipeline.waitingReconnect = false;
         pipeline.mt5CircuitOpen = false; // Close MT5 circuit breaker
-        this.addLog(userId, "INFO", `[PIPELINE] Koneksi MT5 pulih. Pipeline dilanjutkan (Auto-resume).`);
+        if (pipeline.config.symbols[0] === symbol) {
+          this.addLog(userId, "INFO", `[PIPELINE] Koneksi MT5 pulih. Pipeline dilanjutkan (Auto-resume).`);
+        }
       }
 
       if (!this.isWithinTradingHours(pipeline.config)) return;
 
-      await this.managePositions(userId);
-      await this.syncClosedPositions(userId);
+      // Note: managePositions and syncClosedPositions are handled by trailingInterval globally now.
 
       // Check which symbols actually need analysis (candle time has changed)
       const symbolsToAnalyze: string[] = [];
@@ -615,31 +637,25 @@ const pipeline = {
         pipeline.lastAnalyzedCandleTimes = new Map<string, number>();
       }
 
-      for (const symbol of pipeline.config.symbols) {
-        // Skip Forex/Commodities/Indices on weekends (Saturday & Sunday) to save API tokens and avoid locked market errors
-        const day = new Date().getDay();
-        const isWeekend = day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
-        const isCrypto = /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol);
-        if (isWeekend && !isCrypto) {
-          continue; // Skip non-crypto pairs on weekends
-        }
+      // Skip Forex/Commodities/Indices on weekends (Saturday & Sunday) to save API tokens and avoid locked market errors
+      const day = new Date().getDay();
+      const isWeekend = day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
+      const isCrypto = /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol);
+      if (isWeekend && !isCrypto) {
+        return; // Skip non-crypto pairs on weekends
+      }
 
-        try {
-          const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
-          if (rates && rates.length > 0) {
-            const latestCandleTime = rates[rates.length - 1].time;
-            latestCandleTimes.set(symbol, latestCandleTime);
-
-            // ALWAYS push the symbol for analysis in fractal strategies.
-            // The underlying engine needs to check smaller timeframes (M15, M5) 
-            // inside the H1 candle for dynamic entries (e.g. MSNR Top-Down).
-            symbolsToAnalyze.push(symbol);
-          } else {
-            symbolsToAnalyze.push(symbol);
-          }
-        } catch (err: any) {
+      try {
+        const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
+        if (rates && rates.length > 0) {
+          const latestCandleTime = rates[rates.length - 1].time;
+          latestCandleTimes.set(symbol, latestCandleTime);
+          symbolsToAnalyze.push(symbol);
+        } else {
           symbolsToAnalyze.push(symbol);
         }
+      } catch (err: any) {
+        symbolsToAnalyze.push(symbol);
       }
 
       if (symbolsToAnalyze.length === 0) {
@@ -941,6 +957,7 @@ const llmResult = await llmConsensusService.evaluate(
                methodologyVerdict: llmMethV,
                methodologyWinRate: llmMethWR,
                methodologyPnL: llmMethPnL,
+               pattern: analysis.confluence.finalSignal?.pattern,
              },
              pipeline.config.llmConsensus,
            );
@@ -1058,8 +1075,11 @@ const llmResult = await llmConsensusService.evaluate(
           const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
 
           const isPending = finalAction !== signal.direction; // BUY_LIMIT/BUY_STOP etc
+          const methodologyStr = analysis.confluence.finalSignal.primaryMethodology.toUpperCase();
+          const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
+
           this.addLog(userId, "TRADE",
-            `${isPending ? "Placed pending" : "Opened"} ${finalAction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${analysis.confluence.finalSignal.primaryMethodology}]`,
+            `${isPending ? "Placed pending" : "Opened"} ${finalAction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
             { signal, orderResult, confluence: analysis.confluence },
           );
 

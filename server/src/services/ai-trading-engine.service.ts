@@ -211,7 +211,7 @@ class AITradingEngine {
 
     const legacySignal = confluence.finalSignal
       ? {
-          symbol, direction: confluence.finalSignal.direction, confidence: confluence.finalSignal.confidence, entry: confluence.finalSignal.entry, sl: confluence.finalSignal.sl, tp: confluence.finalSignal.tp, reason: confluence.reason, riskPercent, timeframe, indicators: { rsi, atr: atrPattern }, pattern: `MULTI_STRATEGY_${confluence.finalSignal.primaryMethodology.toUpperCase()}`,
+          symbol, direction: confluence.finalSignal.direction, confidence: confluence.finalSignal.confidence, entry: confluence.finalSignal.entry, sl: confluence.finalSignal.sl, tp: confluence.finalSignal.tp, reason: confluence.reason, riskPercent, timeframe, indicators: { rsi, atr: atrPattern }, pattern: confluence.finalSignal.pattern ? `MULTI_STRATEGY_${confluence.finalSignal.primaryMethodology.toUpperCase()}_${confluence.finalSignal.pattern.toUpperCase()}` : `MULTI_STRATEGY_${confluence.finalSignal.primaryMethodology.toUpperCase()}`,
         }
       : null;
 

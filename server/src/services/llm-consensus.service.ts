@@ -286,21 +286,21 @@ const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional den
 
 Aturan Analisis Sinyal (WAJIB diikuti):
 1. **Struktur Pasar (Market Structure)** — Apakah arah tren mendukung arah sinyal? (BULL/BEAR/SIDEWAYS)
-2. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode/indikator yang setuju dengan sinyal ini? (minimal 3 untuk GOOD)
-3. **Rasio Risiko/Hasil (Risk/Reward)** — Apakah perbandingan SL/TP masuk akal? (minimal R:R 1:1.5 untuk GOOD, 1:1 untuk SKIP)
-4. **Aksi Harga (Price Action)** — Apakah ada konfirmasi nyata dari struktur harga? (breakout, penolakan/rejection, pola harga)
-5. **Risiko Korelasi (Correlation Risk)** — Apakah sinyal ini berkorelasi tinggi dengan posisi terbuka lainnya?
-6. **Keselarasan Fundamental (Fundamental Alignment)** — Apakah sentimen fundamental mendukung arah teknikal?
+2. **Pola Teknikal Spesifik (Technical Pattern)** — Jika ada pola teknikal yang dikirim (seperti Orderblock (OB) dari SMC, Fair Value Gap (FVG) dari ICT, atau RBS/SBR/QML dari MSNR), kamu WAJIB menyebutkannya secara eksplisit dalam argumentasi.
+3. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode/indikator yang setuju dengan sinyal ini? (minimal 3 untuk GOOD)
+4. **Rasio Risiko/Hasil (Risk/Reward)** — Apakah perbandingan SL/TP masuk akal? (minimal R:R 1:1.5 untuk GOOD, 1:1 untuk SKIP)
+5. **Aksi Harga (Price Action)** — Apakah ada konfirmasi nyata dari struktur harga? (breakout, penolakan/rejection, pola harga)
+6. **Risiko Korelasi (Correlation Risk)** — Apakah sinyal ini berkorelasi tinggi dengan posisi terbuka lainnya?
 7. **Konfirmasi Timeframe Lebih Tinggi (HTF Confirmation)** — Apakah timeframe yang lebih besar mengkonfirmasi arah sinyal?
 
 Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks lain):
 \`\`\`json
 {
   "verdict": "GOOD",
-  "reasoning": "Tren besar searah sinyal. Konfluensi 3 metode mendukung. Risk/Reward 1:2 rasional."
+  "reasoning": "Tren besar searah sinyal. Terkonfirmasi entry di area Orderblock (SMC) dan 3 metode lain setuju. Risk/Reward 1:2 rasional."
 }
 \`\`\`
-PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan harus singkat (maksimal 2 kalimat) tentang faktor teknikal pasar pendukung.
+PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan harus spesifik menyebutkan Pola Teknikal (seperti OB, FVG, RBS, SBR, QML, MSS, dll) jika tersedia.
 ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan kesimpulan akhir yang padat.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
@@ -401,6 +401,7 @@ function buildSignalPrompt(
     methodologyVerdict?: string;
     methodologyWinRate?: number;
     methodologyPnL?: number;
+    pattern?: string;
   },
   correlationWarnings?: string
 ): string {
@@ -417,6 +418,7 @@ function buildSignalPrompt(
 
 Simbol/Aset: ${signal.symbol}
 Arah Posisi: ${signal.direction}
+Pola Teknikal Spesifik: ${signal.pattern ? signal.pattern : "Tergantung dominasi confluences"}
 Tingkat Keyakinan (Confidence): ${signal.confidence}%
 Entry Price: ${signal.entry}
 Stop Loss (SL): ${signal.sl}
@@ -469,6 +471,7 @@ class LLMConsensusService {
       methodologyVerdict?: string;
       methodologyWinRate?: number;
       methodologyPnL?: number;
+      pattern?: string;
     },
     config?: Partial<LLMConsensusConfig>,
   ): Promise<LLMConsensusResult> {

@@ -43,6 +43,7 @@ export interface MethodologySignal {
   sl: number;
   tp: number;
   weight: number;
+  pattern?: string;
 }
 
 export interface MethodologyBreakdown {
@@ -62,6 +63,7 @@ export interface ConfluenceResult {
     confidence: number;
     confluenceScore: number;
     primaryMethodology: MethodologyName;
+    pattern?: string;
     methodologyBreakdown: MethodologyBreakdown;
     agreeingSignals: MethodologySignal[];
     totalAgreeing: number;
@@ -119,6 +121,11 @@ class ConfluenceEngine {
       const processed = Array.isArray(signal) ? signal[0] : signal;
       if (!processed) continue;
 
+      let pattern = undefined;
+      if ("breachType" in processed) pattern = (processed as any).breachType;
+      else if ("signalType" in processed) pattern = (processed as any).signalType;
+      else if ("pattern" in processed) pattern = (processed as any).pattern;
+
       allMethodologySignals.push({
         methodology,
         direction: processed.direction,
@@ -127,6 +134,7 @@ class ConfluenceEngine {
         sl: processed.sl,
         tp: processed.tp,
         weight: weights[methodology] ?? 1.0,
+        pattern,
       });
     }
 
@@ -225,6 +233,7 @@ class ConfluenceEngine {
         confidence: Math.round(finalConfidence),
         confluenceScore: Math.round(baseScore),
         primaryMethodology: primary.methodology,
+        pattern: primary.pattern,
         methodologyBreakdown: breakdown,
         agreeingSignals: winningSignals,
         totalAgreeing: agreeCount,

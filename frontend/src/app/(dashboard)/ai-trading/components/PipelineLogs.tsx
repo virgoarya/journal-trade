@@ -94,8 +94,22 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
       // Check if it's a global pipeline start message
       const isGlobalStart = log.message.startsWith("Pipeline started:");
       
-      const symbolMatch = log.message.match(/\b(EURUSD|GBPUSD|AUDUSD|USDJPY|USDCAD|USDCHF|XAUUSD|BTCUSD|USTEC|US500)\b/);
-      const symbol = symbolMatch ? symbolMatch[1] : null;
+      let symbol = null;
+      if (activeSymbols.length > 0) {
+        for (const sym of activeSymbols) {
+          if (log.message.includes(sym)) {
+            symbol = sym;
+            break;
+          }
+        }
+      }
+      // Fallback to match 5-8 letter uppercase words for indices like US500 or pairs like BTCUSD
+      if (!symbol) {
+        const symbolMatch = log.message.match(/\b([A-Z]{5,8})\b/);
+        if (symbolMatch && !["SIGNAL", "PIPELINE", "CONFLUENCE", "TRAILING"].includes(symbolMatch[1])) {
+          symbol = symbolMatch[1];
+        }
+      }
       
       let direction: "BUY" | "SELL" | undefined;
       if (/\bBUY\b/i.test(log.message)) direction = "BUY";
