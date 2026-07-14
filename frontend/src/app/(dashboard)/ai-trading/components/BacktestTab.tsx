@@ -12,12 +12,14 @@ import {
 } from "@/services/backtest.service";
 import { History } from "lucide-react";
 import { toast } from "sonner";
+import { useAiTrading } from "../context/AiTradingContext";
 
 interface BacktestTabProps {
   onBacktestComplete?: () => void;
 }
 
 export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
+  const { refreshSettings } = useAiTrading();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -100,6 +102,7 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
       if (applyRes.success) {
         toast.success("Backtest parameters applied to live pipeline!");
         setAnalysis(null);
+        await refreshSettings();
       } else {
         toast.error(applyRes.error || "Failed to apply");
       }
@@ -108,7 +111,7 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
     } finally {
       setIsApplying(false);
     }
-  }, [result]);
+  }, [result, refreshSettings]);
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);

@@ -80,14 +80,15 @@ export const llmConsensusSchema = z.object({
 });
 
 export const pipelineConfigSchema = z.object({
-  symbols: z.array(z.string()).min(1, "At least one symbol required"),
-  timeframe: z.enum(["M5", "M15", "H1"]).default("M15"),
+  useAppliedConfig: z.boolean().optional(),
+  symbols: z.array(z.string()).min(1, "At least one symbol required").optional(),
+  timeframe: z.enum(["M5", "M15", "H1"]).default("M15").optional(),
   strategy: z
     .enum(["RSI_ENGULFING_SCALPING", "RSI_ENGULFING_INTRADAY", "MULTI_METHODOLOGY"])
-    .default("MULTI_METHODOLOGY"),
-  maxOpenPositions: z.number().int().min(1).max(10).default(3),
-  maxRiskPerTrade: z.number().min(0.1).max(5).default(1.0),
-  maxDailyRisk: z.number().min(1).max(10).default(3.0),
+    .default("MULTI_METHODOLOGY").optional(),
+  maxOpenPositions: z.number().int().min(1).max(10).default(3).optional(),
+  maxRiskPerTrade: z.number().min(0.1).max(5).default(1.0).optional(),
+  maxDailyRisk: z.number().min(1).max(10).default(3.0).optional(),
   tradingHours: tradingHoursSchema.optional(),
   trailingStop: trailingStopSchema.optional(),
   entrySettings: entrySettingsSchema.optional(),

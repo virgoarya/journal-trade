@@ -509,9 +509,23 @@ router.post(
       let finalConfig = req.body;
       if (req.body.useAppliedConfig) {
         const { UserSettings } = require("../models/UserSettings");
-        const settings = await UserSettings.findOne({ userId: req.user.id });
+        const settings = await UserSettings.findOne({ userId: req.user.id }).lean();
         if (settings?.savedPipelineConfig) {
-          finalConfig = { ...settings.savedPipelineConfig };
+          finalConfig = { 
+            ...settings.savedPipelineConfig,
+            llmConsensus: {
+               ...(settings.aiTrading?.llmConsensus || {}),
+               enabled: true // FORCE LLM TO ALWAYS BE ACTIVE
+            }
+          };
+          
+          // Also fallback methodologies if missing
+          if (!finalConfig.activeMethodologies) {
+             finalConfig.activeMethodologies = settings.aiTrading?.activeMethodologies;
+          }
+          if (!finalConfig.methodologyWeights) {
+             finalConfig.methodologyWeights = settings.aiTrading?.methodologyWeights;
+          }
         } else {
           return apiResponse.error(res, "No applied config found", "NO_CONFIG", 400);
         }

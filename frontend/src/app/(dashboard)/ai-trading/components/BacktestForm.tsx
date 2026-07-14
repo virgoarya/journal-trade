@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   type BacktestConfig,
 } from "@/services/backtest.service";
+import { aiTradingService } from "@/services/ai-trading.service";
 import {
   Play,
   Settings2,
@@ -33,7 +34,7 @@ interface Props {
 }
 
 export function BacktestForm({ onRun, isRunning }: Props) {
-  const [symbols] = useState<string[]>(FALLBACK_SYMBOLS);
+  const [symbols, setSymbols] = useState<string[]>(FALLBACK_SYMBOLS);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["EURUSD"]);
   const [symbolSearch, setSymbolSearch] = useState("");
   const [filteredSymbols, setFilteredSymbols] = useState(FALLBACK_SYMBOLS);
@@ -64,6 +65,39 @@ export function BacktestForm({ onRun, isRunning }: Props) {
     setFromDate(past.toISOString().split("T")[0]);
   }, []);
 
+  // Fetch available symbols from API
+  useEffect(() => {
+    let mounted = true;
+    const fetchSymbols = async () => {
+      try {
+        const res = await aiTradingService.getSymbols();
+        if (mounted && res.success && res.data?.symbols) {
+          const fetchedSymbols = res.data.symbols.map((s: any) => 
+            typeof s === "string" ? s : s.name
+          );
+          if (fetchedSymbols.length > 0) {
+            setSymbols(fetchedSymbols);
+            setFilteredSymbols(fetchedSymbols);
+
+            // Ensure selected symbols are valid for this broker
+            setSelectedSymbols(prev => {
+              const valid = prev.filter(s => fetchedSymbols.includes(s));
+              // If none of the selected symbols are valid, auto-select the first available one
+              if (valid.length === 0) {
+                return [fetchedSymbols[0]];
+              }
+              return valid;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch symbols:", err);
+      }
+    };
+    fetchSymbols();
+    return () => { mounted = false; };
+  }, []);
+
   // Filter symbols berdasarkan pencarian
   useEffect(() => {
     setFilteredSymbols(
@@ -74,9 +108,10 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   }, [symbolSearch, symbols]);
 
   const addSymbol = (sym: string) => {
-    const s = sym.toUpperCase().trim();
-    if (s && !selectedSymbols.includes(s)) {
-      setSelectedSymbols(prev => [...prev, s]);
+    const s = sym.trim();
+    const matched = symbols.find(x => x.toLowerCase() === s.toLowerCase()) || s.toUpperCase();
+    if (matched && !selectedSymbols.includes(matched)) {
+      setSelectedSymbols(prev => [...prev, matched]);
     }
   };
 

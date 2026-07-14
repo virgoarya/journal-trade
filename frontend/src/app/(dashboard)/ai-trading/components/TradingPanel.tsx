@@ -27,6 +27,8 @@ export function TradingPanel({
     savedPipelineConfig,
     lastAutoBacktestAt,
     pipelineStatus,
+    llmMinProviders,
+    llmModels,
   } = useAiTrading();
 
   const handleStart = async () => {
@@ -38,6 +40,13 @@ export function TradingPanel({
   };
 
   const displayConfig = pipelineRunning || pipelinePaused ? pipelineStatus?.config : savedPipelineConfig;
+
+  // Force LLM to be always active
+  const isLlmActive = true;
+
+  const minProviders = pipelineRunning || pipelinePaused 
+    ? displayConfig?.llmConsensus?.minProviders 
+    : llmMinProviders;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
@@ -99,14 +108,34 @@ export function TradingPanel({
               </div>
             </div>
 
-            {displayConfig.llmConsensus?.enabled && (
-              <div className="col-span-2 pt-3 border-t border-gray-800/50">
-                 <p className="text-[10px] text-purple-400/70 mb-1 uppercase tracking-wider font-semibold">LLM Consensus Active</p>
-                 <p className="text-[11px] text-gray-400">
-                   Requires agreement from <span className="text-purple-300 font-mono">{displayConfig.llmConsensus.minProviders}</span> models.
-                 </p>
+            <div className="col-span-2 pt-3 border-t border-gray-800/50 flex flex-col gap-2">
+              <div>
+                <p className="text-[10px] text-purple-400/70 mb-0.5 uppercase tracking-wider font-semibold">LLM Consensus (ALWAYS ACTIVE)</p>
+                <p className="text-[11px] text-gray-400">
+                  Requires agreement from {minProviders} models:
+                </p>
               </div>
-            )}
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {llmModels.length > 0 ? (
+                  llmModels.map((m) => {
+                    const isOk = m.status === "active";
+                    return (
+                      <div key={m.name} className={`flex items-center gap-1.5 px-2 py-1 rounded border ${isOk ? 'bg-purple-500/10 border-purple-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
+                        <span className={`text-[10px] font-semibold ${isOk ? 'text-purple-300' : 'text-yellow-400'}`}>
+                          {m.label}
+                        </span>
+                        <span className="text-gray-600">|</span>
+                        <span className={`text-[9px] uppercase font-bold tracking-wider ${isOk ? 'text-purple-400/80' : 'text-yellow-500/80'}`}>
+                          {isOk ? 'ACTIVE' : m.status}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <span className="text-[10px] text-gray-500 italic">No LLM models available...</span>
+                )}
+              </div>
+            </div>
           </div>
           
           {!pipelineRunning && !pipelinePaused && (

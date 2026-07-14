@@ -383,7 +383,8 @@ class BacktestService {
     }
 
     if (symbolStates.size === 0) {
-      throw new Error("No valid symbols with enough data");
+      const reasons = fetchResults.map(r => r.error).filter(Boolean).join(" | ");
+      throw new Error(`No valid symbols with enough data. Details: ${reasons}`);
     }
 
     // Create session

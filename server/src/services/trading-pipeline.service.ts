@@ -948,9 +948,11 @@ const llmResult = await llmConsensusService.evaluate(
                tp: signal.tp,
                reason: signal.reason,
                marketTrend: analysis.marketStructure.trend.direction,
-               methodologyBreakdown: analysis.confluence.methodologyBreakdown,
+               methodologyBreakdown: Object.fromEntries(
+                 Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
+               ),
                agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
-               totalMethodologies: Object.keys(analysis.confluence.methodologyBreakdown).length,
+               totalMethodologies: pipeline.config.activeMethodologies?.length ?? 1,
                htfTrend: llmHtfTrend,
                htfConfidence: llmHtfConf,
                symbolScore: llmSymScore,

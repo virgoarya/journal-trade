@@ -1,47 +1,33 @@
 # System Monitoring Report
 
-**Generated:** 14/7/2026, 09.56.02 WIB
+**Generated:** 14/7/2026, 19.41.44 WIB
 **Status:** 🟡 WARNING
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-<think>
-Okay, let's tackle this health check report. The user wants actionable insights in Indonesian, focusing on root causes and immediate actions. The main issue here is the high memory usage at 92.2%. First, I need to figure out why memory is so high. Possible reasons could be memory leaks, inefficient code, or too many active processes.
+**Insights:**
 
-Looking at the metrics: 4 cores, 5.93GB total memory. The system has been up for 36 hours. High memory usage over time might indicate a leak. The active providers are 6, all active, none hibernating. Maybe some providers are using more memory than they should. 
+- **Memory 83.1% on 5.93GB.** At current rate, ~8 jam lagi OOM. Check for memory leaks in active pipeline. Restart pipeline atau add swap. Immediate: monitor `docker stats` atau `ps aux --sort=-%mem` untuk identifikasi proses boros.
 
-First step: Check for memory leaks. Use tools like Task Manager or more advanced ones like Process Explorer to see which processes are consuming the most memory. If a specific provider is using a lot, that's the root cause. Then, restart that service to free up memory.
+- **Pipeline 6a26146a9cad211ba0631027 PnL -$1617.14.** Negatif signifikan. Root cause: check apakah entry salah, stop loss tidak terpicu, atau signal provider memberikan false signal. Immediate: review log pipeline tersebut, validasi apakah posisi masih valid. Jika tidak ada konfirmasi valid, close manual.
 
-Second, optimize the code. If the code isn't efficient, it might be holding onto memory unnecessarily. Look for objects that aren't being garbage collected, or large data structures that are kept in memory. Maybe some pipelines are processing data in a way that's memory-heavy. Implementing more efficient algorithms or using data streaming could help.
+- **1 provider hibernasi.** Provider masuk mode hemat resource. Biasanya karena error berulang atau timeout. Check provider logs: `grep -i error` atau `journalctl`. Jika tidak recover otomatis dalam 1 jam, restart provider tersebut.
 
-Third, consider increasing memory if possible. If the system is consistently using 92%, adding more RAM could be a quick fix. But that's a hardware solution. Alternatively, if the system is on a VM, maybe allocate more memory there.
-
-Fourth, check for any background processes or services that aren't necessary. The uptime is 36 hours; maybe some services have been running longer than needed. Restarting the system could clear out temporary files and free up memory.
-
-Fifth, look into the providers. Since all 6 are active, maybe some can be hibernated during low activity periods. That would reduce the load on memory. Also, check if the providers are configured optimally. Maybe some have higher memory allocations than necessary.
-
-Immediate actions would involve restarting services, optimizing code, and possibly adding more memory. Long-term solutions might include code refactoring and better resource management. Need to present these in a clear, concise manner in Indonesian, focusing on root causes and what to do right away.
-</think>
-
-- **Memory usage tinggi** → 92.2% dari 5.93GB.  
-  **Aksi:** Cek alat `
+- **83.1% memory + 46 jam uptime.** Kombinasi berbahaya. Long-running process accumulate memory fragmentation. Consider scheduled restart setiap 24-48 jam untuk reset heap. Tambahkan health check restart trigger jika memory >
 
 ---
 
 ## Executive Summary
 
-6 warning(s), no critical issues
+3 warning(s), no critical issues
 
 ## 🟡 Warnings
 
-- [system_resources] High memory usage
--   -> CPU: 4 cores
--   -> Memory: 92.2% used (5.93GB total)
--   -> Uptime: 36.2h
--   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 92.2% (threshold: 85%)
+- [pipeline] 1 pipeline(s) running
+-   -> Found 1 active pipeline(s)
+-   -> [6a26146a9cad211ba0631027] PnL negatif signifikan: $-1617.14
 
 ## Metrics Dashboard
 
@@ -49,26 +35,33 @@ Immediate actions would involve restarting services, optimizing code, and possib
 |--------|-------|
 | connected | 1 |
 | circuitState | CLOSED |
-| balance | 119302.2 |
-| equity | 119302.2 |
-| marginLevel | 0 |
-| activePipelines | 0 |
+| balance | 49457.45 |
+| equity | 49535.75 |
+| marginLevel | 2418.903147676111 |
+| activePipelines | 1 |
+| 6a26146a9cad211ba0631027.running | 1 |
+| 6a26146a9cad211ba0631027.paused | 0 |
+| 6a26146a9cad211ba0631027.error | 0 |
+| 6a26146a9cad211ba0631027.totalTrades | 32 |
+| 6a26146a9cad211ba0631027.pnl | -1617.14 |
+| 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 6 |
-| hibernasiProviders | 0 |
+| activeProviders | 5 |
+| hibernasiProviders | 1 |
 | circuitOpenProviders | 0 |
 | provider.deepseek | active |
-| provider.qwen | active |
+| provider.qwen | hibernasi |
 | provider.gemini | active |
 | provider.mistral | active |
 | provider.nemotron | active |
 | provider.claude-opus | active |
-| availableForConsensus | 6 |
+| availableForConsensus | 4 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 92.2 |
-| uptimeHours | 36.2 |
-| checkedPipelines | 0 |
+| memoryUsagePercent | 83.1 |
+| uptimeHours | 46 |
+| checkedPipelines | 1 |
+| dataIssues | 0 |
 
 ## Detailed Health Checks
 
@@ -76,49 +69,49 @@ Immediate actions would involve restarting services, optimizing code, and possib
 
 - **Severity:** healthy
 - **Summary:** MT5 connected and operational
-- **Time:** 2026-07-14T02:56:02.780Z
+- **Time:** 2026-07-14T12:41:44.530Z
 
-- Balance: $119302.20, Equity: $119302.20
+- Balance: $49457.45, Equity: $49535.75
 
-### 🟢 PIPELINE
+### 🟡 PIPELINE
 
-- **Severity:** healthy
-- **Summary:** No active pipelines
-- **Time:** 2026-07-14T02:56:02.801Z
+- **Severity:** warning
+- **Summary:** 1 pipeline(s) running
+- **Time:** 2026-07-14T12:41:44.616Z
 
-- Tidak ada pipeline yang aktif saat ini
+- Found 1 active pipeline(s)
+- [6a26146a9cad211ba0631027] PnL negatif signifikan: $-1617.14
 
 ### 🟢 LLM_CONSENSUS
 
 - **Severity:** healthy
-- **Summary:** 6 provider(s) available for consensus
-- **Time:** 2026-07-14T02:56:02.777Z
+- **Summary:** 4 provider(s) available for consensus
+- **Time:** 2026-07-14T12:41:44.525Z
 
 - ✅ DeepSeek V4 (deepseek): active
-- ✅ Qwen 3 32B (qwen): active
+- 💤 Qwen 3 32B (qwen): hibernasi
 - ✅ Gemini 2.5 Flash (gemini): active
 - ✅ Mistral Large (mistral): active
 - ✅ Nemotron 3 Ultra (nemotron): active
 - ✅ Claude Opus 4.7 (claude-opus): active
 
-### 🟡 SYSTEM_RESOURCES
+### 🟢 SYSTEM_RESOURCES
 
-- **Severity:** warning
-- **Summary:** High memory usage
-- **Time:** 2026-07-14T02:56:02.777Z
+- **Severity:** healthy
+- **Summary:** System resources normal
+- **Time:** 2026-07-14T12:41:44.525Z
 
 - CPU: 4 cores
-- Memory: 92.2% used (5.93GB total)
-- Uptime: 36.2h
+- Memory: 83.1% used (5.93GB total)
+- Uptime: 46h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 92.2% (threshold: 85%)
 
 ### 🟢 DATA_QUALITY
 
 - **Severity:** healthy
-- **Summary:** No active pipelines to check
-- **Time:** 2026-07-14T02:56:02.801Z
+- **Summary:** All data feeds operational
+- **Time:** 2026-07-14T12:41:44.589Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 14/7/2026, 10.56.06 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 14/7/2026, 20.41.59 WIB*

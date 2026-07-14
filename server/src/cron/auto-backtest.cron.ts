@@ -3,6 +3,7 @@ import axios from "axios";
 import { backtestService, type BacktestResult } from "../services/backtest.service";
 import { AIBacktestSkill } from "../models/AIBacktestSkill";
 import { UserSettings } from "../models/UserSettings";
+import { tradingPipelineService } from "../services/trading-pipeline.service";
 
 function calculateQualificationScore(result: BacktestResult): number {
   if (result.totalTrades === 0) return 0;
@@ -15,11 +16,10 @@ function calculateQualificationScore(result: BacktestResult): number {
 }
 
 // Define the shape of the config needed by runBacktestStream
-const BASE_SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD"];
 const TIMEFRAMES = ["M15", "H1", "M5"];
 const ACTIVE_METHODOLOGIES = ["smc", "ict", "msnr", "lit", "rsiEngulf"];
 
-async function runOptimizationForUser(userId: string) {
+async function runOptimizationForUser(userId: string, symbols: string[]) {
   let bestSkill: any = null;
   let bestScore = -1;
   let bestConfig: any = null;
@@ -33,9 +33,9 @@ async function runOptimizationForUser(userId: string) {
     const risk = iteration > 2 ? 0.5 : 1.0; // tighter risk later
     
     const config = {
-      symbols: BASE_SYMBOLS,
+      symbols: symbols.length ? symbols.slice(0, 1) : ["EURUSD"],
       timeframe: tf as any,
-      fromDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // Previous quarter (90 days)
+      fromDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days for Trial MT5 stability
       toDate: new Date(),
       initialBalance: 10000,
       entrySettings: {
@@ -55,7 +55,6 @@ async function runOptimizationForUser(userId: string) {
       leverage: 100,
       signalInterval: 2,
       speedMs: 0, // fast mode
-      sessionId: `cron-${Date.now()}`,
       activeMethodologies: ACTIVE_METHODOLOGIES as any,
     };
 
@@ -107,7 +106,7 @@ async function sendToDiscordWebhook(skill: any, config: any) {
     fields: [
       {
         name: "⚙️ Input Config",
-        value: `**Pairs:** ${config.symbols.join(", ")}\n**Timeframe:** ${config.timeframe}\n**Risk/Trade:** ${config.maxRiskPerTrade}%\n**Period:** 90 Days (Last Quarter)`,
+        value: `**Pairs:** ${config.symbols.join(", ")}\n**Timeframe:** ${config.timeframe}\n**Risk/Trade:** ${config.maxRiskPerTrade}%\n**Period:** 7 Days`,
         inline: false
       },
       {
@@ -132,7 +131,7 @@ async function sendToDiscordWebhook(skill: any, config: any) {
 }
 
 export function initAutoBacktestCron() {
-  console.log("[CRON] Weekly Auto-Backtest & Optimization loop initialized.");
+  console.log("⏰ Weekly Auto-Backtest Cron initialized (running every Sunday 00:00).");
   
   // Runs every Sunday at midnight
   cron.schedule("0 0 * * 0", async () => {
@@ -143,7 +142,11 @@ export function initAutoBacktestCron() {
       for (const userSettings of users) {
         if (!userSettings.userId) continue;
 
-        const { bestSkill, bestConfig } = await runOptimizationForUser(userSettings.userId);
+        console.log(`[CRON] Starting Auto-Backtest for user: ${userSettings.userId}`);
+        
+        // Use user's symbols or fallback
+        const userSymbols = userSettings.savedPipelineConfig?.symbols || ["EURUSD"];
+        const { bestSkill, bestConfig } = await runOptimizationForUser(userSettings.userId, userSymbols);
         
         if (bestSkill) {
           // Fetch the saved skill from DB to get the methodology & symbol rankings for the Live Pipeline
@@ -165,6 +168,16 @@ export function initAutoBacktestCron() {
 
           // Send Webhook
           await sendToDiscordWebhook(bestSkill, bestConfig);
+
+          // Check if pipeline is currently active. If so, restart it to apply new settings.
+          const currentStatus = await tradingPipelineService.getPipelineStatus(userSettings.userId);
+          if (currentStatus.state === "RUNNING") {
+            console.log(`[CRON] Restarting Live Pipeline for user ${userSettings.userId} to apply new config...`);
+            await tradingPipelineService.stopPipeline(userSettings.userId);
+            // Wait a brief moment to ensure ports/processes are freed
+            await new Promise(res => setTimeout(res, 2000));
+            await tradingPipelineService.startPipeline(userSettings.userId, userSettings.savedPipelineConfig);
+          }
         }
       }
       console.log("[CRON] Auto-Backtest complete for all users.");
