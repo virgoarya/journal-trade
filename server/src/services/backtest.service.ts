@@ -51,6 +51,8 @@ export interface BacktestConfig {
   activeMethodologies?: MethodologyName[];
     /** Session ID for two-phase mode — when set, runBacktestStream uses pre-loaded session data. */
   sessionId?: string;
+  /** If true, runs in stealth mode for auto-optimization (no db save, no info logs) */
+  isOptimization?: boolean;
 }
 
 export interface SimulatedTrade {
@@ -324,7 +326,10 @@ class BacktestService {
       emit(idx);
       let rates: MT5Rate[] = [];
       try {
-        rates = await mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs);
+        rates = await Promise.race([
+          mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs),
+          new Promise<MT5Rate[]>((_, reject) => setTimeout(() => reject(new Error("MT5 Connection Timeout (15000ms)")), 15000))
+        ]);
       } catch (error: any) {
         const msg = `Failed to fetch data for ${sym}: ${error.message}`;
         fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, error: msg });
@@ -343,7 +348,10 @@ class BacktestService {
       let volumeMax = 100;
       let volumeStep = 0.01;
       try {
-        const info = await mt5McpService.getSymbolInfo(sym);
+        const info = await Promise.race([
+          mt5McpService.getSymbolInfo(sym),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
+        ]);
         if (info) {
           contractSize = info.tradeContractSize;
           volumeMin = info.volumeMin;
@@ -640,6 +648,11 @@ class BacktestService {
 
     for (const group of timelineGroups) {
       timelineStep++;
+
+      // Apply simulation speed delay if configured
+      if ((merged.speedMs || 0) > 0) {
+        await new Promise((resolve) => setTimeout(resolve, merged.speedMs));
+      }
 
       // Abort check
       if (abortCheck && abortCheck()) {
@@ -1032,28 +1045,33 @@ class BacktestService {
         ? Math.round((currentEquity / totalUsedMargin) * 10000) / 100
         : 0;
 
+      // ── Limit live streaming events to ~200 frames to prevent frontend lag ──
+      const shouldEmitLive = timelineStep % Math.max(1, Math.floor(totalTimelineSteps / 200)) === 0 || timelineStep === totalTimelineSteps;
+
       // ─────────────────────────────────────────────────────────────
       // PHASE C — Emit candle events for ALL symbols at this time step
       //           with the SAME global equity (smooth, consistent curve)
       // ─────────────────────────────────────────────────────────────
       for (const [sym, snap] of perSymbol) {
-        emit({
-          type: "candle",
-          data: {
-            time: snap.candle.time,
-            symbol: sym,
-            open: snap.open,
-            high: snap.high,
-            low: snap.low,
-            close: snap.close,
-            rsi: Math.round(snap.rsi * 100) / 100,
-            atr: Math.round(snap.atr * 100000) / 100000,
-            pattern: snap.pattern.type,
-            equity: Math.round(currentEquity * 100) / 100,
-            floatingPnL: Math.round(floatingPnL * 100) / 100,
-            marginLevel: globalMarginLevel,
-          },
-        });
+        if (shouldEmitLive) {
+          emit({
+            type: "candle",
+            data: {
+              time: snap.candle.time,
+              symbol: sym,
+              open: snap.open,
+              high: snap.high,
+              low: snap.low,
+              close: snap.close,
+              rsi: Math.round(snap.rsi * 100) / 100,
+              atr: Math.round(snap.atr * 100000) / 100000,
+              pattern: snap.pattern.type,
+              equity: Math.round(currentEquity * 100) / 100,
+              floatingPnL: Math.round(floatingPnL * 100) / 100,
+              marginLevel: globalMarginLevel,
+            },
+          });
+        }
       }
 
       // ── Record equity curve (one point per time step) ──
@@ -1066,14 +1084,16 @@ class BacktestService {
       equityCurve.push(equityPoint);
 
       // Emit equity event for global PnL tracking
-      emit({
-        type: "equity",
-        data: {
-          time: group.time,
-          equity: Math.round(currentEquity * 100) / 100,
-          floatingPnL: Math.round(floatingPnL * 100) / 100,
-        },
-      });
+      if (shouldEmitLive) {
+        emit({
+          type: "equity",
+          data: {
+            time: group.time,
+            equity: Math.round(currentEquity * 100) / 100,
+            floatingPnL: Math.round(floatingPnL * 100) / 100,
+          },
+        });
+      }
       const progressPct = Math.round((timelineStep / totalTimelineSteps) * 100);
       if (progressPct - lastProgressPct >= MIN_PROGRESS_INTERVAL_PCT || timelineStep === totalTimelineSteps) {
         lastProgressPct = progressPct;
@@ -1275,9 +1295,11 @@ class BacktestService {
       silentLogger.error(`[BACKTEST] Failed to save result: ${dbError.message}`);
     }
 
-    silentLogger.info(
-      `[BACKTEST] ${merged.symbols.join(",")} ${merged.timeframe}: ${totalTrades} trades, ${Math.round(winRate)}% win rate, ${Math.round(totalPnLPercent)}% return`,
-    );
+    if (!merged.isOptimization) {
+      silentLogger.info(
+        `[BACKTEST] ${merged.symbols.join(",")} ${merged.timeframe}: ${totalTrades} trades, ${Math.round(winRate)}% win rate, ${Math.round(totalPnLPercent)}% return`,
+      );
+    }
 
     const result: BacktestResult = {
       backtestId: savedDocId,
@@ -1309,14 +1331,24 @@ class BacktestService {
       methodologyStats,
     };
 
-    emit({ type: "complete", data: result });
+    // Strip massive arrays from SSE emit to prevent truncation/parsing errors on frontend
+    emit({ 
+      type: "complete", 
+      data: { 
+        ...result, 
+        trades: [], 
+        equityCurve: [] 
+      } 
+    });
 
     // Auto-save the aggregated result to AI Backtest Skill database
-    try {
-      const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
-      await aiBacktestSkillService.updateSkill(userId, result);
-    } catch (err: any) {
-      silentLogger.error(`[BACKTEST] Failed to trigger skill aggregation: ${err.message}`);
+    if (!merged.isOptimization) {
+      try {
+        const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
+        await aiBacktestSkillService.updateSkill(userId, result);
+      } catch (err: any) {
+        silentLogger.error(`[BACKTEST] Failed to trigger skill aggregation: ${err.message}`);
+      }
     }
 
     return result;

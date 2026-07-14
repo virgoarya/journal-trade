@@ -506,9 +506,21 @@ router.post(
         );
       }
 
+      let finalConfig = req.body;
+      if (req.body.useAppliedConfig) {
+        const { UserSettings } = require("../models/UserSettings");
+        const settings = await UserSettings.findOne({ userId: req.user.id });
+        if (settings?.savedPipelineConfig) {
+          finalConfig = { ...settings.savedPipelineConfig };
+        } else {
+          return apiResponse.error(res, "No applied config found", "NO_CONFIG", 400);
+        }
+      }
+
       // Validate symbols exist on broker
       const symbols = await mt5McpService.getSymbols();
-      const validSymbols = req.body.symbols.filter((s: string) =>
+      const reqSymbols = finalConfig.symbols || [];
+      const validSymbols = reqSymbols.filter((s: string) =>
         symbols.some((sym) => sym.name === s),
       );
 
@@ -522,13 +534,13 @@ router.post(
       }
 
       await tradingPipelineService.startPipeline(req.user.id, {
-        ...req.body,
+        ...finalConfig,
         symbols: validSymbols,
       });
 
       return apiResponse.success(res, {
         running: true,
-        config: { ...req.body, symbols: validSymbols },
+        config: { ...finalConfig, symbols: validSymbols },
       });
     } catch (error) {
       next(error);

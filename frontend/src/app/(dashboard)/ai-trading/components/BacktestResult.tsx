@@ -56,7 +56,8 @@ function MetricCard({ icon: Icon, label, value, color = "text-white", sub }: {
 
 export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApplyToPipeline, isApplying }: Props) {
   const [showTrades, setShowTrades] = useState(false);
-  if (!result) return null;
+  // Ensure result is not just a truthy empty object before rendering
+  if (!result || Object.keys(result).length === 0 || result.totalTrades === undefined) return null;
 
   const isProfitable = result.totalPnL >= 0;
   const recoveryFactor = result.recoveryFactor ?? (result.maxDrawdown > 0 ? result.totalPnL / result.maxDrawdown : result.totalPnL > 0 ? Infinity : 0);
@@ -87,17 +88,17 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
         <MetricCard icon={Activity} label="Total Trades" value={`${result.totalTrades}`} />
         <MetricCard icon={Target} label="Win Rate" value={`${result.winRate}%`} color={result.winRate >= 50 ? "text-green-400" : "text-red-400"} sub={`${result.winningTrades}W / ${result.losingTrades}L`} />
-        <MetricCard icon={isProfitable ? TrendingUp : TrendingDown} label="Net PnL" value={`${isProfitable ? "+" : ""}${result.totalPnLPercent}%`} color={isProfitable ? "text-green-400" : "text-red-400"} sub={`$${result.totalPnL.toFixed(2)}`} />
+        <MetricCard icon={isProfitable ? TrendingUp : TrendingDown} label="Net PnL" value={`${isProfitable ? "+" : ""}${result.totalPnLPercent}%`} color={isProfitable ? "text-green-400" : "text-red-400"} sub={`$${(result.totalPnL || 0).toFixed(2)}`} />
         <MetricCard icon={TrendingDown} label="Max DD" value={`${result.maxDrawdownPercent}%`} color={result.maxDrawdownPercent < 10 ? "text-green-400" : result.maxDrawdownPercent < 20 ? "text-yellow-400" : "text-red-400"} />
       </div>
 
       {/* Second Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 relative z-10">
-        <MetricCard icon={Shield} label="Recovery Factor" value={recoveryFactor === Infinity ? "∞" : recoveryFactor.toFixed(2)} color={recoveryColor} />
-        <MetricCard icon={Award} label="Profit Factor" value={result.profitFactor === Infinity ? "∞" : result.profitFactor.toFixed(2)} color={result.profitFactor >= 1.5 ? "text-green-400" : result.profitFactor >= 1 ? "text-yellow-400" : "text-red-400"} />
-        <MetricCard icon={Activity} label="Avg Win" value={`$${result.averageWin.toFixed(2)}`} color="text-green-400" />
-        <MetricCard icon={Activity} label="Avg Loss" value={`$${result.averageLoss.toFixed(2)}`} color="text-red-400" />
-        <MetricCard icon={Percent} label="Sharpe" value={result.sharpeRatio.toFixed(2)} color={result.sharpeRatio >= 1 ? "text-green-400" : "text-gray-300"} />
+        <MetricCard icon={Shield} label="Recovery Factor" value={recoveryFactor === Infinity ? "∞" : (recoveryFactor || 0).toFixed(2)} color={recoveryColor} />
+        <MetricCard icon={Award} label="Profit Factor" value={result.profitFactor === Infinity ? "∞" : (result.profitFactor || 0).toFixed(2)} color={(result.profitFactor || 0) >= 1.5 ? "text-green-400" : (result.profitFactor || 0) >= 1 ? "text-yellow-400" : "text-red-400"} />
+        <MetricCard icon={Activity} label="Avg Win" value={`$${(result.averageWin || 0).toFixed(2)}`} color="text-green-400" />
+        <MetricCard icon={Activity} label="Avg Loss" value={`$${(result.averageLoss || 0).toFixed(2)}`} color="text-red-400" />
+        <MetricCard icon={Percent} label="Sharpe" value={(result.sharpeRatio || 0).toFixed(2)} color={(result.sharpeRatio || 0) >= 1 ? "text-green-400" : "text-gray-300"} />
       </div>
 
       {/* Equity Curve */}
@@ -197,7 +198,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                       {isWorst && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 rounded">WORST</span>}
                     </td>
                     <td className="px-4 py-3 text-center font-mono">{meth.totalTrades}</td>
-                    <td className="px-4 py-3 text-center font-mono">{meth.winRate.toFixed(1)}%</td>
+                    <td className="px-4 py-3 text-center font-mono">{(meth.winRate || 0).toFixed(1)}%</td>
                     <td className="px-4 py-3 text-center font-mono text-xs">
                       <span className="text-green-400">{meth.winningTrades}W</span>
                       <span className="text-gray-500"> / </span>
@@ -289,7 +290,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       <div className="bg-gray-900/60 border border-gray-800 rounded-xl overflow-hidden relative z-10">
         <button onClick={() => setShowTrades(!showTrades)}
           className="w-full px-4 py-3 flex items-center justify-between text-sm text-white hover:bg-gray-800/50 transition">
-          <span>Trade History ({result.trades.length} trades)</span>
+          <span>Trade History ({(result.trades || []).length} trades)</span>
           <span className="text-gray-400">{showTrades ? "▲" : "▼"}</span>
         </button>
         {showTrades && (

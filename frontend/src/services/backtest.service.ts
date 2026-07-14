@@ -333,6 +333,11 @@ class BacktestService {
     return res;
   }
 
+  async applyToLivePipeline(backtestId: string): Promise<ApiResponse<any>> {
+    const res = await apiClient.post(`/api/v1/backtest/apply`, { backtestId });
+    return res.data;
+  }
+
   async optimize(config: OptimizationConfig) {
     const res = await apiClient.post<OptimizationResult>(
       "/api/v1/backtest/optimize",

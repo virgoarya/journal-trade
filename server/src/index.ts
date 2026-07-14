@@ -27,6 +27,7 @@ import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
+import { initAutoBacktestCron } from "./cron/auto-backtest.cron";
 import path from "node:path";
 
 // System Monitor Agent
@@ -98,6 +99,7 @@ connectDB()
       setAuthInstance(auth);
       const authHandler = toNodeHandler(auth);
       startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
+      initAutoBacktestCron();
 
       // Register Multi-MCP Servers
       if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {

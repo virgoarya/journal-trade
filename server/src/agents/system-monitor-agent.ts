@@ -485,19 +485,12 @@ export class SystemMonitorAgent {
       }
 
       const markdown = this.renderReportToMarkdown(report, aiInsights);
-      const filename = `monitoring-report-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.md`;
-      const filepath = path.join(this.config.reportDir, filename);
-
-      await fs.promises.writeFile(filepath, markdown, "utf-8");
 
       // Update latest.md
       const latestPath = path.join(this.config.reportDir, "latest.md");
       await fs.promises.writeFile(latestPath, markdown, "utf-8");
 
-      silentLogger.info(`[MONITOR-AGENT] Report saved: ${filename}`);
-
-      // Cleanup old reports (keep last 48)
-      await this.cleanupOldReports();
+      silentLogger.info(`[MONITOR-AGENT] Report saved: latest.md`);
 
       // Send alert webhook automatically
       if (this.config.alertWebhook) {

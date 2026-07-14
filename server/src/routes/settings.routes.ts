@@ -71,6 +71,8 @@ router.get("/ai-trading", async (req, res, next) => {
       methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
       activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+      savedPipelineConfig: settings.savedPipelineConfig,
+      lastAutoBacktestAt: settings.lastAutoBacktestAt,
     });
   } catch (error) { next(error); }
 });

@@ -20,7 +20,7 @@ interface LogoProps {
 function DeepSeekLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#4d6bfe] shadow-[0_0_15px_rgba(77,107,254,0.5)] border border-[#4d6bfe]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#4d6bfe] shadow-[0_0_15px_rgba(77,107,254,0.5)] border border-[#4d6bfe]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
@@ -40,7 +40,7 @@ function DeepSeekLogo({ size = 40, className }: LogoProps) {
 function QwenLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#6366f1] shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-[#6366f1]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#6366f1] shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-[#6366f1]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
@@ -60,7 +60,7 @@ function QwenLogo({ size = 40, className }: LogoProps) {
 function GeminiLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-white shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-white/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-white shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-white/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
@@ -80,7 +80,7 @@ function GeminiLogo({ size = 40, className }: LogoProps) {
 function MistralLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#fbbf24] shadow-[0_0_15px_rgba(251,191,36,0.5)] border border-[#fbbf24]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#fbbf24] shadow-[0_0_15px_rgba(251,191,36,0.5)] border border-[#fbbf24]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
@@ -100,7 +100,7 @@ function MistralLogo({ size = 40, className }: LogoProps) {
 function NemotronLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#76b900] shadow-[0_0_15px_rgba(118,185,0,0.5)] border border-[#76b900]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#76b900] shadow-[0_0_15px_rgba(118,185,0,0.5)] border border-[#76b900]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
@@ -120,7 +120,7 @@ function NemotronLogo({ size = 40, className }: LogoProps) {
 function ClaudeLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-full overflow-hidden flex-shrink-0 bg-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.5)] border border-[#d4af37]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.5)] border border-[#d4af37]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 

@@ -26,6 +26,8 @@ export interface IUserSettings extends Document {
       providerTimeoutMs: number;
     };
   };
+  savedPipelineConfig?: Record<string, any>;
+  lastAutoBacktestAt?: Date;
 }
 
 const DEFAULT_METHODOLOGY_WEIGHTS: Record<MethodologyName, number> = {
@@ -74,6 +76,8 @@ const UserSettingsSchema = new Schema<IUserSettings>({
       providerTimeoutMs: { type: Number, default: 8000 },
     },
   },
+  savedPipelineConfig: { type: Schema.Types.Mixed },
+  lastAutoBacktestAt: { type: Date },
 }, {
   timestamps: true,
   collection: "user_settings"

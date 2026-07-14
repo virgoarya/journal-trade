@@ -67,7 +67,7 @@ const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> 
   { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash" },
   { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
   { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
-  { name: "claude-opus", label: "Claude Opus 4.6",    model: "kc/kilo-auto/free" },
+  { name: "claude-opus", label: "Claude Opus 4.7",    model: "kc/kilo-auto/free" },
 ];
 
 /** Additional providers requiring direct API keys */

@@ -517,6 +517,8 @@ class AITradingService {
         threshold: number;
         providerTimeoutMs: number;
       };
+      savedPipelineConfig?: PipelineConfig;
+      lastAutoBacktestAt?: string;
     }>("/api/v1/settings/ai-trading");
     return res;
   }

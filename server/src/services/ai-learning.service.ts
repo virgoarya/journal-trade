@@ -500,6 +500,14 @@ class AILearningService {
     // Apply to pipeline
     await tradingPipelineService.updateConfig(userId, updatedConfig);
 
+    // Save persistently so it can be loaded when pipeline starts
+    const { UserSettings } = require("../models/UserSettings");
+    await UserSettings.findOneAndUpdate(
+      { userId },
+      { $set: { savedPipelineConfig: updatedConfig } },
+      { upsert: true }
+    );
+
     silentLogger.info(
       `[AI-LEARN] Applied backtest ${backtestId} to pipeline for user ${userId}: ${JSON.stringify(changes)}`,
     );

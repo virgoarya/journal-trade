@@ -86,6 +86,13 @@ interface AiTradingContextType {
   llmProviderTimeoutMs: number;
   setLlmProviderTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
   isSavingSettings: boolean;
+
+  // Saved Pipeline Config from backend
+  savedPipelineConfig: PipelineConfig | null;
+  setSavedPipelineConfig: React.Dispatch<React.SetStateAction<PipelineConfig | null>>;
+
+  lastAutoBacktestAt: string | null;
+  setLastAutoBacktestAt: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const AiTradingContext = createContext<AiTradingContextType | undefined>(undefined);
@@ -135,6 +142,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(25000);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
+  // Saved Pipeline Config from backend
+  const [savedPipelineConfig, setSavedPipelineConfig] = useState<PipelineConfig | null>(null);
+  const [lastAutoBacktestAt, setLastAutoBacktestAt] = useState<string | null>(null);
+
   // Load AI trading settings from backend on mount
   useEffect(() => {
     const loadSettings = async () => {
@@ -147,6 +158,12 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
           setLlmThreshold(res.data.llmConsensus?.threshold || 0.7);
           setLlmMinProviders(res.data.llmConsensus?.minProviders || 3);
           setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 25000);
+          if (res.data.savedPipelineConfig) {
+            setSavedPipelineConfig(res.data.savedPipelineConfig);
+          }
+          if (res.data.lastAutoBacktestAt) {
+            setLastAutoBacktestAt(res.data.lastAutoBacktestAt);
+          }
         }
       } catch (e) {
         console.warn("Failed to load AI trading settings:", e);

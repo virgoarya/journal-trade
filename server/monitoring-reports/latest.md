@@ -1,17 +1,32 @@
 # System Monitoring Report
 
-**Generated:** 13/7/2026, 22.07.42 WIB
+**Generated:** 14/7/2026, 09.56.02 WIB
 **Status:** 🟡 WARNING
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-- **Memory leak di provider/pipeline** → 96.4% usage naik dalam 24.4h tanpa restart. Profile heap tiap provider (`node --inspect` + Chrome DevTools). Identifikasi objek yang nggak di-release: candle buffer, orderbook snapshot, log queue.
+<think>
+Okay, let's tackle this health check report. The user wants actionable insights in Indonesian, focusing on root causes and immediate actions. The main issue here is the high memory usage at 92.2%. First, I need to figure out why memory is so high. Possible reasons could be memory leaks, inefficient code, or too many active processes.
 
-- **Set hard limit Node.js** → Tambah `--max-old-space-size=4096` (atau 3072) di startup script tiap provider. Paksa GC agresif: `global.gc()` interval 5menit atau pakai `v8.setFlagsFromString('--max-old-space-size=4096 --gc-interval=100')`.
+Looking at the metrics: 4 cores, 5.93GB total memory. The system has been up for 36 hours. High memory usage over time might indicate a leak. The active providers are 6, all active, none hibernating. Maybe some providers are using more memory than they should. 
 
-- **Trim working set Windows** → Panggil `SetProcessWorkingSetSizeEx(GetCurrentProcess(), -1, -1, 0)` via `ffi-napi` tiap 10menit. Atau restart provider
+First step: Check for memory leaks. Use tools like Task Manager or more advanced ones like Process Explorer to see which processes are consuming the most memory. If a specific provider is using a lot, that's the root cause. Then, restart that service to free up memory.
+
+Second, optimize the code. If the code isn't efficient, it might be holding onto memory unnecessarily. Look for objects that aren't being garbage collected, or large data structures that are kept in memory. Maybe some pipelines are processing data in a way that's memory-heavy. Implementing more efficient algorithms or using data streaming could help.
+
+Third, consider increasing memory if possible. If the system is consistently using 92%, adding more RAM could be a quick fix. But that's a hardware solution. Alternatively, if the system is on a VM, maybe allocate more memory there.
+
+Fourth, check for any background processes or services that aren't necessary. The uptime is 36 hours; maybe some services have been running longer than needed. Restarting the system could clear out temporary files and free up memory.
+
+Fifth, look into the providers. Since all 6 are active, maybe some can be hibernated during low activity periods. That would reduce the load on memory. Also, check if the providers are configured optimally. Maybe some have higher memory allocations than necessary.
+
+Immediate actions would involve restarting services, optimizing code, and possibly adding more memory. Long-term solutions might include code refactoring and better resource management. Need to present these in a clear, concise manner in Indonesian, focusing on root causes and what to do right away.
+</think>
+
+- **Memory usage tinggi** → 92.2% dari 5.93GB.  
+  **Aksi:** Cek alat `
 
 ---
 
@@ -23,10 +38,10 @@
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 96.4% used (5.93GB total)
--   -> Uptime: 24.4h
+-   -> Memory: 92.2% used (5.93GB total)
+-   -> Uptime: 36.2h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 96.4% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 92.2% (threshold: 85%)
 
 ## Metrics Dashboard
 
@@ -34,33 +49,26 @@
 |--------|-------|
 | connected | 1 |
 | circuitState | CLOSED |
-| balance | 123931.73 |
-| equity | 123931.73 |
+| balance | 119302.2 |
+| equity | 119302.2 |
 | marginLevel | 0 |
-| activePipelines | 1 |
-| 6a26146a9cad211ba0631027.running | 1 |
-| 6a26146a9cad211ba0631027.paused | 0 |
-| 6a26146a9cad211ba0631027.error | 0 |
-| 6a26146a9cad211ba0631027.totalTrades | 22 |
-| 6a26146a9cad211ba0631027.pnl | 778.62 |
-| 6a26146a9cad211ba0631027.errors1h | 0 |
+| activePipelines | 0 |
 | totalProviders | 6 |
-| activeProviders | 5 |
-| hibernasiProviders | 1 |
+| activeProviders | 6 |
+| hibernasiProviders | 0 |
 | circuitOpenProviders | 0 |
 | provider.deepseek | active |
-| provider.qwen | hibernasi |
+| provider.qwen | active |
 | provider.gemini | active |
 | provider.mistral | active |
 | provider.nemotron | active |
 | provider.claude-opus | active |
-| availableForConsensus | 5 |
+| availableForConsensus | 6 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 96.4 |
-| uptimeHours | 24.4 |
-| checkedPipelines | 1 |
-| dataIssues | 0 |
+| memoryUsagePercent | 92.2 |
+| uptimeHours | 36.2 |
+| checkedPipelines | 0 |
 
 ## Detailed Health Checks
 
@@ -68,49 +76,49 @@
 
 - **Severity:** healthy
 - **Summary:** MT5 connected and operational
-- **Time:** 2026-07-13T15:07:42.133Z
+- **Time:** 2026-07-14T02:56:02.780Z
 
-- Balance: $123931.73, Equity: $123931.73
+- Balance: $119302.20, Equity: $119302.20
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
-- **Summary:** 1 pipeline(s) running
-- **Time:** 2026-07-13T15:07:42.218Z
+- **Summary:** No active pipelines
+- **Time:** 2026-07-14T02:56:02.801Z
 
-- Found 1 active pipeline(s)
+- Tidak ada pipeline yang aktif saat ini
 
 ### 🟢 LLM_CONSENSUS
 
 - **Severity:** healthy
-- **Summary:** 5 provider(s) available for consensus
-- **Time:** 2026-07-13T15:07:42.130Z
+- **Summary:** 6 provider(s) available for consensus
+- **Time:** 2026-07-14T02:56:02.777Z
 
 - ✅ DeepSeek V4 (deepseek): active
-- 💤 Qwen 3 32B (qwen): hibernasi
+- ✅ Qwen 3 32B (qwen): active
 - ✅ Gemini 2.5 Flash (gemini): active
 - ✅ Mistral Large (mistral): active
 - ✅ Nemotron 3 Ultra (nemotron): active
-- ✅ Claude Opus 4.6 (claude-opus): active
+- ✅ Claude Opus 4.7 (claude-opus): active
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-07-13T15:07:42.130Z
+- **Time:** 2026-07-14T02:56:02.777Z
 
 - CPU: 4 cores
-- Memory: 96.4% used (5.93GB total)
-- Uptime: 24.4h
+- Memory: 92.2% used (5.93GB total)
+- Uptime: 36.2h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 96.4% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 92.2% (threshold: 85%)
 
 ### 🟢 DATA_QUALITY
 
 - **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-07-13T15:07:42.176Z
+- **Summary:** No active pipelines to check
+- **Time:** 2026-07-14T02:56:02.801Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 13/7/2026, 23.07.46 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 14/7/2026, 10.56.06 WIB*

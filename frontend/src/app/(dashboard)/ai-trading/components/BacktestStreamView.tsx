@@ -63,6 +63,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [dataReadyInfo, setDataReadyInfo] = useState<StreamDataReady | null>(null);
   const [startingSimulation, setStartingSimulation] = useState(false);
 
+  const accumulatedTradesRef = useRef<any[]>([]);
+  const accumulatedEquityRef = useRef<any[]>([]);
   const initLoggedRef = useRef(false);
   const configKeyRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -70,6 +72,14 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
   // Config change detection — ensures proper reset on re-run
   const newKey = `${config.symbols.join(",")}|${config.timeframe}|${config.fromDate}|${config.toDate}|${config.initialBalance}|${config.maxRiskPerTrade}|${config.maxOpenPositions}|${config.leverage}|${config.signalInterval}|${config.entrySettings.rsiOversold}|${config.entrySettings.rsiOverbought}|${config.entrySettings.atrMultiplierSL}|${config.entrySettings.atrMultiplierTP}|${config.trailingStop.enabled}|${config.trailingStop.activationATR}|${config.trailingStop.trailATR}`;
+
+  const onCompleteRef = useRef(onComplete);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    onErrorRef.current = onError;
+  }, [onComplete, onError]);
 
   useEffect(() => {
     if (configKeyRef.current && configKeyRef.current !== newKey) {
@@ -85,6 +95,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       setSessionId(null);
       setDataReadyInfo(null);
       setStartingSimulation(false);
+      accumulatedTradesRef.current = [];
+      accumulatedEquityRef.current = [];
     }
     configKeyRef.current = newKey;
   }, [newKey]);
@@ -153,7 +165,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data);
-            setEquityHistory(prev => [...prev, { time: data.time, equity: data.equity }]);
+            const pt = { time: data.time, equity: data.equity, floatingPnL: data.floatingPnL };
+            accumulatedEquityRef.current.push(pt);
+            setEquityHistory(prev => [...prev, pt]);
           } catch {}
         });
 
@@ -193,6 +207,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamTradeClose & { symbol: string; primaryMethodology?: string; exitTime: number };
+            accumulatedTradesRef.current.push(data);
             const pnlPrefix = data.pnl >= 0 ? "+" : "";
             addLog("trade_close",
               `[${data.reason}] ${data.symbol} @ ${data.exitPrice.toFixed(5)} | PnL: ${pnlPrefix}${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)`,
@@ -220,17 +235,31 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             completedRef.current = true;
             addLog("info", "Backtest complete. Generating report...");
             const data = JSON.parse(e.data) as BacktestResultData;
-            es.close();
-            eventSourceRef.current = null;
+            data.trades = accumulatedTradesRef.current;
+            data.equityCurve = accumulatedEquityRef.current;
             setPhase("complete");
-            setTimeout(() => { if (mounted) onComplete(data); }, 1500);
+            setTimeout(() => { 
+              if (mounted) {
+                onCompleteRef.current(data);
+              } 
+            }, 1500);
           } catch (err) {
             console.error("Complete handler error:", err);
+          } finally {
+            if (es.readyState !== EventSource.CLOSED) {
+              es.close();
+            }
+            eventSourceRef.current = null;
           }
         });
 
         es.onerror = () => {
-          if (!mounted || completedRef.current) return;
+          if (!mounted) return;
+          // If we already received complete, just close it.
+          if (completedRef.current) {
+            if (es.readyState !== EventSource.CLOSED) es.close();
+            return;
+          }
           // Prevent EventSource auto-reconnect
           if (es.readyState === EventSource.CONNECTING) {
             es.close();
@@ -240,7 +269,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             addLog("error", "Connection interrupted.");
             es.close();
             eventSourceRef.current = null;
-            setTimeout(() => { if (mounted) onError("Connection lost"); }, 2000);
+            setTimeout(() => { if (mounted) onErrorRef.current("Connection lost"); }, 2000);
           }
         };
 
@@ -251,11 +280,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           addLog("error", "ERROR: " + msg);
           es.close();
           eventSourceRef.current = null;
-          setTimeout(() => { if (mounted) onError(msg); }, 2000);
+          setTimeout(() => { if (mounted) onErrorRef.current(msg); }, 2000);
         });
 
       } catch (err: any) {
-        if (mounted) onError(err.message || "Failed to prepare backtest");
+        if (mounted) onErrorRef.current(err.message || "Failed to prepare backtest");
       }
     };
 
@@ -268,7 +297,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         eventSourceRef.current = null;
       }
     };
-  }, [newKey, onComplete, onError]);
+  }, [newKey]);
 
   const handleCancelPreparation = async () => {
     if (sessionId) {
