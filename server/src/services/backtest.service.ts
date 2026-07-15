@@ -1262,36 +1262,41 @@ class BacktestService {
     // ── 8. Persist to DB ───────────────────────────────────────────
     let savedDocId: string | undefined;
     try {
-      const saved = await BacktestExperience.create({
-        userId,
-        symbol: merged.symbols.join(","),
-        symbols: merged.symbols,
-        timeframe: merged.timeframe,
-        dateRange: { from: merged.fromDate, to: merged.toDate },
-        strategy: {
-          name: `MULTI_METHODOLOGY${merged.methodologyWeights ? "_WEIGHTED" : ""}`,
-          params: merged,
+      const saved = await BacktestExperience.findOneAndUpdate(
+        { userId },
+        {
+          $set: {
+            symbol: merged.symbols.join(","),
+            symbols: merged.symbols,
+            timeframe: merged.timeframe,
+            dateRange: { from: merged.fromDate, to: merged.toDate },
+            strategy: {
+              name: `MULTI_METHODOLOGY${merged.methodologyWeights ? "_WEIGHTED" : ""}`,
+              params: merged,
+            },
+            result: {
+              totalTrades,
+              winningTrades: winCount,
+              losingTrades: lossCount,
+              winRate: Math.round(winRate * 100) / 100,
+              totalPnL: Math.round(totalPnL * 100) / 100,
+              totalPnLPercent: Math.round(totalPnLPercent * 100) / 100,
+              maxDrawdownPercent: Math.round(maxDrawdownPercent * 100) / 100,
+              profitFactor: Math.round(profitFactor * 100) / 100,
+              sharpeRatio: Math.round(sharpeRatio * 100) / 100,
+              averageWin: Math.round(avgWin * 100) / 100,
+              averageLoss: Math.round(avgLoss * 100) / 100,
+              equityCurve,
+              recoveryFactor: Math.round(recoveryFactor * 100) / 100,
+              symbolStats,
+              methodologyStats,
+            },
+            pipelineConfigSnapshot: merged,
+          }
         },
-        result: {
-          totalTrades,
-          winningTrades: winCount,
-          losingTrades: lossCount,
-          winRate: Math.round(winRate * 100) / 100,
-          totalPnL: Math.round(totalPnL * 100) / 100,
-          totalPnLPercent: Math.round(totalPnLPercent * 100) / 100,
-          maxDrawdownPercent: Math.round(maxDrawdownPercent * 100) / 100,
-          profitFactor: Math.round(profitFactor * 100) / 100,
-          sharpeRatio: Math.round(sharpeRatio * 100) / 100,
-          averageWin: Math.round(avgWin * 100) / 100,
-          averageLoss: Math.round(avgLoss * 100) / 100,
-          equityCurve,
-          recoveryFactor: Math.round(recoveryFactor * 100) / 100,
-          symbolStats,
-          methodologyStats,
-        },
-        pipelineConfigSnapshot: merged,
-      });
-      savedDocId = saved._id?.toString();
+        { upsert: true, new: true }
+      );
+      savedDocId = saved?._id?.toString();
     } catch (dbError: any) {
       silentLogger.error(`[BACKTEST] Failed to save result: ${dbError.message}`);
     }

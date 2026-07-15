@@ -310,7 +310,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                 </div>
 
                 {/* Horizontal Stepper */}
-                <div className="relative flex items-center justify-between px-2 mb-4">
+                <div className="relative flex items-center justify-between px-2 mb-4 overflow-x-auto pb-2 gap-4">
                   {/* Connecting Line */}
                   <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-[1px] bg-gray-800 -z-10" />
 

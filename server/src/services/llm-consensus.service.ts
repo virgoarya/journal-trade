@@ -540,9 +540,9 @@ class LLMConsensusService {
 
     const prompt = buildSignalPrompt(signal, correlationWarnings);
 
-    // Run all providers in PARALLEL with timeout (minimum 15s, maximum 25s for slow/thinking models)
+    // Run all providers in PARALLEL with timeout (minimum 15s, maximum 45s for slow/thinking models)
     const results = await Promise.all(
-      providers.map((p) => this.callProvider(p, prompt, Math.min(Math.max(cfg.providerTimeoutMs || 25000, 15000), 25000))),
+      providers.map((p) => this.callProvider(p, prompt, Math.min(Math.max(cfg.providerTimeoutMs || 25000, 15000), 45000))),
     );
 
     // Aggregate votes
@@ -688,7 +688,7 @@ isAvailable(): boolean {
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: prompt },
           ],
-          max_tokens: 4096,
+          max_tokens: 500,
           temperature: 0.1,
           stream: false,
         }),

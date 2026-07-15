@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IAITradeLog extends Document {
   userId: string;
+  accountId?: string; // MT5 Login ID
   sessionId: string;
 
   // Signal info
@@ -62,6 +63,7 @@ export interface IAITradeLog extends Document {
 const AITradeLogSchema = new Schema<IAITradeLog>(
   {
     userId: { type: String, required: true, index: true },
+    accountId: { type: String, index: true },
     sessionId: { type: String, index: true },
 
     signal: {

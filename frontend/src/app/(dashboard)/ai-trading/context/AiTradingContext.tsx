@@ -151,7 +151,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   // Load AI trading settings from backend
   const refreshSettings = useCallback(async () => {
     try {
-      const res = await aiTradingService.getAiTradingSettings();
+      const [res, skillRes] = await Promise.all([
+        aiTradingService.getAiTradingSettings(),
+        aiTradingService.getSkill().catch(() => null)
+      ]);
+      
       if (res.success && res.data) {
         setActiveMethodologies(res.data.activeMethodologies || []);
         setMethodologyWeights(res.data.methodologyWeights || { ...DEFAULT_METHODOLOGY_WEIGHTS });
@@ -165,6 +169,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
         if (res.data.lastAutoBacktestAt) {
           setLastAutoBacktestAt(res.data.lastAutoBacktestAt);
         }
+      }
+
+      if (skillRes && skillRes.success && skillRes.data) {
+        setSkillConfig(skillRes.data);
       }
     } catch (e) {
       console.warn("Failed to load AI trading settings:", e);

@@ -729,11 +729,17 @@ router.post("/analyze-multi", heavyLimiter, async (req, res, next) => {
  */
 router.get("/performance", async (req, res, next) => {
   try {
-    const trades = await AITradeLog.find({
+    const accountInfo = await mt5McpService.getAccountInfo();
+    const accountId = accountInfo?.login?.toString();
+
+    const query: any = {
       userId: req.user.id,
       closed: true,
       pnl: { $exists: true },
-    }).sort({ createdAt: -1 }).lean();
+    };
+    if (accountId) query.accountId = accountId;
+
+    const trades = await AITradeLog.find(query).sort({ createdAt: -1 }).lean();
 
     if (trades.length === 0) {
       return apiResponse.success(res, {

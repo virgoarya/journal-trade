@@ -10,7 +10,7 @@ import {
   type BacktestResult as BacktestResultData,
   type BacktestAnalysis,
 } from "@/services/backtest.service";
-import { History } from "lucide-react";
+import { History, Settings2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAiTrading } from "../context/AiTradingContext";
 
@@ -29,6 +29,7 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isBacktestDrawerOpen, setIsBacktestDrawerOpen] = useState(false);
 
   const handleRun = useCallback(async (config: BacktestConfig) => {
     setResult(null);
@@ -181,10 +182,42 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
 
       {/* 2-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Form */}
+        {/* Floating Mobile Settings Button for Backtest */}
         {!isStreaming && (
-          <div>
-            <BacktestForm onRun={handleRun} isRunning={isStreaming} />
+          <button 
+            onClick={() => setIsBacktestDrawerOpen(true)}
+            className="lg:hidden fixed bottom-6 right-6 z-40 bg-accent-gold text-black p-4 rounded-full shadow-lg shadow-accent-gold/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center touch-target"
+          >
+            <Settings2 className="w-6 h-6" />
+          </button>
+        )}
+
+        {/* Left: Form (Mobile Drawer + Desktop Sidebar) */}
+        {!isStreaming && (
+          <div className={`
+            transition-all duration-300
+            ${isBacktestDrawerOpen 
+              ? 'fixed inset-0 z-50 bg-black/90 p-4 pt-16 overflow-y-auto block' 
+              : 'hidden lg:block'
+            }
+          `}>
+            {/* Mobile Close Button */}
+            {isBacktestDrawerOpen && (
+              <button 
+                onClick={() => setIsBacktestDrawerOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-900 rounded-full p-2 touch-target"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+
+            <BacktestForm 
+              onRun={(config) => {
+                handleRun(config);
+                if (isBacktestDrawerOpen) setIsBacktestDrawerOpen(false);
+              }} 
+              isRunning={isStreaming} 
+            />
           </div>
         )}
 

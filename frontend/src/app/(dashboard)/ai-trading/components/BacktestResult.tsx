@@ -105,7 +105,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       {chartData.length > 1 && (
         <div className="bg-gray-950/50 border border-gray-800/60 rounded-xl p-4 relative z-10">
           <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Equity Curve</p>
-          <div style={{ height: "200px", width: "100%", position: "relative" }}>
+          <div className="w-full relative h-[200px] md:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs><linearGradient id="btEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.2} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
@@ -127,15 +127,15 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
             <Activity className="w-4 h-4 text-accent-gold" />
             Symbol Performance
           </h4>
-          <div className="bg-gray-950/80 border border-gray-800/80 rounded-xl overflow-hidden">
+          <div className="bg-gray-950/80 border border-gray-800/80 rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-400">
               <thead className="bg-gray-900/50 text-xs uppercase text-gray-500 border-b border-gray-800">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Symbol</th>
-                  <th className="px-4 py-3 font-medium text-center">Trades</th>
-                  <th className="px-4 py-3 font-medium text-center">Win %</th>
-                  <th className="px-4 py-3 font-medium text-center">W/L/BE</th>
-                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Symbol</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">Trades</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">Win %</th>
+                  <th className="px-4 py-3 font-medium text-center whitespace-nowrap">W/L/BE</th>
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">PnL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">

@@ -76,16 +76,16 @@ export function PendingOrdersTable({ orders, onCancel }: PendingOrdersTableProps
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="text-left px-2 py-2 font-medium">Symbol</th>
-              <th className="text-left px-2 py-2 font-medium">Ticket</th>
-              <th className="text-left px-2 py-2 font-medium">Time</th>
-              <th className="text-left px-2 py-2 font-medium">Type</th>
-              <th className="text-right px-2 py-2 font-medium">Volume</th>
-              <th className="text-right px-2 py-2 font-medium">Price</th>
-              <th className="text-right px-2 py-2 font-medium">S / L</th>
-              <th className="text-right px-2 py-2 font-medium">T / P</th>
-              <th className="text-left px-2 py-2 font-medium">Comment</th>
-              <th className="text-right px-2 py-2 font-medium">Actions</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Symbol</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Ticket</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Time</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Type</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Volume</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Price</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">S / L</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">T / P</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Comment</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>

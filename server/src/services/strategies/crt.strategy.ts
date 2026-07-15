@@ -12,7 +12,7 @@ export interface CRTSignal {
   sl: number;
   tp: number;
   range: { high: number; low: number; width: number };
-  signalType: "RANGE_BREAKOUT" | "LIQUIDITY_SWEEP" | "DISPLACEMENT" | "MSB";
+  signalType: "RANGE_BREAKOUT" | "LIQUIDITY_SWEEP" | "DISPLACEMENT" | "MSB" | "3_CANDLE_PATTERN";
   displacementCandle?: Candle;
   reason: string;
 }
@@ -42,6 +42,10 @@ class CRTStrategy {
     if (candles.length < RANGE_LOOKBACK) return signals;
 
     const ranges = marketStructure.candleRanges;
+
+    // 0. CRT 3-Candle Pattern (Specific Setup)
+    const threeCandleSignal = this.detect3CandlePattern(fractal);
+    if (threeCandleSignal) signals.push(threeCandleSignal);
 
     // 1. Range Breakout
     const breakoutSignal = this.detectRangeBreakout(candles, ranges, marketStructure);
@@ -281,6 +285,99 @@ class CRTStrategy {
           displacementCandle: last,
           confidence: 78,
           reason: `CRT MSB SELL: Displacement broke swing low ${swing.price.toFixed(5)}`,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // ── 3-Candle Pattern (Accumulation, Manipulation, Distribution) ──
+
+  private detect3CandlePattern(fractal: import("./market-structure.service").FractalContext): CRTSignal | null {
+    const setupCandles = fractal.setup;
+    if (setupCandles.length < 3) return null;
+
+    // C1: Accumulation (Range)
+    // C2: Manipulation (Sweep + Close inside/reverse)
+    // C3: Distribution (Current Open)
+    const c1 = setupCandles[setupCandles.length - 2];
+    const c2 = setupCandles[setupCandles.length - 1];
+
+    // Check HTF Direction
+    const htfTrend = fractal.directionStr.trend.direction;
+
+    const atr = atrService.calculate(setupCandles);
+    const c1Range = c1.high - c1.low;
+    const isLowAtr = atr > 0 && atr < this.avgRange(setupCandles, 14) * 0.8; // Example threshold for low ATR
+
+    // Bullish Scenario
+    // H4 is Bullish (or SIDEWAYS allowing for local continuation)
+    if (htfTrend !== "BEAR") {
+      const c1Bearish = c1.close < c1.open;
+      const c2SweepLow = c2.low < c1.low;
+      const c2CloseBullish = c2.close > c2.open && c2.close > c1.low;
+
+      if (c1Bearish && c2SweepLow && c2CloseBullish) {
+        // Find entry: if low ATR, look for OB in M5 (entry timeframe)
+        let entryPrice = c2.close;
+        let reason = `CRT 3-Candle BUY: C2 swept C1 low (${c1.low.toFixed(5)}) and closed bullish.`;
+
+        if (isLowAtr) {
+          const ltfBullishOBs = fractal.entryStr.orderBlocks.filter(ob => ob.type === "BULLISH" && !ob.mitigated);
+          if (ltfBullishOBs.length > 0) {
+            // Find the OB closest to current price but below it
+            const closestOB = ltfBullishOBs.sort((a, b) => b.top - a.top)[0];
+            if (closestOB.top < c2.close && closestOB.top > c2.low) {
+              entryPrice = closestOB.top;
+              reason += ` Low ATR detected: Pending limit at LTF OB (${entryPrice.toFixed(5)}).`;
+            }
+          }
+        }
+
+        return {
+          direction: "BUY",
+          entry: entryPrice,
+          sl: c2.low - atr * 0.2, // slightly below C2 low
+          tp: c1.high, // draw on liquidity at C1 high
+          range: { high: c1.high, low: c2.low, width: c1.high - c2.low },
+          signalType: "3_CANDLE_PATTERN",
+          confidence: 85,
+          reason,
+        };
+      }
+    }
+
+    // Bearish Scenario
+    if (htfTrend !== "BULL") {
+      const c1Bullish = c1.close > c1.open;
+      const c2SweepHigh = c2.high > c1.high;
+      const c2CloseBearish = c2.close < c2.open && c2.close < c1.high;
+
+      if (c1Bullish && c2SweepHigh && c2CloseBearish) {
+        let entryPrice = c2.close;
+        let reason = `CRT 3-Candle SELL: C2 swept C1 high (${c1.high.toFixed(5)}) and closed bearish.`;
+
+        if (isLowAtr) {
+          const ltfBearishOBs = fractal.entryStr.orderBlocks.filter(ob => ob.type === "BEARISH" && !ob.mitigated);
+          if (ltfBearishOBs.length > 0) {
+            const closestOB = ltfBearishOBs.sort((a, b) => a.bottom - b.bottom)[0];
+            if (closestOB.bottom > c2.close && closestOB.bottom < c2.high) {
+              entryPrice = closestOB.bottom;
+              reason += ` Low ATR detected: Pending limit at LTF OB (${entryPrice.toFixed(5)}).`;
+            }
+          }
+        }
+
+        return {
+          direction: "SELL",
+          entry: entryPrice,
+          sl: c2.high + atr * 0.2, // slightly above C2 high
+          tp: c1.low, // draw on liquidity at C1 low
+          range: { high: c2.high, low: c1.low, width: c2.high - c1.low },
+          signalType: "3_CANDLE_PATTERN",
+          confidence: 85,
+          reason,
         };
       }
     }

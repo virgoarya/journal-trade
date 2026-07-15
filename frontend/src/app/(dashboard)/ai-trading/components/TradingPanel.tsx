@@ -18,6 +18,7 @@ export function TradingPanel({
   pipelinePaused,
   isStarting,
   isStopping,
+  skillConfig,
 }: TradingPanelProps) {
   const {
     startPipeline,
@@ -48,6 +49,51 @@ export function TradingPanel({
     ? displayConfig?.llmConsensus?.minProviders 
     : llmMinProviders;
 
+  // Calculate overall grade based on selected symbols
+  const getOverallGrade = () => {
+    if (!skillConfig || !skillConfig.symbolRankings || skillConfig.symbolRankings.length === 0) return null;
+    if (!displayConfig || !displayConfig.symbols || displayConfig.symbols.length === 0) return null;
+    
+    // Normalize symbols by stripping .i, .a etc (e.g. BTCUSD.i -> BTCUSD)
+    const normalizeSym = (s: string) => s.split('.')[0].toUpperCase();
+    const displaySyms = displayConfig.symbols.map(normalizeSym);
+    
+    // Filter rankings for selected symbols
+    const selectedRankings = skillConfig.symbolRankings.filter(r => displaySyms.includes(normalizeSym(r.symbol)));
+    if (selectedRankings.length === 0) return { grade: "UNRATED" };
+    
+    const avgWinRate = selectedRankings.reduce((sum, r) => sum + r.avgWinRate, 0) / selectedRankings.length;
+    const avgProfitFactor = selectedRankings.reduce((sum, r) => sum + r.avgProfitFactor, 0) / selectedRankings.length;
+    const avgRecovery = selectedRankings.reduce((sum, r) => sum + (r.avgRecoveryFactor || 0), 0) / selectedRankings.length;
+    const totalTrades = selectedRankings.reduce((sum, r) => sum + r.totalTrades, 0);
+    
+    let score = 0;
+    
+    // Win Rate (max 2)
+    if (avgWinRate >= 60) score += 2;
+    else if (avgWinRate >= 45) score += 1;
+    
+    // Profit Factor (max 2)
+    if (avgProfitFactor >= 2.0) score += 2;
+    else if (avgProfitFactor >= 1.5) score += 1;
+    
+    // Recovery Factor (Proxy for Drawdown/Sharpe) (max 2)
+    if (avgRecovery >= 3.0) score += 2;
+    else if (avgRecovery >= 1.5) score += 1;
+    
+    // Total Trades (max 2)
+    if (totalTrades >= 50) score += 2;
+    else if (totalTrades >= 20) score += 1;
+    
+    if (score >= 6) return { grade: "A", color: "text-green-400 border-green-400/30 bg-green-400/10" };
+    if (score >= 4) return { grade: "B", color: "text-blue-400 border-blue-400/30 bg-blue-400/10" };
+    if (score >= 2) return { grade: "C", color: "text-yellow-400 border-yellow-400/30 bg-yellow-400/10" };
+    if (score >= 1) return { grade: "D", color: "text-orange-400 border-orange-400/30 bg-orange-400/10" };
+    return { grade: "F", color: "text-red-400 border-red-400/30 bg-red-400/10" };
+  };
+
+  const gradeInfo = getOverallGrade();
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
       {/* Header */}
@@ -56,11 +102,18 @@ export function TradingPanel({
           <Signal className="w-4 h-4 text-accent-gold" />
           Live Trading Panel
         </h3>
-        {(pipelineRunning || pipelinePaused) && (
-          <span className="text-[10px] uppercase tracking-widest bg-accent-gold/20 text-accent-gold px-2 py-1 rounded font-semibold">
-            Active
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {gradeInfo && gradeInfo.grade !== "UNRATED" && (
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${gradeInfo.color}`} title="AI Config Grade">
+              Grade {gradeInfo.grade}
+            </span>
+          )}
+          {(pipelineRunning || pipelinePaused) && (
+            <span className="text-[10px] uppercase tracking-widest bg-accent-gold/20 text-accent-gold px-2 py-1 rounded font-semibold">
+              Active
+            </span>
+          )}
+        </div>
       </div>
 
       {displayConfig ? (
@@ -100,11 +153,35 @@ export function TradingPanel({
             <div className="col-span-2 pt-3 border-t border-gray-800/50">
                <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">Active AI Methodologies</p>
                <div className="flex flex-wrap gap-1.5">
-                {(displayConfig.activeMethodologies || []).map((m: string) => (
-                  <span key={m} className="bg-accent-gold/10 border border-accent-gold/20 text-[10px] px-2 py-1 rounded text-accent-gold uppercase font-semibold">
-                    {m === "rsiEngulf" ? "RSI+ENGULF" : m}
-                  </span>
-                ))}
+                {(displayConfig.activeMethodologies || []).map((m: string) => {
+                  const mRank = skillConfig?.methodologyRankings?.find(
+                    (rank) => rank.methodology.toLowerCase() === m.toLowerCase()
+                  );
+                  const verdict = mRank?.verdict;
+                  let bgClass = "bg-accent-gold/10";
+                  let borderClass = "border-accent-gold/20";
+                  let textClass = "text-accent-gold";
+
+                  if (verdict === "KEEP") {
+                    bgClass = "bg-green-500/10";
+                    borderClass = "border-green-500/20";
+                    textClass = "text-green-400";
+                  } else if (verdict === "ADJUST") {
+                    bgClass = "bg-yellow-500/10";
+                    borderClass = "border-yellow-500/20";
+                    textClass = "text-yellow-400";
+                  } else if (verdict === "DISABLE") {
+                    bgClass = "bg-red-500/10";
+                    borderClass = "border-red-500/20";
+                    textClass = "text-red-400";
+                  }
+
+                  return (
+                    <span key={m} className={`${bgClass} border ${borderClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-semibold`}>
+                      {m === "rsiEngulf" ? "RSI+ENGULF" : m}
+                    </span>
+                  );
+                })}
               </div>
             </div>
 

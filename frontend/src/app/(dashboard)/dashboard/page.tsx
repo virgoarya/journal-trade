@@ -492,29 +492,29 @@ export default function DashboardPage() {
                </div>
              </div>
              {recentTrades.length > 0 ? (
-               <div className="overflow-hidden">
+               <div className="overflow-x-auto w-full">
                  <table className="min-w-full divide-y divide-white/5">
                    <thead>
                      <tr className="bg-bg-void/50">
-                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Pair</th>
-                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Dir</th>
-                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">PnL</th>
-                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Result</th>
-                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider">Date</th>
+                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider whitespace-nowrap">Pair</th>
+                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider whitespace-nowrap">Dir</th>
+                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider whitespace-nowrap">PnL</th>
+                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider whitespace-nowrap">Result</th>
+                       <th className="px-4 py-3 text-left text-[9px] font-mono text-text-muted uppercase tracking-wider whitespace-nowrap">Date</th>
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-white/5">
                       {recentTrades.map((trade) => (
                        <tr key={trade.id} className="hover:bg-white/5 transition-colors">
-                         <td className="px-4 py-3 text-sm font-mono">{trade.pair}</td>
-                         <td className="px-4 py-3 text-sm font-mono">{trade.direction === 'Long' ? 'L' : 'S'}</td>
-                         <td className={`px-4 py-3 text-sm font-mono ${trade.pnl >= 0 ? 'text-data-profit' : 'text-data-loss'}`}>
+                         <td className="px-4 py-3 text-sm font-mono whitespace-nowrap">{trade.pair}</td>
+                         <td className="px-4 py-3 text-sm font-mono whitespace-nowrap">{trade.direction === 'Long' ? 'L' : 'S'}</td>
+                         <td className={`px-4 py-3 text-sm font-mono whitespace-nowrap ${trade.pnl >= 0 ? 'text-data-profit' : 'text-data-loss'}`}>
                            {trade.pnl.toFixed(2)}
                          </td>
-                         <td className={`px-4 py-3 text-sm font-mono ${trade.result === 'win' ? 'text-data-profit' : trade.result === 'loss' ? 'text-data-loss' : 'text-accent-gold'}`}>
+                         <td className={`px-4 py-3 text-sm font-mono whitespace-nowrap ${trade.result === 'win' ? 'text-data-profit' : trade.result === 'loss' ? 'text-data-loss' : 'text-accent-gold'}`}>
                            {trade.result === 'win' ? 'W' : trade.result === 'loss' ? 'L' : 'B'}
                          </td>
-                         <td className="px-4 py-3 text-sm font-mono text-text-muted">
+                         <td className="px-4 py-3 text-sm font-mono text-text-muted whitespace-nowrap">
                            {new Date(trade.tradeDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
                          </td>
                        </tr>

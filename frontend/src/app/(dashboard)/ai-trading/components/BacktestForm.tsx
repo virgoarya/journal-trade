@@ -34,36 +34,57 @@ interface Props {
 }
 
 export function BacktestForm({ onRun, isRunning }: Props) {
+  // Helper for localStorage state persistence
+  const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
+    const [value, setValue] = useState<T>(() => {
+      if (typeof window !== 'undefined') {
+        const stickyValue = window.localStorage.getItem(key);
+        return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+      }
+      return defaultValue;
+    });
+
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      }
+    }, [key, value]);
+
+    return [value, setValue];
+  };
+
   const [symbols, setSymbols] = useState<string[]>(FALLBACK_SYMBOLS);
-  const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["EURUSD"]);
+  const [selectedSymbols, setSelectedSymbols] = useStickyState<string[]>(["EURUSD"], "bt_selectedSymbols");
   const [symbolSearch, setSymbolSearch] = useState("");
   const [filteredSymbols, setFilteredSymbols] = useState(FALLBACK_SYMBOLS);
-  const [timeframe, setTimeframe] = useState("M15");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [initialBalance, setInitialBalance] = useState(10000);
-  const [rsiOversold, setRsiOversold] = useState(30);
-  const [rsiOverbought, setRsiOverbought] = useState(70);
-  const [slMultiplier, setSlMultiplier] = useState(1.5);
-  const [tpMultiplier, setTpMultiplier] = useState(1.5);
-  const [trailingEnabled, setTrailingEnabled] = useState(true);
-  const [activationATR, setActivationATR] = useState(1.0);
-  const [trailATR, setTrailATR] = useState(0.5);
-  const [maxRisk, setMaxRisk] = useState(1.0);
-  const [maxPositions, setMaxPositions] = useState(3);
-  const [leverage, setLeverage] = useState(100);
-  const [signalInterval, setSignalInterval] = useState(4);
-  const [speedMs, setSpeedMs] = useState(0);
-  const [activeMethodologies, setActiveMethodologies] = useState<string[]>(METHODOLOGY_NAMES);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [timeframe, setTimeframe] = useStickyState("M15", "bt_timeframe");
+  const [fromDate, setFromDate] = useStickyState("", "bt_fromDate");
+  const [toDate, setToDate] = useStickyState("", "bt_toDate");
+  const [initialBalance, setInitialBalance] = useStickyState(10000, "bt_initialBalance");
+  const [rsiOversold, setRsiOversold] = useStickyState(30, "bt_rsiOversold");
+  const [rsiOverbought, setRsiOverbought] = useStickyState(70, "bt_rsiOverbought");
+  const [slMultiplier, setSlMultiplier] = useStickyState(1.5, "bt_slMultiplier");
+  const [tpMultiplier, setTpMultiplier] = useStickyState(1.5, "bt_tpMultiplier");
+  const [trailingEnabled, setTrailingEnabled] = useStickyState(true, "bt_trailingEnabled");
+  const [activationATR, setActivationATR] = useStickyState(1.0, "bt_activationATR");
+  const [trailATR, setTrailATR] = useStickyState(0.5, "bt_trailATR");
+  const [maxRisk, setMaxRisk] = useStickyState(1.0, "bt_maxRisk");
+  const [maxPositions, setMaxPositions] = useStickyState(3, "bt_maxPositions");
+  const [leverage, setLeverage] = useStickyState(100, "bt_leverage");
+  const [signalInterval, setSignalInterval] = useStickyState(4, "bt_signalInterval");
+  const [speedMs, setSpeedMs] = useStickyState(0, "bt_speedMs");
+  const [activeMethodologies, setActiveMethodologies] = useStickyState<string[]>(METHODOLOGY_NAMES, "bt_activeMethodologies");
+  const [showAdvanced, setShowAdvanced] = useStickyState(false, "bt_showAdvanced");
 
-  // Set default dates
+  // Set default dates if not loaded from localStorage
   useEffect(() => {
-    const now = new Date();
-    const past = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-    setToDate(now.toISOString().split("T")[0]);
-    setFromDate(past.toISOString().split("T")[0]);
-  }, []);
+    if (!toDate || !fromDate) {
+      const now = new Date();
+      const past = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+      if (!toDate) setToDate(now.toISOString().split("T")[0]);
+      if (!fromDate) setFromDate(past.toISOString().split("T")[0]);
+    }
+  }, [toDate, fromDate]);
 
   // Fetch available symbols from API
   useEffect(() => {

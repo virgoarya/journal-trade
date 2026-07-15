@@ -15,7 +15,7 @@ import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BarChart3, Activity } from "lucide-react";
+import { ArrowLeft, BarChart3, Activity, Settings2, X } from "lucide-react";
 import { Suspense } from "react";
 
 type Tab = "trading" | "backtest";
@@ -39,6 +39,7 @@ function AITradingPageContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>("trading");
+  const [isTradingDrawerOpen, setIsTradingDrawerOpen] = useState(false);
 
   const {
     isConnected,
@@ -260,8 +261,32 @@ function AITradingPageContent() {
             )}
           </div>
 
-          {/* Right: Trading panel */}
-          <div className="space-y-4">
+          {/* Floating Mobile Settings Button */}
+          <button 
+            onClick={() => setIsTradingDrawerOpen(true)}
+            className="xl:hidden fixed bottom-6 right-6 z-40 bg-accent-gold text-black p-4 rounded-full shadow-lg shadow-accent-gold/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center touch-target"
+          >
+            <Settings2 className="w-6 h-6" />
+          </button>
+
+          {/* Right: Trading panel (Mobile Drawer + Desktop Sidebar) */}
+          <div className={`
+            space-y-4 transition-all duration-300
+            ${isTradingDrawerOpen 
+              ? 'fixed inset-0 z-50 bg-black/90 p-4 pt-16 overflow-y-auto block' 
+              : 'hidden xl:block'
+            }
+          `}>
+            {/* Mobile Close Button */}
+            {isTradingDrawerOpen && (
+              <button 
+                onClick={() => setIsTradingDrawerOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-900 rounded-full p-2 touch-target"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+
             <TradingPanel
               pipelineRunning={pipelineStatus?.running ?? false}
               pipelinePaused={pipelineStatus?.paused ?? false}
@@ -280,8 +305,8 @@ function AITradingPageContent() {
 
             <SkillDisplay key={skillVersion} onApplySkill={(skill) => {
               setSkillConfig(skill);
+              if (isTradingDrawerOpen) setIsTradingDrawerOpen(false);
             }} />
-            {/* Performance and Stats have been moved to the main column below AI Consensus */}
           </div>
         </div>
       )}

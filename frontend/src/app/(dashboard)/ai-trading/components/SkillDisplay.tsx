@@ -221,45 +221,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
         </div>
       )}
 
-      {/* Methodology Verdicts */}
-      {skill && skill.methodologyRankings && skill.methodologyRankings.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowMethodologies(!showMethodologies)}
-            className="flex items-center justify-between w-full text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2"
-          >
-            <span className="flex items-center gap-1.5">
-              <Layers className="w-3 h-3" />
-              Methodology Verdicts
-            </span>
-            {showMethodologies ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
-          {showMethodologies && (
-            <div className="space-y-1">
-              {skill.methodologyRankings.map((m) => {
-                const vColor = m.verdict === "KEEP" ? "text-green-400" : m.verdict === "ADJUST" ? "text-yellow-400" : "text-red-400";
-                const vBg = m.verdict === "KEEP" ? "bg-green-500/10" : m.verdict === "ADJUST" ? "bg-yellow-500/10" : "bg-red-500/10";
-                return (
-                  <div key={m.methodology} className="bg-gray-800/40 rounded px-2.5 py-1.5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${vBg} ${vColor}`}>{m.verdict}</span>
-                      <span className="text-xs text-white capitalize">{m.methodology}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                      <span>{m.totalTrades}t</span>
-                      <span className={m.totalPnL >= 0 ? "text-green-400" : "text-red-400"}>
-                        {m.totalPnL >= 0 ? "+" : ""}${m.totalPnL.toFixed(0)}
-                      </span>
-                      <span>{m.avgWinRate.toFixed(1)}%</span>
-                      {m.bestSymbol && <span className="text-[9px] text-gray-600 hidden sm:inline">⭐ {m.bestSymbol}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+
 
       {/* Apply button */}
       {skill && skill.symbolRankings && skill.symbolRankings.length > 0 && (

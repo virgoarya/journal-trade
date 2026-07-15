@@ -131,7 +131,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   },
   methodologyWeights: { ...DEFAULT_METHODOLOGY_WEIGHTS },
   activeMethodologies: Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
-  llmConsensus: { enabled: false, minProviders: 4, threshold: 0.5, providerTimeoutMs: 15000 },
+  llmConsensus: { enabled: false, minProviders: 4, threshold: 0.5, providerTimeoutMs: 45000 },
 };
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -468,20 +468,28 @@ const pipeline = {
     let currentDrawdown = 0;
 
     try {
-      // Open positions langsung dari MT5
+      if (!mt5McpService.isConnected) {
+        return pipeline; // Return cached without polling MT5
+      }
+      // Get current MT5 account ID
+      const accountInfo = await mt5McpService.getAccountInfo();
+      const accountId = accountInfo?.login?.toString();
+
+      // Open positions langsung dari MT5 (filter only AI trades)
       const positions = await mt5McpService.getPositions();
-      openPositions = positions.length;
-      // Hitung total floating PnL dari semua posisi
-      totalPnL = positions.reduce((sum, p) => sum + (p.profit || 0), 0);
+      const aiPositions = positions.filter(p => p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")));
+      openPositions = aiPositions.length;
+      // Hitung total floating PnL dari semua posisi AI
+      totalPnL = aiPositions.reduce((sum, p) => sum + (p.profit || 0), 0);
 
       // Trade history dari DB (closed trades)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const closedTrades = await AITradeLog.find({
-        userId,
-        closed: true,
-      }).lean();
+      const query: any = { userId, closed: true };
+      if (accountId) query.accountId = accountId;
+
+      const closedTrades = await AITradeLog.find(query).lean();
 
       totalTrades = closedTrades.length;
       let allTimePnL = 0;
@@ -502,7 +510,7 @@ const pipeline = {
       dailyPnL = dailyPnLSum;
 
       // Drawdown sederhana: negatif dari total floating
-      currentDrawdown = positions
+      currentDrawdown = aiPositions
         .filter(p => p.profit < 0)
         .reduce((sum, p) => sum + Math.abs(p.profit), 0);
 
@@ -1095,8 +1103,11 @@ const llmResult = await llmConsensusService.evaluate(
             });
           }
 
+          const accInfo = await mt5McpService.getAccountInfo();
+          
           await AITradeLog.create({
             userId,
+            accountId: accInfo?.login?.toString(),
             signal: {
               symbol: signal.symbol,
               direction: signal.direction,
@@ -1177,11 +1188,14 @@ const llmResult = await llmConsensusService.evaluate(
 
     // ── Trailing Stop Management ─────────────────────────────────────
     if (!pipeline.config.trailingStop.enabled) return;
+    if (!mt5McpService.isConnected) return;
 
     try {
-      const positions = await mt5McpService.getPositions();
+      const allPositions = await mt5McpService.getPositions();
+      // Hanya kelola posisi (Trailing/Breakeven) yang dibuka oleh AI
+      const aiPositions = allPositions.filter(p => p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")));
 
-      for (const pos of positions) {
+      for (const pos of aiPositions) {
         // Cek cooldown market closed (30 menit)
         const closedTime = this.marketClosedCache.get(pos.symbol);
         if (closedTime && Date.now() - closedTime < 1000 * 60 * 30) {
@@ -1279,8 +1293,15 @@ const llmResult = await llmConsensusService.evaluate(
     if (!pipeline) return;
 
     try {
+      if (!mt5McpService.isConnected) return;
+      const accountInfo = await mt5McpService.getAccountInfo();
+      const accountId = accountInfo?.login?.toString();
+
+      const query: any = { userId, closed: false };
+      if (accountId) query.accountId = accountId;
+
       // 1. Fetch all trade logs that are still marked as OPEN (closed: false)
-      const openLogs = await AITradeLog.find({ userId, closed: false });
+      const openLogs = await AITradeLog.find(query);
       if (openLogs.length === 0) return;
 
       // 2. Fetch active positions from MT5

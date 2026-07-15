@@ -158,8 +158,9 @@ connectDB()
       // System Monitor Agent — periodic health checks & hourly reports
       await systemMonitorAgent.start();
 
-      // Apply auth rate limiter to auth endpoints
-      app.use("/api/auth", authLimiter);
+
+
+app.use("/api/auth", authLimiter);
 
       app.use((req, res, next) => {
         if (req.url.startsWith("/api/auth")) {

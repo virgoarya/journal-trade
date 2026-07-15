@@ -13,7 +13,7 @@ export interface MSNRSignal {
   tp: number;
   keyLevel: KeyLevel;
   levelStrength: number; // 1–5
-  signalType: "BOUNCE" | "BREAK_RETEST" | "STRUCTURE_BREAK" | "SBR" | "RBS" | "QML";
+  signalType: "BOUNCE" | "BREAK_RETEST" | "STRUCTURE_BREAK" | "SBR" | "RBS" | "QML" | "STORYLINE_QM" | "STORYLINE_SBR" | "STORYLINE_RBS";
   fibLevel?: number;
   reason: string;
 }
@@ -44,11 +44,11 @@ class MSNRStrategy {
     rawSignals.push(...bounceSignals);
 
     // 2. SBR / RBS
-    const sbrRbsSignals = this.detectSBR_RBS(setupCandles, setupStructure);
+    const sbrRbsSignals = this.detectSBR_RBS(setupCandles, setupStructure, fractal.directionStr);
     rawSignals.push(...sbrRbsSignals);
 
     // 2b. Quasimodo Level (QML)
-    const qmlSignals = this.detectQML(setupCandles, setupStructure);
+    const qmlSignals = this.detectQML(setupCandles, setupStructure, fractal.directionStr);
     rawSignals.push(...qmlSignals);
 
     // 3. Structure break
@@ -196,7 +196,7 @@ class MSNRStrategy {
 
   // ── SBR / RBS (Support Become Resistance / Resistance Become Support) ──
 
-  private detectSBR_RBS(candles: Candle[], ms: MarketStructure): MSNRSignal[] {
+  private detectSBR_RBS(candles: Candle[], ms: MarketStructure, htfMs: MarketStructure): MSNRSignal[] {
     const signals: MSNRSignal[] = [];
     if (candles.length < 3 || ms.keyLevels.length === 0) return signals;
 
@@ -215,16 +215,21 @@ class MSNRStrategy {
         const retesting = Math.abs(last.close - level.price) / level.price < 0.002;
 
         if (brokeAbove && retesting) {
+          // STORYLINE CHECK: Did the move that broke the resistance originate from an HTF Support?
+          const recentSwings = ms.swingLows.filter(s => s.time < last.time);
+          const originLow = recentSwings.length > 0 ? recentSwings[recentSwings.length - 1].price : null;
+          const isStoryline = originLow !== null && htfMs.keyLevels.some(htf => htf.type === "SUPPORT" && Math.abs(originLow - htf.price) / htf.price < 0.005);
+          
           signals.push({
             direction: "BUY",
             entry: last.close,
             sl: level.price - avgRange * 1.5,
-            tp: last.close + avgRange * 2.5,
+            tp: last.close + avgRange * 3.0,
             keyLevel: level,
             levelStrength: level.strength,
-            signalType: "RBS",
-            confidence: Math.min(90, 70 + level.strength * 4),
-            reason: `RBS BUY: Resistance ${level.price.toFixed(5)} broken and retested as support`,
+            signalType: isStoryline ? "STORYLINE_RBS" : "RBS",
+            confidence: isStoryline ? 95 : Math.min(80, 60 + level.strength * 4),
+            reason: isStoryline ? `Storyline RBS BUY: HTF Support rejected, broke resistance ${level.price.toFixed(5)}, now retesting` : `RBS BUY: Resistance ${level.price.toFixed(5)} broken and retested as support`,
           });
         }
       }
@@ -235,16 +240,21 @@ class MSNRStrategy {
         const retesting = Math.abs(last.close - level.price) / level.price < 0.002;
 
         if (brokeBelow && retesting) {
+          // STORYLINE CHECK: Did the move that broke the support originate from an HTF Resistance?
+          const recentSwings = ms.swingHighs.filter(s => s.time < last.time);
+          const originHigh = recentSwings.length > 0 ? recentSwings[recentSwings.length - 1].price : null;
+          const isStoryline = originHigh !== null && htfMs.keyLevels.some(htf => htf.type === "RESISTANCE" && Math.abs(originHigh - htf.price) / htf.price < 0.005);
+
           signals.push({
             direction: "SELL",
             entry: last.close,
             sl: level.price + avgRange * 1.5,
-            tp: last.close - avgRange * 2.5,
+            tp: last.close - avgRange * 3.0,
             keyLevel: level,
             levelStrength: level.strength,
-            signalType: "SBR",
-            confidence: Math.min(90, 70 + level.strength * 4),
-            reason: `SBR SELL: Support ${level.price.toFixed(5)} broken and retested as resistance`,
+            signalType: isStoryline ? "STORYLINE_SBR" : "SBR",
+            confidence: isStoryline ? 95 : Math.min(80, 60 + level.strength * 4),
+            reason: isStoryline ? `Storyline SBR SELL: HTF Resistance rejected, broke support ${level.price.toFixed(5)}, now retesting` : `SBR SELL: Support ${level.price.toFixed(5)} broken and retested as resistance`,
           });
         }
       }
@@ -255,7 +265,7 @@ class MSNRStrategy {
 
   // ── QML (Quasimodo Level) ──────────────────────────────────────────
 
-  private detectQML(candles: Candle[], ms: MarketStructure): MSNRSignal[] {
+  private detectQML(candles: Candle[], ms: MarketStructure, htfMs: MarketStructure): MSNRSignal[] {
     const signals: MSNRSignal[] = [];
     if (candles.length < 10) return signals;
     if (ms.swingHighs.length < 2 || ms.swingLows.length < 2) return signals;
@@ -280,16 +290,19 @@ class MSNRStrategy {
       const notViolated = last.close > s3.price; 
 
       if (isHeadLower && isQmBroken && isRetestingLeftShoulder && notViolated) {
+        // STORYLINE CHECK: Did the Head (S3) reject off an HTF Support?
+        const isStoryline = htfMs.keyLevels.some(htf => htf.type === "SUPPORT" && Math.abs(s3.price - htf.price) / htf.price < 0.005);
+        
         signals.push({
           direction: "BUY",
           entry: last.close,
           sl: s3.price - avgRange * 0.5,
-          tp: s4.price + avgRange * 1.5,
+          tp: s4.price + avgRange * 3.0,
           keyLevel: { price: s1.price, strength: 4, type: "SUPPORT", lastTested: last.time },
           levelStrength: 4,
-          signalType: "QML",
-          confidence: 88,
-          reason: `Bullish QML BUY: Left Shoulder retest at ${s1.price.toFixed(5)} after LL & HH`,
+          signalType: isStoryline ? "STORYLINE_QM" : "QML",
+          confidence: isStoryline ? 98 : 75,
+          reason: isStoryline ? `Storyline QM BUY: HTF Support rejected at Head, MSS formed, retesting QM ${s1.price.toFixed(5)}` : `Bullish QML BUY: Left Shoulder retest at ${s1.price.toFixed(5)} after LL & HH`,
         });
       }
     }
@@ -302,16 +315,19 @@ class MSNRStrategy {
       const notViolated = last.close < s3.price;
 
       if (isHeadHigher && isQmBroken && isRetestingLeftShoulder && notViolated) {
+        // STORYLINE CHECK: Did the Head (S3) reject off an HTF Resistance?
+        const isStoryline = htfMs.keyLevels.some(htf => htf.type === "RESISTANCE" && Math.abs(s3.price - htf.price) / htf.price < 0.005);
+
         signals.push({
           direction: "SELL",
           entry: last.close,
           sl: s3.price + avgRange * 0.5,
-          tp: s4.price - avgRange * 1.5,
+          tp: s4.price - avgRange * 3.0,
           keyLevel: { price: s1.price, strength: 4, type: "RESISTANCE", lastTested: last.time },
           levelStrength: 4,
-          signalType: "QML",
-          confidence: 88,
-          reason: `Bearish QML SELL: Left Shoulder retest at ${s1.price.toFixed(5)} after HH & LL`,
+          signalType: isStoryline ? "STORYLINE_QM" : "QML",
+          confidence: isStoryline ? 98 : 75,
+          reason: isStoryline ? `Storyline QM SELL: HTF Resistance rejected at Head, MSS formed, retesting QM ${s1.price.toFixed(5)}` : `Bearish QML SELL: Left Shoulder retest at ${s1.price.toFixed(5)} after HH & LL`,
         });
       }
     }

@@ -385,15 +385,8 @@ class MT5MCPService {
 
   /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
-    return withRetry(
-      async () => {
-        const result = await this.callWithCircuit("mt5_positions_get", {});
-        return (result as any).positions ?? [];
-      },
-      3, // maxRetries
-      1000, // baseDelayMs
-      (e) => !e.message.includes("MT5 not connected") // only retry if MT5 is actually connected
-    );
+    const result = await this.callWithCircuit("mt5_positions_get", {});
+    return (result as any).positions ?? [];
   }
 
   /** Debug — get raw MT5 diagnostic info about positions. */
