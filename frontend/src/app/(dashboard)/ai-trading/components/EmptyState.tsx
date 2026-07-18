@@ -20,13 +20,7 @@ interface EmptyStateProps {
 
 /**
  * EmptyState - Consistent empty state displays for AI Trading components.
- *
- * Provides clear, actionable empty states with:
- * - Appropriate icons
- * - Helpful messages
- * - Optional action buttons
- *
- * Uses Card component for consistent styling.
+ * Uses HUD panel styling for visual consistency.
  */
 export function EmptyState({
   type,
@@ -36,7 +30,6 @@ export function EmptyState({
   onAction,
   className = "",
 }: EmptyStateProps) {
-  // Default content for each type
   const defaults = {
     data: {
       title: "No Data Available",
@@ -79,20 +72,22 @@ export function EmptyState({
   const Icon = content.icon;
 
   return (
-    <Card className={`text-center ${className}`}>
+    <div className={`hud-panel p-6 text-center ${className}`}>
       <div className="flex flex-col items-center justify-center space-y-3">
-        <Icon className="w-10 h-10 text-gray-500" />
-        <h3 className="text-sm font-medium text-gray-200">{content.title}</h3>
-        <p className="text-xs text-gray-500 max-w-md">{content.description}</p>
+        <div className="w-12 h-12 rounded-full border border-accent-gold/20 bg-black/40 flex items-center justify-center">
+          <Icon className="w-6 h-6 text-accent-gold-dim" />
+        </div>
+        <h3 className="text-sm font-medium text-text-primary font-mono tracking-wider">{content.title}</h3>
+        <p className="text-xs text-text-muted max-w-md">{content.description}</p>
         {actionText && onAction && (
           <button
             onClick={onAction}
-            className="mt-3 px-3 py-1.5 bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold text-xs font-medium rounded transition"
+            className="mt-3 px-4 py-1.5 bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold text-xs font-mono font-medium rounded border border-accent-gold/30 hover:border-accent-gold/50 transition-all shadow-[0_0_8px_rgba(212,175,55,0)] hover:shadow-[0_0_8px_rgba(212,175,55,0.2)]"
           >
             {actionText}
           </button>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

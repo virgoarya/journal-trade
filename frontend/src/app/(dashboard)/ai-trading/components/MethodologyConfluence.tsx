@@ -58,12 +58,12 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+    <div className="hud-panel p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-300 flex items-center gap-2 uppercase tracking-wider">
-            <Brain className="w-4 h-4 text-purple-400" />
-            Methodology Confluence {symbol ? <span className="text-purple-300 bg-purple-900/40 px-2 py-0.5 rounded border border-purple-500/30">{symbol}</span> : ""}
+          <h3 className="text-[11px] font-bold text-accent-gold flex items-center gap-2 uppercase tracking-widest drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+            <Brain className="w-4 h-4" />
+            Methodology Confluence {symbol ? <span className="text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30">{symbol}</span> : ""}
           </h3>
         {confluence.conflictDetected && (
           <span className="text-[10px] text-yellow-400 flex items-center gap-1">
@@ -79,16 +79,16 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${trendColor(marketStructure.trend.direction)}`}>
             {marketStructure.trend.direction === "BULL" ? "Bull" : marketStructure.trend.direction === "BEAR" ? "Bear" : "Sideways"} ({marketStructure.trend.strength}%)
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-600/30 bg-gray-700/20 text-gray-400">
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
             {priceActionLabel(marketStructure.recentPriceAction)}
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-600/30 bg-gray-700/20 text-gray-400">
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
             {marketStructure.orderBlocksCount} OB
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-600/30 bg-gray-700/20 text-gray-400">
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
             {marketStructure.fvgCount} FVG
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-600/30 bg-gray-700/20 text-gray-400">
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
             {marketStructure.liquidityZonesCount} Liq
           </span>
         </div>
@@ -96,16 +96,16 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
 
       {/* Final Signal */}
       {finalSignal ? (
-        <div className="bg-gray-950 rounded-lg p-3 space-y-2">
+        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {finalSignal.direction === "BUY" ? (
-                <TrendingUp className="w-4 h-4 text-green-400" />
+                <TrendingUp className="w-4 h-4 text-neon-green" />
               ) : (
-                <TrendingDown className="w-4 h-4 text-red-400" />
+                <TrendingDown className="w-4 h-4 text-neon-red" />
               )}
-              <span className={`text-sm font-bold ${
-                finalSignal.direction === "BUY" ? "text-green-400" : "text-red-400"
+              <span className={`text-sm font-bold font-mono ${
+                finalSignal.direction === "BUY" ? "text-neon-green" : "text-neon-red"
               }`}>
                 {finalSignal.direction}
               </span>
@@ -113,7 +113,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
                 {finalSignal.confidence}%
               </span>
             </div>
-            <span className="text-[10px] text-gray-500">
+            <span className="text-[10px] text-text-muted font-mono">
               Score: {finalSignal.confluenceScore}%
             </span>
           </div>
@@ -132,16 +132,16 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
                 />
               ))}
             </div>
-            <span className="text-[10px] text-gray-500">
-              {finalSignal.totalAgreeing}/4 methodologies agreeing
+            <span className="text-[10px] text-text-muted font-mono">
+              {finalSignal.totalAgreeing}/{Object.keys(confluence.methodologyBreakdown).length} methodologies agreeing
             </span>
           </div>
 
           {/* Primary methodology */}
-          <div className="text-[10px] text-gray-400">
+          <div className="text-[10px] text-text-muted">
             Primary:{" "}
             <span
-              className="font-medium"
+              className="font-medium font-mono"
               style={{ color: METHODOLOGY_COLORS[finalSignal.primaryMethodology] || "#6B7280" }}
             >
               {METHODOLOGY_LABELS[finalSignal.primaryMethodology] || finalSignal.primaryMethodology}
@@ -151,16 +151,16 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
           {/* Entry/SL/TP */}
           <div className="grid grid-cols-3 gap-1 text-[10px]">
             <div>
-              <span className="text-gray-600">Entry</span>
-              <p className="text-white font-mono">{finalSignal.entry.toFixed(5)}</p>
+              <span className="text-accent-gold-dim">Entry</span>
+              <p className="text-text-primary font-mono">{finalSignal.entry.toFixed(5)}</p>
             </div>
             <div>
-              <span className="text-gray-600">SL</span>
-              <p className="text-red-400 font-mono">{finalSignal.sl.toFixed(5)}</p>
+              <span className="text-accent-gold-dim">SL</span>
+              <p className="text-neon-red font-mono">{finalSignal.sl.toFixed(5)}</p>
             </div>
             <div>
-              <span className="text-gray-600">TP</span>
-              <p className="text-green-400 font-mono">{finalSignal.tp.toFixed(5)}</p>
+              <span className="text-accent-gold-dim">TP</span>
+              <p className="text-neon-green font-mono">{finalSignal.tp.toFixed(5)}</p>
             </div>
           </div>
 
@@ -169,10 +169,10 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
           </p>
         </div>
       ) : (
-        <div className="bg-gray-950 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-gray-500">
+        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-text-muted">
             <AlertTriangle className="w-4 h-4 text-yellow-500" />
-            <span className="text-xs">{confluence.reason}</span>
+            <span className="text-xs font-mono">{confluence.reason}</span>
           </div>
         </div>
       )}
@@ -180,20 +180,20 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
       {/* Individual Methodology Breakdown */}
       {Object.keys(confluence.methodologyBreakdown).length > 0 && (
         <div className="space-y-1.5">
-          <span className="text-[10px] text-gray-500 uppercase tracking-wider">Individual Signals</span>
+          <span className="text-[9px] text-accent-gold-dim uppercase tracking-widest font-mono">Individual Signals</span>
           {Object.entries(confluence.methodologyBreakdown).map(([key, data]) => {
             const method = key as MethodologyName;
             const color = METHODOLOGY_COLORS[method] || "#6B7280";
             return (
               <div key={key} className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="flex-1 text-[10px] text-gray-400 truncate flex items-center gap-1">
+                <span className="flex-1 text-[10px] text-text-muted truncate flex items-center gap-1 font-mono">
                   {METHODOLOGY_LABELS[method] || method}
-                  {data.direction === "BUY" && <span title="Sinyal BUY"><TrendingUp className="w-3 h-3 text-green-500" /></span>}
-                  {data.direction === "SELL" && <span title="Sinyal SELL"><TrendingDown className="w-3 h-3 text-red-500" /></span>}
+                  {data.direction === "BUY" && <span title="Sinyal BUY"><TrendingUp className="w-3 h-3 text-neon-green" /></span>}
+                  {data.direction === "SELL" && <span title="Sinyal SELL"><TrendingDown className="w-3 h-3 text-neon-red" /></span>}
                 </span>
                 {/* Confidence bar */}
-                <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden flex-shrink-0">
+                <div className="w-16 h-1.5 bg-black rounded-full overflow-hidden flex-shrink-0 border border-accent-gold/10">
                   <div
                     className="h-full rounded-full transition-all"
                     style={{
@@ -206,7 +206,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
                 <span className="w-6 text-right text-[10px] font-mono" style={{ color }}>
                   {data.confidence > 0 ? `${data.confidence}%` : "—"}
                 </span>
-                <span className="text-[9px] text-gray-600 w-10 text-right">
+                <span className="text-[9px] text-text-muted w-10 text-right font-mono">
                   ×{data.weight.toFixed(1)}
                 </span>
               </div>

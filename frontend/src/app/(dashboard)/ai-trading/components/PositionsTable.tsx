@@ -107,13 +107,13 @@ export function PositionsTable({
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <div className="hud-panel overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
-        <h3 className="text-sm font-semibold text-white">
+      <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
+        <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
           Open Positions
-          <span className="ml-2 text-gray-500 font-normal">
-            ({positions.length})
+          <span className="ml-2 text-accent-gold-dim">
+            [{positions.length}]
           </span>
         </h3>
         {positions.length > 0 && (
@@ -151,108 +151,108 @@ export function PositionsTable({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Symbol</th>
-                <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Ticket</th>
-                <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Time</th>
-                <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Type</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Volume</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Price</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">S / L</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">T / P</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Price</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Swap</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Profit</th>
-                <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Comment</th>
-                <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Actions</th>
+              <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
+                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
+                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
+                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Time</th>
+                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Open</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Current</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Swap</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Profit</th>
+                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
+                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {positions.map((pos) => (
                 <tr
                   key={pos.ticket}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/30 transition"
+                  className="border-b border-accent-gold/10 hover:bg-accent-gold/5 transition group"
                 >
-                  <td className="px-2 py-2.5 font-medium text-blue-400">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 border border-blue-500 rounded-sm flex items-center justify-center text-[6px]">↑</span>
-                      {pos.symbol.toLowerCase()}
+                  <td className="px-3 py-2.5 font-mono text-text-primary">
+                    <span className="inline-flex items-center gap-2 bg-black/50 border border-accent-gold/20 px-2 py-0.5 rounded shadow-[inset_0_0_8px_rgba(212,175,55,0.1)]">
+                      <span className={`w-2 h-2 rounded-full animate-pulse shadow-[0_0_4px_currentColor] ${pos.type.toLowerCase() === 'buy' ? 'bg-neon-green text-neon-green' : 'bg-neon-red text-neon-red'}`} />
+                      {pos.symbol.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-2 py-2.5 text-gray-400 text-xs">
-                    {pos.ticket}
+                  <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
+                    #{pos.ticket}
                   </td>
-                  <td className="px-2 py-2.5 text-gray-400 text-xs tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-text-muted text-[10px] tabular-nums whitespace-nowrap font-mono">
                     {(() => {
                       const d = new Date(pos.time * 1000);
                       const pad = (n: number) => n.toString().padStart(2, "0");
-                      return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                      return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
                     })()}
                   </td>
-                  <td className="px-2 py-2.5 text-gray-300">
-                    {pos.type.toLowerCase()}
+                  <td className={`px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider ${pos.type.toLowerCase() === 'buy' ? 'text-neon-green' : 'text-neon-red'}`}>
+                    {pos.type.toUpperCase()}
                   </td>
-                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums">
+                  <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
                     {pos.volume.toFixed(2)}
                   </td>
-                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums whitespace-nowrap">
                     {formatPrice(pos.priceOpen)}
                   </td>
 
                   {/* S / L column (editable) */}
-                  <td className="px-2 py-2.5 text-right tabular-nums">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-mono">
                     {editingId === pos.ticket ? (
                       <input
                         type="number"
                         step="0.00001"
                         value={editSL}
                         onChange={(e) => setEditSL(e.target.value)}
-                        className="w-[72px] px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
+                        className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
                       />
                     ) : (
                       <span
-                        className={`${pos.sl ? "text-gray-300" : "text-gray-500"}`}
+                        className={`${pos.sl ? "text-neon-red drop-shadow-[0_0_2px_rgba(255,56,100,0.4)]" : "text-text-muted/50"}`}
                       >
-                        {pos.sl ? formatPrice(pos.sl) : ""}
+                        {pos.sl ? formatPrice(pos.sl) : "-"}
                       </span>
                     )}
                   </td>
 
                   {/* T / P column (editable) */}
-                  <td className="px-2 py-2.5 text-right tabular-nums">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-mono">
                     {editingId === pos.ticket ? (
                       <input
                         type="number"
                         step="0.00001"
                         value={editTP}
                         onChange={(e) => setEditTP(e.target.value)}
-                        className="w-[72px] px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-right text-xs text-white"
+                        className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
                       />
                     ) : (
                       <span
-                        className={`${pos.tp ? "text-gray-300" : "text-gray-500"}`}
+                        className={`${pos.tp ? "text-neon-green drop-shadow-[0_0_2px_rgba(57,255,136,0.4)]" : "text-text-muted/50"}`}
                       >
-                        {pos.tp ? formatPrice(pos.tp) : ""}
+                        {pos.tp ? formatPrice(pos.tp) : "-"}
                       </span>
                     )}
                   </td>
 
-                  <td className="px-2 py-2.5 text-right text-gray-300 tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums whitespace-nowrap drop-shadow-[0_0_2px_rgba(212,175,55,0.4)]">
                     {formatPrice(pos.priceCurrent)}
                   </td>
 
                   {/* Swap */}
-                  <td className="px-2 py-2.5 text-right tabular-nums text-gray-400">
-                    {pos.swap ? pos.swap.toFixed(2) : ""}
+                  <td className="px-3 py-2.5 text-right tabular-nums text-text-muted font-mono text-xs">
+                    {pos.swap ? pos.swap.toFixed(2) : "-"}
                   </td>
 
                   {/* Profit */}
                   <td
-                    className={`px-2 py-2.5 text-right font-medium tabular-nums whitespace-nowrap ${
-                      pos.profit >= 0 ? "text-blue-400" : "text-red-400"
+                    className={`px-3 py-2.5 text-right font-bold tabular-nums whitespace-nowrap font-mono text-[15px] ${
+                      pos.profit >= 0 ? "text-neon-green drop-shadow-[0_0_6px_rgba(57,255,136,0.5)]" : "text-neon-red drop-shadow-[0_0_6px_rgba(255,56,100,0.5)]"
                     }`}
                   >
-                    {pos.profit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0")}
+                    {pos.profit >= 0 ? "+" : ""}{pos.profit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                   </td>
 
                   {/* Comment */}

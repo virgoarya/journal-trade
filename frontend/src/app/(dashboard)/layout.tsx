@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -140,14 +140,23 @@ export default function DashboardLayout({
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden md:block z-10 relative">
         <Sidebar />
       </div>
 
       {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
         <Header onMenuClick={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
-        <main className="p-4 sm:p-6 md:p-8 flex-1 overflow-y-auto max-w-[1600px] w-full mx-auto">
+        <main className="p-4 sm:p-6 md:p-8 flex-1 overflow-y-auto max-w-[1600px] w-full mx-auto relative">
+          
+          {/* Subtle Ambient Dust Layer */}
+          <div className="pointer-events-none fixed inset-0 overflow-hidden z-[-1]" aria-hidden="true">
+             <div className="absolute top-1/4 left-1/4 w-2 h-2 rounded-full bg-accent-gold/20 shadow-[0_0_10px_rgba(212,175,55,0.4)] animate-[floatDust_10s_ease-in-out_infinite]" />
+             <div className="absolute top-2/3 left-1/3 w-1.5 h-1.5 rounded-full bg-accent-gold/10 shadow-[0_0_8px_rgba(212,175,55,0.2)] animate-[floatDust_14s_ease-in-out_infinite_2s]" />
+             <div className="absolute top-1/2 right-1/4 w-2.5 h-2.5 rounded-full bg-accent-gold/30 shadow-[0_0_12px_rgba(212,175,55,0.5)] animate-[floatDust_12s_ease-in-out_infinite_4s]" />
+             <div className="absolute top-3/4 right-1/3 w-1 h-1 rounded-full bg-accent-gold/20 shadow-[0_0_6px_rgba(212,175,55,0.3)] animate-[floatDust_16s_ease-in-out_infinite_1s]" />
+          </div>
+
           {children}
         </main>
       </div>

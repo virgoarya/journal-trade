@@ -19,7 +19,7 @@ function calculateQualificationScore(result: BacktestResult): number {
 const TIMEFRAMES = ["M15", "H1", "M5"];
 const ACTIVE_METHODOLOGIES = ["smc", "ict", "msnr", "lit", "rsiEngulf"];
 
-async function runOptimizationForUser(userId: string, symbols: string[]) {
+async function runOptimizationForUser(userId: string, savedConfig: any = {}) {
   let bestSkill: any = null;
   let bestScore = -1;
   let bestConfig: any = null;
@@ -30,30 +30,30 @@ async function runOptimizationForUser(userId: string, symbols: string[]) {
     
     // Tweak config based on iteration
     const tf = TIMEFRAMES[iteration % TIMEFRAMES.length];
-    const risk = iteration > 2 ? 0.5 : 1.0; // tighter risk later
     
     const config = {
-      symbols: symbols.length ? symbols.slice(0, 1) : ["EURUSD"],
+      ...savedConfig,
+      symbols: savedConfig?.symbols?.length ? savedConfig.symbols : ["EURUSD"], // MULTIPAIR
       timeframe: tf as any,
-      fromDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days for Trial MT5 stability
+      fromDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 3 months
       toDate: new Date(),
-      initialBalance: 10000,
-      entrySettings: {
+      initialBalance: savedConfig?.initialBalance || 5000,
+      entrySettings: savedConfig?.entrySettings || {
         rsiOversold: 30,
         rsiOverbought: 70,
-        atrMultiplierSL: 1.5,
-        atrMultiplierTP: 1.5,
+        atrMultiplierSL: 1.0,
+        atrMultiplierTP: 3.0,
       },
-      trailingStop: {
+      trailingStop: savedConfig?.trailingStop || {
         enabled: true,
-        activationATR: 1.0,
-        trailATR: 0.5,
+        activationATR: 2.0,
+        trailATR: 2.5,
         breakEven: false,
       },
-      maxRiskPerTrade: risk,
-      maxOpenPositions: 3,
-      leverage: 100,
-      signalInterval: 2,
+      maxRiskPerTrade: savedConfig?.maxRiskPerTrade || 0.25,
+      maxOpenPositions: savedConfig?.maxOpenPositions || 5,
+      leverage: savedConfig?.leverage || 100,
+      signalInterval: savedConfig?.signalInterval || 2,
       speedMs: 0, // fast mode
       activeMethodologies: ACTIVE_METHODOLOGIES as any,
     };
@@ -144,9 +144,8 @@ export function initAutoBacktestCron() {
 
         console.log(`[CRON] Starting Auto-Backtest for user: ${userSettings.userId}`);
         
-        // Use user's symbols or fallback
-        const userSymbols = userSettings.savedPipelineConfig?.symbols || ["EURUSD"];
-        const { bestSkill, bestConfig } = await runOptimizationForUser(userSettings.userId, userSymbols);
+        // Use user's saved config to seed the backtester
+        const { bestSkill, bestConfig } = await runOptimizationForUser(userSettings.userId, userSettings.savedPipelineConfig || {});
         
         if (bestSkill) {
           // Fetch the saved skill from DB to get the methodology & symbol rankings for the Live Pipeline

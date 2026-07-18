@@ -61,13 +61,13 @@ export function PendingOrdersTable({ orders, onCancel }: PendingOrdersTableProps
   if (!orders || orders.length === 0) return null;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mt-4">
+    <div className="hud-panel overflow-hidden mt-4">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
-        <h3 className="text-sm font-semibold text-white">
+      <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
+        <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
           Pending Orders
-          <span className="ml-2 text-gray-500 font-normal">
-            ({orders.length})
+          <span className="ml-2 text-accent-gold-dim">
+            [{orders.length}]
           </span>
         </h3>
       </div>
@@ -75,7 +75,7 @@ export function PendingOrdersTable({ orders, onCancel }: PendingOrdersTableProps
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
+            <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Symbol</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Ticket</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Time</th>
@@ -94,7 +94,7 @@ export function PendingOrdersTable({ orders, onCancel }: PendingOrdersTableProps
               return (
                 <tr
                   key={ord.ticket}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/30 transition"
+                  className="border-b border-accent-gold/10 hover:bg-accent-gold/5 transition"
                 >
                   <td className="px-2 py-2.5 font-medium text-blue-400">
                     <span className="inline-flex items-center gap-1.5">

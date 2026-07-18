@@ -50,7 +50,7 @@ export function Card({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 ${className}`}>
+    <div className={`hud-panel p-4 space-y-3 ${className}`}>
       {(title || action || collapsible) && (
         <div className="flex items-center justify-between">
           {title && (

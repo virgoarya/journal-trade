@@ -43,6 +43,66 @@ interface SymbolTrack {
   };
 }
 
+const CircuitTrace = ({ dx, dy, color, delay = "0s", className = "" }: { dx: number; dy: number; color: string; delay?: string; className?: string }) => {
+  const w = Math.abs(dx);
+  const h = Math.abs(dy);
+  
+  const animationClass = dx > 0 ? "animate-[circuitFlow_2s_linear_infinite]" : "animate-[circuitFlowReverse_2s_linear_infinite]";
+
+  if (h === 0) {
+     return (
+       <svg width={w} height={4} className={`absolute pointer-events-none overflow-visible ${className}`} style={{ left: dx > 0 ? 0 : -w, top: -2, zIndex: -5 }}>
+         <path d={`M ${dx > 0 ? 0 : w},2 L ${dx > 0 ? w : 0},2`} stroke={color} strokeWidth="2" opacity="0.4" />
+         <path d={`M ${dx > 0 ? 0 : w},2 L ${dx > 0 ? w : 0},2`} stroke={color} strokeWidth="2" opacity="1" strokeDasharray="6 40" className={animationClass} style={{ filter: `drop-shadow(0 0 6px ${color})`, animationDelay: delay }} />
+         <circle cx={dx > 0 ? w : 0} cy="2" r="4" fill={color} style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} className="animate-pulse" />
+       </svg>
+     );
+  }
+
+  const startX = dx > 0 ? 0 : w;
+  const startY = dy > 0 ? 0 : h;
+  const eX = dx > 0 ? w : 0;
+  const eY = dy > 0 ? h : 0;
+  
+  const signX = dx > 0 ? 1 : -1;
+  const signY = dy > 0 ? 1 : -1;
+  
+  let p = `M ${startX},${startY}`;
+  if (w >= h) {
+     const straight1 = Math.min(25, (w - h) / 2);
+     const px1 = startX + signX * straight1;
+     p += ` L ${px1},${startY}`;
+     const px2 = px1 + signX * h;
+     const py2 = startY + signY * h;
+     p += ` L ${px2},${py2}`;
+     p += ` L ${eX},${eY}`;
+  } else {
+     const straightY = (h - w) / 2;
+     const py1 = startY + signY * straightY;
+     p += ` L ${startX},${py1}`;
+     const px2 = startX + signX * w;
+     const py2 = py1 + signY * w;
+     p += ` L ${px2},${py2}`;
+     p += ` L ${eX},${eY}`;
+  }
+  
+  return (
+    <svg width={w} height={h} className={`absolute pointer-events-none overflow-visible ${className}`} style={{ left: dx > 0 ? 0 : -w, top: dy > 0 ? 0 : -h, zIndex: -5 }}>
+      <path d={p} fill="none" stroke={color} strokeWidth="2" opacity="0.3" />
+      <path d={p} fill="none" stroke={color} strokeWidth="2" opacity="1" strokeDasharray="6 40" className={animationClass} style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} />
+      <circle cx={eX} cy={eY} r="3" fill={color} className="animate-pulse" style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} />
+    </svg>
+  );
+};
+
+const DECORATIVE_TRACES = [
+  [{ dx: 85, dy: -16, delay: '0s' }, { dx: 70, dy: 16, delay: '0.2s' }, { dx: 95, dy: -8, delay: '0.4s' }],
+  [{ dx: 80, dy: -24, delay: '0.1s' }, { dx: 90, dy: 12, delay: '0.8s' }, { dx: -75, dy: 20, delay: '0.3s' }, { dx: -65, dy: -12, delay: '0.5s' }],
+  [{ dx: 85, dy: 20, delay: '0.6s' }, { dx: -80, dy: -16, delay: '0.9s' }, { dx: 95, dy: -12, delay: '0.4s' }, { dx: -70, dy: 8, delay: '0.7s' }],
+  [{ dx: -80, dy: 16, delay: '1s' }, { dx: 85, dy: -20, delay: '0.1s' }, { dx: -90, dy: -12, delay: '0.5s' }, { dx: 75, dy: 8, delay: '0.2s' }],
+  [{ dx: -95, dy: -16, delay: '0.5s' }, { dx: -75, dy: 24, delay: '0.2s' }, { dx: -85, dy: 12, delay: '0.8s' }]
+];
+
 export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
   const [viewMode, setViewMode] = useState<"cards" | "raw">("cards");
   const [filterType, setFilterType] = useState("");
@@ -241,35 +301,35 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     : logs;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden space-y-4 p-4">
+    <div className="hud-panel p-5 overflow-hidden space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <Layers className="w-4 h-4 text-accent-gold" />
-          Pipeline Activity
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3">
+        <h3 className="text-[11px] font-bold text-accent-gold tracking-widest uppercase flex items-center gap-2 drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+          <Layers className="w-4 h-4" />
+          Pipeline Circuit
         </h3>
         
         {/* Toggle Mode */}
-        <div className="flex bg-gray-950 rounded-lg p-0.5 border border-gray-800">
+        <div className="flex bg-black/40 rounded-lg p-0.5 border border-accent-gold/20 backdrop-blur-md">
           <button
             onClick={() => setViewMode("cards")}
-            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition ${
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition ${
               viewMode === "cards"
-                ? "bg-accent-gold text-black"
-                : "text-gray-400 hover:text-white"
+                ? "bg-accent-gold/20 text-accent-gold shadow-[inset_0_0_8px_rgba(212,175,55,0.4)] border border-accent-gold/40"
+                : "text-text-muted hover:text-accent-gold"
             }`}
           >
-            Active Cards
+            Circuit View
           </button>
           <button
             onClick={() => setViewMode("raw")}
-            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition ${
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition ${
               viewMode === "raw"
-                ? "bg-accent-gold text-black"
-                : "text-gray-400 hover:text-white"
+                ? "bg-accent-gold/20 text-accent-gold shadow-[inset_0_0_8px_rgba(212,175,55,0.4)] border border-accent-gold/40"
+                : "text-text-muted hover:text-accent-gold"
             }`}
           >
-            Raw Logs
+            Raw Data
           </button>
         </div>
       </div>
@@ -291,51 +351,88 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
             const currentStepDetail = getStepStatus(track, currentSelectedStageKey);
 
             return (
-              <div key={track.symbol} className="bg-gray-950/40 border border-gray-800 rounded-xl p-4 transition hover:border-gray-700/60">
+              <div key={track.symbol} className="bg-black/30 border border-accent-gold/10 rounded-xl p-4 transition hover:border-accent-gold/30 hover:shadow-[0_0_15px_rgba(212,175,55,0.1)] group">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-sm font-bold text-white tracking-wider">{track.symbol}</span>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-text-primary tracking-widest font-mono drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]">{track.symbol}</span>
                     {track.direction && (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        track.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider border ${
+                        track.direction === "BUY" ? "bg-neon-green/10 text-neon-green border-neon-green/30 shadow-[0_0_8px_rgba(57,255,136,0.2)]" : "bg-neon-red/10 text-neon-red border-neon-red/30 shadow-[0_0_8px_rgba(255,56,100,0.2)]"
                       }`}>
                         {track.direction}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-gray-500 font-mono">
-                    Updated {new Date(track.lastUpdateTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                  <span className="text-[10px] text-accent-gold-dim font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-gold animate-pulse"></span>
+                    SYNC: {new Date(track.lastUpdateTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
                   </span>
                 </div>
 
-                {/* Horizontal Stepper */}
-                <div className="relative flex items-center justify-between px-2 mb-4 overflow-x-auto pb-2 gap-4">
-                  {/* Connecting Line */}
-                  <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-[1px] bg-gray-800 -z-10" />
+                {/* Circuit Path Stepper */}
+                <div className="relative flex items-start justify-between px-8 mb-2 overflow-x-auto pb-8 pt-6 gap-4">
+                  {/* CSS Animation for data flow */}
+                  <style dangerouslySetInnerHTML={{__html: `
+                    @keyframes circuitFlow {
+                      from { stroke-dashoffset: 46; }
+                      to { stroke-dashoffset: 0; }
+                    }
+                    @keyframes circuitFlowReverse {
+                      from { stroke-dashoffset: 0; }
+                      to { stroke-dashoffset: 46; }
+                    }
+                  `}} />
+                  
+                  {/* Animated Circuit Data Vein */}
+                  <svg className="absolute left-6 right-6 top-[44px] h-2 -translate-y-1/2 -z-10 pointer-events-none" style={{ width: 'calc(100% - 3rem)', overflow: 'visible' }}>
+                    {/* Background Track */}
+                    <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#D4AF37" strokeWidth="1" opacity="0.15" />
+                    <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#D4AF37" strokeWidth="1" strokeDasharray="2 4" opacity="0.25" />
+                    
+                    {/* Active Data Flow Packets */}
+                    <line 
+                      x1="0" y1="50%" x2="100%" y2="50%" 
+                      stroke="#39FF88" strokeWidth="2" 
+                      strokeDasharray="6 40" 
+                      className="animate-[circuitFlow_1s_linear_infinite]" 
+                      style={{ filter: "drop-shadow(0 0 6px rgba(57,255,136,0.8))" }}
+                      opacity="0.9"
+                    />
+                  </svg>
 
-                  {STAGES.map((stage) => {
+                  {STAGES.map((stage, index) => {
                     const stepInfo = getStepStatus(track, stage.key);
                     const isSelected = currentSelectedStageKey === stage.key;
                     
-                    let bgClass = "bg-gray-900 border-gray-800 text-gray-600";
-                    let iconColor = "text-gray-600";
+                    let nodeClass = "bg-black/60 backdrop-blur-md border-accent-gold/20 text-text-muted";
+                    let iconColor = "text-text-muted";
+                    let glowClass = "";
+                    let traceColor = "#00F0FF";
 
                     if (stepInfo.status === "passed") {
-                      bgClass = "bg-accent-gold/10 border-accent-gold text-accent-gold cursor-pointer";
+                      nodeClass = "bg-accent-gold/10 backdrop-blur-md border-accent-gold/50 text-accent-gold cursor-pointer";
                       iconColor = "text-accent-gold";
+                      traceColor = "#00F0FF";
                     } else if (stepInfo.status === "active") {
-                      bgClass = "bg-accent-gold/25 border-accent-gold text-accent-gold ring-2 ring-accent-gold/20 animate-pulse cursor-pointer";
+                      nodeClass = "bg-accent-gold/20 backdrop-blur-md border-accent-gold text-accent-gold cursor-pointer animate-pulse";
                       iconColor = "text-accent-gold";
+                      glowClass = "shadow-[0_0_15px_rgba(212,175,55,0.6)]";
+                      traceColor = "#D4AF37";
                     } else if (stepInfo.status === "success") {
-                      bgClass = "bg-green-500/15 border-green-500 text-green-400 cursor-pointer";
-                      iconColor = "text-green-400";
+                      nodeClass = "bg-neon-green/10 backdrop-blur-md border-neon-green text-neon-green cursor-pointer";
+                      iconColor = "text-neon-green";
+                      glowClass = "shadow-[0_0_15px_rgba(57,255,136,0.4)]";
+                      traceColor = "#39FF88";
                     } else if (stepInfo.status === "error") {
-                      bgClass = "bg-red-500/15 border-red-500 text-red-400 cursor-pointer";
-                      iconColor = "text-red-400";
+                      nodeClass = "bg-neon-red/10 backdrop-blur-md border-neon-red text-neon-red cursor-pointer";
+                      iconColor = "text-neon-red";
+                      glowClass = "shadow-[0_0_15px_rgba(255,56,100,0.6)] animate-pulse";
+                      traceColor = "#FF3864";
                     }
 
                     const StageIcon = stage.icon;
+                    const traces = DECORATIVE_TRACES[index] || [];
 
                     return (
                       <div
@@ -345,18 +442,34 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                             setSelectedStages(prev => ({ ...prev, [track.symbol]: stage.key }));
                           }
                         }}
-                        className="flex flex-col items-center gap-1.5 z-10"
+                        className="flex flex-col items-center gap-2 z-10 relative group-node cursor-pointer"
                       >
-                        <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${bgClass} ${
-                          isSelected ? "scale-110 shadow-[0_0_10px_rgba(212,175,55,0.15)] border-2" : ""
-                        }`}>
-                          <StageIcon className={`w-4 h-4 ${iconColor}`} />
+                        {/* Intricate Decorative Circuit Branches */}
+                        <div className="absolute top-[20px] left-[50%] -z-10">
+                          {traces.map((t, i) => (
+                            <CircuitTrace key={i} dx={t.dx} dy={t.dy} color={traceColor} delay={t.delay} />
+                          ))}
                         </div>
-                        <span className={`text-[9px] font-semibold tracking-wide ${
-                          isSelected ? "text-white" : "text-gray-500"
+
+                        <div className="relative">
+                          {/* Animated Circuit Ring for Selected Node */}
+                          {isSelected && (
+                            <div className={`absolute inset-[-6px] rounded-full border border-dashed animate-[spin_4s_linear_infinite] opacity-60 ${
+                              stepInfo.status === 'success' ? 'border-neon-green' : stepInfo.status === 'error' ? 'border-neon-red' : 'border-accent-gold'
+                            }`} />
+                          )}
+                          
+                          <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${nodeClass} ${glowClass} ${
+                            isSelected ? "scale-110 shadow-[0_0_20px_currentColor]" : ""
+                          }`}>
+                            <StageIcon className={`w-4 h-4 ${iconColor}`} />
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-bold tracking-widest uppercase font-mono ${
+                          isSelected ? (stepInfo.status === 'success' ? 'text-neon-green drop-shadow-[0_0_2px_rgba(57,255,136,0.8)]' : stepInfo.status === 'error' ? 'text-neon-red drop-shadow-[0_0_2px_rgba(255,56,100,0.8)]' : 'text-accent-gold drop-shadow-[0_0_2px_rgba(212,175,55,0.8)]') : "text-text-muted/60"
                         }`}>
                           {stage.key === "EXECUTION" 
-                            ? (stepInfo.status === "error" ? "No Trade" : stepInfo.status === "success" ? "Trade" : "Execution")
+                            ? (stepInfo.status === "error" ? "Block" : stepInfo.status === "success" ? "Exec" : "Exec")
                             : stage.label}
                         </span>
                       </div>
@@ -366,15 +479,16 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
 
                 {/* Selected Stage Detail Console */}
                 {currentStepDetail && currentStepDetail.message && (
-                  <div className={`mt-3 p-3 bg-gray-950 rounded-lg border font-mono text-[11px] leading-relaxed transition ${
+                  <div className={`mt-2 p-3 bg-black/60 rounded border font-mono text-[10px] leading-relaxed transition shadow-inner relative overflow-hidden ${
                     currentStepDetail.status === "error" 
-                      ? "border-red-900/30 text-red-400/90" 
+                      ? "border-neon-red/30 text-neon-red" 
                       : currentStepDetail.status === "success" 
-                        ? "border-green-900/30 text-green-400/90" 
-                        : "border-gray-800 text-gray-300"
+                        ? "border-neon-green/30 text-neon-green" 
+                        : "border-accent-gold/20 text-accent-gold"
                   }`}>
-                    <div className="flex items-center justify-between mb-1.5 opacity-60 text-[9px] uppercase tracking-wider">
-                      <span>Detail: {currentSelectedStageKey}</span>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/[0.02] pointer-events-none" />
+                    <div className="flex items-center justify-between mb-2 opacity-70 text-[9px] uppercase tracking-widest border-b border-current/10 pb-1">
+                      <span>{">"} SYS.LOG.{currentSelectedStageKey}</span>
                       {currentStepDetail.time && (
                         <span>{new Date(currentStepDetail.time).toLocaleTimeString([], { hour12: false })}</span>
                       )}

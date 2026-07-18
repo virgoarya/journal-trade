@@ -107,19 +107,19 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
   const userHasData = skill && (skill.symbolRankings?.length > 0 || skill.methodologyRankings?.length > 0);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+    <div className="hud-panel p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-yellow-400" />
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-2">
+        <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2 drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+          <Sparkles className="w-4 h-4 text-accent-gold" />
           AI Backtest Skill
         </h3>
-        <div className="flex items-center gap-1">
-          <button onClick={fetchSkill} disabled={loading} className="text-gray-500 hover:text-white transition p-1" title="Refresh">
+        <div className="flex items-center gap-2">
+          <button onClick={fetchSkill} disabled={loading} className="text-text-muted hover:text-accent-gold transition p-1" title="Refresh">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
           {skill && skill.totalBacktests > 0 && (
-            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] text-accent-gold-dim bg-black/40 border border-accent-gold/20 px-2 py-0.5 rounded font-mono">
               {skill.totalBacktests} tests
             </span>
           )}
@@ -130,23 +130,23 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       <button
         onClick={handleAutoScan}
         disabled={autoScanning}
-        className="w-full py-2 px-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-800 disabled:to-gray-800 disabled:text-gray-600 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-2"
+        className="w-full py-2.5 px-3 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-accent-gold text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
       >
         {autoScanning ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Scanning all pairs (0.5% risk)...</>
         ) : (
-          <><Zap className="w-4 h-4" /> AI Auto-Scan All Pairs</>
+          <><Zap className="w-4 h-4 fill-current" /> AI Auto-Scan All Pairs</>
         )}
       </button>
 
       {/* Auto-Scan Progress */}
       {autoSummary && autoSummary.status === "complete" && (
-        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-green-400 font-medium flex items-center gap-1">
+        <div className="bg-neon-green/10 border border-neon-green/30 rounded p-2.5 shadow-[0_0_8px_rgba(57,255,136,0.2)]">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="text-neon-green font-bold flex items-center gap-1 uppercase tracking-wider">
               <CheckCircle className="w-3 h-3" /> Ready
             </span>
-            <span className="text-gray-400">
+            <span className="text-neon-green/80">
               {autoSummary.qualifiedSymbols}/{autoSummary.totalSymbols} qualified
             </span>
           </div>
@@ -155,7 +155,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
 
       {/* No data state */}
       {!userHasData && !loading && (
-        <div className="text-[10px] text-gray-500 text-center py-3 leading-relaxed">
+        <div className="text-[10px] text-text-muted text-center py-3 leading-relaxed font-mono italic">
           No backtest data yet.<br />
           Run an auto-scan or manual backtest to build AI skill.
         </div>
@@ -170,13 +170,13 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
 
       {/* Symbol Rankings */}
       {skill && skill.symbolRankings && skill.symbolRankings.length > 0 && (
-        <div>
+        <div className="pt-2 border-t border-accent-gold/10">
           <button
             onClick={() => setShowSymbols(!showSymbols)}
-            className="flex items-center justify-between w-full text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2"
+            className="flex items-center justify-between w-full text-[10px] font-bold text-accent-gold-dim uppercase tracking-widest mb-2 hover:text-accent-gold transition"
           >
             <span className="flex items-center gap-1.5">
-              <BarChart3 className="w-3 h-3" />
+              <BarChart3 className="w-3.5 h-3.5" />
               Symbol Rankings
             </span>
             {showSymbols ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -184,34 +184,36 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
           {showSymbols && (
             <div className="space-y-1.5">
               {skill.symbolRankings.slice(0, 6).map((s, i) => {
-                const rankColor = i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-300" : i === 2 ? "text-orange-400" : "text-gray-500";
+                const rankColor = i === 0 ? "text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.6)]" : i === 1 ? "text-gray-300" : i === 2 ? "text-orange-400" : "text-text-muted";
                 const isQualified = s.score >= 50;
                 return (
-                  <div key={s.symbol} className="bg-gray-800/40 rounded px-2.5 py-1.5">
+                  <div key={s.symbol} className="bg-black/40 border border-accent-gold/10 rounded px-2.5 py-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[10px] font-mono font-bold ${rankColor}`}>#{i + 1}</span>
-                        <span className="text-xs font-semibold text-white">{s.symbol}</span>
+                        <span className="text-[11px] font-bold text-text-primary font-mono">{s.symbol}</span>
                         {isQualified ? (
-                          <CheckCircle className="w-2.5 h-2.5 text-green-400" />
+                          <CheckCircle className="w-2.5 h-2.5 text-neon-green" />
                         ) : (
-                          <AlertCircle className="w-2.5 h-2.5 text-gray-500" />
+                          <AlertCircle className="w-2.5 h-2.5 text-text-muted" />
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500">{s.totalTrades}t</span>
-                        <span className={`text-[10px] font-medium ${s.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        <span className="text-[9px] text-accent-gold-dim font-mono">{s.totalTrades}t</span>
+                        <span className={`text-[9px] font-bold font-mono ${s.totalPnL >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                           {s.totalPnL >= 0 ? "+" : ""}${s.totalPnL.toFixed(0)}
                         </span>
-                        <span className={`text-[10px] font-bold ${s.score >= 70 ? "text-green-400" : s.score >= 50 ? "text-yellow-400" : "text-red-400"}`}>
+                        <span className={`text-[10px] font-bold font-mono px-1 rounded ${s.score >= 70 ? "bg-neon-green/10 text-neon-green border border-neon-green/30" : s.score >= 50 ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30" : "bg-neon-red/10 text-neon-red border border-neon-red/30"}`}>
                           {s.score}
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-2 text-[9px] text-gray-500 mt-0.5">
+                    <div className="flex gap-2 text-[9px] text-text-muted mt-1 font-mono uppercase tracking-wider">
                       <span>{s.avgWinRate.toFixed(1)}% WR</span>
+                      <span className="opacity-50">|</span>
                       <span>{s.avgProfitFactor.toFixed(2)} PF</span>
-                      <span>Best: {s.bestMethodology}</span>
+                      <span className="opacity-50">|</span>
+                      <span className="truncate">BEST: {s.bestMethodology}</span>
                     </div>
                   </div>
                 );
@@ -227,9 +229,9 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       {skill && skill.symbolRankings && skill.symbolRankings.length > 0 && (
         <button
           onClick={handleApply}
-          className="w-full py-2 bg-accent-gold text-black text-xs font-semibold rounded-lg hover:bg-accent-gold/90 transition flex items-center justify-center gap-2"
+          className="w-full py-3 bg-accent-gold text-black text-[10px] tracking-widest uppercase font-bold rounded-lg hover:bg-accent-gold/90 transition flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(212,175,55,0.4)] mt-2"
         >
-          <Target className="w-3.5 h-3.5" />
+          <Target className="w-4 h-4" />
           Apply Skill to Pipeline
         </button>
       )}

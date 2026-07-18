@@ -40,26 +40,32 @@ export function ConnectionPanel({
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[80vh]">
-      <div className="w-full max-w-md">
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl">
+    <div className="flex items-center justify-center min-h-[80vh] relative">
+      <div className="w-full max-w-md relative z-10">
+        
+        {/* Main Card */}
+        <div className="bg-bg-elevated border border-border-subtle rounded-2xl p-8 shadow-2xl relative overflow-hidden group">
+          
+          {/* Subtle top highlight */}
+          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-accent-gold/50 to-transparent opacity-50" />
+
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-accent-gold/10 rounded-full mb-4">
+          <div className="flex flex-col items-center text-center mb-10">
+            <div className="w-16 h-16 rounded-full bg-surface border border-border-subtle flex items-center justify-center mb-5 shadow-inner">
               <PlugZap className="w-8 h-8 text-accent-gold" />
             </div>
-            <h1 className="text-2xl font-bold text-white">
-              Connect MT5 Account
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+              Connect MT5
             </h1>
-            <p className="text-gray-400 mt-2 text-sm">
-              Enter your MT5 broker credentials to start AI trading
+            <p className="text-text-muted mt-2 text-sm">
+              Link your broker account to activate the AI engine
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">
                 Broker Server
               </label>
               <input
@@ -67,30 +73,27 @@ export function ConnectionPanel({
                 value={server}
                 onChange={(e) => setServer(e.target.value)}
                 placeholder="e.g. ICMarkets-Demo"
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition"
+                className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/50 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Enter your broker's server name
-              </p>
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">
                 Account Login
               </label>
               <input
                 type="text"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
-                placeholder="e.g. 12345678"
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition"
+                placeholder="Account ID"
+                className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/50 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
@@ -98,19 +101,19 @@ export function ConnectionPanel({
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Account password"
-                  className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition pr-10"
+                  placeholder="Master Password"
+                  className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/50 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm pr-12"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
+                    <EyeOff className="w-5 h-5" />
                   ) : (
-                    <Eye className="w-4 h-4" />
+                    <Eye className="w-5 h-5" />
                   )}
                 </button>
               </div>
@@ -118,7 +121,8 @@ export function ConnectionPanel({
 
             {/* Error message */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
             )}
@@ -127,26 +131,32 @@ export function ConnectionPanel({
             <button
               type="submit"
               disabled={isConnecting}
-              className="w-full py-3 bg-accent-gold hover:bg-accent-gold/90 disabled:bg-accent-gold/50 text-black rounded-lg font-semibold transition flex items-center justify-center gap-2"
+              className="w-full mt-2 py-3.5 bg-accent-gold hover:bg-accent-gold/90 text-black rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(212,175,55,0.15)] hover:shadow-[0_0_25px_rgba(212,175,55,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isConnecting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Connecting...
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Connecting...</span>
                 </>
               ) : (
                 <>
-                  <Plug className="w-4 h-4" />
-                  Connect to MT5
+                  <PlugZap className="w-5 h-5" />
+                  <span>Establish Connection</span>
                 </>
               )}
             </button>
           </form>
 
           {/* Security note */}
-          <p className="text-xs text-gray-500 text-center mt-6">
-            🔒 Credentials are never stored. Connected via secure MCP session.
-          </p>
+          <div className="mt-8 flex items-center justify-center gap-2 opacity-60">
+            <svg className="w-4 h-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <p className="text-xs text-text-muted">
+              Credentials are never stored. Secure MCP session.
+            </p>
+          </div>
+          
         </div>
       </div>
     </div>

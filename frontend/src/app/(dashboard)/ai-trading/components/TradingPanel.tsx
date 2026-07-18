@@ -95,35 +95,36 @@ export function TradingPanel({
   const gradeInfo = getOverallGrade();
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+    <div className="hud-panel p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <Signal className="w-4 h-4 text-accent-gold" />
-          Live Trading Panel
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3 relative">
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-gold/50 to-transparent"></div>
+        <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)] flex items-center gap-2">
+          <Signal className="w-4 h-4" />
+          Live Trading Link
         </h3>
         <div className="flex items-center gap-2">
           {gradeInfo && gradeInfo.grade !== "UNRATED" && (
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${gradeInfo.color}`} title="AI Config Grade">
-              Grade {gradeInfo.grade}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border tracking-wider font-mono ${gradeInfo.color}`} title="AI Config Grade">
+              Class {gradeInfo.grade}
             </span>
           )}
           {(pipelineRunning || pipelinePaused) && (
-            <span className="text-[10px] uppercase tracking-widest bg-accent-gold/20 text-accent-gold px-2 py-1 rounded font-semibold">
-              Active
+            <span className="text-[9px] uppercase tracking-widest bg-accent-gold/20 text-accent-gold px-2 py-1 rounded font-bold shadow-[0_0_8px_rgba(212,175,55,0.3)] animate-pulse border border-accent-gold/50 font-mono">
+              Active Sync
             </span>
           )}
         </div>
       </div>
 
       {displayConfig ? (
-        <div className="space-y-4 text-sm text-gray-300">
-          <div className="grid grid-cols-2 gap-4 bg-gray-950/50 p-3 rounded-lg border border-gray-800/80">
+        <div className="space-y-4 text-sm text-text-primary">
+          <div className="grid grid-cols-2 gap-4 bg-black/40 p-4 rounded-lg border border-accent-gold/10 shadow-inner">
             <div className="col-span-2">
-              <p className="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">Trading Pairs</p>
+              <p className="text-[9px] text-accent-gold-dim mb-1.5 uppercase tracking-widest">Target Vectors</p>
               <div className="flex flex-wrap gap-1.5">
                 {(displayConfig.symbols || []).map((s: string) => (
-                  <span key={s} className="bg-gray-800 border border-gray-700 text-xs px-2 py-1 rounded text-white font-medium shadow-sm">
+                  <span key={s} className="bg-accent-gold/5 border border-accent-gold/20 text-xs px-2 py-1 rounded text-accent-gold font-mono font-bold shadow-[0_0_4px_rgba(212,175,55,0.1)]">
                     {s}
                   </span>
                 ))}
@@ -131,27 +132,27 @@ export function TradingPanel({
             </div>
             
             <div>
-              <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Timeframe</p>
-              <p className="font-mono text-white bg-gray-800/50 inline-block px-2 py-0.5 rounded">{displayConfig.timeframe || "M15"}</p>
+              <p className="text-[9px] text-accent-gold-dim mb-1 uppercase tracking-widest">Timeframe</p>
+              <p className="font-mono font-bold text-text-primary bg-black/60 border border-accent-gold/20 inline-block px-2 py-0.5 rounded shadow-inner">{displayConfig.timeframe || "M15"}</p>
             </div>
             
             <div>
-              <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Risk / Trade</p>
-              <p className="font-mono text-white bg-gray-800/50 inline-block px-2 py-0.5 rounded">{displayConfig.maxRiskPerTrade || 1.0}%</p>
+              <p className="text-[9px] text-accent-gold-dim mb-1 uppercase tracking-widest">Risk / Trade</p>
+              <p className="font-mono font-bold text-text-primary bg-black/60 border border-accent-gold/20 inline-block px-2 py-0.5 rounded shadow-inner">{displayConfig.maxRiskPerTrade || 1.0}%</p>
             </div>
             
             <div>
-              <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Max Positions</p>
-              <p className="font-mono text-white bg-gray-800/50 inline-block px-2 py-0.5 rounded">{displayConfig.maxOpenPositions || 3}</p>
+              <p className="text-[9px] text-accent-gold-dim mb-1 uppercase tracking-widest">Max Positions</p>
+              <p className="font-mono font-bold text-text-primary bg-black/60 border border-accent-gold/20 inline-block px-2 py-0.5 rounded shadow-inner">{displayConfig.maxOpenPositions || 3}</p>
             </div>
 
             <div>
-              <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Daily Risk Limit</p>
-              <p className="font-mono text-white bg-gray-800/50 inline-block px-2 py-0.5 rounded">{displayConfig.maxDailyRisk || 3.0}%</p>
+              <p className="text-[9px] text-accent-gold-dim mb-1 uppercase tracking-widest">Daily Risk Limit</p>
+              <p className="font-mono font-bold text-text-primary bg-black/60 border border-accent-gold/20 inline-block px-2 py-0.5 rounded shadow-inner">{displayConfig.maxDailyRisk || 3.0}%</p>
             </div>
 
-            <div className="col-span-2 pt-3 border-t border-gray-800/50">
-               <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">Active AI Methodologies</p>
+            <div className="col-span-2 pt-3 border-t border-accent-gold/10">
+               <p className="text-[9px] text-accent-gold-dim mb-2 uppercase tracking-widest">Active Neural Pathways</p>
                <div className="flex flex-wrap gap-1.5">
                 {Array.from(new Set((displayConfig.activeMethodologies || []).map((m: string) => {
                   const mLower = m.toLowerCase();
@@ -165,23 +166,27 @@ export function TradingPanel({
                   let bgClass = "bg-accent-gold/10";
                   let borderClass = "border-accent-gold/20";
                   let textClass = "text-accent-gold";
+                  let glowClass = "shadow-[0_0_8px_rgba(212,175,55,0.2)]";
 
                   if (verdict === "KEEP") {
-                    bgClass = "bg-green-500/10";
-                    borderClass = "border-green-500/20";
-                    textClass = "text-green-400";
+                    bgClass = "bg-neon-green/10";
+                    borderClass = "border-neon-green/30";
+                    textClass = "text-neon-green";
+                    glowClass = "shadow-[0_0_8px_rgba(57,255,136,0.3)]";
                   } else if (verdict === "ADJUST") {
                     bgClass = "bg-yellow-500/10";
-                    borderClass = "border-yellow-500/20";
+                    borderClass = "border-yellow-500/30";
                     textClass = "text-yellow-400";
+                    glowClass = "shadow-[0_0_8px_rgba(234,179,8,0.3)]";
                   } else if (verdict === "DISABLE") {
-                    bgClass = "bg-red-500/10";
-                    borderClass = "border-red-500/20";
-                    textClass = "text-red-400";
+                    bgClass = "bg-neon-red/10";
+                    borderClass = "border-neon-red/30";
+                    textClass = "text-neon-red";
+                    glowClass = "shadow-[0_0_8px_rgba(255,56,100,0.3)]";
                   }
 
                   return (
-                    <span key={m + idx} className={`${bgClass} border ${borderClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-semibold`}>
+                    <span key={m + idx} className={`${bgClass} border ${borderClass} ${glowClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-bold tracking-wider font-mono`}>
                       {m}
                     </span>
                   );
@@ -189,11 +194,11 @@ export function TradingPanel({
               </div>
             </div>
 
-            <div className="col-span-2 pt-3 border-t border-gray-800/50 flex flex-col gap-2">
+            <div className="col-span-2 pt-3 border-t border-accent-gold/10 flex flex-col gap-2">
               <div>
-                <p className="text-[10px] text-purple-400/70 mb-0.5 uppercase tracking-wider font-semibold">LLM Consensus (ALWAYS ACTIVE)</p>
-                <p className="text-[11px] text-gray-400">
-                  Requires agreement from {minProviders} models:
+                <p className="text-[9px] text-[#A855F7] mb-0.5 uppercase tracking-widest font-bold">LLM Consensus Link</p>
+                <p className="text-[10px] text-text-muted">
+                  Sync nodes req: {minProviders} models
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-1">
@@ -201,46 +206,46 @@ export function TradingPanel({
                   llmModels.map((m) => {
                     const isOk = m.status === "active";
                     return (
-                      <div key={m.name} className={`flex items-center gap-1.5 px-2 py-1 rounded border ${isOk ? 'bg-purple-500/10 border-purple-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
-                        <span className={`text-[10px] font-semibold ${isOk ? 'text-purple-300' : 'text-yellow-400'}`}>
+                      <div key={m.name} className={`flex items-center gap-1.5 px-2 py-1 rounded border ${isOk ? 'bg-[#A855F7]/10 border-[#A855F7]/30 shadow-[0_0_8px_rgba(168,85,247,0.2)]' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
+                        <span className={`text-[10px] font-bold font-mono ${isOk ? 'text-[#D8B4FE]' : 'text-yellow-400'}`}>
                           {m.label}
                         </span>
-                        <span className="text-gray-600">|</span>
-                        <span className={`text-[9px] uppercase font-bold tracking-wider ${isOk ? 'text-purple-400/80' : 'text-yellow-500/80'}`}>
-                          {isOk ? 'ACTIVE' : m.status}
+                        <span className="text-text-muted/50">|</span>
+                        <span className={`text-[9px] uppercase font-bold tracking-widest ${isOk ? 'text-[#A855F7]' : 'text-yellow-500/80'}`}>
+                          {isOk ? 'ONLINE' : m.status}
                         </span>
                       </div>
                     );
                   })
                 ) : (
-                  <span className="text-[10px] text-gray-500 italic">No LLM models available...</span>
+                  <span className="text-[10px] text-text-muted italic">No LLM models available...</span>
                 )}
               </div>
             </div>
 
             {/* Smart Risk Management */}
             {displayConfig.smartRisk?.enabled && (
-              <div className="col-span-2 pt-3 border-t border-gray-800/50">
+              <div className="col-span-2 pt-3 border-t border-accent-gold/10">
                 <div className="flex items-center gap-2 mb-2">
-                  <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
-                  <p className="text-[10px] text-indigo-400/80 uppercase tracking-wider font-semibold">
-                    Smart Risk Management
+                  <ShieldAlert className="w-3.5 h-3.5 text-accent-gold" />
+                  <p className="text-[9px] text-accent-gold uppercase tracking-widest font-bold">
+                    Safety Protocols
                   </p>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase font-bold tracking-wider ${pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400/80'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase font-bold tracking-widest ${pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked ? 'bg-neon-red/10 border-neon-red/30 text-neon-red shadow-[0_0_8px_rgba(255,56,100,0.3)]' : 'bg-neon-green/10 border-neon-green/30 text-neon-green shadow-[0_0_8px_rgba(57,255,136,0.3)]'}`}>
                     {pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked ? 'BLOCKED' : 'ACTIVE'}
                   </span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 mt-2">
                   {displayConfig.smartRisk.drawdownRecovery?.enabled && (
-                    <div className="bg-indigo-500/5 rounded p-2 border border-indigo-500/10">
-                      <p className="text-[10px] text-gray-400 mb-1">Drawdown Recovery</p>
+                    <div className="bg-black/50 rounded p-2 border border-accent-gold/20">
+                      <p className="text-[9px] tracking-wider text-text-muted mb-1">Drawdown Rec</p>
                       <div className="flex items-end justify-between">
-                        <p className="text-xs text-white font-mono">
+                        <p className="text-[11px] font-bold text-text-primary font-mono">
                           {displayConfig.smartRisk.drawdownRecovery.activationDrawdownPct}% → {displayConfig.smartRisk.drawdownRecovery.riskReductionMultiplier}x
                         </p>
                         {pipelineStatus?.metrics?.smartRisk?.currentDrawdownPct !== undefined && (
-                          <span className={`text-[10px] font-mono ${pipelineStatus.metrics.smartRisk.currentDrawdownPct >= displayConfig.smartRisk.drawdownRecovery.activationDrawdownPct ? 'text-red-400' : 'text-gray-500'}`}>
+                          <span className={`text-[9px] font-mono font-bold ${pipelineStatus.metrics.smartRisk.currentDrawdownPct >= displayConfig.smartRisk.drawdownRecovery.activationDrawdownPct ? 'text-neon-red drop-shadow-[0_0_4px_rgba(255,56,100,0.5)]' : 'text-text-muted'}`}>
                             Live: {pipelineStatus.metrics.smartRisk.currentDrawdownPct.toFixed(2)}%
                           </span>
                         )}
@@ -249,14 +254,14 @@ export function TradingPanel({
                   )}
 
                   {displayConfig.smartRisk.capitalPreservation?.enabled && (
-                    <div className="bg-indigo-500/5 rounded p-2 border border-indigo-500/10">
-                      <p className="text-[10px] text-gray-400 mb-1">Tiered Scaling (Growth)</p>
+                    <div className="bg-black/50 rounded p-2 border border-accent-gold/20">
+                      <p className="text-[9px] tracking-wider text-text-muted mb-1">Tiered Scale</p>
                       <div className="flex items-end justify-between">
-                        <p className="text-xs text-white font-mono">
+                        <p className="text-[11px] font-bold text-text-primary font-mono">
                           {displayConfig.smartRisk.capitalPreservation.activationGrowthPct}% → {displayConfig.smartRisk.capitalPreservation.riskReductionMultiplier}x
                         </p>
                         {pipelineStatus?.metrics?.smartRisk?.currentGrowthPct !== undefined && (
-                          <span className={`text-[10px] font-mono ${pipelineStatus.metrics.smartRisk.currentGrowthPct >= displayConfig.smartRisk.capitalPreservation.activationGrowthPct ? 'text-green-400' : 'text-gray-500'}`}>
+                          <span className={`text-[9px] font-mono font-bold ${pipelineStatus.metrics.smartRisk.currentGrowthPct >= displayConfig.smartRisk.capitalPreservation.activationGrowthPct ? 'text-neon-green drop-shadow-[0_0_4px_rgba(57,255,136,0.5)]' : 'text-text-muted'}`}>
                             Live: {pipelineStatus.metrics.smartRisk.currentGrowthPct.toFixed(2)}%
                           </span>
                         )}
@@ -265,17 +270,17 @@ export function TradingPanel({
                   )}
 
                   {displayConfig.smartRisk.dailyLimits?.enabled && (
-                    <div className="col-span-2 bg-indigo-500/5 rounded p-2 border border-indigo-500/10 flex justify-between items-center">
+                    <div className="col-span-2 bg-black/50 rounded p-2 border border-accent-gold/20 flex justify-between items-center">
                       <div>
-                         <p className="text-[10px] text-gray-400">Daily Limits</p>
-                         <p className="text-xs text-white font-mono mt-0.5">
+                         <p className="text-[9px] tracking-wider text-text-muted">Daily Limits</p>
+                         <p className="text-[11px] font-bold text-text-primary font-mono mt-0.5">
                            +{displayConfig.smartRisk.dailyLimits.profitTargetPct}% / -{displayConfig.smartRisk.dailyLimits.lossLimitPct}%
                          </p>
                       </div>
                       {pipelineStatus?.metrics?.smartRisk && (
                         <div className="text-right">
-                          <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">Current Multiplier</p>
-                          <p className={`text-xs font-mono font-bold ${pipelineStatus.metrics.smartRisk.currentRiskMultiplier < 1 ? 'text-indigo-400' : 'text-gray-400'}`}>
+                          <p className="text-[9px] text-accent-gold-dim uppercase tracking-widest mb-0.5">Current Multiplier</p>
+                          <p className={`text-[11px] font-mono font-bold ${pipelineStatus.metrics.smartRisk.currentRiskMultiplier < 1 ? 'text-neon-red drop-shadow-[0_0_4px_rgba(255,56,100,0.5)]' : 'text-text-primary'}`}>
                             {pipelineStatus.metrics.smartRisk.currentRiskMultiplier}x
                           </p>
                         </div>
@@ -288,86 +293,88 @@ export function TradingPanel({
           </div>
           
           {!pipelineRunning && !pipelinePaused && (
-            <div className="flex flex-col items-center gap-1.5">
-               <p className="text-[11px] text-gray-400 text-center italic opacity-80">
-                 * Settings are strictly locked to the applied backtest configuration.
+            <div className="flex flex-col items-center gap-2">
+               <p className="text-[10px] text-text-muted text-center font-mono opacity-60">
+                 // Settings locked to validated backtest parameters
                </p>
                {lastAutoBacktestAt && (
-                 <p className="text-[10px] text-green-400/90 font-medium bg-green-400/10 px-2 py-1 rounded-full border border-green-400/20">
-                   ✓ Last Auto-Calibration: {new Date(lastAutoBacktestAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} WIB
+                 <p className="text-[9px] tracking-widest font-mono text-neon-green font-bold bg-neon-green/10 px-3 py-1.5 rounded border border-neon-green/30 shadow-[0_0_8px_rgba(57,255,136,0.2)]">
+                   SYS.CALIBRATED: {new Date(lastAutoBacktestAt).toLocaleTimeString("en-US", { hour12: false })}
                  </p>
                )}
             </div>
           )}
         </div>
       ) : (
-        <div className="py-10 bg-gray-900/50 border border-gray-800 border-dashed rounded-xl flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mb-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-600" />
+        <div className="py-12 bg-black/40 border border-accent-gold/20 border-dashed rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+          <div className="w-12 h-12 rounded-full bg-accent-gold/10 flex items-center justify-center mb-4 border border-accent-gold/30">
+            <AlertTriangle className="w-5 h-5 text-accent-gold" />
           </div>
-          <h4 className="text-gray-300 font-medium mb-1 text-sm">No Configuration</h4>
-          <p className="text-xs text-gray-500 max-w-[220px]">
-            Please run a backtest and click "Apply to Live Pipeline" to configure trading parameters.
+          <h4 className="text-accent-gold font-bold mb-1 text-xs tracking-widest uppercase">No Config Found</h4>
+          <p className="text-[10px] text-text-muted max-w-[220px] font-mono">
+            Execute backtest simulation to generate trading parameters.
           </p>
         </div>
       )}
 
-      {/* Pipeline Controls */}
-      <div className="pt-2 border-t border-gray-800 space-y-2">
+      {/* Pipeline Controls (Tactile Switches) */}
+      <div className="pt-4 border-t border-accent-gold/20 space-y-3">
         {!pipelineRunning && !pipelinePaused && (
           <button
             onClick={handleStart}
             disabled={isStarting || !savedPipelineConfig}
-            className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-800 disabled:text-gray-600 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+            className="w-full py-4 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-accent-gold text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
           >
             {isStarting ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Starting...</span>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>INIT SYS...</span>
               </>
             ) : (
               <>
-                <Play className="w-4 h-4 fill-current" />
-                <span>Start Pipeline</span>
+                <Play className="w-5 h-5 fill-current" />
+                <span>ENGAGE PIPELINE</span>
               </>
             )}
           </button>
         )}
 
         {pipelineRunning && (
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={pausePipeline}
-              className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-black border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 hover:shadow-[0_0_15px_rgba(234,179,8,0.4)] text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2"
             >
-              <Pause className="w-4 h-4 fill-current" />
-              <span>Pause</span>
+              <Pause className="w-5 h-5 fill-current" />
+              <span>PAUSE</span>
             </button>
             <button
               onClick={stopPipeline}
               disabled={isStopping}
-              className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-800 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-black border border-neon-red/50 text-neon-red hover:bg-neon-red/10 hover:shadow-[0_0_15px_rgba(255,56,100,0.4)] disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2"
             >
-              {isStopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4 fill-current" />}
+              {isStopping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Square className="w-5 h-5 fill-current" />}
+              <span>HALT</span>
             </button>
           </div>
         )}
 
         {pipelinePaused && (
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={resumePipeline}
-              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-black border border-neon-green/50 text-neon-green hover:bg-neon-green/10 hover:shadow-[0_0_15px_rgba(57,255,136,0.4)] text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2"
             >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Resume</span>
+              <Play className="w-5 h-5 fill-current" />
+              <span>RESUME</span>
             </button>
             <button
               onClick={stopPipeline}
               disabled={isStopping}
-              className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-800 text-white text-sm rounded-lg font-medium transition flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-black border border-neon-red/50 text-neon-red hover:bg-neon-red/10 hover:shadow-[0_0_15px_rgba(255,56,100,0.4)] disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2"
             >
-              {isStopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4 fill-current" />}
+              {isStopping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Square className="w-5 h-5 fill-current" />}
+              <span>HALT</span>
             </button>
           </div>
         )}
