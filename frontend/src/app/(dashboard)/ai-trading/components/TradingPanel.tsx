@@ -221,11 +221,14 @@ export function TradingPanel({
             {/* Smart Risk Management */}
             {displayConfig.smartRisk?.enabled && (
               <div className="col-span-2 pt-3 border-t border-gray-800/50">
-                <div className="flex items-center gap-1.5 mb-2">
+                <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
                   <p className="text-[10px] text-indigo-400/80 uppercase tracking-wider font-semibold">
-                    Smart Risk Management {pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked && <span className="text-red-400">(BLOCKED)</span>}
+                    Smart Risk Management
                   </p>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase font-bold tracking-wider ${pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400/80'}`}>
+                    {pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked ? 'BLOCKED' : 'ACTIVE'}
+                  </span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 mt-2">

@@ -831,9 +831,13 @@ const pipeline = {
             (adjustedWeights as any)[key] = ((adjustedWeights as any)[key] || 1.0) * mult;
           }
         }
-        this.addLog(userId, "SIGNAL",
-          `[REGIME] Adjusted weights: ${Object.entries(adjustedWeights).map(([k, v]) => `${k}=${(v as number).toFixed(2)}`).join(", ")}`
-        );
+        const filteredWeightsStr = Object.entries(adjustedWeights)
+          .filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
+          .map(([k, v]) => `${k}=${(v as number).toFixed(2)}`)
+          .join(", ");
+        if (filteredWeightsStr) {
+          this.addLog(userId, "SIGNAL", `[REGIME] Adjusted weights: ${filteredWeightsStr}`);
+        }
       }
 
       // Provide visual feedback for scanning process in the UI
