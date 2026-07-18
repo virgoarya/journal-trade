@@ -5,9 +5,9 @@
 import type { SMCSignal } from "./smc.strategy";
 import type { ICTSignal } from "./ict.strategy";
 import type { MSNRSignal } from "./msnr.strategy";
-import type { CRTSignal } from "./crt.strategy";
-import type { QuarterlySignal } from "./quarterly.strategy";
-import type { LITSignal } from "./lit.strategy";
+
+import { strategyConfigService } from "./strategy-config.service";
+
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -15,20 +15,14 @@ export interface MethodologyWeights {
   smc: number;
   ict: number;
   msnr: number;
-  crt: number;
-  quarterly: number;
-  lit: number;
-  rsiEngulf: number;
+
 }
 
 export const DEFAULT_METHODOLOGY_WEIGHTS: MethodologyWeights = {
   smc: 1.0,
   ict: 1.0,
   msnr: 0.8,
-  crt: 0.8,
-  quarterly: 0.6,
-  lit: 1.0,
-  rsiEngulf: 0.5,
+
 };
 
 export type MethodologyName = keyof MethodologyWeights;
@@ -80,18 +74,14 @@ interface AllMethodologySignals {
   smc: SMCSignal | null;
   ict: ICTSignal | null;
   msnr: MSNRSignal | null;
-  crt: CRTSignal | null;
-  quarterly: QuarterlySignal | null;
-  lit: LITSignal | null;
-  rsiEngulf: { direction: "BUY" | "SELL"; confidence: number; entry: number; sl: number; tp: number } | null;
+
 }
 
 // ─── Confidence Thresholds ───────────────────────────────────────────
 
 const MIN_CONFIDENCE = 50;
-const AGREE_2_BOOST = 5;
-const AGREE_4_BOOST = 10;
-const AGREE_6_BOOST = 15;
+// Boost values diambil dari config (di-cache saat digunakan)
+// Default: agree2=5, agree3=10, agree4=15 (disesuaikan untuk 4 methodology max)
 
 // ─── Service ─────────────────────────────────────────────────────────
 
@@ -210,11 +200,13 @@ class ConfluenceEngine {
       / winningSignals.reduce((s, sig) => s + sig.weight, 0);
 
     // Boost based on number of agreeing methodologies
+    // Disesuaikan: max 4 methodology, threshold ≥6 dihapus
+    const confluenceConfig = strategyConfigService.getConfluenceConfig();
     const agreeCount = winningSignals.length;
     let boost = 0;
-    if (agreeCount >= 6) boost = AGREE_6_BOOST;
-    else if (agreeCount >= 4) boost = AGREE_4_BOOST;
-    else if (agreeCount >= 2) boost = AGREE_2_BOOST;
+    if (agreeCount >= 4) boost = confluenceConfig.agree4Boost;       // semua 4 agree → +15
+    else if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
+    else if (agreeCount >= 2) boost = confluenceConfig.agree2Boost;  // 2 agree → +5
 
     const finalConfidence = Math.min(100, baseScore + boost);
 

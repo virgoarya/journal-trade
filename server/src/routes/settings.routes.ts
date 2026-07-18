@@ -28,7 +28,7 @@ const updateSettingsSchema = z.object({
 
 const aiTradingSettingsSchema = z.object({
   methodologyWeights: z.record(z.string(), z.number()).optional(),
-  activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"])).optional(),
+  activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "crt"])).optional(),
   llmConsensus: z.object({
     enabled: z.boolean().optional(),
     minProviders: z.number().int().min(1).max(6).optional(),

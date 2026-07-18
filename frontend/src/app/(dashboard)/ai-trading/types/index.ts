@@ -27,7 +27,7 @@ import type {
  * LLM Model status: aligned with backend `/llm-status` response
  * 'active' = provider is live and responding, 'hibernasi' = temporarily down/paused
  */
-export type LlmModelStatus = "active" | "hibernasi";
+export type LlmModelStatus = "active" | "hibernasi" | "circuit_open";
 
 /**
  * Standardized model node shape used across all components.

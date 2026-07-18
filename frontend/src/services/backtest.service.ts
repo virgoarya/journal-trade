@@ -59,6 +59,8 @@ export interface StreamTradeClose {
   reason: string;
   confidence: number;
   primaryMethodology?: string;
+  rr: number;
+  exitMethodology?: string;
 }
 
 export type SSEEvent =
@@ -97,6 +99,24 @@ export interface BacktestConfig {
   speedMs?: number;
   activeMethodologies?: string[];
   sessionId?: string;
+  smartRisk?: {
+    enabled: boolean;
+    capitalPreservation?: {
+      enabled: boolean;
+      activationGrowthPct: number;
+      riskReductionMultiplier: number;
+    };
+    dailyLimits?: {
+      enabled: boolean;
+      profitTargetPct: number;
+      lossLimitPct: number;
+    };
+    drawdownRecovery?: {
+      enabled: boolean;
+      activationDrawdownPct: number;
+      riskReductionMultiplier: number;
+    };
+  };
 }
 export interface BacktestTrade {
   entryTime: number;
@@ -333,10 +353,6 @@ class BacktestService {
     return res;
   }
 
-  async applyToLivePipeline(backtestId: string): Promise<ApiResponse<any>> {
-    const res = await apiClient.post(`/api/v1/backtest/apply`, { backtestId });
-    return res.data;
-  }
 
   async optimize(config: OptimizationConfig) {
     const res = await apiClient.post<OptimizationResult>(

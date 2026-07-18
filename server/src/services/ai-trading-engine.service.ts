@@ -7,9 +7,7 @@ import {
   smcStrategy,
   ictStrategy,
   msnrStrategy,
-  crtStrategy,
-  quarterlyTheoryStrategy,
-  litStrategy,
+
   confluenceEngine,
   atrService,
   type MarketStructure,
@@ -94,10 +92,7 @@ export interface MultiStrategySymbolAnalysis {
     smc: ReturnType<typeof smcStrategy.analyze>;
     ict: ReturnType<typeof ictStrategy.analyze>;
     msnr: ReturnType<typeof msnrStrategy.analyze>;
-    crt: ReturnType<typeof crtStrategy.analyze>;
-    quarterly: ReturnType<typeof quarterlyTheoryStrategy.analyze>;
-    lit: ReturnType<typeof litStrategy.analyze>;
-    rsiEngulf: EngulfingAnalysisResult | null;
+
   };
   confluence: ConfluenceResult;
   /** Legacy backwards‑compat shape */
@@ -153,7 +148,7 @@ class AITradingEngine {
       return {
         symbol,
         marketStructure: null as any,
-        methodologySignals: { smc: [], ict: [], msnr: [], crt: [], quarterly: [], lit: [], rsiEngulf: null },
+        methodologySignals: { smc: [], ict: [], msnr: [] },
         confluence: { finalSignal: null, allSignals: [], methodologyBreakdown: {}, conflictDetected: false, reason: "Insufficient data" },
         signal: this.emptySignal(directionRates),
       };
@@ -189,22 +184,16 @@ class AITradingEngine {
     };
 
     // ── 2. Run all 7 strategies in parallel ────────────────────────
-    const [smcSignals, ictSignals, msnrSignals, crtSignals, quarterlySignals, litSignals] =
+    const [smcSignals, ictSignals, msnrSignals] =
       await Promise.all([
         Promise.resolve(smcStrategy.analyze(fractalCtx)),
         Promise.resolve(ictStrategy.analyze(fractalCtx)),
         Promise.resolve(msnrStrategy.analyze(fractalCtx)),
-        Promise.resolve(crtStrategy.analyze(fractalCtx)),
-        Promise.resolve(quarterlyTheoryStrategy.analyze(fractalCtx)),
-        Promise.resolve(litStrategy.analyze(fractalCtx)),
+
       ]);
 
-    // ── 3. RSI+Engulfing (legacy, now methodology #7) ─────────────
-    const rsiEngulfSignal = this.detectRSIEngulfing(rsi, pattern, currentPrice, atrPattern, directionStructure);
-
-    // ── 4. Run Confluence Engine ───────────────────────────────────
     const confluence = confluenceEngine.calculateConfluence(
-      { smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null, msnr: msnrSignals[0] ?? null, crt: crtSignals[0] ?? null, quarterly: quarterlySignals[0] ?? null, lit: litSignals[0] ?? null, rsiEngulf: rsiEngulfSignal },
+      { smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null, msnr: msnrSignals[0] ?? null },
       methodologyWeights,
       activeMethodologies,
     );
@@ -218,7 +207,7 @@ class AITradingEngine {
     return {
       symbol,
       marketStructure: directionStructure,
-      methodologySignals: { smc: smcSignals, ict: ictSignals, msnr: msnrSignals, crt: crtSignals, quarterly: quarterlySignals, lit: litSignals, rsiEngulf: rsiEngulfSignal },
+      methodologySignals: { smc: smcSignals, ict: ictSignals, msnr: msnrSignals },
       confluence,
       signal: { rsi, atr: atrPattern, pattern: pattern.type, currentPrice, signal: legacySignal },
     };
@@ -242,45 +231,7 @@ class AITradingEngine {
     return results;
   }
 
-  // ── RSI + Engulfing (Methodology #7) ─────────────────────────────
 
-  private detectRSIEngulfing(
-    rsi: number,
-    pattern: EngulfingResult,
-    currentPrice: number,
-    atrValue: number,
-    ms: MarketStructure,
-  ): EngulfingAnalysisResult | null {
-    // RSI Oversold + Bullish Engulfing = BUY
-    if (rsi < RSI_OVERSOLD && pattern.type === "BULLISH_ENGULFING") {
-      const sl = currentPrice - atrValue * ATR_SL_MULTIPLIER;
-      const tp = currentPrice + atrValue * ATR_TP_MULTIPLIER;
-      return {
-        direction: "BUY",
-        entry: currentPrice,
-        sl,
-        tp,
-        confidence: this.calcConfidence(rsi, pattern, RSI_OVERSOLD),
-      };
-    }
-
-    // RSI Overbought + Bearish Engulfing = SELL
-    if (rsi > RSI_OVERBOUGHT && pattern.type === "BEARISH_ENGULFING") {
-      const sl = currentPrice + atrValue * ATR_SL_MULTIPLIER;
-      const tp = currentPrice - atrValue * ATR_TP_MULTIPLIER;
-      return {
-        direction: "SELL",
-        entry: currentPrice,
-        sl,
-        tp,
-        confidence: this.calcConfidence(rsi, pattern, RSI_OVERBOUGHT),
-      };
-    }
-
-    return null;
-  }
-
-  // ─── Legacy Methods (kept for backwards compatibility) ────────────
 
   /**
    * @deprecated Use analyzeSymbol() instead for multi‑strategy.
@@ -339,16 +290,18 @@ class AITradingEngine {
     }
 
     const rounded = Math.floor(lotSize / volumeStep) * volumeStep;
+    const decimals = volumeStep.toString().split('.')[1]?.length || 0;
+    const finalLot = parseFloat(rounded.toFixed(decimals));
     
     // Jika lot hasil perhitungan berada di bawah lot terkecil broker,
     // kembalikan 0 agar pipeline membatalkan eksekusi,
     // daripada memaksa entry dengan lot minimum yang berakibat
     // resiko kerugian dolar akan melebihi maxRiskPerTrade.
-    if (rounded < volumeMin) {
+    if (finalLot < volumeMin) {
       return 0;
     }
     
-    return Math.min(volumeMax, rounded);
+    return Math.min(finalLot, volumeMax);
   }
 
   /**

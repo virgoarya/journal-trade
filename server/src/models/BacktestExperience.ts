@@ -5,6 +5,7 @@ export interface IBacktestExperience extends Document {
   sessionId?: string;
 
   symbol: string;
+  symbols?: string[];
   timeframe: string;
   dateRange: {
     from: Date;
@@ -69,6 +70,7 @@ const BacktestExperienceSchema = new Schema<IBacktestExperience>(
     sessionId: { type: String },
 
     symbol: { type: String, required: true },
+    symbols: { type: [String], default: undefined },
     timeframe: { type: String, required: true },
     dateRange: {
       from: { type: Date, required: true },

@@ -33,7 +33,7 @@ const TRADABLE_SYMBOLS = [
 ];
 
 const ALL_METHODOLOGIES: MethodologyName[] = [
-  "smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf",
+  "smc", "ict", "msnr",
 ];
 
 const DEFAULT_BACKTEST_CONFIG = {

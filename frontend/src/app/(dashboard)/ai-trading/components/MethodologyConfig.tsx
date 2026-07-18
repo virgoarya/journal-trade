@@ -13,7 +13,7 @@ interface MethodologyConfigProps {
 }
 
 const ALL_METHODOLOGIES: MethodologyName[] = [
-  "smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"
+  "smc", "ict", "msnr"
 ];
 
 const MethodologyToggle = ({ method, active, weight, onToggle, onWeightChange }: {
@@ -72,7 +72,7 @@ export function MethodologyConfig({
         }`}
       >
         <Brain className="w-3 h-3" />
-        {activeCount}/7
+        {activeCount}/4
       </button>
 
       {showConfig && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAiTrading } from "../context/AiTradingContext";
-import { Play, Square, Pause, Loader2, Signal, AlertTriangle } from "lucide-react";
+import { Play, Square, Pause, Loader2, Signal, AlertTriangle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
 
@@ -153,7 +153,11 @@ export function TradingPanel({
             <div className="col-span-2 pt-3 border-t border-gray-800/50">
                <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">Active AI Methodologies</p>
                <div className="flex flex-wrap gap-1.5">
-                {(displayConfig.activeMethodologies || []).map((m: string) => {
+                {Array.from(new Set((displayConfig.activeMethodologies || []).map((m: string) => {
+                  const mLower = m.toLowerCase();
+                  if (["ictcrt", "crt", "ict-crt"].includes(mLower)) return "ICT";
+                  return m.toUpperCase();
+                }).filter((m: string) => ["SMC", "ICT", "MSNR"].includes(m)))).map((m: string, idx: number) => {
                   const mRank = skillConfig?.methodologyRankings?.find(
                     (rank) => rank.methodology.toLowerCase() === m.toLowerCase()
                   );
@@ -177,8 +181,8 @@ export function TradingPanel({
                   }
 
                   return (
-                    <span key={m} className={`${bgClass} border ${borderClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-semibold`}>
-                      {m === "rsiEngulf" ? "RSI+ENGULF" : m}
+                    <span key={m + idx} className={`${bgClass} border ${borderClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-semibold`}>
+                      {m}
                     </span>
                   );
                 })}
@@ -213,6 +217,71 @@ export function TradingPanel({
                 )}
               </div>
             </div>
+
+            {/* Smart Risk Management */}
+            {displayConfig.smartRisk?.enabled && (
+              <div className="col-span-2 pt-3 border-t border-gray-800/50">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                  <p className="text-[10px] text-indigo-400/80 uppercase tracking-wider font-semibold">
+                    Smart Risk Management {pipelineStatus?.metrics?.smartRisk?.dailyTradingBlocked && <span className="text-red-400">(BLOCKED)</span>}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  {displayConfig.smartRisk.drawdownRecovery?.enabled && (
+                    <div className="bg-indigo-500/5 rounded p-2 border border-indigo-500/10">
+                      <p className="text-[10px] text-gray-400 mb-1">Drawdown Recovery</p>
+                      <div className="flex items-end justify-between">
+                        <p className="text-xs text-white font-mono">
+                          {displayConfig.smartRisk.drawdownRecovery.activationDrawdownPct}% → {displayConfig.smartRisk.drawdownRecovery.riskReductionMultiplier}x
+                        </p>
+                        {pipelineStatus?.metrics?.smartRisk?.currentDrawdownPct !== undefined && (
+                          <span className={`text-[10px] font-mono ${pipelineStatus.metrics.smartRisk.currentDrawdownPct >= displayConfig.smartRisk.drawdownRecovery.activationDrawdownPct ? 'text-red-400' : 'text-gray-500'}`}>
+                            Live: {pipelineStatus.metrics.smartRisk.currentDrawdownPct.toFixed(2)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {displayConfig.smartRisk.capitalPreservation?.enabled && (
+                    <div className="bg-indigo-500/5 rounded p-2 border border-indigo-500/10">
+                      <p className="text-[10px] text-gray-400 mb-1">Tiered Scaling (Growth)</p>
+                      <div className="flex items-end justify-between">
+                        <p className="text-xs text-white font-mono">
+                          {displayConfig.smartRisk.capitalPreservation.activationGrowthPct}% → {displayConfig.smartRisk.capitalPreservation.riskReductionMultiplier}x
+                        </p>
+                        {pipelineStatus?.metrics?.smartRisk?.currentGrowthPct !== undefined && (
+                          <span className={`text-[10px] font-mono ${pipelineStatus.metrics.smartRisk.currentGrowthPct >= displayConfig.smartRisk.capitalPreservation.activationGrowthPct ? 'text-green-400' : 'text-gray-500'}`}>
+                            Live: {pipelineStatus.metrics.smartRisk.currentGrowthPct.toFixed(2)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {displayConfig.smartRisk.dailyLimits?.enabled && (
+                    <div className="col-span-2 bg-indigo-500/5 rounded p-2 border border-indigo-500/10 flex justify-between items-center">
+                      <div>
+                         <p className="text-[10px] text-gray-400">Daily Limits</p>
+                         <p className="text-xs text-white font-mono mt-0.5">
+                           +{displayConfig.smartRisk.dailyLimits.profitTargetPct}% / -{displayConfig.smartRisk.dailyLimits.lossLimitPct}%
+                         </p>
+                      </div>
+                      {pipelineStatus?.metrics?.smartRisk && (
+                        <div className="text-right">
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">Current Multiplier</p>
+                          <p className={`text-xs font-mono font-bold ${pipelineStatus.metrics.smartRisk.currentRiskMultiplier < 1 ? 'text-indigo-400' : 'text-gray-400'}`}>
+                            {pipelineStatus.metrics.smartRisk.currentRiskMultiplier}x
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           
           {!pipelineRunning && !pipelinePaused && (

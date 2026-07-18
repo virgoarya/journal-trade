@@ -36,7 +36,7 @@ class AIBacktestSkillService {
           wr.total++;
           if (t.pnl > 0) wr.wins++;
         }
-        let bestMeth = "rsiEngulf";
+        let bestMeth = "unknown";
         let bestWrRatio = 0;
         for (const [meth, wr] of methWinRates.entries()) {
           const ratio = wr.wins / wr.total;
@@ -167,7 +167,7 @@ class AIBacktestSkillService {
       // ── 2c. Mark methodologies that were NOT tested as ADJUST ──────────
       // If a methodology has very old data and was excluded from active,
       // nudge it toward ADJUST so user re-evaluates.
-      const ALL_METHODOLOGIES = ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"];
+      const ALL_METHODOLOGIES = ["smc", "ict", "msnr"];
       if (activeMeths) {
         for (const meth of ALL_METHODOLOGIES) {
           if (activeMeths.includes(meth)) continue;

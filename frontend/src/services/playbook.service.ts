@@ -5,7 +5,7 @@ export interface Strategy {
   userId: string;
   name: string;
   description: string;
-  methodology: "ICT" | "CRT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
+  methodology: "ICT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   legacyCategory?: "breakout" | "reversal" | "scalping" | "swing" | "news";
   timeframe: string;
@@ -34,7 +34,7 @@ export interface Strategy {
 export interface CreateStrategyDto {
   name: string;
   description?: string;
-  methodology: "ICT" | "CRT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
+  methodology: "ICT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   legacyCategory?: "breakout" | "reversal" | "scalping" | "swing" | "news";
   timeframe?: string;

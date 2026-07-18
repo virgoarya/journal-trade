@@ -60,7 +60,7 @@ export default function PlaybookPage() {
   const categories = [
     { id: "all", label: "All Methodologies" },
     { id: "ICT", label: "ICT" },
-    { id: "CRT", label: "CRT" },
+
     { id: "MSNR", label: "MSNR" },
     { id: "SMC", label: "SMC" },
     { id: "PA", label: "Price Action" },
@@ -71,7 +71,7 @@ export default function PlaybookPage() {
   const getCategoryColor = (methodology: string) => {
     const colors: Record<string, string> = {
       ICT: "bg-data-profit/10 text-data-profit border-data-profit/30",
-      CRT: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+
       MSNR: "bg-purple-500/10 text-purple-400 border-purple-500/30",
       SMC: "bg-accent-gold/10 text-accent-gold border-accent-gold/30",
       PA: "bg-green-500/10 text-green-400 border-green-500/30",

@@ -711,10 +711,7 @@ router.post("/analyze-multi", heavyLimiter, async (req, res, next) => {
         smc: analysis.methodologySignals.smc.length > 0 ? analysis.methodologySignals.smc[0] : null,
         ict: analysis.methodologySignals.ict.length > 0 ? analysis.methodologySignals.ict[0] : null,
         msnr: analysis.methodologySignals.msnr.length > 0 ? analysis.methodologySignals.msnr[0] : null,
-        crt: analysis.methodologySignals.crt.length > 0 ? analysis.methodologySignals.crt[0] : null,
-        quarterly: analysis.methodologySignals.quarterly.length > 0 ? analysis.methodologySignals.quarterly[0] : null,
-        lit: analysis.methodologySignals.lit.length > 0 ? analysis.methodologySignals.lit[0] : null,
-        rsiEngulf: analysis.methodologySignals.rsiEngulf,
+
       },
       confluence: analysis.confluence,
     });

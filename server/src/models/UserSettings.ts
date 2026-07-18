@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type MethodologyName = "smc" | "ict" | "msnr" | "crt" | "quarterly" | "lit" | "rsiEngulf";
+export type MethodologyName = "smc" | "ict" | "msnr" | "crt";
 
 export interface IUserSettings extends Document {
   userId: string;
@@ -35,13 +35,10 @@ const DEFAULT_METHODOLOGY_WEIGHTS: Record<MethodologyName, number> = {
   ict: 1.0,
   msnr: 0.8,
   crt: 0.8,
-  quarterly: 0.6,
-  lit: 1.0,
-  rsiEngulf: 0.5,
 };
 
 const DEFAULT_ACTIVE_METHODOLOGIES: MethodologyName[] = [
-  "smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"
+  "smc", "ict", "msnr", "crt"
 ];
 
 const UserSettingsSchema = new Schema<IUserSettings>({
@@ -66,7 +63,7 @@ const UserSettingsSchema = new Schema<IUserSettings>({
     },
     activeMethodologies: {
       type: [String],
-      enum: ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"],
+      enum: ["smc", "ict", "msnr", "crt"],
       default: () => DEFAULT_ACTIVE_METHODOLOGIES,
     },
     llmConsensus: {

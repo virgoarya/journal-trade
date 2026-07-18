@@ -99,6 +99,24 @@ export interface PipelineConfig {
     threshold?: number;
     providerTimeoutMs?: number;
   };
+  smartRisk?: {
+    enabled: boolean;
+    capitalPreservation?: {
+      enabled: boolean;
+      activationGrowthPct: number;
+      riskReductionMultiplier: number;
+    };
+    dailyLimits?: {
+      enabled: boolean;
+      profitTargetPct: number;
+      lossLimitPct: number;
+    };
+    drawdownRecovery?: {
+      enabled: boolean;
+      activationDrawdownPct: number;
+      riskReductionMultiplier: number;
+    };
+  };
 }
 
 export interface LLMConsensusVote {
@@ -134,6 +152,12 @@ export interface PipelineStatus {
     dailyPnL: number;
     openPositions: number;
     currentDrawdown: number;
+    smartRisk?: {
+      currentDrawdownPct: number;
+      currentGrowthPct: number;
+      currentRiskMultiplier: number;
+      dailyTradingBlocked: boolean;
+    };
   };
   lastSignal: TradingSignal | null;
   lastAnalysis: MultiStrategyAnalysis | null;
@@ -182,16 +206,13 @@ export interface PipelineLog {
 
 // ─── NEW: Methodology Types ──────────────────────────────────────────
 
-export type MethodologyName = "smc" | "ict" | "msnr" | "crt" | "quarterly" | "lit" | "rsiEngulf";
+export type MethodologyName = "smc" | "ict" | "msnr";
 
 export interface MethodologyWeights {
   smc: number;
   ict: number;
   msnr: number;
-  crt: number;
-  quarterly: number;
-  lit: number;
-  rsiEngulf: number;
+
 }
 
 export interface MethodologySignalResult {
@@ -250,9 +271,6 @@ export interface MultiStrategyAnalysis {
     ict: MethodologySignalResult | null;
     msnr: MethodologySignalResult | null;
     crt: MethodologySignalResult | null;
-    quarterly: MethodologySignalResult | null;
-    lit: MethodologySignalResult | null;
-    rsiEngulf: MethodologySignalResult | null;
   };
   confluence: ConfluenceResult;
 }
@@ -263,30 +281,21 @@ export const METHODOLOGY_LABELS: Record<MethodologyName, string> = {
   smc: "Smart Money Concept",
   ict: "Inner Circle Trader",
   msnr: "Malaysian S&R",
-  crt: "Candle Range Theory",
-  quarterly: "Quarterly Theory",
-  lit: "Liquidity Inducement",
-  rsiEngulf: "RSI + Engulfing",
+
 };
 
 export const METHODOLOGY_COLORS: Record<MethodologyName, string> = {
   smc: "#8B5CF6",      // violet
   ict: "#3B82F6",      // blue
   msnr: "#10B981",     // emerald
-  crt: "#F59E0B",      // amber
-  quarterly: "#EC4899", // pink
-  lit: "#EF4444",      // red
-  rsiEngulf: "#6B7280", // gray
+
 };
 
 export const DEFAULT_METHODOLOGY_WEIGHTS: MethodologyWeights = {
   smc: 1.0,
   ict: 1.0,
   msnr: 0.8,
-  crt: 0.8,
-  quarterly: 0.6,
-  lit: 1.0,
-  rsiEngulf: 0.5,
+
 };
 
 // ─── Service ─────────────────────────────────────────────────────────

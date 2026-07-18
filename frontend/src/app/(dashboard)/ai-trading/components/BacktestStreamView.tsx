@@ -63,12 +63,35 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [dataReadyInfo, setDataReadyInfo] = useState<StreamDataReady | null>(null);
   const [startingSimulation, setStartingSimulation] = useState(false);
 
+  // New SMC-focused states
+  const [activeTradeCount, setActiveTradeCount] = useState(0);
+  const [globalWins, setGlobalWins] = useState(0);
+  const [globalLosses, setGlobalLosses] = useState(0);
+  const [maxDrawdownPct, setMaxDrawdownPct] = useState(0);
+  
+  const activeTradesRef = useRef<Map<string, StreamTradeOpen>>(new Map());
+  const maxEquityRef = useRef<number>(config.initialBalance);
+
+
   const accumulatedTradesRef = useRef<any[]>([]);
   const accumulatedEquityRef = useRef<any[]>([]);
   const initLoggedRef = useRef(false);
   const configKeyRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const completedRef = useRef(false);
+
+  // ── Performance: RAF-based throttling ──────────────────────────
+  // Buffer incoming SSE data in refs (no re-render), then flush to state at ~60fps
+  const candleBufferRef = useRef<StreamCandle | null>(null);
+  const progressBufferRef = useRef<StreamProgress | null>(null);
+  const equityBufferRef = useRef<Array<{ time: number; equity: number; floatingPnL?: number }>>([]);
+  const rafRef = useRef<number | null>(null);
+  const globalWinsRef = useRef(0);
+  const globalLossesRef = useRef(0);
+  const maxDrawdownPctRef = useRef(0);
+  
+  const liveTradesBufferRef = useRef<any[]>([]);
+  const [liveTrades, setLiveTrades] = useState<any[]>([]);
 
   // Config change detection — ensures proper reset on re-run
   const newKey = `${config.symbols.join(",")}|${config.timeframe}|${config.fromDate}|${config.toDate}|${config.initialBalance}|${config.maxRiskPerTrade}|${config.maxOpenPositions}|${config.leverage}|${config.signalInterval}|${config.entrySettings.rsiOversold}|${config.entrySettings.rsiOverbought}|${config.entrySettings.atrMultiplierSL}|${config.entrySettings.atrMultiplierTP}|${config.trailingStop.enabled}|${config.trailingStop.activationATR}|${config.trailingStop.trailATR}`;
@@ -95,11 +118,74 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       setSessionId(null);
       setDataReadyInfo(null);
       setStartingSimulation(false);
+      setActiveTradeCount(0);
+      setGlobalWins(0);
+      setGlobalLosses(0);
+      setMaxDrawdownPct(0);
+      activeTradesRef.current.clear();
+      maxEquityRef.current = config.initialBalance;
+      globalWinsRef.current = 0;
+      globalLossesRef.current = 0;
+      maxDrawdownPctRef.current = 0;
+      candleBufferRef.current = null;
+      progressBufferRef.current = null;
+      equityBufferRef.current = [];
       accumulatedTradesRef.current = [];
       accumulatedEquityRef.current = [];
+      liveTradesBufferRef.current = [];
+      setLiveTrades([]);
     }
     configKeyRef.current = newKey;
   }, [newKey]);
+
+  // ── RAF flush loop: push buffered data to React state at ~60fps ──
+  useEffect(() => {
+    let running = true;
+    const flush = () => {
+      if (!running) return;
+      // Flush candle
+      const c = candleBufferRef.current;
+      if (c) {
+        candleBufferRef.current = null;
+        setCandle(c);
+      }
+      // Flush progress
+      const p = progressBufferRef.current;
+      if (p) {
+        progressBufferRef.current = null;
+        setProgress(p);
+      }
+      // Flush equity (batch)
+      const eq = equityBufferRef.current;
+      if (eq.length > 0) {
+        equityBufferRef.current = [];
+        setEquityHistory(prev => {
+          const next = [...prev, ...eq];
+          // Downsample: keep max ~800 points for chart performance to allow smooth high-res curves
+          if (next.length > 800) {
+            const step = Math.ceil(next.length / 800);
+            return next.filter((_, i) => i % step === 0 || i === next.length - 1);
+          }
+          return next;
+        });
+      }
+      // Flush win/loss/drawdown
+      setGlobalWins(globalWinsRef.current);
+      setGlobalLosses(globalLossesRef.current);
+      setMaxDrawdownPct(maxDrawdownPctRef.current);
+      setActiveTradeCount(activeTradesRef.current.size);
+      
+      // Flush live trades PnL
+      setLiveTrades(liveTradesBufferRef.current);
+
+      rafRef.current = requestAnimationFrame(flush);
+    };
+    rafRef.current = requestAnimationFrame(flush);
+    return () => {
+      running = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -158,7 +244,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
         es.addEventListener("progress", (e: any) => {
           if (!mounted) return;
-          try { setProgress(JSON.parse(e.data)); } catch {}
+          try { progressBufferRef.current = JSON.parse(e.data); } catch {}
         });
 
         es.addEventListener("equity", (e: any) => {
@@ -167,7 +253,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             const data = JSON.parse(e.data);
             const pt = { time: data.time, equity: data.equity, floatingPnL: data.floatingPnL };
             accumulatedEquityRef.current.push(pt);
-            setEquityHistory(prev => [...prev, pt]);
+            equityBufferRef.current.push(pt);
+            if (data.activeTrades) {
+              liveTradesBufferRef.current = data.activeTrades;
+            }
           } catch {}
         });
 
@@ -175,7 +264,15 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamCandle;
-            setCandle(data);
+            // Buffer candle — RAF loop will flush to state
+            candleBufferRef.current = data;
+            // Update drawdown tracking in ref (no re-render)
+            if (data.equity > maxEquityRef.current) {
+                maxEquityRef.current = data.equity;
+            } else if (maxEquityRef.current > 0) {
+                const dd = ((maxEquityRef.current - data.equity) / maxEquityRef.current) * 100;
+                if (dd > maxDrawdownPctRef.current) maxDrawdownPctRef.current = dd;
+            }
           } catch {}
         });
 
@@ -200,6 +297,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             }
             methStatsRef.current.get(meth)!.count++;
             setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
+            
+            // Track open position (ref only — RAF flushes activeTradeCount)
+            activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
           } catch {}
         });
 
@@ -209,8 +309,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             const data = JSON.parse(e.data) as StreamTradeClose & { symbol: string; primaryMethodology?: string; exitTime: number };
             accumulatedTradesRef.current.push(data);
             const pnlPrefix = data.pnl >= 0 ? "+" : "";
+            const exitMeth = data.exitMethodology ? ` [Exit: ${data.exitMethodology}]` : "";
+            const rrStr = data.rr > 0 ? ` | RR: 1:${data.rr.toFixed(2)}` : "";
             addLog("trade_close",
-              `[${data.reason}] ${data.symbol} @ ${data.exitPrice.toFixed(5)} | PnL: ${pnlPrefix}${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)`,
+              `[${data.reason}] ${data.symbol} @ ${data.exitPrice.toFixed(5)}${exitMeth} | PnL: ${pnlPrefix}${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)${rrStr}`,
               data,
               data.exitTime,
             );
@@ -226,6 +328,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               methStatsRef.current.get(meth)!.pnl += data.pnl;
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
+
+            // Remove from active trades (ref only — RAF flushes)
+            activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
+            
+            // Update Global Win Rate (ref only — RAF flushes)
+            if (data.pnl >= 0) globalWinsRef.current++;
+            else globalLossesRef.current++;
           } catch {}
         });
 
@@ -329,6 +438,19 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
   const progressPercent = progress ? progress.percent : 0;
 
+  const getKillzone = (timeStr?: number) => {
+    if (!timeStr) return { name: "None", color: "text-gray-500", bg: "bg-gray-800" };
+    const date = new Date(timeStr * 1000);
+    const hour = date.getUTCHours();
+    if (hour >= 0 && hour < 6) return { name: "Asian", color: "text-yellow-400", bg: "bg-yellow-400/10" };
+    if (hour >= 7 && hour < 10) return { name: "London", color: "text-blue-400", bg: "bg-blue-400/10" };
+    if (hour >= 13 && hour < 16) return { name: "New York", color: "text-red-400", bg: "bg-red-400/10" };
+    return { name: "None", color: "text-gray-500", bg: "bg-gray-800/50" };
+  };
+
+  const killzone = getKillzone(candle?.time);
+  const winRate = globalWins + globalLosses > 0 ? (globalWins / (globalWins + globalLosses)) * 100 : 0;
+
   return (
     <div className="h-full min-h-[500px] flex flex-col bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden relative">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -394,19 +516,41 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           </div>
 
-          {/* RSI/ATR Card */}
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Indicators</p>
-            <div className="space-y-2 font-mono text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">RSI(14)</span>
-                <span className={`${candle && (candle.rsi || 0) > 70 ? "text-red-400" : candle && (candle.rsi || 0) < 30 ? "text-green-400" : "text-gray-300"}`}>
-                  {candle ? (candle.rsi || 0).toFixed(1) : "0.0"}
-                </span>
+          {/* New SMC-Focused Analytics Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Killzone Card */}
+            <div className={`border border-gray-800 rounded-xl p-3 ${killzone.bg}`}>
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Session</p>
+              <div className={`font-mono font-bold text-sm ${killzone.color}`}>{killzone.name}</div>
+            </div>
+
+            {/* Win Rate Card */}
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1 flex items-center justify-between">
+                <span>Win Rate</span>
+                <span className="text-gray-400">{globalWins}W / {globalLosses}L</span>
+              </p>
+              <div className={`font-mono font-bold text-sm ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                {winRate.toFixed(1)}%
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">ATR(14)</span>
-                <span className="text-gray-300">{candle ? (candle.atr || 0).toFixed(5) : "0.00000"}</span>
+            </div>
+
+            {/* Max Drawdown Card */}
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Max Drawdown</p>
+              <div className="font-mono font-bold text-sm text-red-400">
+                -{maxDrawdownPct.toFixed(2)}%
+              </div>
+            </div>
+
+            {/* Open Positions Card */}
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Open Positions</p>
+              <div className="flex justify-between items-baseline">
+                <div className="font-mono font-bold text-sm text-blue-400">{activeTradeCount} Active</div>
+                <div className={`font-mono text-xs ${(candle?.floatingPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(candle?.floatingPnL || 0) >= 0 ? '+' : ''}${(candle?.floatingPnL || 0).toFixed(2)}
+                </div>
               </div>
             </div>
           </div>
@@ -481,18 +625,41 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
+          {/* Live Active Positions */}
+          {liveTrades.length > 0 && (
+            <div className="bg-black/40 border border-gray-800 rounded-xl p-3">
+              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Live Positions</p>
+              <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                {liveTrades.map((t, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-gray-900/60 p-2 rounded-lg border border-gray-800/50">
+                    <div className="flex items-center gap-3">
+                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.direction.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction.toUpperCase()}</span>
+                       <span className="text-gray-200 font-bold">{t.symbol}</span>
+                       <span className="text-gray-500 text-[10px]">
+                         {t.volume} lot {t.primaryMethodology ? <span className="text-gray-600">[{t.primaryMethodology.toUpperCase()}]</span> : ""}
+                       </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                       <span className="text-gray-400 tracking-tight hidden sm:block">{t.entryPrice.toFixed(5)} → {t.currentPrice.toFixed(5)}</span>
+                       <span className={`font-bold w-16 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                         {t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}
+                       </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* AI Trading Journal */}
           <div className="flex-1 bg-black/40 border border-gray-800 rounded-xl flex flex-col font-mono text-xs overflow-hidden relative max-h-[400px]">
             <div className="bg-gray-900/80 px-4 py-2 border-b border-gray-800 text-gray-500 flex items-center gap-2">
               <Terminal className="w-4 h-4" /> AI Trading Journal
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2 relative">
-              <AnimatePresence initial={false}>
-                {logs.map((log) => (
-                  <motion.div
+              {logs.map((log) => (
+                  <div
                     key={log.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
                     className={`flex gap-3 leading-relaxed border-l-2 pl-3 py-0.5 ${
                       log.type === "trade_open" ? "border-blue-500 text-blue-100 bg-blue-900/10"
                       : log.type === "trade_close"
@@ -504,9 +671,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                   >
                     <span className="text-gray-600 shrink-0">[{log.candleTime || log.time}]</span>
                     <span className="break-words">{log.message}</span>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                  </div>
+              ))}
               <div ref={logsEndRef} />
             </div>
           </div>
@@ -519,15 +685,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         <div className="flex justify-between text-xs font-medium font-mono">
           <span className="text-accent-gold flex items-center gap-2">
             {phase === "preparing" && !progress && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Loading historical data...</>
+              <><Loader2 className="w-3 h-3 animate-spin" /> Fetching historical data...</>
             )}
-            {phase === "preparing" && progress && progress.percent < 10 && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Fetching {config.symbols?.join(",") || ""} data...</>
+            {phase === "running" && progress && progress.percent === 0 && (
+              <><Loader2 className="w-3 h-3 animate-spin" /> Initializing Strategy Engine...</>
             )}
-            {phase === "running" && progress && progress.percent < 10 && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Data loaded, starting simulation...</>
-            )}
-            {phase === "running" && progress && progress.percent >= 10 && progress.percent < 100 && (
+            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && (
               <><Loader2 className="w-3 h-3 animate-spin" /> Simulating... {Math.round(progressPercent)}%</>
             )}
             {phase === "running" && progress && progress.percent >= 100 && (<>Completed.</>)}
@@ -540,16 +703,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               "loading data..."
             )}
           </span>
-        </div>
-        <div className="h-1.5 w-full bg-gray-950 rounded-full overflow-hidden border border-gray-800/50">
-          <motion.div
-            className="h-full bg-accent-gold rounded-full relative"
-            initial={{ width: 0 }}
-            animate={{ width: `${phase === "complete" || progressPercent >= 100 ? 100 : progressPercent}%` }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-          >
-            <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
-          </motion.div>
         </div>
       </div>
     </div>

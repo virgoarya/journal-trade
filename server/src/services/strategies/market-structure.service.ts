@@ -96,14 +96,31 @@ export interface CandleRangeAnalysis {
   recentDisplacement: boolean;
 }
 
-export interface QuarterlyPivot {
-  year: number;
-  quarter: 1 | 2 | 3 | 4;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  range: number;
+
+export interface MalaysianSNR {
+  price: number;
+  type: "RESISTANCE" | "SUPPORT";
+  time: number;
+  index: number;
+  isFresh: boolean;
+  touchedByWick: boolean;
+  brokenByBody: boolean;
+  missed: boolean;
+}
+
+export interface MalaysianEngulfing {
+  type: "BULLISH" | "BEARISH";
+  top: number;
+  bottom: number;
+  time: number;
+  index: number;
+}
+
+export interface MalaysianTrendline {
+  p1: MalaysianSNR;
+  p2: MalaysianSNR;
+  type: "RESISTANCE" | "SUPPORT";
+  slope: number;
 }
 
 export interface MarketStructure {
@@ -116,7 +133,10 @@ export interface MarketStructure {
   keyLevels: KeyLevel[];
   liquidityZones: LiquidityZone[];
   candleRanges: CandleRangeAnalysis;
-  quarterlyPivots: QuarterlyPivot | null;
+  malaysianSNRs: MalaysianSNR[];
+  malaysianEngulfings: MalaysianEngulfing[];
+  malaysianTrendlines: MalaysianTrendline[];
+
   recentPriceAction: "RANGING" | "EXPANSION_BULL" | "EXPANSION_BEAR" | "CONTRACTION";
 }
 
@@ -128,13 +148,47 @@ const LEVEL_CLUSTER_TOLERANCE_PCT = 0.001; // 0.1% price tolerance for level gro
 const FVG_BODY_ONLY = true; // only consider body (open/close) for FVG, not wicks
 const IMPULSE_THRESHOLD = 1.8; // × average candle range to be considered "impulsive"
 
+export type KillzoneType = "ASIAN" | "LONDON" | "NEW_YORK" | "LONDON_CLOSE" | "NONE";
+const KILLZONES = {
+  ASIAN: { start: 19 * 60 + 0, end: 2 * 60 + 0 },    // 19:00 – 02:00 EST
+  LONDON: { start: 2 * 60 + 0, end: 5 * 60 + 0 },     // 02:00 – 05:00 EST
+  NEW_YORK: { start: 7 * 60 + 0, end: 10 * 60 + 0 },  // 07:00 – 10:00 EST
+  LONDON_CLOSE: { start: 10 * 60 + 0, end: 12 * 60 + 0 }, // 10:00 – 12:00 EST
+};
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 class MarketStructureService {
-  /**
-   * Full market structure analysis for a given set of candles.
-   * This is the main entry point used by all strategies.
-   */
+  /** Get EST minutes from timestamp (0-1439). */
+  getEstMinutesFromTimestamp(timestamp: number): number {
+    const d = new Date(timestamp * 1000);
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(d);
+    const h = parseInt(parts.find(p => p.type === "hour")?.value ?? "0");
+    const m = parseInt(parts.find(p => p.type === "minute")?.value ?? "0");
+    return h * 60 + m;
+  }
+
+  /** Get killzone for a given timestamp (used in backtesting). */
+  getKillzoneForTimestamp(timestamp: number): KillzoneType {
+    const estMinutes = this.getEstMinutesFromTimestamp(timestamp);
+
+    // ASIAN wraps past midnight: 19:00–24:00 OR 00:00–02:00
+    const inAsian = estMinutes >= KILLZONES.ASIAN.start || estMinutes < KILLZONES.ASIAN.end;
+    if (inAsian) return "ASIAN";
+
+    // Non-wrap zones: simple range check
+    if (estMinutes >= KILLZONES.LONDON.start && estMinutes < KILLZONES.LONDON.end) return "LONDON";
+    if (estMinutes >= KILLZONES.NEW_YORK.start && estMinutes < KILLZONES.NEW_YORK.end) return "NEW_YORK";
+    if (estMinutes >= KILLZONES.LONDON_CLOSE.start && estMinutes < KILLZONES.LONDON_CLOSE.end) return "LONDON_CLOSE";
+    return "NONE";
+  }
+
   analyzeMarketStructure(candles: Candle[]): MarketStructure {
     const swingHighs = this.findSwingHighs(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
     const swingLows = this.findSwingLows(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
@@ -145,8 +199,12 @@ class MarketStructureService {
     const keyLevels = this.identifyKeyLevels(candles, swingHighs, swingLows);
     const liquidityZones = this.detectLiquidityZones(swingHighs, swingLows);
     const candleRanges = this.analyzeCandleRanges(candles);
-    const quarterlyPivots = this.identifyQuarterlyPivots(candles);
+
     const recentPriceAction = this.classifyRecentPriceAction(candles, candleRanges);
+
+    const malaysianSNRs = this.detectMalaysianSNRs(candles);
+    const malaysianEngulfings = this.detectMalaysianEngulfings(candles);
+    const malaysianTrendlines = this.detectMalaysianTrendlines(malaysianSNRs);
 
     return {
       swingHighs,
@@ -158,7 +216,10 @@ class MarketStructureService {
       keyLevels,
       liquidityZones,
       candleRanges,
-      quarterlyPivots,
+      malaysianSNRs,
+      malaysianEngulfings,
+      malaysianTrendlines,
+
       recentPriceAction,
     };
   }
@@ -694,55 +755,7 @@ class MarketStructureService {
     };
   }
 
-  // ── Quarterly Pivot Identification ─────────────────────────────────
 
-  identifyQuarterlyPivots(candles: Candle[]): QuarterlyPivot | null {
-    if (candles.length < 2) return null;
-
-    // Determine current quarter from the last candle
-    const lastCandle = candles[candles.length - 1];
-    const lastDate = new Date(lastCandle.time * 1000);
-    const year = lastDate.getUTCFullYear();
-    const quarter = (Math.floor(lastDate.getUTCMonth() / 3) + 1) as 1 | 2 | 3 | 4;
-
-    // Calculate quarter boundaries in seconds
-    const quarterStartMonth = (quarter - 1) * 3;
-    const quarterStart = new Date(Date.UTC(year, quarterStartMonth, 1));
-    const quarterEnd = new Date(Date.UTC(year, quarterStartMonth + 3, 1));
-    const qStartTs = quarterStart.getTime() / 1000;
-    const qEndTs = quarterEnd.getTime() / 1000;
-
-    // Filter candles within this quarter
-    const quarterCandles = candles.filter((c) => c.time >= qStartTs && c.time < qEndTs);
-
-    if (quarterCandles.length < 2) {
-      // Fall back: use all available candles as the "quarter"
-      return {
-        year,
-        quarter,
-        open: candles[0].open,
-        high: Math.max(...candles.map((c) => c.high)),
-        low: Math.min(...candles.map((c) => c.low)),
-        close: lastCandle.close,
-        range: lastCandle.close - candles[0].open,
-      };
-    }
-
-    const qOpen = quarterCandles[0].open;
-    const qHigh = Math.max(...quarterCandles.map((c) => c.high));
-    const qLow = Math.min(...quarterCandles.map((c) => c.low));
-    const qClose = quarterCandles[quarterCandles.length - 1].close;
-
-    return {
-      year,
-      quarter,
-      open: qOpen,
-      high: qHigh,
-      low: qLow,
-      close: qClose,
-      range: qHigh - qLow,
-    };
-  }
 
   // ── Price Action Classification ────────────────────────────────────
 
@@ -863,6 +876,215 @@ class MarketStructureService {
 
     return merged;
   }
+  // ── Malaysian SNR (Body-based) ──────────────────────────────────────
+
+  /**
+   * Detects A-shapes (Resistance) and V-shapes (Support) based on Open/Close prices.
+   * Resistance: Bullish close followed by Bearish open at the same level.
+   * Support: Bearish close followed by Bullish open at the same level.
+   * Also tracks "Freshness" and "Misses".
+   */
+  detectMalaysianSNRs(candles: Candle[]): MalaysianSNR[] {
+    const snrs: MalaysianSNR[] = [];
+    if (candles.length < 3) return snrs;
+
+    for (let i = 1; i < candles.length - 1; i++) {
+      const prev = candles[i - 1];
+      const curr = candles[i];
+      const next = candles[i + 1];
+
+      const prevBodyDir = prev.close > prev.open ? "BULL" : (prev.close < prev.open ? "BEAR" : "DOJI");
+      const currBodyDir = curr.close > curr.open ? "BULL" : (curr.close < curr.open ? "BEAR" : "DOJI");
+
+      // Tolerance is now ZONE-BASED: current candle's open must be within ±30% of previous candle's BODY size.
+      // This is realistic for OHLC data where open ≠ previous close due to spreads/gaps.
+      // Example: if previous bullish body = 200 pips, open can be within ±60 pips (30% of body) of prev.close.
+      const prevBodySize = Math.abs(prev.close - prev.open);
+      // Minimum tolerance: 20% of previous close (1/5 of a pip for tight assets)
+      const priceTolerance = Math.max(curr.close * 0.001, prevBodySize * 0.30);
+
+      // A-Shape (Resistance): Bullish prev candle -> Bearish curr candle
+      // curr.open must be near prev.close (within tolerance)
+      // AND curr candle must NOT break above prev.close (otherwise it's a breakout, not SNR)
+      if (prevBodyDir === "BULL" && currBodyDir === "BEAR"
+        && Math.abs(prev.close - curr.open) <= priceTolerance
+        && curr.close < prev.close // bearish reaction confirms resistance
+      ) {
+        snrs.push({
+          price: prev.close,
+          type: "RESISTANCE",
+          time: curr.time,
+          index: i,
+          isFresh: true,
+          touchedByWick: false,
+          brokenByBody: false,
+          missed: false,
+        });
+      }
+
+      // V-Shape (Support): Bearish prev candle -> Bullish curr candle
+      // curr.open must be near prev.close (within tolerance)
+      // AND curr candle must close above prev.close (bullish reaction confirms support)
+      if (prevBodyDir === "BEAR" && currBodyDir === "BULL"
+        && Math.abs(prev.close - curr.open) <= priceTolerance
+        && curr.close > prev.close // bullish reaction confirms support
+      ) {
+        snrs.push({
+          price: prev.close,
+          type: "SUPPORT",
+          time: curr.time,
+          index: i,
+          isFresh: true,
+          touchedByWick: false,
+          brokenByBody: false,
+          missed: false,
+        });
+      }
+    }
+
+    // Update Freshness and Misses for all detected SNRs
+    this.updateSNRFreshness(snrs, candles);
+
+    return snrs;
+  }
+
+  private updateSNRFreshness(snrs: MalaysianSNR[], candles: Candle[]) {
+    for (const snr of snrs) {
+      let missed = false;
+      let touched = false;
+      
+      // Start checking from the candle after the SNR formed
+      for (let j = snr.index + 1; j < candles.length; j++) {
+        const c = candles[j];
+        
+        // 1. Check for body break (Breakout validates it as Fresh again, or creates a Flipped SNR)
+        if (snr.type === "RESISTANCE" && Math.min(c.open, c.close) > snr.price) {
+            snr.brokenByBody = true;
+            snr.isFresh = true; // Broken by body makes it fresh for support
+            snr.type = "SUPPORT"; // Flipped SNR
+            continue;
+        }
+        if (snr.type === "SUPPORT" && Math.max(c.open, c.close) < snr.price) {
+            snr.brokenByBody = true;
+            snr.isFresh = true;
+            snr.type = "RESISTANCE"; // Flipped SNR
+            continue;
+        }
+
+        // 2. Check for wick touch
+        const wickHigh = c.high;
+        const wickLow = c.low;
+
+        // If it was broken by body, we evaluate touches based on its NEW type
+        if (snr.type === "RESISTANCE" && wickHigh >= snr.price) {
+          snr.touchedByWick = true;
+          snr.isFresh = false; // Once touched by wick, it's unfresh
+          touched = true;
+        }
+        if (snr.type === "SUPPORT" && wickLow <= snr.price) {
+          snr.touchedByWick = true;
+          snr.isFresh = false;
+          touched = true;
+        }
+
+        // 3. Check for Miss (price comes close but wick fails to touch)
+        // A Miss validates the SNR. Let's say within 1 ATR but no touch.
+        // Simplified: if it hasn't been touched yet, but subsequent candles form away from it, it's missed.
+        if (!touched && (j > snr.index + 2)) {
+            snr.missed = true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Strict Engulfing: 2nd candle body COMPLETELY engulfs 1st candle body.
+   */
+  detectMalaysianEngulfings(candles: Candle[]): MalaysianEngulfing[] {
+    const engulfings: MalaysianEngulfing[] = [];
+    if (candles.length < 2) return engulfings;
+
+    for (let i = 1; i < candles.length; i++) {
+      const prev = candles[i - 1];
+      const curr = candles[i];
+
+      const prevTop = Math.max(prev.open, prev.close);
+      const prevBottom = Math.min(prev.open, prev.close);
+      const currTop = Math.max(curr.open, curr.close);
+      const currBottom = Math.min(curr.open, curr.close);
+
+      // Bullish Engulfing
+      if (prev.close < prev.open && curr.close > curr.open) { // Prev Bear, Curr Bull
+        if (currTop >= prevTop && currBottom <= prevBottom) {
+          engulfings.push({
+            type: "BULLISH",
+            top: currTop,
+            bottom: currBottom,
+            time: curr.time,
+            index: i,
+          });
+        }
+      }
+
+      // Bearish Engulfing
+      if (prev.close > prev.open && curr.close < curr.open) { // Prev Bull, Curr Bear
+        if (currTop >= prevTop && currBottom <= prevBottom) {
+          engulfings.push({
+            type: "BEARISH",
+            top: currTop,
+            bottom: currBottom,
+            time: curr.time,
+            index: i,
+          });
+        }
+      }
+    }
+    return engulfings;
+  }
+
+  /**
+   * Trendline: connects at least 2 SNRs of the same type.
+   * Resistance TL: connects Resistance SNRs downwards.
+   * Support TL: connects Support SNRs upwards.
+   */
+  detectMalaysianTrendlines(snrs: MalaysianSNR[]): MalaysianTrendline[] {
+    const trendlines: MalaysianTrendline[] = [];
+    const supports = snrs.filter(s => s.type === "SUPPORT");
+    const resistances = snrs.filter(s => s.type === "RESISTANCE");
+
+    // Very basic naive trendline builder: just connect the last 2 valid points
+    // A proper trendline builder would require more complex raycasting.
+    // For now, let's just connect recent consecutive SNRs that form a trend.
+
+    // Support Trendline (higher lows)
+    for (let i = 0; i < supports.length - 1; i++) {
+        for (let j = i + 1; j < supports.length; j++) {
+            const p1 = supports[i];
+            const p2 = supports[j];
+            if (p2.price > p1.price && p2.index > p1.index) {
+                // Upward slope
+                const slope = (p2.price - p1.price) / (p2.index - p1.index);
+                trendlines.push({ p1, p2, type: "SUPPORT", slope });
+            }
+        }
+    }
+
+    // Resistance Trendline (lower highs)
+    for (let i = 0; i < resistances.length - 1; i++) {
+        for (let j = i + 1; j < resistances.length; j++) {
+            const p1 = resistances[i];
+            const p2 = resistances[j];
+            if (p2.price < p1.price && p2.index > p1.index) {
+                // Downward slope
+                const slope = (p2.price - p1.price) / (p2.index - p1.index);
+                trendlines.push({ p1, p2, type: "RESISTANCE", slope });
+            }
+        }
+    }
+
+    return trendlines;
+  }
+
 }
 
 export const marketStructureService = new MarketStructureService();

@@ -8,7 +8,7 @@ export interface IPlaybook extends Document {
   markets: string[]; // formerly applicablePairs
   timeframe?: string;
   // Primary methodology category
-  methodology: "ICT" | "CRT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
+  methodology: "ICT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID";
   // Market condition filter (optional)
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   // Legacy compatibility
@@ -44,7 +44,7 @@ const PlaybookSchema = new Schema<IPlaybook>({
   timeframe: { type: String },
   methodology: {
     type: String,
-    enum: ["ICT", "CRT", "MSNR", "SMC", "PA", "IND", "HYBRID"],
+    enum: ["ICT", "MSNR", "SMC", "PA", "IND", "HYBRID"],
     required: true
   },
   marketCondition: {

@@ -111,31 +111,25 @@ class MarketRegimeService {
    */
   getRegimeMultipliers(regime: MarketRegime): Record<string, number> {
     const multipliers: Record<string, number> = {
-      smc: 1.0, ict: 1.0, msnr: 1.0, crt: 1.0, quarterly: 1.0, lit: 1.0, rsiEngulf: 1.0,
+      smc: 1.0, ict: 1.0, msnr: 1.0,
     };
 
     switch (regime) {
       case "TRENDING_BULL":
       case "TRENDING_BEAR":
         multipliers.smc = 1.3;
-        multipliers.ict = 1.2;
-        multipliers.lit = 1.2;
-        multipliers.crt = 0.6;
+        multipliers.ict = 0.6;  // ICT (Upgraded with CRT) still useful in trends
         multipliers.msnr = 0.7;
         break;
       case "RANGING":
-        multipliers.crt = 1.3;
+        multipliers.ict = 1.3;  // ICT (Upgraded) excels in ranging AMD accumulation
         multipliers.msnr = 1.2;
         multipliers.smc = 0.7;
-        multipliers.ict = 0.8;
         break;
       case "HIGH_VOLATILITY":
         multipliers.smc = 0.5;
         multipliers.ict = 0.5;
-        multipliers.crt = 0.5;
         multipliers.msnr = 0.5;
-        multipliers.lit = 0.5;
-        multipliers.rsiEngulf = 0.3;
         break;
     }
 

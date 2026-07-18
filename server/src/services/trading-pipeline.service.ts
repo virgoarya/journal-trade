@@ -79,6 +79,24 @@ export interface PipelineConfig {
   activeMethodologies?: MethodologyName[];
   // NEW: LLM Consensus settings
   llmConsensus?: LLMConsensusConfig;
+  smartRisk?: {
+    enabled: boolean;
+    capitalPreservation?: {
+      enabled: boolean;
+      activationGrowthPct: number;
+      riskReductionMultiplier: number;
+    };
+    dailyLimits?: {
+      enabled: boolean;
+      profitTargetPct: number;
+      lossLimitPct: number;
+    };
+    drawdownRecovery?: {
+      enabled: boolean;
+      activationDrawdownPct: number;
+      riskReductionMultiplier: number;
+    };
+  };
 }
 
 export interface PipelineStatus {
@@ -94,6 +112,12 @@ export interface PipelineStatus {
     dailyPnL: number;
     openPositions: number;
     currentDrawdown: number;
+    smartRisk?: {
+      currentDrawdownPct: number;
+      currentGrowthPct: number;
+      currentRiskMultiplier: number;
+      dailyTradingBlocked: boolean;
+    };
   };
   lastSignal: TradingSignal | null;
   lastAnalysis: MultiStrategySymbolAnalysis | null;
@@ -156,6 +180,15 @@ class TradingPipelineService {
       mt5CircuitOpen: boolean;
       llmCircuitOpen: boolean;
       llmCircuitStates: Record<string, string>;
+      /** Smart Risk Management States */
+      startOfDayEquity?: number;
+      currentDayStr?: string;
+      peakEquity?: number;
+      initialBalance?: number;
+      dailyTradingBlocked?: boolean;
+      currentDrawdownPct?: number;
+      currentGrowthPct?: number;
+      currentRiskMultiplier?: number;
     }
   > = new Map();
 
@@ -248,6 +281,14 @@ const pipeline = {
       llmCircuitStates: {},
       /** Track pending orders for expiry management */
       pendingOrders: new Map<number, { symbol: string; placedAt: number; expiryAt: number }>(),
+      startOfDayEquity: 0,
+      currentDayStr: new Date().toLocaleDateString(),
+      peakEquity: 0,
+      initialBalance: 0,
+      dailyTradingBlocked: false,
+      currentDrawdownPct: 0,
+      currentGrowthPct: 0,
+      currentRiskMultiplier: 1,
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -256,6 +297,11 @@ const pipeline = {
       const accountInfo = await mt5McpService.getAccountInfo();
       const positions = await mt5McpService.getPositions();
       const symbolPositions = positions.filter(p => merged.symbols.includes(p.symbol));
+      
+      pipeline.initialBalance = accountInfo?.balance || 0;
+      pipeline.startOfDayEquity = accountInfo?.equity || 0;
+      pipeline.peakEquity = accountInfo?.equity || 0;
+
       this.addLog(userId, "INFO",
         `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | Balance: $${accountInfo?.balance?.toFixed(2) || 0} | Positions: ${symbolPositions.length}/${merged.maxOpenPositions}`
       );
@@ -469,7 +515,26 @@ const pipeline = {
 
     try {
       if (!mt5McpService.isConnected) {
-        return pipeline; // Return cached without polling MT5
+        return {
+          running: pipeline.intervals.size > 0 && !pipeline.paused,
+          paused: pipeline.paused,
+          startedAt: null,
+          config: pipeline.config,
+          metrics: {
+            totalTrades: 0,
+            winningTrades: 0,
+            losingTrades: 0,
+            totalPnL: 0,
+            dailyPnL: 0,
+            openPositions: 0,
+            currentDrawdown: 0,
+          },
+          lastSignal: pipeline.lastSignal,
+          lastAnalysis: pipeline.lastAnalysis,
+          lastError: pipeline.lastError,
+          mt5CircuitState: "DISCONNECTED",
+          llmCircuitStates: pipeline.llmCircuitStates,
+        };
       }
       // Get current MT5 account ID
       const accountInfo = await mt5McpService.getAccountInfo();
@@ -531,6 +596,12 @@ const pipeline = {
         dailyPnL: Math.round(dailyPnL * 100) / 100,
         openPositions,
         currentDrawdown: Math.round(currentDrawdown * 100) / 100,
+        smartRisk: {
+          currentDrawdownPct: pipeline.currentDrawdownPct || 0,
+          currentGrowthPct: pipeline.currentGrowthPct || 0,
+          currentRiskMultiplier: pipeline.currentRiskMultiplier || 1,
+          dailyTradingBlocked: pipeline.dailyTradingBlocked || false,
+        }
       },
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
@@ -634,6 +705,57 @@ const pipeline = {
       }
 
       if (!this.isWithinTradingHours(pipeline.config)) return;
+
+      // ── Smart Risk Management State Updates ──
+      try {
+        const acc = await mt5McpService.getAccountInfo();
+        if (acc && acc.equity) {
+          const todayStr = new Date().toLocaleDateString();
+          if (pipeline.currentDayStr !== todayStr) {
+            pipeline.currentDayStr = todayStr;
+            pipeline.startOfDayEquity = acc.equity;
+            pipeline.dailyTradingBlocked = false; // Reset block on new day
+            this.addLog(userId, "INFO", `[SMART-RISK] Daily state reset. Start of day equity: $${acc.equity.toFixed(2)}`);
+          }
+          if (acc.equity > (pipeline.peakEquity || 0)) {
+            pipeline.peakEquity = acc.equity;
+          }
+          
+          if (pipeline.peakEquity && pipeline.peakEquity > 0) {
+            pipeline.currentDrawdownPct = ((pipeline.peakEquity - acc.equity) / pipeline.peakEquity) * 100;
+          }
+          
+          if (pipeline.initialBalance && pipeline.initialBalance > 0) {
+            pipeline.currentGrowthPct = ((acc.equity - pipeline.initialBalance) / pipeline.initialBalance) * 100;
+          }
+
+          // Check Daily Limits
+          if (pipeline.config.smartRisk?.enabled && pipeline.config.smartRisk.dailyLimits?.enabled) {
+            const dailyLimits = pipeline.config.smartRisk.dailyLimits;
+            const startOfDay = pipeline.startOfDayEquity || acc.equity;
+            const currentDailyGainPct = ((acc.equity - startOfDay) / startOfDay) * 100;
+
+            if (currentDailyGainPct >= dailyLimits.profitTargetPct) {
+               if (!pipeline.dailyTradingBlocked) {
+                 pipeline.dailyTradingBlocked = true;
+                 this.addLog(userId, "INFO", `[SMART-RISK] Daily Profit Target tercapai (+${currentDailyGainPct.toFixed(2)}%). Trading dihentikan untuk hari ini.`);
+               }
+            } else if (currentDailyGainPct <= -dailyLimits.lossLimitPct) {
+               if (!pipeline.dailyTradingBlocked) {
+                 pipeline.dailyTradingBlocked = true;
+                 this.addLog(userId, "INFO", `[SMART-RISK] Daily Loss Limit tercapai (${currentDailyGainPct.toFixed(2)}%). Trading dihentikan untuk hari ini.`);
+               }
+            }
+          }
+        }
+      } catch (err) {
+        // silently skip state update if MT5 fails
+      }
+
+      if (pipeline.dailyTradingBlocked) {
+        return; // Skip trading loop if blocked by Smart Risk
+      }
+
 
       // Note: managePositions and syncClosedPositions are handled by trailingInterval globally now.
 
@@ -999,11 +1121,36 @@ const llmResult = await llmConsensusService.evaluate(
         const accountInfo = await mt5McpService.getAccountInfo();
         const symbolInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
 
-        let volume = pipeline.config.maxRiskPerTrade;
+        // Calculate Smart Risk Multiplier
+        let riskMultiplier = 1;
+        if (pipeline.config.smartRisk?.enabled) {
+          const smart = pipeline.config.smartRisk;
+          
+          // 1. Drawdown Recovery (Priority 1)
+          if (smart.drawdownRecovery?.enabled && pipeline.currentDrawdownPct !== undefined) {
+             if (pipeline.currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
+               riskMultiplier = smart.drawdownRecovery.riskReductionMultiplier;
+               this.addLog(userId, "INFO", `[SMART-RISK] Drawdown Recovery aktif (DD: ${pipeline.currentDrawdownPct.toFixed(2)}%). Risk diturunkan menjadi ${riskMultiplier}x.`);
+             }
+          }
+          
+          // 2. Capital Preservation (Tiered Scaling)
+          if (riskMultiplier === 1 && smart.capitalPreservation?.enabled && pipeline.currentGrowthPct !== undefined) {
+             if (pipeline.currentGrowthPct >= smart.capitalPreservation.activationGrowthPct) {
+               riskMultiplier = smart.capitalPreservation.riskReductionMultiplier;
+               this.addLog(userId, "INFO", `[SMART-RISK] Capital Preservation aktif (Growth: ${pipeline.currentGrowthPct.toFixed(2)}%). Risk diturunkan menjadi ${riskMultiplier}x untuk melindungi profit.`);
+             }
+          }
+        }
+        
+        pipeline.currentRiskMultiplier = riskMultiplier;
+        const finalRiskPercent = pipeline.config.maxRiskPerTrade * riskMultiplier;
+
+        let volume = finalRiskPercent;
         if (symbolInfo) {
           volume = aiTradingEngine.calculatePositionSize({
             accountBalance: accountInfo.balance,
-            riskPercent: pipeline.config.maxRiskPerTrade,
+            riskPercent: finalRiskPercent,
             entryPrice: signal.entry,
             stopLoss: signal.sl,
             contractSize: symbolInfo.tradeContractSize,
@@ -1014,7 +1161,7 @@ const llmResult = await llmConsensusService.evaluate(
 
           if (volume === 0) {
             this.addLog(userId, "ERROR",
-              `Risk rejected ${signal.symbol}: Stop Loss terlalu jauh (${Math.abs(signal.entry - signal.sl).toFixed(5)} poin). Lot terkecil (${symbolInfo.volumeMin}) akan mengakibatkan kerugian melebihi max risk per trade (${pipeline.config.maxRiskPerTrade}%).`
+              `Risk rejected ${signal.symbol}: Stop Loss terlalu jauh (${Math.abs(signal.entry - signal.sl).toFixed(5)} poin). Lot terkecil (${symbolInfo.volumeMin}) akan mengakibatkan kerugian melebihi max risk per trade (${finalRiskPercent}%).`
             );
             continue;
           }

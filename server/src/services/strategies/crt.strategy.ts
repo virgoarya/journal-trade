@@ -4,6 +4,7 @@
 
 import { type Candle, type MarketStructure, type CandleRangeAnalysis } from "./market-structure.service";
 import { atrService } from "./atr.service";
+import { strategyConfigService } from "./strategy-config.service";
 
 export interface CRTSignal {
   direction: "BUY" | "SELL";
@@ -22,11 +23,6 @@ export interface CRTAnalysis {
   signals: CRTSignal[];
 }
 
-// Candles to look back for range calculation
-const RANGE_LOOKBACK = 20;
-const BREAKOUT_THRESHOLD = 0.6; // % of range to confirm breakout
-const DISPLACEMENT_MULTIPLIER = 2.0; // × avg range for displacement
-
 class CRTStrategy {
   /**
    * Full CRT analysis.
@@ -38,29 +34,31 @@ class CRTStrategy {
 
     const candles = fractal.entry;
     const marketStructure = fractal.entryStr;
+    const crtConfig = strategyConfigService.getCRTConfig();
+    // HTF trend direction untuk filter Range Breakout
+    const htfTrend = fractal.directionStr.trend.direction;
 
-    if (candles.length < RANGE_LOOKBACK) return signals;
+    if (candles.length < crtConfig.rangeLookback) return signals;
 
     const ranges = marketStructure.candleRanges;
 
-    // 0. CRT 3-Candle Pattern (Specific Setup)
-    const threeCandleSignal = this.detect3CandlePattern(fractal);
+    // 0. CRT 3-Candle Pattern (highest quality setup)
+    const threeCandleSignal = this.detect3CandlePattern(fractal, crtConfig);
     if (threeCandleSignal) signals.push(threeCandleSignal);
 
-    // 1. Range Breakout
-    const breakoutSignal = this.detectRangeBreakout(candles, ranges, marketStructure);
+    // 1. Range Breakout (pending limit di retest, dengan HTF trend filter)
+    const breakoutSignal = this.detectRangeBreakout(candles, ranges, marketStructure, crtConfig, htfTrend);
     if (breakoutSignal) signals.push(breakoutSignal);
 
-    // 2. Liquidity Sweep
-    const sweepSignal = this.detectLiquiditySweep(candles, ranges, marketStructure);
+    // 2. Liquidity Sweep (reversal setelah stop hunt)
+    const sweepSignal = this.detectLiquiditySweep(candles, ranges, marketStructure, crtConfig);
     if (sweepSignal) signals.push(sweepSignal);
 
-    // 3. Displacement
-    const displacementSignal = this.detectDisplacement(candles, ranges, marketStructure);
-    if (displacementSignal) signals.push(displacementSignal);
+    // 3. Displacement — DIHAPUS dari backtest (noisy, lebih cocok untuk live manual trading)
+    // const displacementSignal = this.detectDisplacement(...);
 
-    // 4. Market Structure Break (MSB)
-    const msbSignal = this.detectMSB(candles, ranges, marketStructure);
+    // 4. Market Structure Break (MSB) — tetap aktif
+    const msbSignal = this.detectMSB(candles, ranges, marketStructure, crtConfig, fractal.directionStr);
     if (msbSignal) signals.push(msbSignal);
 
     return signals.sort((a, b) => b.confidence - a.confidence);
@@ -69,20 +67,24 @@ class CRTStrategy {
   // ── Range Breakout ─────────────────────────────────────────────────
 
   /**
-   * Price closes outside the established range of the last N candles.
-   * The more convincing the close (body entirely out), the stronger.
+   * Range Breakout dengan HTF trend filter.
+   * Hanya ambil BUY breakout jika HTF bullish (atau sideways),
+   * hanya ambil SELL breakout jika HTF bearish (atau sideways).
+   * Ini mengurangi counter-trend false signals.
    */
   private detectRangeBreakout(
     candles: Candle[],
     ranges: CandleRangeAnalysis,
     ms: MarketStructure,
+    crtConfig: import("./strategy-config.service").StrategyConfig['crt'],
+    htfTrend: "BULL" | "BEAR" | "SIDEWAYS" = "SIDEWAYS",
   ): CRTSignal | null {
     if (candles.length < 2) return null;
 
     const last = candles[candles.length - 1];
 
-    // Calculate range from the last 20 candles (excluding the last one)
-    const recent = candles.slice(-RANGE_LOOKBACK - 1, -1);
+    // Calculate range from the last N candles (excluding the last one)
+    const recent = candles.slice(-crtConfig.rangeLookback - 1, -1);
     const rangeHigh = Math.max(...recent.map((c) => c.high));
     const rangeLow = Math.min(...recent.map((c) => c.low));
     const rangeWidth = rangeHigh - rangeLow;
@@ -95,31 +97,35 @@ class CRTStrategy {
     const bodyBottom = Math.min(last.open, last.close);
     const body = bodyTop - bodyBottom;
 
-    // Bullish breakout: body entirely above range
-    if (bodyBottom > rangeHigh && body > rangeWidth * BREAKOUT_THRESHOLD) {
+    // Bullish breakout: body entirely above range — hanya jika HTF TIDAK bearish
+    if (bodyBottom > rangeHigh && body > rangeWidth * crtConfig.breakoutThresholdPct) {
+      if (htfTrend === "BEAR") return null;
+      // Entry: pending BUY LIMIT di rangeHigh (retest level yang ditembus)
+      // Jauh lebih reliable daripada market entry di close breakout candle
       return {
         direction: "BUY",
-        entry: last.close,
-        sl: rangeHigh - avgRange * 0.3,
-        tp: last.close + avgRange * 2.0,
+        entry: rangeHigh,           // Pending limit di rangeHigh
+        sl: rangeHigh - avgRange * 1.0,  // SL 1× ATR di bawah rangeHigh
+        tp: rangeHigh + avgRange * 2.5,  // TP 2.5× ATR dari entry
         range: { high: rangeHigh, low: rangeLow, width: rangeWidth },
         signalType: "RANGE_BREAKOUT",
-        confidence: 65,
-        reason: `CRT Breakout BUY: Price broke above ${RANGE_LOOKBACK}c range high ${rangeHigh.toFixed(5)}`,
+        confidence: crtConfig.minConfidence + 20,  // confidence lebih tinggi karena entry lebih selektif
+        reason: `CRT Breakout BUY: Pending limit @ retest rangeHigh ${rangeHigh.toFixed(5)} (HTF: ${htfTrend}, RR 1:2.5)`,
       };
     }
 
-    // Bearish breakout: body entirely below range
-    if (bodyTop < rangeLow && body > rangeWidth * BREAKOUT_THRESHOLD) {
+    // Bearish breakout: body entirely below range — hanya jika HTF TIDAK bullish
+    if (bodyTop < rangeLow && body > rangeWidth * crtConfig.breakoutThresholdPct) {
+      if (htfTrend === "BULL") return null;
       return {
         direction: "SELL",
-        entry: last.close,
-        sl: rangeLow + avgRange * 0.3,
-        tp: last.close - avgRange * 2.0,
+        entry: rangeLow,            // Pending limit di rangeLow
+        sl: rangeLow + avgRange * 1.0,
+        tp: rangeLow - avgRange * 2.5,
         range: { high: rangeHigh, low: rangeLow, width: rangeWidth },
         signalType: "RANGE_BREAKOUT",
-        confidence: 65,
-        reason: `CRT Breakout SELL: Price broke below ${RANGE_LOOKBACK}c range low ${rangeLow.toFixed(5)}`,
+        confidence: crtConfig.minConfidence + 20,
+        reason: `CRT Breakout SELL: Pending limit @ retest rangeLow ${rangeLow.toFixed(5)} (HTF: ${htfTrend}, RR 1:2.5)`,
       };
     }
 
@@ -136,12 +142,13 @@ class CRTStrategy {
     candles: Candle[],
     ranges: CandleRangeAnalysis,
     ms: MarketStructure,
+    crtConfig: import("./strategy-config.service").StrategyConfig['crt'],
   ): CRTSignal | null {
     if (candles.length < 2) return null;
 
     const last = candles[candles.length - 1];
     const prev = candles[candles.length - 2];
-    const recent = candles.slice(-RANGE_LOOKBACK - 1, -1);
+    const recent = candles.slice(-crtConfig.rangeLookback - 1, -1);
     const rangeHigh = Math.max(...recent.map((c) => c.high));
     const rangeLow = Math.min(...recent.map((c) => c.low));
     const rangeWidth = rangeHigh - rangeLow;
@@ -157,11 +164,11 @@ class CRTStrategy {
         direction: "BUY",
         entry: last.close,
         sl: rangeLow - avgRange * 0.5,
-        tp: last.close + avgRange * 2.0,
+        tp: rangeHigh, // TP mengincar sisi berlawanan range (lebih logis dari fixed ATR)
         range: { high: rangeHigh, low: rangeLow, width: rangeWidth },
         signalType: "LIQUIDITY_SWEEP",
-        confidence: 72,
-        reason: `CRT Sweep BUY: Wick below range ${rangeLow.toFixed(5)} swept stops, now reversing`,
+        confidence: crtConfig.minConfidence + 22,
+        reason: `CRT Sweep BUY: Wick below range ${rangeLow.toFixed(5)} swept stops, TP @ range high ${rangeHigh.toFixed(5)}`,
       };
     }
 
@@ -171,11 +178,11 @@ class CRTStrategy {
         direction: "SELL",
         entry: last.close,
         sl: rangeHigh + avgRange * 0.5,
-        tp: last.close - avgRange * 2.0,
+        tp: rangeLow, // TP mengincar sisi berlawanan range
         range: { high: rangeHigh, low: rangeLow, width: rangeWidth },
         signalType: "LIQUIDITY_SWEEP",
-        confidence: 72,
-        reason: `CRT Sweep SELL: Wick above range ${rangeHigh.toFixed(5)} swept stops, now reversing`,
+        confidence: crtConfig.minConfidence + 22,
+        reason: `CRT Sweep SELL: Wick above range ${rangeHigh.toFixed(5)} swept stops, TP @ range low ${rangeLow.toFixed(5)}`,
       };
     }
 
@@ -192,6 +199,7 @@ class CRTStrategy {
     candles: Candle[],
     ranges: CandleRangeAnalysis,
     ms: MarketStructure,
+    crtConfig: import("./strategy-config.service").StrategyConfig['crt'],
   ): CRTSignal | null {
     if (candles.length < 6) return null;
 
@@ -208,14 +216,16 @@ class CRTStrategy {
     if (isBullish) {
       return {
         direction: "BUY",
+        // Market entry di close candle (backtest-compatible)
+        // Note: idealnya pending limit di 50% body untuk live trading
         entry: last.close,
-        sl: last.low - avgRange * 0.3,
-        tp: last.close + avgRange * 2.0,
+        sl: last.low - avgRange * 0.5,
+        tp: last.close + avgRange * 2.5,
         range: { high: last.high, low: last.low, width: last.high - last.low },
         signalType: "DISPLACEMENT",
         displacementCandle: last,
-        confidence: 70,
-        reason: `CRT Displacement BUY: Last candle range ${(last.high - last.low).toFixed(5)} (${((last.high - last.low) / avgRange).toFixed(1)}× avg)`,
+        confidence: crtConfig.minConfidence + 20,
+        reason: `CRT Displacement BUY: Market entry @ close ${last.close.toFixed(5)}, candle range ${(last.high - last.low).toFixed(5)} (${((last.high - last.low) / avgRange).toFixed(1)}× avg)`,
       };
     }
 
@@ -223,13 +233,13 @@ class CRTStrategy {
       return {
         direction: "SELL",
         entry: last.close,
-        sl: last.high + avgRange * 0.3,
-        tp: last.close - avgRange * 2.0,
+        sl: last.high + avgRange * 0.5,
+        tp: last.close - avgRange * 2.5,
         range: { high: last.high, low: last.low, width: last.high - last.low },
         signalType: "DISPLACEMENT",
         displacementCandle: last,
-        confidence: 70,
-        reason: `CRT Displacement SELL: Last candle range ${(last.high - last.low).toFixed(5)} (${((last.high - last.low) / avgRange).toFixed(1)}× avg)`,
+        confidence: crtConfig.minConfidence + 20,
+        reason: `CRT Displacement SELL: Market entry @ close ${last.close.toFixed(5)}, candle range ${(last.high - last.low).toFixed(5)} (${((last.high - last.low) / avgRange).toFixed(1)}× avg)`,
       };
     }
 
@@ -246,6 +256,8 @@ class CRTStrategy {
     candles: Candle[],
     ranges: CandleRangeAnalysis,
     ms: MarketStructure,
+    crtConfig: import("./strategy-config.service").StrategyConfig['crt'],
+    fractalDirection: import("./market-structure.service").FractalContext['directionStr'],
   ): CRTSignal | null {
     if (!ranges.recentDisplacement) return null;
     if (candles.length < 3) return null;
@@ -258,6 +270,9 @@ class CRTStrategy {
     const recentHighs = ms.swingHighs.filter((s) => s.index >= candles.length - 6);
     for (const swing of recentHighs) {
       if (last.close > swing.price && last.low > swing.price) {
+        let confidence = crtConfig.minConfidence + 28;
+        if (fractalDirection.trend.direction === "BULL") confidence += 5;
+
         return {
           direction: "BUY",
           entry: last.close,
@@ -266,7 +281,7 @@ class CRTStrategy {
           range: { high: ranges.high, low: ranges.low, width: ranges.width },
           signalType: "MSB",
           displacementCandle: last,
-          confidence: 78,
+          confidence: Math.min(98, confidence),
           reason: `CRT MSB BUY: Displacement broke swing high ${swing.price.toFixed(5)}`,
         };
       }
@@ -275,6 +290,9 @@ class CRTStrategy {
     const recentLows = ms.swingLows.filter((s) => s.index >= candles.length - 6);
     for (const swing of recentLows) {
       if (last.close < swing.price && last.high < swing.price) {
+        let confidence = crtConfig.minConfidence + 28;
+        if (fractalDirection.trend.direction === "BEAR") confidence += 5;
+
         return {
           direction: "SELL",
           entry: last.close,
@@ -283,7 +301,7 @@ class CRTStrategy {
           range: { high: ranges.high, low: ranges.low, width: ranges.width },
           signalType: "MSB",
           displacementCandle: last,
-          confidence: 78,
+          confidence: Math.min(98, confidence),
           reason: `CRT MSB SELL: Displacement broke swing low ${swing.price.toFixed(5)}`,
         };
       }
@@ -292,9 +310,12 @@ class CRTStrategy {
     return null;
   }
 
-  // ── 3-Candle Pattern (Accumulation, Manipulation, Distribution) ──
+  // ─── 3-Candle Pattern (Accumulation, Manipulation, Distribution) ──
 
-  private detect3CandlePattern(fractal: import("./market-structure.service").FractalContext): CRTSignal | null {
+  private detect3CandlePattern(
+    fractal: import("./market-structure.service").FractalContext,
+    crtConfig: import("./strategy-config.service").StrategyConfig['crt'],
+  ): CRTSignal | null {
     const setupCandles = fractal.setup;
     if (setupCandles.length < 3) return null;
 
@@ -338,11 +359,11 @@ class CRTStrategy {
         return {
           direction: "BUY",
           entry: entryPrice,
-          sl: c2.low - atr * 0.2, // slightly below C2 low
+          sl: c2.low - atr * 0.5, // was 0.2 — diperlebar agar tidak kena noise
           tp: c1.high, // draw on liquidity at C1 high
           range: { high: c1.high, low: c2.low, width: c1.high - c2.low },
           signalType: "3_CANDLE_PATTERN",
-          confidence: 85,
+          confidence: crtConfig.minConfidence + 35,
           reason,
         };
       }
@@ -372,11 +393,11 @@ class CRTStrategy {
         return {
           direction: "SELL",
           entry: entryPrice,
-          sl: c2.high + atr * 0.2, // slightly above C2 high
+          sl: c2.high + atr * 0.5, // was 0.2 — diperlebar agar tidak kena noise
           tp: c1.low, // draw on liquidity at C1 low
           range: { high: c2.high, low: c1.low, width: c2.high - c1.low },
           signalType: "3_CANDLE_PATTERN",
-          confidence: 85,
+          confidence: crtConfig.minConfidence + 35,
           reason,
         };
       }

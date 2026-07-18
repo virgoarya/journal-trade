@@ -5,15 +5,14 @@ import { marketStructureService } from "./strategies/market-structure.service";
 import { smcStrategy } from "./strategies/smc.strategy";
 import { ictStrategy } from "./strategies/ict.strategy";
 import { msnrStrategy } from "./strategies/msnr.strategy";
-import { crtStrategy } from "./strategies/crt.strategy";
-import { quarterlyTheoryStrategy } from "./strategies/quarterly.strategy";
-import { litStrategy } from "./strategies/lit.strategy";
+
 import { confluenceEngine } from "./strategies/confluence-engine";
 import { atrService } from "./strategies/atr.service";
 import { BacktestExperience } from "../models/BacktestExperience";
 import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
+import { strategyConfigService } from "./strategies/strategy-config.service";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -53,6 +52,25 @@ export interface BacktestConfig {
   sessionId?: string;
   /** If true, runs in stealth mode for auto-optimization (no db save, no info logs) */
   isOptimization?: boolean;
+  
+  smartRisk?: {
+    enabled: boolean;
+    capitalPreservation?: {
+      enabled: boolean;
+      activationGrowthPct: number;
+      riskReductionMultiplier: number;
+    };
+    dailyLimits?: {
+      enabled: boolean;
+      profitTargetPct: number;
+      lossLimitPct: number;
+    };
+    drawdownRecovery?: {
+      enabled: boolean;
+      activationDrawdownPct: number;
+      riskReductionMultiplier: number;
+    };
+  };
 }
 
 export interface SimulatedTrade {
@@ -68,6 +86,8 @@ export interface SimulatedTrade {
   pnl: number;
   pnlPercent: number;
   closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT";
+  exitMethodology?: string;
+  rr?: number;
   rsiAtEntry: number;
   atrAtEntry: number;
   pattern: string;
@@ -229,11 +249,13 @@ export type BacktestStreamEvent =
         reason: string;
         confidence: number;
         primaryMethodology?: string;
+        rr: number;
+        exitMethodology?: string;
       };
     }
   | {
       type: "equity";
-      data: { time: number; equity: number; floatingPnL: number };
+      data: { time: number; equity: number; floatingPnL: number; activeTrades?: any[] };
     }
   | {
       type: "complete";
@@ -546,6 +568,9 @@ class BacktestService {
     abortCheck?: () => boolean,
   ): Promise<BacktestResult> {
 
+    // ── Sync strategy configs from backtest entrySettings ────────────
+    strategyConfigService.updateFromBacktestConfig(merged.entrySettings);
+
     // ── Emit sim-start progress ──────────────────────────────
     emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
     await new Promise(r => setTimeout(r, 30)); // flush SSE
@@ -555,7 +580,7 @@ class BacktestService {
     const ATR_PERIOD = 14;
     const warmupCandles = Math.max(RSI_PERIOD, ATR_PERIOD) + 2;
     /** Limit strategy analysis to last N candles for performance */
-    const MAX_STRATEGY_CANDLES = 300;
+    const MAX_STRATEGY_CANDLES = 100;
 
     let allTimelineCandles: TimelineCandle[] = [];
     for (const [sym, state] of symbolStates) {
@@ -589,6 +614,7 @@ class BacktestService {
     let equity = merged.initialBalance;
     let peakEquity = equity;
     let maxDrawdown = 0;
+    let maxDrawdownPctGlobal = 0;
     let openTrades: Map<string, OpenSimTrade> = new Map();
     let totalWin = 0;
     let totalLoss = 0;
@@ -601,6 +627,18 @@ class BacktestService {
     let lastProgressPct = -1;
     const MIN_PROGRESS_INTERVAL_PCT = 0.25;
     const PROGRESS_FLUSH_MS = 5;
+
+    // ── Performance: yield control ───────────────────────────────
+    // For non-eval steps (cheap): batch many before yielding
+    // For eval steps (expensive): always yield after to flush SSE
+    const YIELD_BATCH_SIZE = Math.max(20, Math.floor(totalTimelineSteps / 200));
+    let stepsSinceYield = 0;
+    let didStrategyEval = false; // flag to force yield after heavy computation
+
+    // ── Market structure cache per symbol ─────────────────────────
+    // Cache the last analysis result and the candle index it was computed at.
+    // Only recompute when the candle index advances past the cached one.
+    const msCache = new Map<string, { idx: number; dirMs: any; setupMs: any; entryMs: any; isAligned: boolean }>();
 
     // Track which candle index each symbol is at
     const symbolCandleIdx = new Map<string, number>();
@@ -633,6 +671,12 @@ class BacktestService {
     // Map of visible symbols (those with enough data)
     const activeSymbols = Array.from(symbolStates.keys());
 
+    // ── Smart Risk Management State ───────────────────────────────
+    let startOfDayEquity = merged.initialBalance;
+    let currentDayStr = "";
+    let dailyTradingBlocked = false;
+    let currentRiskMultiplier = 1;
+
     // ── Iterate by timeline ───────────────────────────────────────
     let timelineStep = 0;
 
@@ -650,24 +694,24 @@ class BacktestService {
     for (const group of timelineGroups) {
       timelineStep++;
 
-      // Apply simulation speed delay if configured
-      if ((merged.speedMs || 0) > 0) {
-        await new Promise((resolve) => setTimeout(resolve, merged.speedMs));
-      }
-
       // Abort check
       if (abortCheck && abortCheck()) {
         silentLogger.info(`[BACKTEST] Aborted by user at step ${timelineStep}/${totalTimelineSteps}`);
         break;
       }
 
-      // Speed control: yield to event loop so SSE flushes
-      if (merged.speedMs && merged.speedMs > 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, merged.speedMs!));
-      } else {
-        // Yield every step to keep SSE keepalive / event loop responsive
-        await new Promise<void>((resolve) => setImmediate(resolve));
+      // Check for day change
+      let resetDailyEquity = false;
+      const dayStr = new Date(group.time * 1000).toISOString().split('T')[0];
+      if (currentDayStr !== dayStr) {
+        currentDayStr = dayStr;
+        resetDailyEquity = true;
+        dailyTradingBlocked = false;
       }
+
+      // We will yield at the END of the loop so we don't delay the first frame.
+      
+      let tradeStateChanged = false;
 
       // ─────────────────────────────────────────────────────────────
       // PHASE A — Process ALL symbols at this time step
@@ -716,7 +760,7 @@ class BacktestService {
         });
 
         // ── Manage open trades for THIS symbol ───────────────────
-        const toClose: Array<{ key: string; exitPrice: number; reason: SimulatedTrade["closeReason"] }> = [];
+        const toClose: Array<{ key: string; exitPrice: number; reason: SimulatedTrade["closeReason"]; exitMethodology?: string }> = [];
         for (const [key, trade] of openTrades) {
           if (trade.symbol !== tc.symbol) continue;
           trade.barsHeld++;
@@ -751,18 +795,18 @@ class BacktestService {
             const slExit = trade.direction === "BUY"
               ? trade.sl - slippageVal  // closed at BID, worse
               : trade.sl + slippageVal; // closed at ASK, worse
-            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT" });
+            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT", exitMethodology: "Risk Management" });
             continue;
           } else if (hitSL) {
             const slExit = trade.direction === "BUY"
               ? trade.sl - slippageVal
               : trade.sl + slippageVal;
-            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT" });
+            toClose.push({ key, exitPrice: slExit, reason: "SL_HIT", exitMethodology: "Risk Management" });
             continue;
           } else if (hitTP) {
             // TP hit exactly at TP price (no slippage on favorable exit)
             const tpExit = trade.tp;
-            toClose.push({ key, exitPrice: tpExit, reason: "TP_HIT" });
+            toClose.push({ key, exitPrice: tpExit, reason: "TP_HIT", exitMethodology: "Risk Management" });
             continue;
           }
 
@@ -785,28 +829,28 @@ class BacktestService {
 
             // Check if trailing SL is hit using candle High/Low
             if (trade.direction === "BUY" && currentCandle.low <= trade.sl) {
-              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
               continue;
             }
             if (trade.direction === "SELL" && currentCandle.high >= trade.sl) {
-              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT" });
+              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
               continue;
             }
           }
 
           // 3. Reverse signal
           if (trade.direction === "BUY" && pattern.type === "BEARISH_ENGULFING") {
-            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE" });
+            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE", exitMethodology: "PA Reverse" });
             continue;
           }
           if (trade.direction === "SELL" && pattern.type === "BULLISH_ENGULFING") {
-            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE" });
+            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE", exitMethodology: "PA Reverse" });
             continue;
           }
         }
 
         for (const item of toClose) {
-          const { key, exitPrice, reason } = item;
+          const { key, exitPrice, reason, exitMethodology = "Risk Management" } = item;
           const trade = openTrades.get(key)!;
           const pnl = this.calculatePnL(trade.direction, trade.entryPrice, exitPrice, trade.volume, symState.contractSize);
           const pnlPercent = trade.volume > 0 ? (pnl / (trade.entryPrice * trade.volume)) * 100 : 0;
@@ -816,13 +860,16 @@ class BacktestService {
             symbol: trade.symbol, direction: trade.direction,
             entryPrice: trade.entryPrice, exitPrice,
             sl: trade.sl, tp: trade.tp, volume: trade.volume,
-            pnl, pnlPercent, closeReason: reason,
+            pnl, pnlPercent, closeReason: reason, exitMethodology,
             rsiAtEntry: trade.rsiAtEntry, atrAtEntry: trade.atrAtEntry,
             pattern: trade.pattern, confidence: trade.confidence,
             trailingHistory: trade.trailingHistory,
             primaryMethodology: trade.primaryMethodology,
             methodologyConfidence: trade.methodologyConfidence,
             methodologyCount: trade.methodologyCount,
+            rr: trade.direction === "BUY" 
+              ? (trade.entryPrice - trade.sl > 0 ? (exitPrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
+              : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - exitPrice) / (trade.sl - trade.entryPrice) : 0),
           });
 
           equity += pnl;
@@ -840,8 +887,14 @@ class BacktestService {
               entryPrice: trade.entryPrice, exitPrice,
               pnl, pnlPercent, reason, confidence: trade.confidence,
               primaryMethodology: trade.primaryMethodology,
+              rr: trade.direction === "BUY" 
+                ? (trade.entryPrice - trade.sl > 0 ? (exitPrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
+                : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - exitPrice) / (trade.sl - trade.entryPrice) : 0),
+              exitMethodology,
             },
           });
+          
+          tradeStateChanged = true;
         }
 
         // ── Check for new entry signals (multi-methodology) ──
@@ -849,7 +902,7 @@ class BacktestService {
         const doEval = signalCounter % merged.signalInterval === 0;
         signalCounters.set(tc.symbol, (signalCounter + 1) % merged.signalInterval);
 
-        if (doEval && openTrades.size < merged.maxOpenPositions) {
+        if (doEval && openTrades.size < merged.maxOpenPositions && !dailyTradingBlocked) {
           let newTrade: OpenSimTrade | null = null;
           const volumeBuy = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "BUY");
           const volumeSell = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "SELL");
@@ -859,56 +912,47 @@ class BacktestService {
           }));
 
           // Build proper fractal context for multi-timeframe approximation
-          // In backtest we don't have separate TF data, so we simulate:
-          //   - direction: full candle window (HTF perspective)
-          //   - setup: last 2/3 of candles (MTF perspective)
-          //   - entry: last 1/3 of candles (LTF perspective)
-          const dirCandles = strategyCandles;
-          const setupCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3)));
-          const entryCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3)));
+          // Use cached market structure if available for this symbol at same index
+          let dirMs: any, setupMs: any, entryMs: any, isAligned: boolean;
+          const cached = msCache.get(tc.symbol);
+          if (cached && cached.idx === idx) {
+            dirMs = cached.dirMs;
+            setupMs = cached.setupMs;
+            entryMs = cached.entryMs;
+            isAligned = cached.isAligned;
+          } else {
+            const dirCandles = strategyCandles;
+            const setupCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3)));
+            const entryCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3)));
 
-          const dirMs = marketStructureService.analyzeMarketStructure(dirCandles);
-          const setupMs = marketStructureService.analyzeMarketStructure(setupCandles);
-          const entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
+            dirMs = marketStructureService.analyzeMarketStructure(dirCandles);
+            setupMs = marketStructureService.analyzeMarketStructure(setupCandles);
+            entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
 
-          // Compute alignment properly instead of hardcoding true
-          const isAligned = dirMs.trend.direction === setupMs.trend.direction &&
-                            setupMs.trend.direction === entryMs.trend.direction;
+            isAligned = dirMs.trend.direction === setupMs.trend.direction &&
+                        setupMs.trend.direction === entryMs.trend.direction;
+
+            msCache.set(tc.symbol, { idx, dirMs, setupMs, entryMs, isAligned });
+            didStrategyEval = true; // flag for forced yield
+          }
 
           const fractalCtx = {
-            direction: dirCandles,
-            setup: setupCandles,
-            entry: entryCandles,
+            direction: strategyCandles,
+            setup: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3))),
+            entry: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3))),
             directionStr: dirMs,
             setupStr: setupMs,
             entryStr: entryMs,
             isAligned,
           };
-          const [smcSignals, ictSignals, msnrSignals, crtSignals, quarterlySignals, litSignals] = [
+          const [smcSignals, ictSignals, msnrSignals] = [
             smcStrategy.analyze(fractalCtx),
             ictStrategy.analyze(fractalCtx),
             msnrStrategy.analyze(fractalCtx),
-            crtStrategy.analyze(fractalCtx),
-            quarterlyTheoryStrategy.analyze(fractalCtx),
-            litStrategy.analyze(fractalCtx),
+
           ];
 
-          let rsiEngulfSignal: any = null;
-          if (rsi < merged.entrySettings.rsiOversold && pattern.type === "BULLISH_ENGULFING" && volumeBuy) {
-            rsiEngulfSignal = {
-              direction: "BUY", entry: currentPrice,
-              sl: currentPrice - atr * merged.entrySettings.atrMultiplierSL,
-              tp: currentPrice + atr * merged.entrySettings.atrMultiplierTP,
-              confidence: this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOversold),
-            };
-          } else if (rsi > merged.entrySettings.rsiOverbought && pattern.type === "BEARISH_ENGULFING" && volumeSell) {
-            rsiEngulfSignal = {
-              direction: "SELL", entry: currentPrice,
-              sl: currentPrice + atr * merged.entrySettings.atrMultiplierSL,
-              tp: currentPrice - atr * merged.entrySettings.atrMultiplierTP,
-              confidence: this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOverbought),
-            };
-          }
+
 
           const mw = merged.methodologyWeights ?? DEFAULT_METHODOLOGY_WEIGHTS;
           const am = merged.activeMethodologies ?? (Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[]);
@@ -916,9 +960,7 @@ class BacktestService {
           const confluence = confluenceEngine.calculateConfluence(
             {
               smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null,
-              msnr: msnrSignals[0] ?? null, crt: crtSignals[0] ?? null,
-              quarterly: quarterlySignals[0] ?? null, lit: litSignals[0] ?? null,
-              rsiEngulf: rsiEngulfSignal,
+              msnr: msnrSignals[0] ?? null,
             }, mw, am,
           );
 
@@ -932,69 +974,42 @@ class BacktestService {
               const simulatedEntry = fs.direction === "BUY"
                 ? fs.entry + spreadValue + slippageValue
                 : fs.entry - spreadValue - slippageValue;
+              // Calculate final SL/TP using the Backtest Settings (ATR Multipliers) to enforce strictly the user's RR
+              const customSlDist = atr * (merged.entrySettings?.atrMultiplierSL || 1.5);
+              const customTpDist = atr * (merged.entrySettings?.atrMultiplierTP || 1.5);
+
+              const finalSl = fs.direction === "BUY"
+                ? simulatedEntry - customSlDist
+                : simulatedEntry + customSlDist;
+
+              const finalTp = fs.direction === "BUY"
+                ? simulatedEntry + customTpDist
+                : simulatedEntry - customTpDist;
+
               const vol = aiTradingEngine.calculatePositionSize({
-                accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
-                entryPrice: simulatedEntry, stopLoss: fs.sl,
+                accountBalance: equity, riskPercent: merged.maxRiskPerTrade * currentRiskMultiplier,
+                entryPrice: simulatedEntry, stopLoss: finalSl,
                 atr,
                 contractSize: symState.contractSize, volumeMin: symState.volumeMin,
                 volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
               });
-              newTrade = {
-                symbol: tc.symbol, direction: fs.direction,
-                entryPrice: simulatedEntry, entryTime: currentCandle.time,
-                sl: fs.sl, tp: fs.tp, volume: vol,
-                rsiAtEntry: rsi, atrAtEntry: atr,
-                pattern: `MULTI_${fs.primaryMethodology.toUpperCase()}`,
-                confidence: fs.confidence, barsHeld: 0, trailingHistory: [],
-                primaryMethodology: fs.primaryMethodology,
-                methodologyConfidence: fs.confluenceScore,
-                methodologyCount: fs.totalAgreeing,
-              };
+              if (vol > 0) {
+                newTrade = {
+                  symbol: tc.symbol, direction: fs.direction,
+                  entryPrice: simulatedEntry, entryTime: currentCandle.time,
+                  sl: finalSl, tp: finalTp, volume: vol,
+                  rsiAtEntry: rsi, atrAtEntry: atr,
+                  pattern: `MULTI_${fs.primaryMethodology.toUpperCase()}`,
+                  confidence: fs.confidence, barsHeld: 0, trailingHistory: [],
+                  primaryMethodology: fs.primaryMethodology,
+                  methodologyConfidence: fs.confluenceScore,
+                  methodologyCount: fs.totalAgreeing,
+                };
+              }
             }
           }
 
-          // Fallback RSI+Engulf (only if rsiEngulf is in activeMethodologies)
-          if (!newTrade && am.includes("rsiEngulf")) {
-            if (rsi < merged.entrySettings.rsiOversold && pattern.type === "BULLISH_ENGULFING" && volumeBuy) {
-              const spreadValue = (merged.spreadPips || 0) * 0.0001;
-              const entryPrice = currentPrice + spreadValue;
-              const sl = entryPrice - atr * merged.entrySettings.atrMultiplierSL;
-              const tp = entryPrice + atr * merged.entrySettings.atrMultiplierTP;
-              const confidence = this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOversold);
-              const vol = aiTradingEngine.calculatePositionSize({
-                accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
-                entryPrice: entryPrice, stopLoss: sl, atr,
-                contractSize: symState.contractSize, volumeMin: symState.volumeMin,
-                volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
-              });
-              newTrade = {
-                symbol: tc.symbol, direction: "BUY", entryPrice: entryPrice,
-                entryTime: currentCandle.time, sl, tp, volume: vol,
-                rsiAtEntry: rsi, atrAtEntry: atr, pattern: pattern.type, confidence,
-                barsHeld: 0, trailingHistory: [],
-                primaryMethodology: "rsiEngulf", methodologyConfidence: confidence, methodologyCount: 1,
-              };
-            } else if (rsi > merged.entrySettings.rsiOverbought && pattern.type === "BEARISH_ENGULFING" && volumeSell) {
-              const spreadValue = (merged.spreadPips || 0) * 0.0001;
-              const entryPrice = currentPrice - spreadValue;
-              const sl = entryPrice + atr * merged.entrySettings.atrMultiplierSL;
-              const tp = entryPrice - atr * merged.entrySettings.atrMultiplierTP;
-              const confidence = this.calcConfidence(rsi, pattern, merged.entrySettings.rsiOverbought);
-              const vol = aiTradingEngine.calculatePositionSize({
-                accountBalance: equity, riskPercent: merged.maxRiskPerTrade,
-                entryPrice: entryPrice, stopLoss: sl, atr,
-                contractSize: symState.contractSize, volumeMin: symState.volumeMin,
-                volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
-              });
-              newTrade = {
-                symbol: tc.symbol, direction: "SELL", entryPrice: entryPrice,
-                entryTime: currentCandle.time, sl, tp, volume: vol,
-                rsiAtEntry: rsi, atrAtEntry: atr, pattern: pattern.type, confidence,
-                barsHeld: 0, trailingHistory: [],
-                primaryMethodology: "rsiEngulf", methodologyConfidence: confidence, methodologyCount: 1,
-              };
-            }
-          }
+
 
           if (newTrade) {
             const key = `${newTrade.direction}_${newTrade.symbol}`;
@@ -1009,6 +1024,7 @@ class BacktestService {
                 pattern: newTrade.pattern, primaryMethodology: newTrade.primaryMethodology,
               },
             });
+            tradeStateChanged = true;
           }
         }
 
@@ -1016,12 +1032,27 @@ class BacktestService {
         symbolCandleIdx.set(tc.symbol, idx + 1);
       }
 
+      // ── Limit live streaming events to prevent frontend lag ──
+      // If Max Speed (0ms), we only emit ~300 frames total so we don't choke the stream.
+      // If Visual Mode (>0ms), we emit EVERY SINGLE CANDLE for perfectly fluid PnL animation.
+      let emitInterval = 1;
+      if (!merged.speedMs || merged.speedMs === 0) {
+        emitInterval = Math.max(1, Math.floor(totalTimelineSteps / 300));
+      } else {
+        // Visual mode: emit every single candle for 100% smooth tick-by-tick feeling
+        emitInterval = 1;
+      }
+      
+      const shouldEmitLive = tradeStateChanged || timelineStep % emitInterval === 0 || timelineStep === totalTimelineSteps;
+
       // ─────────────────────────────────────────────────────────────
       // PHASE B — Calculate global floating PnL across ALL positions
       //           using each symbol's current candle close
       // ─────────────────────────────────────────────────────────────
       let floatingPnL = 0;
       let totalUsedMargin = 0;
+      const liveTrades: any[] = [];
+
       for (const [_, trade] of openTrades) {
         const symState = symbolStates.get(trade.symbol);
         if (!symState) continue;
@@ -1035,19 +1066,64 @@ class BacktestService {
         const pnl = this.calculatePnL(trade.direction, trade.entryPrice, latestC.close, trade.volume, symState.contractSize);
         floatingPnL += pnl;
         totalUsedMargin += this.calculateMarginRequired(trade.entryPrice, trade.volume, symState.contractSize, merged.leverage);
+        
+        if (shouldEmitLive) {
+          liveTrades.push({
+            symbol: trade.symbol,
+            direction: trade.direction,
+            entryPrice: trade.entryPrice,
+            currentPrice: latestC.close,
+            volume: trade.volume,
+            pnl: Math.round(pnl * 100) / 100,
+            primaryMethodology: trade.primaryMethodology
+          });
+        }
       }
 
       const currentEquity = equity + floatingPnL;
+      
+      if (resetDailyEquity) {
+        startOfDayEquity = currentEquity;
+      }
+
       if (currentEquity > peakEquity) peakEquity = currentEquity;
       const drawdown = peakEquity - currentEquity;
+      const currentDrawdownPct = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+      if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = currentDrawdownPct;
+      
+      // ── Smart Risk Management Check ──
+      currentRiskMultiplier = 1;
+      const smart = merged.smartRisk;
+      if (smart?.enabled) {
+        // 1. Drawdown Recovery (Priority 1 - Safety First)
+        if (smart.drawdownRecovery?.enabled && currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
+          currentRiskMultiplier = smart.drawdownRecovery.riskReductionMultiplier;
+        } 
+        // 2. Capital Preservation (Tiered Scaling)
+        else if (smart.capitalPreservation?.enabled) {
+          const growthPct = ((currentEquity - merged.initialBalance) / merged.initialBalance) * 100;
+          if (growthPct >= smart.capitalPreservation.activationGrowthPct) {
+            currentRiskMultiplier = smart.capitalPreservation.riskReductionMultiplier;
+          }
+        }
+        
+        // 3. Daily Limits
+        if (smart.dailyLimits?.enabled && !dailyTradingBlocked) {
+          const dailyPnLPct = ((currentEquity - startOfDayEquity) / startOfDayEquity) * 100;
+          if (dailyPnLPct >= smart.dailyLimits.profitTargetPct) {
+            dailyTradingBlocked = true;
+            silentLogger.info(`[BACKTEST] [${currentDayStr}] Daily Profit Target hit (+${dailyPnLPct.toFixed(2)}%). Trading suspended for the day.`);
+          } else if (dailyPnLPct <= -smart.dailyLimits.lossLimitPct) {
+            dailyTradingBlocked = true;
+            silentLogger.info(`[BACKTEST] [${currentDayStr}] Daily Loss Limit hit (${dailyPnLPct.toFixed(2)}%). Trading suspended for the day.`);
+          }
+        }
+      }
 
       const globalMarginLevel = totalUsedMargin > 0
         ? Math.round((currentEquity / totalUsedMargin) * 10000) / 100
         : 0;
-
-      // ── Limit live streaming events to ~200 frames to prevent frontend lag ──
-      const shouldEmitLive = timelineStep % Math.max(1, Math.floor(totalTimelineSteps / 200)) === 0 || timelineStep === totalTimelineSteps;
 
       // ─────────────────────────────────────────────────────────────
       // PHASE C — Emit candle events for ALL symbols at this time step
@@ -1092,6 +1168,7 @@ class BacktestService {
             time: group.time,
             equity: Math.round(currentEquity * 100) / 100,
             floatingPnL: Math.round(floatingPnL * 100) / 100,
+            activeTrades: liveTrades,
           },
         });
       }
@@ -1119,7 +1196,46 @@ class BacktestService {
             percent: progressPct,
           },
         });
-        // Progress flush not needed — every step already yields
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // PHASE D — Yield / Speed Control (End of Loop)
+      // ─────────────────────────────────────────────────────────────
+      let yielded = false;
+      
+      // 1. If it's a visual frame, apply the visual delay
+      if (merged.speedMs && merged.speedMs > 0 && shouldEmitLive) {
+        if (merged.speedMs < 50) {
+          // Fast visual (e.g. 10ms): Use setImmediate to avoid Windows 15ms timer penalty.
+          // This allows ~1000 candles/sec, finishing a 30k backtest in ~30s very smoothly.
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        } else {
+          // Observable: use actual setTimeout
+          await new Promise<void>((resolve) => setTimeout(resolve, merged.speedMs!));
+        }
+        yielded = true;
+      }
+      
+      // 2. If we didn't apply a delay above, we MUST check if we need to yield to the event loop
+      //    to prevent Node.js from freezing (starving the event loop).
+      if (!yielded) {
+        if (didStrategyEval) {
+          // Always yield after heavy SMC/ICT eval to keep SSE pipe and Node responsive
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          yielded = true;
+        } else {
+          stepsSinceYield++;
+          if (stepsSinceYield >= YIELD_BATCH_SIZE) {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            yielded = true;
+          }
+        }
+      }
+
+      // Reset trackers if we yielded
+      if (yielded) {
+        stepsSinceYield = 0;
+        didStrategyEval = false;
       }
 
       // Stop if account blown
@@ -1173,6 +1289,10 @@ class BacktestService {
           reason: "TIMEOUT",
           confidence: trade.confidence,
           primaryMethodology: trade.primaryMethodology,
+          rr: trade.direction === "BUY" 
+            ? (trade.entryPrice - trade.sl > 0 ? (lastCandle.close - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
+            : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - lastCandle.close) / (trade.sl - trade.entryPrice) : 0),
+          exitMethodology: "Session Timeout",
         },
       });
     }
@@ -1192,7 +1312,7 @@ class BacktestService {
     const endEquity = equity;
     const totalPnL = endEquity - merged.initialBalance;
     const totalPnLPercent = (totalPnL / merged.initialBalance) * 100;
-    const maxDrawdownPercent = peakEquity > 0 ? (maxDrawdown / peakEquity) * 100 : 0;
+    const maxDrawdownPercent = maxDrawdownPctGlobal;
     const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
     const profitFactor = totalLoss > 0 ? totalWin / totalLoss : totalWin > 0 ? Infinity : 0;
     const recoveryFactor = maxDrawdown > 0 ? totalPnL / maxDrawdown : totalPnL > 0 ? Infinity : 0;
@@ -1262,8 +1382,16 @@ class BacktestService {
     // ── 8. Persist to DB ───────────────────────────────────────────
     let savedDocId: string | undefined;
     try {
+      const query: any = { userId };
+      if (merged.sessionId) {
+        query.sessionId = merged.sessionId;
+      } else {
+        // Overwrite if no session ID, to prevent DB bloat for generic backtests
+        query.symbol = merged.symbols.join(",");
+        query.timeframe = merged.timeframe;
+      }
       const saved = await BacktestExperience.findOneAndUpdate(
-        { userId },
+        query,
         {
           $set: {
             symbol: merged.symbols.join(","),
@@ -1294,7 +1422,7 @@ class BacktestService {
             pipelineConfigSnapshot: merged,
           }
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       savedDocId = saved?._id?.toString();
     } catch (dbError: any) {

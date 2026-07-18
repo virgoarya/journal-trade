@@ -4,6 +4,7 @@
 
 import { marketStructureService, type Candle, type MarketStructure, type OrderBlock } from "./market-structure.service";
 import { atrService } from "./atr.service";
+import { strategyConfigService } from "./strategy-config.service";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -76,7 +77,7 @@ class SMCStrategy {
 
     const atrEntry = atrService.calculate(entryCandles);
     const avgRangeEntry = atrEntry > 0 ? atrEntry : this.avgCandleRange(entryCandles, 5);
-    const buffer = avgRangeEntry * 0.5;
+    const buffer = avgRangeEntry * 1.0; // was 0.5 — diperlebar agar SL tidak terlalu sempit
 
     // Look for a swing high that was just broken upward
     const recentHighs = ms.swingHighs.filter((s) => s.index >= candles.length - 10);
@@ -87,11 +88,11 @@ class SMCStrategy {
           return {
             direction: "BUY",
             entry: swing.price, // Pending BUY Limit on retest
-            sl: swing.price - buffer, // Tight SL below the broken structure using M5 ATR
-            tp: swing.price + buffer * 4.0,
+            sl: swing.price - buffer, // SL 1× ATR below broken structure
+            tp: swing.price + buffer * 3.0, // RR 1:3
             breachType: "MSS",
             confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY"),
-            reason: `Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL tight by Entry TF ATR)`,
+            reason: `Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price - buffer).toFixed(5)})`,
           };
         }
       }
@@ -106,11 +107,11 @@ class SMCStrategy {
           return {
             direction: "SELL",
             entry: swing.price, // Pending SELL Limit on retest
-            sl: swing.price + buffer, // Tight SL above the broken structure using M5 ATR
-            tp: swing.price - buffer * 4.0,
+            sl: swing.price + buffer, // SL 1× ATR above broken structure
+            tp: swing.price - buffer * 3.0, // RR 1:3
             breachType: "MSS",
             confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL"),
-            reason: `Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL tight by Entry TF ATR)`,
+            reason: `Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price + buffer).toFixed(5)})`,
           };
         }
       }
@@ -124,43 +125,46 @@ class SMCStrategy {
   private detectOrderBlockEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
     const candles = fractal.entry;
     const ms = fractal.entryStr;
+    const smcConfig = strategyConfigService.getSMCConfig();
 
     if (candles.length < 2) return null;
 
     const last = candles[candles.length - 1];
     const atr = atrService.calculate(candles);
     const avgRange = atr > 0 ? atr : this.avgCandleRange(candles, 5);
-    // Buffer for spread and padding (approx. 10% of ATR or small pip value)
-    const buffer = avgRange * 0.2;
+    // Buffer: now configurable via smcConfig.obMitigationBufferAtr (default 0.5 ATR)
+    const buffer = avgRange * smcConfig.obMitigationBufferAtr;
 
     for (const ob of ms.orderBlocks) {
       if (ob.mitigated) continue;
 
       // BULLISH OB: pending BUY LIMIT order at OB Top
       if (ob.type === "BULLISH") {
+        const obHeight = ob.top - ob.bottom;
         return {
           direction: "BUY",
-          entry: ob.top, // Pending order price (Limit)
-          sl: ob.bottom - buffer, // SL tightly below OB + buffer
-          tp: ob.top + (ob.top - ob.bottom) * 2, // 1:2 RR approx
+          entry: ob.top,            // Pending order price (Limit)
+          sl: ob.bottom - buffer,   // SL below OB bottom + ATR buffer
+          tp: ob.top + obHeight * 3, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${ob.bottom.toFixed(5)})`,
+          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${(ob.bottom - buffer).toFixed(5)})`,
         };
       }
 
       // BEARISH OB: pending SELL LIMIT order at OB Bottom
       if (ob.type === "BEARISH") {
+        const obHeight = ob.top - ob.bottom;
         return {
           direction: "SELL",
-          entry: ob.bottom, // Pending order price (Limit)
-          sl: ob.top + buffer, // SL tightly above OB + buffer
-          tp: ob.bottom - (ob.top - ob.bottom) * 2, // 1:2 RR approx
+          entry: ob.bottom,         // Pending order price (Limit)
+          sl: ob.top + buffer,      // SL above OB top + ATR buffer
+          tp: ob.bottom - obHeight * 3, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${ob.top.toFixed(5)})`,
+          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${(ob.top + buffer).toFixed(5)})`,
         };
       }
     }
@@ -173,42 +177,48 @@ class SMCStrategy {
   private detectBreakerEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
     const candles = fractal.entry;
     const ms = fractal.entryStr;
+    const smcConfig = strategyConfigService.getSMCConfig();
 
     if (candles.length < 2 || ms.breakerBlocks.length === 0) return null;
 
     const last = candles[candles.length - 1];
     const atr = atrService.calculate(candles);
     const avgRange = atr > 0 ? atr : this.avgCandleRange(candles, 5);
+    // Proximity sekarang berbasis ATR — configurable (default 1.0 ATR)
+    const proximityAtr = smcConfig.breakerProximityAtr ?? 1.0;
 
     for (const breaker of ms.breakerBlocks) {
       const flipped = breaker.flippedLevel;
 
       // BULL breaker: price broke above bearish OB → now support
       if (breaker.brokenDirection === "BULL") {
-        if (Math.abs(last.close - flipped) / flipped < 0.003) {
+        // Gunakan ATR-based proximity alih-alih % hardcoded
+        if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
+          const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped, bottom: flipped - avgRange, type: "BULLISH", mitigated: false } as any, ms));
           return {
             direction: "BUY",
             entry: last.close,
             sl: flipped - avgRange * 1.5,
-            tp: last.close + avgRange * 2.0,
+            tp: last.close + avgRange * 2.5,
             breachType: "BREAKER",
-            confidence: 65,
-            reason: `Breaker BUY: Former OB flipped to support at ${flipped.toFixed(5)}`,
+            confidence,
+            reason: `Breaker BUY: Former OB flipped to support at ${flipped.toFixed(5)} (within ${proximityAtr}× ATR)`,
           };
         }
       }
 
       // BEAR breaker: price broke below bullish OB → now resistance
       if (breaker.brokenDirection === "BEAR") {
-        if (Math.abs(last.close - flipped) / flipped < 0.003) {
+        if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
+          const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped + avgRange, bottom: flipped, type: "BEARISH", mitigated: false } as any, ms));
           return {
             direction: "SELL",
             entry: last.close,
             sl: flipped + avgRange * 1.5,
-            tp: last.close - avgRange * 2.0,
+            tp: last.close - avgRange * 2.5,
             breachType: "BREAKER",
-            confidence: 65,
-            reason: `Breaker SELL: Former OB flipped to resistance at ${flipped.toFixed(5)}`,
+            confidence,
+            reason: `Breaker SELL: Former OB flipped to resistance at ${flipped.toFixed(5)} (within ${proximityAtr}× ATR)`,
           };
         }
       }

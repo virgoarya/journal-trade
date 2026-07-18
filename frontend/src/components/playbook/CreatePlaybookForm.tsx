@@ -23,7 +23,7 @@ export function CreatePlaybookForm({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    methodology: "ICT" as "ICT" | "CRT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID",
+    methodology: "ICT" as "ICT" | "MSNR" | "SMC" | "PA" | "IND" | "HYBRID",
     marketCondition: "ALL" as "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL",
     timeframe: "",
     markets: "",
@@ -144,7 +144,7 @@ export function CreatePlaybookForm({
             className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
           >
             <option value="ICT">ICT</option>
-            <option value="CRT">CRT</option>
+
             <option value="MSNR">MSNR</option>
             <option value="SMC">SMC</option>
             <option value="PA">Price Action</option>

@@ -17,7 +17,10 @@ import {
   Gauge,
   Zap,
   BrainCircuit,
+  RefreshCcw,
+  ShieldAlert,
 } from "lucide-react";
+import { useAiTrading } from "../context/AiTradingContext";
 
 const FALLBACK_SYMBOLS = [
   "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD",
@@ -25,7 +28,7 @@ const FALLBACK_SYMBOLS = [
 ];
 
 const METHODOLOGY_NAMES = [
-  "smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf",
+  "smc", "ict", "msnr"
 ];
 
 interface Props {
@@ -34,6 +37,7 @@ interface Props {
 }
 
 export function BacktestForm({ onRun, isRunning }: Props) {
+  const { accountInfo } = useAiTrading();
   // Helper for localStorage state persistence
   const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
     const [value, setValue] = useState<T>(() => {
@@ -71,9 +75,50 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [maxRisk, setMaxRisk] = useStickyState(1.0, "bt_maxRisk");
   const [maxPositions, setMaxPositions] = useStickyState(3, "bt_maxPositions");
   const [leverage, setLeverage] = useStickyState(100, "bt_leverage");
-  const [signalInterval, setSignalInterval] = useStickyState(4, "bt_signalInterval");
+  const [signalInterval, setSignalInterval] = useStickyState(3, "bt_signalInterval");
   const [speedMs, setSpeedMs] = useStickyState(0, "bt_speedMs");
   const [activeMethodologies, setActiveMethodologies] = useStickyState<string[]>(METHODOLOGY_NAMES, "bt_activeMethodologies");
+
+  // Smart Risk Management
+  const [smartRiskEnabled, setSmartRiskEnabled] = useStickyState(false, "bt_smartRiskEnabled");
+  const [cpEnabled, setCpEnabled] = useStickyState(false, "bt_cpEnabled");
+  const [cpGrowthPct, setCpGrowthPct] = useStickyState(100, "bt_cpGrowthPct");
+  const [cpRiskMult, setCpRiskMult] = useStickyState(0.5, "bt_cpRiskMult");
+  const [dlEnabled, setDlEnabled] = useStickyState(false, "bt_dlEnabled");
+  const [dlProfitPct, setDlProfitPct] = useStickyState(3, "bt_dlProfitPct");
+  const [dlLossPct, setDlLossPct] = useStickyState(4, "bt_dlLossPct");
+  const [drEnabled, setDrEnabled] = useStickyState(false, "bt_drEnabled");
+  const [drActivationPct, setDrActivationPct] = useStickyState(10, "bt_drActivationPct");
+  const [drRiskMult, setDrRiskMult] = useStickyState(0.5, "bt_drRiskMult");
+  
+  // Migration for older localStorage data: replace 'ictCrt' with 'ict' or remove
+  useEffect(() => {
+    setActiveMethodologies(prev => {
+      const valid = new Set(["smc", "ict", "msnr"]);
+      const next = new Set<string>();
+      
+      for (const m of prev) {
+        if (m === "ictCrt" || m === "crt") {
+          next.add("ict");
+        } else if (valid.has(m)) {
+          next.add(m);
+        }
+      }
+      
+      // If empty after filter, set default
+      if (next.size === 0) {
+        return ["smc", "ict", "msnr"];
+      }
+      
+      // Only update if changed
+      const nextArr = Array.from(next);
+      if (nextArr.length !== prev.length || !nextArr.every((v, i) => v === prev[i])) {
+        return nextArr;
+      }
+      return prev;
+    });
+  }, [setActiveMethodologies]);
+
   const [showAdvanced, setShowAdvanced] = useStickyState(false, "bt_showAdvanced");
 
   // Set default dates if not loaded from localStorage
@@ -217,6 +262,24 @@ export function BacktestForm({ onRun, isRunning }: Props) {
       signalInterval,
       speedMs,
       activeMethodologies,
+      smartRisk: {
+        enabled: smartRiskEnabled,
+        capitalPreservation: {
+          enabled: cpEnabled,
+          activationGrowthPct: cpGrowthPct,
+          riskReductionMultiplier: cpRiskMult
+        },
+        dailyLimits: {
+          enabled: dlEnabled,
+          profitTargetPct: dlProfitPct,
+          lossLimitPct: dlLossPct
+        },
+        drawdownRecovery: {
+          enabled: drEnabled,
+          activationDrawdownPct: drActivationPct,
+          riskReductionMultiplier: drRiskMult
+        }
+      },
     });
   };
 
@@ -350,39 +413,30 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Leverage</label>
-            <select
-              value={leverage}
-              onChange={(e) => setLeverage(Number(e.target.value))}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
-            >
-              <option value={1}>1:1</option>
-              <option value={30}>1:30</option>
-              <option value={50}>1:50</option>
-              <option value={100}>1:100</option>
-              <option value={200}>1:200</option>
-              <option value={500}>1:500</option>
-              <option value={1000}>1:1000</option>
-              <option value={2000}>1:2000</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Entry Settings */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">RSI Oversold</label>
-            <input
-              type="text" inputMode="numeric" value={rsiOversold} onChange={(e) => { const v = parseInt(e.target.value) || 0; if (v >= 10 && v <= 50) setRsiOversold(v); }}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">RSI Overbought</label>
-            <input
-              type="text" inputMode="numeric" value={rsiOverbought} onChange={(e) => { const v = parseInt(e.target.value) || 0; if (v >= 50 && v <= 90) setRsiOverbought(v); }}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
-            />
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Leverage</label>
+              {accountInfo?.leverage && (
+                <button
+                  type="button"
+                  onClick={() => setLeverage(accountInfo.leverage)}
+                  className="flex items-center gap-1 text-[10px] text-accent-gold hover:text-yellow-400 transition"
+                >
+                  <RefreshCcw className="w-3 h-3" />
+                  Sync ({accountInfo.leverage})
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                value={leverage}
+                onChange={(e) => setLeverage(Number(e.target.value))}
+                min={1}
+                step={1}
+                className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 pl-6 text-sm text-white focus:border-accent-gold outline-none"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">1:</span>
+            </div>
           </div>
         </div>
 
@@ -448,6 +502,73 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           )}
         </div>
 
+        {/* Smart Risk Management */}
+        <div className="bg-gray-950/40 border border-gray-800/80 rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-accent-gold uppercase tracking-wider flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4" /> Smart Risk Management
+            </h4>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={smartRiskEnabled} onChange={(e) => setSmartRiskEnabled(e.target.checked)} />
+              <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-gold"></div>
+            </label>
+          </div>
+          
+          {smartRiskEnabled && (
+            <div className="space-y-4 border-t border-gray-800/50 pt-4 mt-2">
+              {/* Drawdown Recovery */}
+              <div className="flex items-start gap-3">
+                <input type="checkbox" id="drEnabled" checked={drEnabled} onChange={(e) => setDrEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="drEnabled" className="text-xs font-medium text-gray-300 block">Drawdown Recovery (Safety Gear)</label>
+                  {drEnabled && (
+                    <div className="flex items-center gap-2">
+                      <input type="number" value={drActivationPct} onChange={(e) => setDrActivationPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Activation Drawdown %" />
+                      <span className="text-[10px] text-gray-500">% DD ➔</span>
+                      <input type="number" step="0.1" value={drRiskMult} onChange={(e) => setDrRiskMult(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Risk Multiplier" />
+                      <span className="text-[10px] text-gray-500">× Risk</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Capital Preservation */}
+              <div className="flex items-start gap-3">
+                <input type="checkbox" id="cpEnabled" checked={cpEnabled} onChange={(e) => setCpEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="cpEnabled" className="text-xs font-medium text-gray-300 block">Tiered Scaling (Capital Preservation)</label>
+                  {cpEnabled && (
+                    <div className="flex items-center gap-2">
+                      <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Activation Growth %" />
+                      <span className="text-[10px] text-gray-500">% Profit ➔</span>
+                      <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Risk Multiplier" />
+                      <span className="text-[10px] text-gray-500">× Risk</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Daily Limits */}
+              <div className="flex items-start gap-3">
+                <input type="checkbox" id="dlEnabled" checked={dlEnabled} onChange={(e) => setDlEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="dlEnabled" className="text-xs font-medium text-gray-300 block">Prop Firm Daily Limits</label>
+                  {dlEnabled && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-green-500">Target:</span>
+                      <input type="number" value={dlProfitPct} onChange={(e) => setDlProfitPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Daily Profit Target %" />
+                      <span className="text-[10px] text-gray-500">%</span>
+                      <span className="text-[10px] text-red-500 ml-2">Loss:</span>
+                      <input type="number" value={dlLossPct} onChange={(e) => setDlLossPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Daily Loss Limit %" />
+                      <span className="text-[10px] text-gray-500">%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Speed + Signal Interval */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
@@ -459,11 +580,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               onChange={(e) => setSpeedMs(Number(e.target.value))}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white outline-none"
             >
-              <option value={0}>⚡ Max</option>
-              <option value={50}>Fast</option>
-              <option value={200}>Normal</option>
-              <option value={500}>🐢 Slow</option>
+              <option value={0}>⚡ Max Speed</option>
+              <option value={10}>🏎️ Visual (Smooth)</option>
+              <option value={50}>👁️ Observable</option>
             </select>
+            <p className="text-[9px] text-gray-600">Max = fastest result. Visual = smooth like MT5.</p>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1">
@@ -474,12 +595,12 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               onChange={(e) => setSignalInterval(Number(e.target.value))}
               className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white outline-none"
             >
-              <option value={1}>Every Candle</option>
-              <option value={2}>Every 2nd</option>
-              <option value={4}>Every 4th</option>
-              <option value={8}>Every 8th</option>
-              <option value={12}>Every 12th</option>
+              <option value={1}>Every Candle (Accurate)</option>
+              <option value={3}>Every 3rd (Balanced)</option>
+              <option value={6}>Every 6th (Fast)</option>
+              <option value={12}>Every 12th (Ultra Fast)</option>
             </select>
+            <p className="text-[9px] text-gray-600">Higher = faster but may miss entries.</p>
           </div>
         </div>
 
@@ -491,7 +612,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition"
           >
             <Layers className="w-3.5 h-3.5" />
-            Methodologies ({activeMethodologies.length}/7)
+            Methodologies ({activeMethodologies.length}/{METHODOLOGY_NAMES.length})
             <span className="ml-1">{showAdvanced ? "▲" : "▼"}</span>
           </button>
           {showAdvanced && (
@@ -507,7 +628,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                       : "bg-gray-800 text-gray-500 border border-gray-700"
                   }`}
                 >
-                  {m === "rsiEngulf" ? "RSI+E" : m.toUpperCase()}
+                  {m.toUpperCase()}
                 </button>
               ))}
             </div>

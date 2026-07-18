@@ -171,7 +171,7 @@ export function initAutoBacktestCron() {
 
           // Check if pipeline is currently active. If so, restart it to apply new settings.
           const currentStatus = await tradingPipelineService.getPipelineStatus(userSettings.userId);
-          if (currentStatus.state === "RUNNING") {
+          if (currentStatus && currentStatus.running === true && currentStatus.paused === false) {
             console.log(`[CRON] Restarting Live Pipeline for user ${userSettings.userId} to apply new config...`);
             await tradingPipelineService.stopPipeline(userSettings.userId);
             // Wait a brief moment to ensure ports/processes are freed

@@ -133,7 +133,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
               ))}
             </div>
             <span className="text-[10px] text-gray-500">
-              {finalSignal.totalAgreeing}/7 methodologies agreeing
+              {finalSignal.totalAgreeing}/4 methodologies agreeing
             </span>
           </div>
 
@@ -189,8 +189,8 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                 <span className="flex-1 text-[10px] text-gray-400 truncate flex items-center gap-1">
                   {METHODOLOGY_LABELS[method] || method}
-                  {data.direction === "BUY" && <TrendingUp className="w-3 h-3 text-green-500" title="Sinyal BUY" />}
-                  {data.direction === "SELL" && <TrendingDown className="w-3 h-3 text-red-500" title="Sinyal SELL" />}
+                  {data.direction === "BUY" && <span title="Sinyal BUY"><TrendingUp className="w-3 h-3 text-green-500" /></span>}
+                  {data.direction === "SELL" && <span title="Sinyal SELL"><TrendingDown className="w-3 h-3 text-red-500" /></span>}
                 </span>
                 {/* Confidence bar */}
                 <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden flex-shrink-0">

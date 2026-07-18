@@ -6,16 +6,13 @@ export const methodologyWeightsSchema = z.object({
   smc: z.number().min(0).max(2).default(1.0).optional(),
   ict: z.number().min(0).max(2).default(1.0).optional(),
   msnr: z.number().min(0).max(2).default(0.8).optional(),
-  crt: z.number().min(0).max(2).default(0.8).optional(),
-  quarterly: z.number().min(0).max(2).default(0.6).optional(),
-  lit: z.number().min(0).max(2).default(1.0).optional(),
-  rsiEngulf: z.number().min(0).max(2).default(0.5).optional(),
+  ictCrt: z.number().min(0).max(2).default(0.9).optional(),
 });
 
 export const activeMethodologiesSchema = z
-  .array(z.enum(["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"]))
+  .array(z.enum(["smc", "ict", "msnr", "ictCrt"]))
   .min(1, "At least one methodology required")
-  .default(["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"]);
+  .default(["smc", "ict", "msnr", "ictCrt"]);
 
 export const methodologyConfigSchema = z.object({
   weights: methodologyWeightsSchema.optional(),

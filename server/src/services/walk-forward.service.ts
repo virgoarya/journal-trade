@@ -94,11 +94,10 @@ class WalkForwardService {
     
     // Methodology subsets to test (from most selective to most inclusive)
     const methodologySets: Array<import("./strategies/index").MethodologyName[]> = [
-      ["smc", "ict", "lit"],                                    // Trend-following only
-      ["msnr", "crt"],                                          // Mean-reversion only
-      ["smc", "ict", "msnr", "lit"],                            // Core 4
-      ["smc", "ict", "msnr", "crt", "quarterly", "lit"],        // All 6 advanced
-      ["smc", "ict", "msnr", "crt", "quarterly", "lit", "rsiEngulf"], // All 7
+      ["smc", "ict"],                                    // Trend-following only
+      ["msnr"],                                       // Mean-reversion only
+      ["smc", "ict", "msnr"],                            // Core 3
+      ["smc", "ict", "msnr"],      // All 3 advanced
     ];
 
     for (const os of [25, 30, 35]) {

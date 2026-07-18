@@ -5,7 +5,7 @@ export const createPlaybookSchema = z.object({
   description: z.string().optional(),
   markets: z.array(z.string()).default([]),
   timeframe: z.string().optional(),
-  methodology: z.enum(["ICT", "CRT", "MSNR", "SMC", "PA", "IND", "HYBRID"]),
+  methodology: z.enum(["ICT", "MSNR", "SMC", "PA", "IND", "HYBRID"]),
   marketCondition: z.enum(["TRENDING", "RANGING", "VOLATILE", "LIQUID", "ALL"]).default("ALL"),
   legacyCategory: z.enum(["breakout", "reversal", "scalping", "swing", "news"]).optional(),
   tags: z.array(z.string()).default([]),

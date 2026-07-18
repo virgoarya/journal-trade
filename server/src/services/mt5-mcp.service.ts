@@ -3,6 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
+import { execSync } from 'child_process';
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
 export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
@@ -261,14 +262,41 @@ class MT5MCPService {
   async init(): Promise<void> {
     if (this.client) return;
 
+    // Validate prerequisites before starting Python server
+    const serverScript = path.join(__dirname, "..", "..", "mcp-mt5-server", "server.py");
+    const pythonPath = path.join(__dirname, "..", "..", ".venv-mcp", "Scripts", "python.exe");
+
+    // Check Python executable
+    if (!fs.existsSync(pythonPath)) {
+      const err = new Error(`Python executable not found at: ${pythonPath}. Please create .venv-mcp virtual environment.`);
+      silentLogger.error(`[MT5-MCP] ${err.message}`);
+      throw err;
+    }
+
+    // Check server script
+    if (!fs.existsSync(serverScript)) {
+      const err = new Error(`MCP server script not found at: ${serverScript}`);
+      silentLogger.error(`[MT5-MCP] ${err.message}`);
+      throw err;
+    }
+
+    // Optional: Check if MT5 terminal is running (basic check)
+    try {
+      const { execSync } = require("child_process");
+      const output = execSync('tasklist /FI "IMAGENAME eq terminal64.exe" /FI "IMAGENAME eq terminal.exe"', { encoding: 'utf8', stdio: 'pipe' });
+      if (!output.includes("terminal64.exe") && !output.includes("terminal.exe")) {
+        silentLogger.warn("[MT5-MCP] MetaTrader 5 terminal does not appear to be running. Connection may fail.");
+      }
+    } catch {
+      silentLogger.warn("[MT5-MCP] Could not check MT5 terminal status (tasklist failed).");
+    }
+
     try {
       const client = new Client(
         { name: "JournalTradeAI", version: "1.0.0" },
         { capabilities: {} },
       );
 
-      const serverScript = path.join(__dirname, "..", "..", "mcp-mt5-server", "server.py");
-      const pythonPath = path.join(__dirname, "..", "..", ".venv-mcp", "Scripts", "python.exe");
       const transport = new StdioClientTransport({
         command: pythonPath,
         args: [serverScript],
@@ -283,6 +311,7 @@ class MT5MCPService {
       }
       this.client = null;
       silentLogger.error(`[MT5-MCP] Init failed: ${error.message}`);
+      logErrorStructured("init", error, {}, "error"); // Log error structure
       throw error;
     }
   }
