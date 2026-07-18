@@ -107,9 +107,9 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
   const userHasData = skill && (skill.symbolRankings?.length > 0 || skill.methodologyRankings?.length > 0);
 
   return (
-    <div className="hud-panel p-4 space-y-3">
+    <div className="hud-panel p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-2">
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3">
         <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2 drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
           <Sparkles className="w-4 h-4 text-accent-gold" />
           AI Backtest Skill
@@ -119,7 +119,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
           {skill && skill.totalBacktests > 0 && (
-            <span className="text-[10px] text-accent-gold-dim bg-black/40 border border-accent-gold/20 px-2 py-0.5 rounded font-mono">
+            <span className="text-[10px] text-accent-gold-dim bg-bg-input border border-accent-gold/20 px-2 py-0.5 rounded font-mono">
               {skill.totalBacktests} tests
             </span>
           )}
@@ -130,7 +130,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       <button
         onClick={handleAutoScan}
         disabled={autoScanning}
-        className="w-full py-2.5 px-3 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-accent-gold text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
+        className="w-full py-2.5 px-3 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-bg-input disabled:border-border-subtle disabled:text-gray-600 text-accent-gold text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
       >
         {autoScanning ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Scanning all pairs (0.5% risk)...</>
@@ -164,7 +164,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-3">
-          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+          <Loader2 className="w-4 h-4 animate-spin text-text-muted" />
         </div>
       )}
 
@@ -184,10 +184,10 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
           {showSymbols && (
             <div className="space-y-1.5">
               {skill.symbolRankings.slice(0, 6).map((s, i) => {
-                const rankColor = i === 0 ? "text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.6)]" : i === 1 ? "text-gray-300" : i === 2 ? "text-orange-400" : "text-text-muted";
+                const rankColor = i === 0 ? "text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.6)]" : i === 1 ? "text-text-secondary" : i === 2 ? "text-orange-400" : "text-text-muted";
                 const isQualified = s.score >= 50;
                 return (
-                  <div key={s.symbol} className="bg-black/40 border border-accent-gold/10 rounded px-2.5 py-1.5">
+                  <div key={s.symbol} className="bg-bg-input border border-accent-gold/10 rounded px-2.5 py-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[10px] font-mono font-bold ${rankColor}`}>#{i + 1}</span>
@@ -225,16 +225,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
 
 
 
-      {/* Apply button */}
-      {skill && skill.symbolRankings && skill.symbolRankings.length > 0 && (
-        <button
-          onClick={handleApply}
-          className="w-full py-3 bg-accent-gold text-black text-[10px] tracking-widest uppercase font-bold rounded-lg hover:bg-accent-gold/90 transition flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(212,175,55,0.4)] mt-2"
-        >
-          <Target className="w-4 h-4" />
-          Apply Skill to Pipeline
-        </button>
-      )}
+
     </div>
   );
 }

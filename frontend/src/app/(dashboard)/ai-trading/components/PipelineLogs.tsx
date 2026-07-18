@@ -43,6 +43,50 @@ interface SymbolTrack {
   };
 }
 
+const renderLogMessage = (msg: string) => {
+  if (msg.startsWith("Config updated: {")) {
+    try {
+      const jsonStr = msg.replace("Config updated: ", "");
+      const config = JSON.parse(jsonStr);
+      return (
+        <div className="flex flex-col gap-1.5 mt-1">
+          <span className="opacity-80">Config applied:</span>
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {config.symbols && config.symbols.length > 0 && (
+              <span className="px-2 py-0.5 bg-black/40 border border-current/20 rounded text-[9px] font-mono tracking-wider">
+                {config.symbols.length} Symbols
+              </span>
+            )}
+            {config.timeframe && (
+              <span className="px-2 py-0.5 bg-black/40 border border-current/20 rounded text-[9px] font-mono tracking-wider">
+                {config.timeframe}
+              </span>
+            )}
+            {config.activeMethodologies && config.activeMethodologies.length > 0 && (
+              <span className="px-2 py-0.5 bg-black/40 border border-current/20 rounded text-[9px] font-mono tracking-wider uppercase">
+                {config.activeMethodologies.join(", ")}
+              </span>
+            )}
+            {config.maxRiskPerTrade !== undefined && (
+              <span className="px-2 py-0.5 bg-black/40 border border-current/20 rounded text-[9px] font-mono tracking-wider">
+                Risk: {config.maxRiskPerTrade}%
+              </span>
+            )}
+            {config.trailingStop !== undefined && (
+              <span className={`px-2 py-0.5 bg-black/40 border border-current/20 rounded text-[9px] font-mono tracking-wider ${config.trailingStop.enabled ? 'opacity-100' : 'opacity-50'}`}>
+                Trailing: {config.trailingStop.enabled ? 'ON' : 'OFF'}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    } catch (e) {
+      // fallback
+    }
+  }
+  return msg;
+};
+
 const CircuitTrace = ({ dx, dy, color, delay = "0s", className = "" }: { dx: number; dy: number; color: string; delay?: string; className?: string }) => {
   const w = Math.abs(dx);
   const h = Math.abs(dy);
@@ -151,8 +195,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     const sorted = [...pipelineLogs].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
     for (const log of sorted) {
-      // Check if it's a global pipeline start message
-      const isGlobalStart = log.message.startsWith("Pipeline started:");
+      // Check if it's a global pipeline message (start or config update)
+      const isGlobalLog = log.message.startsWith("Pipeline started:") || log.message.startsWith("Config updated:");
       
       let symbol = null;
       if (activeSymbols.length > 0) {
@@ -227,8 +271,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
         }
       };
 
-      if (isGlobalStart && activeSymbols.length > 0) {
-        // Apply global start info to all active configured symbols
+      if (isGlobalLog && activeSymbols.length > 0) {
+        // Apply global info to all active configured symbols
         activeSymbols.forEach(applyStage);
       } else if (symbol) {
         // Apply to specific matched symbol
@@ -493,7 +537,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                         <span>{new Date(currentStepDetail.time).toLocaleTimeString([], { hour12: false })}</span>
                       )}
                     </div>
-                    <p className="whitespace-pre-wrap">{currentStepDetail.message}</p>
+                    <div className="whitespace-pre-wrap">{renderLogMessage(currentStepDetail.message || "")}</div>
                   </div>
                 )}
               </div>
@@ -532,7 +576,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                     <div className="flex items-start gap-2.5">
                       <Icon className={`w-3.5 h-3.5 mt-0.5 ${meta.color} shrink-0`} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-gray-300">{log.message}</p>
+                        <div className="text-xs text-gray-300 whitespace-pre-wrap">{renderLogMessage(log.message)}</div>
                         <p className="text-[9px] text-gray-600 mt-0.5">
                           {new Date(log.time).toLocaleDateString("en-GB") + " " + new Date(log.time).toLocaleTimeString([], { hour12: false })}
                         </p>

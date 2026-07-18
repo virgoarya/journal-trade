@@ -439,20 +439,20 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const progressPercent = progress ? progress.percent : 0;
 
   const getKillzone = (timeStr?: number) => {
-    if (!timeStr) return { name: "None", color: "text-gray-500", bg: "bg-gray-800" };
+    if (!timeStr) return { name: "None", color: "text-text-muted", bg: "bg-bg-input" };
     const date = new Date(timeStr * 1000);
     const hour = date.getUTCHours();
     if (hour >= 0 && hour < 6) return { name: "Asian", color: "text-yellow-400", bg: "bg-yellow-400/10" };
     if (hour >= 7 && hour < 10) return { name: "London", color: "text-blue-400", bg: "bg-blue-400/10" };
     if (hour >= 13 && hour < 16) return { name: "New York", color: "text-red-400", bg: "bg-red-400/10" };
-    return { name: "None", color: "text-gray-500", bg: "bg-gray-800/50" };
+    return { name: "None", color: "text-text-muted", bg: "bg-bg-input" };
   };
 
   const killzone = getKillzone(candle?.time);
   const winRate = globalWins + globalLosses > 0 ? (globalWins / (globalWins + globalLosses)) * 100 : 0;
 
   return (
-    <div className="h-full min-h-[500px] flex flex-col bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden relative">
+    <div className="h-full min-h-[500px] flex flex-col hud-panel overflow-hidden relative">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: "linear-gradient(#d4af37 1px, transparent 1px), linear-gradient(90deg, #d4af37 1px, transparent 1px)",
@@ -461,16 +461,16 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gray-900/80 border-b border-gray-800 backdrop-blur-md relative z-10">
+      <div className="flex items-center justify-between p-4 bg-black/40 border-b border-accent-gold/20 backdrop-blur-md relative z-10">
         <div className="flex items-center gap-3">
           <Cpu className="w-5 h-5 text-accent-gold animate-pulse" />
-          <h3 className="text-sm font-bold text-white tracking-wider uppercase">AI Strategy Tester</h3>
-          <div className="flex items-center gap-2 text-xs font-mono text-gray-400 bg-gray-950 px-3 py-1 rounded-full border border-gray-800">
+          <h3 className="text-sm font-bold text-text-primary tracking-wider uppercase">AI Strategy Tester</h3>
+          <div className="flex items-center gap-2 text-xs font-mono text-text-muted bg-black/60 px-3 py-1 rounded border border-accent-gold/30 shadow-inner">
             <span className="text-accent-gold">{config.symbols?.join(",") || ""}</span>
             <span>{config.timeframe}</span>
           </div>
         </div>
-        <button onClick={handleCancelPreparation} className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-red-400 transition-colors bg-gray-950 px-3 py-1.5 rounded-lg border border-gray-800 hover:border-red-900/50">
+        <button onClick={handleCancelPreparation} className="flex items-center gap-2 text-xs font-medium text-text-muted hover:text-red-400 transition-colors bg-black/60 px-3 py-1.5 rounded border border-accent-gold/30 hover:border-red-500/50 hover:bg-red-900/20">
           <XCircle className="w-4 h-4" /> Stop
         </button>
       </div>
@@ -481,9 +481,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         {/* Left Panel */}
         <div className="w-full lg:w-72 flex flex-col gap-4 overflow-y-auto">
           {/* Equity Card */}
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Current Equity</p>
-            <p className="text-2xl font-bold font-mono text-white">
+          <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
+            <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Current Equity</p>
+            <p className="text-2xl font-bold font-mono text-text-primary">
               ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
             </p>
             {candle && (candle.floatingPnL || 0) !== 0 && (
@@ -493,25 +493,25 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               </div>
             )}
             {candle && candle.marginLevel > 0 && (
-              <p className="text-[10px] text-gray-500 mt-1">Margin: {candle.marginLevel.toFixed(1)}%</p>
+              <p className="text-[10px] text-text-muted mt-1">Margin: {candle.marginLevel.toFixed(1)}%</p>
             )}
           </div>
 
           {/* Price Card */}
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Activity className="w-3 h-3" /> Live Quote</p>
+          <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
+            <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Activity className="w-3 h-3" /> Live Quote</p>
             <div className="space-y-1 font-mono text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Close</span>
+                <span className="text-text-muted">Close</span>
                 <span className="text-accent-gold font-bold">{candle ? (candle.close || 0).toFixed(5) : "0.00000"}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">High</span>
-                <span className="text-gray-300">{candle ? (candle.high || 0).toFixed(5) : "0.00000"}</span>
+                <span className="text-text-muted">High</span>
+                <span className="text-text-secondary">{candle ? (candle.high || 0).toFixed(5) : "0.00000"}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Low</span>
-                <span className="text-gray-300">{candle ? (candle.low || 0).toFixed(5) : "0.00000"}</span>
+                <span className="text-text-muted">Low</span>
+                <span className="text-text-secondary">{candle ? (candle.low || 0).toFixed(5) : "0.00000"}</span>
               </div>
             </div>
           </div>
@@ -519,16 +519,16 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {/* New SMC-Focused Analytics Cards */}
           <div className="grid grid-cols-2 gap-3">
             {/* Killzone Card */}
-            <div className={`border border-gray-800 rounded-xl p-3 ${killzone.bg}`}>
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Session</p>
+            <div className={`border border-accent-gold/20 rounded-lg p-3 ${killzone.bg}`}>
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Session</p>
               <div className={`font-mono font-bold text-sm ${killzone.color}`}>{killzone.name}</div>
             </div>
 
             {/* Win Rate Card */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1 flex items-center justify-between">
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1 flex items-center justify-between">
                 <span>Win Rate</span>
-                <span className="text-gray-400">{globalWins}W / {globalLosses}L</span>
+                <span className="text-text-muted">{globalWins}W / {globalLosses}L</span>
               </p>
               <div className={`font-mono font-bold text-sm ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                 {winRate.toFixed(1)}%
@@ -536,16 +536,16 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
 
             {/* Max Drawdown Card */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Max Drawdown</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Max Drawdown</p>
               <div className="font-mono font-bold text-sm text-red-400">
                 -{maxDrawdownPct.toFixed(2)}%
               </div>
             </div>
 
             {/* Open Positions Card */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Open Positions</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Open Positions</p>
               <div className="flex justify-between items-baseline">
                 <div className="font-mono font-bold text-sm text-blue-400">{activeTradeCount} Active</div>
                 <div className={`font-mono text-xs ${(candle?.floatingPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -557,18 +557,18 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
           {/* Live Symbol Stats */}
           {liveSymbolStats.length > 0 && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
               <div className="space-y-2">
                 {liveSymbolStats.map((s) => (
                   <div key={s.symbol} className="text-xs">
                     <div className="flex justify-between">
-                      <span className="text-gray-300 font-medium">{s.symbol}</span>
+                      <span className="text-text-secondary font-medium">{s.symbol}</span>
                       <span className={`font-mono ${s.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
                         {s.totalPnL >= 0 ? "+" : ""}${s.totalPnL.toFixed(2)}
                       </span>
                     </div>
-                    <div className="flex gap-2 text-[10px] text-gray-500">
+                    <div className="flex gap-2 text-[10px] text-text-muted">
                       <span>{s.totalTrades}t</span>
                       <span>{s.wins}W/{s.losses}L</span>
                     </div>
@@ -580,18 +580,18 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
           {/* Live Methodology Stats */}
           {liveMethStats.length > 0 && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Layers className="w-3 h-3" /> Methodologies</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Layers className="w-3 h-3" /> Methodologies</p>
               <div className="space-y-2">
                 {liveMethStats.map((m) => (
                   <div key={m.methodology} className="text-xs">
                     <div className="flex justify-between">
-                      <span className="text-gray-300 font-medium capitalize">{m.methodology}</span>
+                      <span className="text-text-secondary font-medium capitalize">{m.methodology}</span>
                       <span className={`font-mono ${m.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                         {m.pnl >= 0 ? "+" : ""}${m.pnl.toFixed(2)}
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-500">{m.count} trades</span>
+                    <span className="text-[10px] text-text-muted">{m.count} trades</span>
                   </div>
                 ))}
               </div>
@@ -603,8 +603,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         <div className="flex-1 flex flex-col gap-4">
           {/* Equity Curve Chart */}
           {equityHistory.length > 1 && (
-            <div className="bg-black/40 border border-gray-800 rounded-xl p-3">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Equity Curve</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Equity Curve</p>
               <div style={{ height: "200px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), equity: p.equity }))}>
@@ -627,20 +627,20 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
           {/* Live Active Positions */}
           {liveTrades.length > 0 && (
-            <div className="bg-black/40 border border-gray-800 rounded-xl p-3">
-              <p className="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Live Positions</p>
+            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
+              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Live Positions</p>
               <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
                 {liveTrades.map((t, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-gray-900/60 p-2 rounded-lg border border-gray-800/50">
+                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-surface/60 p-2 rounded-lg border border-border-subtle/50">
                     <div className="flex items-center gap-3">
                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.direction.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction.toUpperCase()}</span>
                        <span className="text-gray-200 font-bold">{t.symbol}</span>
-                       <span className="text-gray-500 text-[10px]">
+                       <span className="text-text-muted text-[10px]">
                          {t.volume} lot {t.primaryMethodology ? <span className="text-gray-600">[{t.primaryMethodology.toUpperCase()}]</span> : ""}
                        </span>
                     </div>
                     <div className="flex items-center gap-4">
-                       <span className="text-gray-400 tracking-tight hidden sm:block">{t.entryPrice.toFixed(5)} → {t.currentPrice.toFixed(5)}</span>
+                       <span className="text-text-muted tracking-tight hidden sm:block">{t.entryPrice.toFixed(5)} → {t.currentPrice.toFixed(5)}</span>
                        <span className={`font-bold w-16 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                          {t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}
                        </span>
@@ -652,8 +652,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           )}
 
           {/* AI Trading Journal */}
-          <div className="flex-1 bg-black/40 border border-gray-800 rounded-xl flex flex-col font-mono text-xs overflow-hidden relative max-h-[400px]">
-            <div className="bg-gray-900/80 px-4 py-2 border-b border-gray-800 text-gray-500 flex items-center gap-2">
+          <div className="flex-1 bg-black/40 border border-border-subtle rounded-xl flex flex-col font-mono text-xs overflow-hidden relative max-h-[400px]">
+            <div className="bg-bg-elevated px-4 py-2 border-b border-border-subtle text-text-muted flex items-center gap-2">
               <Terminal className="w-4 h-4" /> AI Trading Journal
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2 relative">
@@ -666,7 +666,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                         ? log.message.includes("+") ? "border-green-500 text-green-100 bg-green-900/10"
                           : "border-red-500 text-red-100 bg-red-900/10"
                         : log.type === "error" ? "border-red-500 text-red-400 bg-red-950/30"
-                          : "border-gray-700 text-gray-400"
+                          : "border-border-subtle text-text-muted"
                     }`}
                   >
                     <span className="text-gray-600 shrink-0">[{log.candleTime || log.time}]</span>
@@ -681,7 +681,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       )}
 
       {/* Progress Footer */}
-      <div className="p-4 bg-gray-900/80 border-t border-gray-800 backdrop-blur-md relative z-10 flex flex-col gap-2">
+      <div className="p-4 bg-bg-elevated border-t border-border-subtle backdrop-blur-md relative z-10 flex flex-col gap-2">
         <div className="flex justify-between text-xs font-medium font-mono">
           <span className="text-accent-gold flex items-center gap-2">
             {phase === "preparing" && !progress && (
@@ -696,7 +696,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             {phase === "running" && progress && progress.percent >= 100 && (<>Completed.</>)}
             {phase === "complete" && (<>Completed.</>)}
           </span>
-          <span className="text-gray-400">
+          <span className="text-text-muted">
             {progress ? (
               `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)`
             ) : (

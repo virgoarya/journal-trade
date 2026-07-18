@@ -805,28 +805,45 @@ isAvailable(): boolean {
   private parseVerdict(text: string): { verdict: LLMVerdict; reasoning: string } {
     if (!text) return { verdict: "SKIP", reasoning: "Empty response" };
 
-    // Strip <think>...</think> reasoning tags (DeepSeek/Qwen style)
+    // Extract <think>...</think> reasoning tags (DeepSeek/Qwen style)
+    let thinkBlock = "";
+    const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/i);
+    if (thinkMatch && thinkMatch[1]) {
+      thinkBlock = thinkMatch[1].trim();
+    }
+
+    // Strip <think>...</think> tags for JSON parsing
     let cleaned = text.trim();
     cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     // Strip markdown code fences (```json ... ```)
-    // Jangan gunakan ^ agar teks pengantar atau backtick di tengah teks tetap terhapus
     cleaned = cleaned.replace(/```(?:json)?\s*/gi, "").replace(/\s*```/gi, "").trim();
 
-    // Strip ​ (zero-width chars) and other invisible unicode
+    // Strip zero-width chars and other invisible unicode
     cleaned = cleaned.replace(/[​-‍﻿]/g, "").trim();
 
-    // If after stripping everything is empty, return SKIP
-    if (!cleaned) return { verdict: "SKIP", reasoning: "Empty response after cleaning" };
+    // If after stripping everything is empty, return SKIP (or use think block)
+    if (!cleaned) {
+      if (thinkBlock.length > 5) {
+        // If we only got a think block and no verdict, we still don't know the verdict
+        return { verdict: "SKIP", reasoning: thinkBlock.slice(0, 300) + "..." };
+      }
+      return { verdict: "SKIP", reasoning: "Empty response after cleaning" };
+    }
 
     const tryParse = (raw: string): { verdict: LLMVerdict; reasoning: string } | null => {
       try {
-        // Try to extract just the JSON object from the text if it's embedded
         const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0] || raw;
         const parsed = JSON.parse(jsonStr);
         const verdict = (parsed.verdict || "").toString().toUpperCase();
         if (["GOOD", "BAD", "SKIP"].includes(verdict)) {
           let reasoning = (parsed.reasoning || "").toString().trim();
+          
+          // Fallback to think block if JSON reasoning is missing/too short
+          if ((reasoning.length < 5 || reasoning === ".") && thinkBlock.length > 5) {
+            reasoning = thinkBlock.slice(0, 300) + (thinkBlock.length > 300 ? "..." : "");
+          }
+          
           if (reasoning.length < 5 || reasoning === ".") {
             reasoning = "Analisis teknikal tidak disediakan oleh model.";
           }
@@ -882,10 +899,22 @@ isAvailable(): boolean {
       }
       
       reasoning = reasoning.replace(/[\n\r]+/g, ' ').slice(0, 300);
+      
+      // Fallback to think block if free-form reasoning is missing/too short
+      if ((reasoning.length < 5 || reasoning === ".") && thinkBlock.length > 5) {
+        reasoning = thinkBlock.slice(0, 300) + (thinkBlock.length > 300 ? "..." : "");
+      }
+      
       if (reasoning.length < 5 || reasoning === ".") {
         reasoning = "Analisis teknikal tidak disediakan oleh model.";
       }
       return { verdict, reasoning };
+    }
+
+    // Jika tidak ada JSON dan tidak ada format baku, tapi kita punya thinkBlock,
+    // asumsikan SKIP dan gunakan thinkBlock sebagai alasannya (daripada false positive)
+    if (thinkBlock.length > 5) {
+      return { verdict: "SKIP", reasoning: thinkBlock.slice(0, 300) + "..." };
     }
 
     // Jika kita tidak bisa menyimpulkan sinyal dengan format baku/pasti, lebih baik kembalikan SKIP daripada false positive.

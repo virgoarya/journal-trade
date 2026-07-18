@@ -11,7 +11,7 @@ import { PipelinePerformance } from "./components/PipelinePerformance";
 import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
-import { SymbolRankings } from "./components/SymbolRankings";
+
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
@@ -328,8 +328,6 @@ function AITradingPageContent() {
       )}
 
       {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(skillVersion + 1)} />}
-      
-      <SymbolRankings />
     </div>
   );
 }

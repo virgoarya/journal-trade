@@ -284,20 +284,22 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   };
 
   return (
-    <div className="bg-gray-900/60 backdrop-blur-md border border-gray-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-      <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent-gold/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="hud-panel p-4 space-y-4 relative overflow-hidden">
+      <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent-gold/5 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-gray-800/80 rounded-lg border border-gray-700/50">
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3 relative">
+        <div className="flex items-center gap-3">
           <Settings2 className="w-5 h-5 text-accent-gold" />
+          <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-widest drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+            Backtest Config
+          </h3>
         </div>
-        <h3 className="text-lg font-semibold text-white tracking-wide">Backtest Config</h3>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
         {/* Symbols Multi-Select dengan Search */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1.5">
             <CandlestickChart className="w-3.5 h-3.5" />
             Symbols ({selectedSymbols.length})
           </label>
@@ -315,7 +317,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               }
             }}
             placeholder="Type symbol & Enter (e.g. EURUSD) or search..."
-            className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none mb-2"
+            className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none mb-2"
           />
 
           {/* Selected symbols sebagai tag */}
@@ -340,7 +342,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                 className={`px-2 py-1 text-[10px] rounded font-medium transition ${
                   selectedSymbols.includes(sym)
                     ? "bg-accent-gold text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white"
+                    : "bg-bg-input text-text-muted hover:text-text-primary"
                 }`}
               >
                 {sym}
@@ -363,11 +365,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         {/* Timeframe + Dates */}
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Timeframe</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Timeframe</label>
             <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white font-medium focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary font-medium focus:border-accent-gold outline-none"
             >
               <option value="M5">M5</option>
               <option value="M15">M15</option>
@@ -377,22 +379,22 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">From</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">From</label>
             <input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
               required
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">To</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">To</label>
             <input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
               required
             />
           </div>
@@ -401,7 +403,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         {/* Balance + Leverage */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1.5">
               <Target className="w-3 h-3" />
               Balance ($)
             </label>
@@ -409,12 +411,12 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               type="text" inputMode="decimal"
               value={initialBalance}
               onChange={(e) => setInitialBalance(Number(e.target.value) || 0)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Leverage</label>
+              <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Leverage</label>
               {accountInfo?.leverage && (
                 <button
                   type="button"
@@ -433,9 +435,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                 onChange={(e) => setLeverage(Number(e.target.value))}
                 min={1}
                 step={1}
-                className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 pl-6 text-sm text-white focus:border-accent-gold outline-none"
+                className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 pl-6 text-sm text-text-primary focus:border-accent-gold outline-none"
               />
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">1:</span>
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-text-muted">1:</span>
             </div>
           </div>
         </div>
@@ -443,17 +445,17 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         {/* SL/TP Multipliers */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">SL (ATR ×)</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">SL (ATR ×)</label>
             <input
               type="text" inputMode="decimal" value={slMultiplier} onChange={(e) => setSlMultiplier(parseFloat(e.target.value) || 0)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">TP (ATR ×)</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">TP (ATR ×)</label>
             <input
               type="text" inputMode="decimal" value={tpMultiplier} onChange={(e) => setTpMultiplier(parseFloat(e.target.value) || 0)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
         </div>
@@ -461,17 +463,17 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         {/* Risk Settings */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Risk/Trade (%)</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Risk/Trade (%)</label>
             <input
               type="text" inputMode="decimal" value={maxRisk} onChange={(e) => setMaxRisk(parseFloat(e.target.value) || 0)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Max Positions</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Max Positions</label>
             <input
               type="text" inputMode="numeric" value={maxPositions} onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white focus:border-accent-gold outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
         </div>
@@ -483,19 +485,19 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             id="trailing"
             checked={trailingEnabled}
             onChange={(e) => setTrailingEnabled(e.target.checked)}
-            className="rounded bg-gray-800 border-gray-600"
+            className="rounded bg-bg-input border-gray-600"
           />
-          <label htmlFor="trailing" className="text-xs text-gray-400">Trailing Stop</label>
+          <label htmlFor="trailing" className="text-xs text-text-muted">Trailing Stop</label>
           {trailingEnabled && (
             <div className="flex gap-2 ml-2">
               <input
                 type="text" inputMode="decimal" value={activationATR} onChange={(e) => setActivationATR(parseFloat(e.target.value) || 0)}
-                className="w-16 bg-gray-950/50 border border-gray-700/50 rounded-lg p-1 text-xs text-white text-center outline-none"
+                className="w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs text-text-primary text-center outline-none"
                 title="Activation ATR"
               />
               <input
                 type="text" inputMode="decimal" value={trailATR} onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
-                className="w-16 bg-gray-950/50 border border-gray-700/50 rounded-lg p-1 text-xs text-white text-center outline-none"
+                className="w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs text-text-primary text-center outline-none"
                 title="Trail ATR"
               />
             </div>
@@ -503,7 +505,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         </div>
 
         {/* Smart Risk Management */}
-        <div className="bg-gray-950/40 border border-gray-800/80 rounded-xl p-4 space-y-4">
+        <div className="bg-surface/40 border border-border-subtle/80 rounded-xl p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold text-accent-gold uppercase tracking-wider flex items-center gap-2">
               <ShieldAlert className="w-4 h-4" /> Smart Risk Management
@@ -515,18 +517,18 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           </div>
           
           {smartRiskEnabled && (
-            <div className="space-y-4 border-t border-gray-800/50 pt-4 mt-2">
+            <div className="space-y-4 border-t border-border-subtle pt-4 mt-2">
               {/* Drawdown Recovery */}
               <div className="flex items-start gap-3">
-                <input type="checkbox" id="drEnabled" checked={drEnabled} onChange={(e) => setDrEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <input type="checkbox" id="drEnabled" checked={drEnabled} onChange={(e) => setDrEnabled(e.target.checked)} className="mt-1 rounded bg-bg-input border-gray-600" />
                 <div className="flex-1 space-y-2">
-                  <label htmlFor="drEnabled" className="text-xs font-medium text-gray-300 block">Drawdown Recovery (Safety Gear)</label>
+                  <label htmlFor="drEnabled" className="text-xs font-medium text-text-secondary block">Drawdown Recovery (Safety Gear)</label>
                   {drEnabled && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={drActivationPct} onChange={(e) => setDrActivationPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Activation Drawdown %" />
-                      <span className="text-[10px] text-gray-500">% DD ➔</span>
-                      <input type="number" step="0.1" value={drRiskMult} onChange={(e) => setDrRiskMult(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Risk Multiplier" />
-                      <span className="text-[10px] text-gray-500">× Risk</span>
+                      <input type="number" value={drActivationPct} onChange={(e) => setDrActivationPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Activation Drawdown %" />
+                      <span className="text-[10px] text-text-muted">% DD ➔</span>
+                      <input type="number" step="0.1" value={drRiskMult} onChange={(e) => setDrRiskMult(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Risk Multiplier" />
+                      <span className="text-[10px] text-text-muted">× Risk</span>
                     </div>
                   )}
                 </div>
@@ -534,15 +536,15 @@ export function BacktestForm({ onRun, isRunning }: Props) {
 
               {/* Capital Preservation */}
               <div className="flex items-start gap-3">
-                <input type="checkbox" id="cpEnabled" checked={cpEnabled} onChange={(e) => setCpEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <input type="checkbox" id="cpEnabled" checked={cpEnabled} onChange={(e) => setCpEnabled(e.target.checked)} className="mt-1 rounded bg-bg-input border-gray-600" />
                 <div className="flex-1 space-y-2">
-                  <label htmlFor="cpEnabled" className="text-xs font-medium text-gray-300 block">Tiered Scaling (Capital Preservation)</label>
+                  <label htmlFor="cpEnabled" className="text-xs font-medium text-text-secondary block">Tiered Scaling (Capital Preservation)</label>
                   {cpEnabled && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Activation Growth %" />
-                      <span className="text-[10px] text-gray-500">% Profit ➔</span>
-                      <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Risk Multiplier" />
-                      <span className="text-[10px] text-gray-500">× Risk</span>
+                      <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Activation Growth %" />
+                      <span className="text-[10px] text-text-muted">% Profit ➔</span>
+                      <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Risk Multiplier" />
+                      <span className="text-[10px] text-text-muted">× Risk</span>
                     </div>
                   )}
                 </div>
@@ -550,17 +552,17 @@ export function BacktestForm({ onRun, isRunning }: Props) {
 
               {/* Daily Limits */}
               <div className="flex items-start gap-3">
-                <input type="checkbox" id="dlEnabled" checked={dlEnabled} onChange={(e) => setDlEnabled(e.target.checked)} className="mt-1 rounded bg-gray-800 border-gray-600" />
+                <input type="checkbox" id="dlEnabled" checked={dlEnabled} onChange={(e) => setDlEnabled(e.target.checked)} className="mt-1 rounded bg-bg-input border-gray-600" />
                 <div className="flex-1 space-y-2">
-                  <label htmlFor="dlEnabled" className="text-xs font-medium text-gray-300 block">Prop Firm Daily Limits</label>
+                  <label htmlFor="dlEnabled" className="text-xs font-medium text-text-secondary block">Prop Firm Daily Limits</label>
                   {dlEnabled && (
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-green-500">Target:</span>
-                      <input type="number" value={dlProfitPct} onChange={(e) => setDlProfitPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Daily Profit Target %" />
-                      <span className="text-[10px] text-gray-500">%</span>
+                      <input type="number" value={dlProfitPct} onChange={(e) => setDlProfitPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Daily Profit Target %" />
+                      <span className="text-[10px] text-text-muted">%</span>
                       <span className="text-[10px] text-red-500 ml-2">Loss:</span>
-                      <input type="number" value={dlLossPct} onChange={(e) => setDlLossPct(Number(e.target.value))} className="w-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white text-center" title="Daily Loss Limit %" />
-                      <span className="text-[10px] text-gray-500">%</span>
+                      <input type="number" value={dlLossPct} onChange={(e) => setDlLossPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Daily Loss Limit %" />
+                      <span className="text-[10px] text-text-muted">%</span>
                     </div>
                   )}
                 </div>
@@ -572,13 +574,13 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         {/* Speed + Signal Interval */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
               <Zap className="w-3 h-3" /> Speed
             </label>
             <select
               value={speedMs}
               onChange={(e) => setSpeedMs(Number(e.target.value))}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary outline-none"
             >
               <option value={0}>⚡ Max Speed</option>
               <option value={10}>🏎️ Visual (Smooth)</option>
@@ -587,13 +589,13 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             <p className="text-[9px] text-gray-600">Max = fastest result. Visual = smooth like MT5.</p>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">
               <Gauge className="w-3 h-3" /> Signal Eval
             </label>
             <select
               value={signalInterval}
               onChange={(e) => setSignalInterval(Number(e.target.value))}
-              className="w-full bg-gray-950/50 border border-gray-700/50 rounded-xl p-2.5 text-sm text-white outline-none"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary outline-none"
             >
               <option value={1}>Every Candle (Accurate)</option>
               <option value={3}>Every 3rd (Balanced)</option>
@@ -609,7 +611,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition"
+            className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-primary transition"
           >
             <Layers className="w-3.5 h-3.5" />
             Methodologies ({activeMethodologies.length}/{METHODOLOGY_NAMES.length})
@@ -625,7 +627,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                   className={`px-2 py-1 text-[9px] rounded font-medium transition ${
                     activeMethodologies.includes(m)
                       ? "bg-purple-600/30 text-purple-300 border border-purple-500/30"
-                      : "bg-gray-800 text-gray-500 border border-gray-700"
+                      : "bg-bg-input text-text-muted border border-border-subtle"
                   }`}
                 >
                   {m.toUpperCase()}

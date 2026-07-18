@@ -2,6 +2,7 @@ import { TradingAccount } from "../models/TradingAccount";
 import { AITradeLog } from "../models/AITradeLog";
 import { type TradingSignal } from "./ai-trading-engine.service";
 import { mt5McpService } from "./mt5-mcp.service";
+import { tradeService } from "./trade.service";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ export interface RiskCheck {
 
 export interface RiskMetrics {
   dailyPnL: number;
+  weeklyPnL: number;
   monthlyPnL: number;
   dailyDrawdown: number;
   maxDrawdown: number;
@@ -20,6 +22,7 @@ export interface RiskMetrics {
   marginLevel: number;
   marginUsed: number;
   openPositions: number;
+  winRate: number;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -157,11 +160,31 @@ class RiskManagerService {
     const accountInfo = await mt5McpService.getAccountInfo();
     const positions = await mt5McpService.getPositions();
 
-    // Calculate open risk (sum of distance to SL * lot value)
+    // Calculate open risk (sum of distance to SL * lot value * contract size)
     let openRisk = 0;
+    const symbolCache: Record<string, any> = {};
+
     for (const pos of positions) {
-      const slDist = Math.abs(pos.priceOpen - (pos.sl || 0));
-      openRisk += slDist * pos.volume;
+      if (!pos.sl || pos.sl === 0) continue;
+
+      if (!symbolCache[pos.symbol]) {
+        const info = await mt5McpService.getSymbolInfo(pos.symbol);
+        if (info) symbolCache[pos.symbol] = info;
+      }
+      
+      const symInfo = symbolCache[pos.symbol];
+      // Default to 100 if XAUUSD, otherwise 100000 (typical forex)
+      const contractSize = symInfo?.tradeContractSize || (pos.symbol.includes("XAU") ? 100 : 100000);
+
+      // Check for risk-free positions (Trailing Stop / Break Even)
+      if (pos.type === "BUY" || pos.type === 0) {
+        if (pos.sl >= pos.priceOpen) continue;
+      } else if (pos.type === "SELL" || pos.type === 1) {
+        if (pos.sl <= pos.priceOpen) continue;
+      }
+
+      const slDist = Math.abs(pos.priceOpen - pos.sl);
+      openRisk += slDist * pos.volume * contractSize;
     }
 
     // Get daily metrics from DB
@@ -169,6 +192,7 @@ class RiskManagerService {
 
     return {
       dailyPnL: todayMetrics?.dailyPnL ?? accountInfo.profit ?? 0,
+      weeklyPnL: todayMetrics?.weeklyPnL ?? 0,
       monthlyPnL: todayMetrics?.monthlyPnL ?? accountInfo.profit ?? 0,
       dailyDrawdown: todayMetrics?.dailyDrawdown ?? 0,
       maxDrawdown: 0, // TODO: track from DB
@@ -176,6 +200,7 @@ class RiskManagerService {
       marginLevel: accountInfo.marginLevel,
       marginUsed: accountInfo.margin,
       openPositions: positions.length,
+      winRate: todayMetrics?.winRate ?? 0,
     };
   }
 
@@ -184,43 +209,100 @@ class RiskManagerService {
    */
   async getDailyMetrics(userId: string): Promise<{
     dailyPnL: number;
+    weeklyPnL: number;
     dailyDrawdown: number;
     monthlyPnL: number;
+    winRate: number;
   } | null> {
     try {
       // Get today's timestamp
       const now = new Date();
-      const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const todayTs = Math.floor(todayStart.getTime() / 1000);
 
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthTs = Math.floor(monthStart.getTime() / 1000);
 
-      // Get this month's MT5 deals to calculate both monthly and daily PnL
-      const deals = await mt5McpService.getHistory(monthTs);
+      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+      const weekTs = Math.floor(weekStart.getTime() / 1000);
+
+      // Get ALL-TIME MT5 deals to calculate overall winrate accurately
+      const deals = await mt5McpService.getHistory(0);
 
       // Add current floating PnL from open positions
       const positions = await mt5McpService.getPositions();
       const floatingPnL = positions.reduce((sum, p) => sum + p.profit, 0);
 
       let dailyPnL = floatingPnL;
+      let weeklyPnL = floatingPnL;
       let monthlyPnL = floatingPnL;
 
       for (const d of deals) {
-        monthlyPnL += d.profit;
-        if (d.time >= todayTs) {
-          dailyPnL += d.profit;
+        if (d.time >= monthTs) monthlyPnL += d.profit;
+        if (d.time >= weekTs) weeklyPnL += d.profit;
+        if (d.time >= todayTs) dailyPnL += d.profit;
+      }
+
+      // Remove the complex Deals winrate loop and use tradeService for Journal accuracy
+      let winRate = 0;
+      
+      const positionPnL: Record<string, { net: number; hasOut: boolean }> = {};
+      
+      for (const d of deals) {
+        if (d.type === "BUY" || d.type === "SELL" || (d as any).type === 0 || (d as any).type === 1) {
+          // MT5 Deal objects might have position_id. If missing, we can't reliably group them.
+          // BUT wait! "order" is usually the same as position_id for the first entry. 
+          // However, MT5 history_deals_get in python returns `position_id`. Let's use it.
+          const posId = (d as any).position_id || d.ticket; 
+          
+          if (!positionPnL[posId]) {
+            positionPnL[posId] = { net: 0, hasOut: false };
+          }
+          
+          positionPnL[posId].net += d.profit + (d.commission || 0) + (d.swap || 0);
+
+          if (d.entry === 1 || d.entry === 2 || Math.abs(d.profit) > 0.0001) {
+            positionPnL[posId].hasOut = true;
+          }
         }
+      }
+
+      let winCount = 0;
+      let totalClosed = 0;
+
+      for (const posId in positionPnL) {
+        const pos = positionPnL[posId];
+        if (pos.hasOut) {
+          totalClosed++;
+          if (pos.net > 0) winCount++;
+        }
+      }
+
+      winRate = totalClosed > 0 ? (winCount / totalClosed) * 100 : 0;
+
+      // Also try to sync with Trade model if possible
+      try {
+        const accountInfo = await mt5McpService.getAccountInfo();
+        const account = await TradingAccount.findOne({
+          userId,
+        });
+        
+        if (account) {
+          const summary = await tradeService.getSummary(userId, account._id.toString());
+          if (summary.totalTrades > 0) {
+            winRate = summary.winRate;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch winrate from Journal:", err);
       }
 
       return {
         dailyPnL,
+        weeklyPnL,
         dailyDrawdown: dailyPnL < 0 ? Math.abs(dailyPnL) : 0,
         monthlyPnL,
+        winRate,
       };
     } catch {
       return null;
