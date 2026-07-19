@@ -182,7 +182,7 @@ app.use("/api/auth", authLimiter);
       });
       setWebSocketServer(wss);
 
-      server.listen(PORT, () => {
+      server.listen(PORT, "0.0.0.0", () => {
         console.log(`API running on port ${PORT}`);
         console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
         console.log(`WebSocket server running on port ${PORT}`);
