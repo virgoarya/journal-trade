@@ -44,6 +44,7 @@ function AITradingPageContent() {
 
   const {
     isConnected,
+    isReconnecting,
     isConnecting,
     isCheckingSession,
     connectError,
@@ -125,6 +126,21 @@ function AITradingPageContent() {
 
   return (
     <div className="min-h-screen p-4 pb-24 relative z-10 font-mono">
+      {/* Reconnecting Overlay */}
+      {isReconnecting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 p-8 rounded-xl border border-accent-gold/20 bg-black/50">
+            <div className="w-12 h-12 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
+            <h2 className="text-xl font-bold text-accent-gold animate-pulse tracking-widest">
+              RECONNECTING TO MT5...
+            </h2>
+            <p className="text-sm text-text-muted text-center max-w-xs">
+              Connection to terminal was lost. Auto-recovering session...
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <header className="flex items-center justify-between mb-6 hud-panel p-3">
         <div className="flex items-center gap-3">

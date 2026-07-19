@@ -62,6 +62,13 @@ export class CircuitBreaker {
   canExecute(): boolean {
     return this.getState() !== "OPEN";
   }
+
+  reset(): void {
+    this.state = "CLOSED";
+    this.failureCount = 0;
+    this.successCount = 0;
+    this.lastFailureTime = 0;
+  }
 }
 
 // ─── Retry Helper ───────────────────────────────────────────────────────
@@ -238,6 +245,9 @@ class MT5MCPService {
 
   private currentTunnelUrl?: string;
   private keepAliveTimer: NodeJS.Timeout | null = null;
+  private lastConfig?: MT5Config;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private isReconnecting = false;
 
   constructor() {
     this._circuitBreaker = new CircuitBreaker();
@@ -256,8 +266,36 @@ class MT5MCPService {
   }
 
   forceDisconnect() {
+    this.stopAutoReconnect();
     this.stopKeepAlive();
     this.connected = false;
+  }
+
+  private startAutoReconnect() {
+    if (this.isReconnecting || !this.lastConfig) return;
+    this.isReconnecting = true;
+    silentLogger.info("[MT5-MCP] Starting auto-reconnect loop...");
+
+    this.reconnectTimer = setInterval(async () => {
+      if (!this.lastConfig) return;
+      silentLogger.info("[MT5-MCP] Auto-reconnect attempt...");
+      try {
+        const res = await this.connectToMT5(this.lastConfig);
+        if (res.success) {
+          silentLogger.info("[MT5-MCP] Auto-reconnect successful!");
+        }
+      } catch (err: any) {
+        silentLogger.warn(`[MT5-MCP] Auto-reconnect failed: ${err.message}`);
+      }
+    }, 10000); // Try every 10 seconds
+  }
+
+  private stopAutoReconnect() {
+    this.isReconnecting = false;
+    if (this.reconnectTimer) {
+      clearInterval(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   private startKeepAlive() {
@@ -360,6 +398,8 @@ class MT5MCPService {
 
   /** Connect to MT5 terminal with broker credentials. */
   async connectToMT5(config: MT5Config): Promise<{ success: boolean; accountInfo?: MT5AccountInfo; error?: string }> {
+    this.lastConfig = config;
+
     // Selalu force re-init jika lewat tunnel (SSE) agar session_id selalu fresh
     // dan menghindari error "Could not find session" akibat stale connection.
     if (config.tunnelUrl && this.client) {
@@ -392,6 +432,8 @@ class MT5MCPService {
         this.accountInfo = data.accountInfo as MT5AccountInfo;
       }
       this.connected = true;
+      this._circuitBreaker.reset();
+      this.stopAutoReconnect();
       this.startKeepAlive();
       return { success: true, accountInfo: this.accountInfo ?? undefined };
     } catch (error: any) {
@@ -409,6 +451,7 @@ class MT5MCPService {
     } catch {
       // ignore
     }
+    this.stopAutoReconnect();
     this.stopKeepAlive();
     this.connected = false;
     this.accountInfo = null;
@@ -619,6 +662,8 @@ class MT5MCPService {
         silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
         this.connected = false;
         this.accountInfo = null;
+        this.circuitBreaker.recordFailure();
+        this.startAutoReconnect();
       } else if (!isExpectedError) {
         logErrorStructured(tool, error, { args }, "warn");
       } else {

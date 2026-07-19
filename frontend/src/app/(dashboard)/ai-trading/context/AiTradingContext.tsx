@@ -24,6 +24,7 @@ import { aiTradingService } from "@/services/ai-trading.service";
 interface AiTradingContextType {
   // MT5 Connection
   isConnected: boolean;
+  isReconnecting: boolean;
   isConnecting: boolean;
   isCheckingSession: boolean;
   connectError: string | null;
@@ -102,7 +103,7 @@ const AiTradingContext = createContext<AiTradingContextType | undefined>(undefin
 
 export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   // MT5 Connection
-  const { isConnected, isConnecting, isCheckingSession, error: connectError, connect, disconnect } = useMT5Connection();
+  const { isConnected, isReconnecting, isConnecting, isCheckingSession, error: connectError, connect, disconnect } = useMT5Connection();
 
   // Account Info
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(1000);

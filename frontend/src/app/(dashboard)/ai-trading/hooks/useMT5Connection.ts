@@ -12,6 +12,7 @@ interface MT5Credentials {
 
 export function useMT5Connection() {
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function useMT5Connection() {
     try {
       await aiTradingService.disconnect();
       setIsConnected(false);
+      setIsReconnecting(false);
       toast.success("Disconnected from MT5");
     } catch (e: any) {
       toast.error(e.message || "Disconnect failed");
@@ -71,5 +73,31 @@ export function useMT5Connection() {
     return () => { mounted = false; };
   }, []);
 
-  return { isConnected, isConnecting, isCheckingSession, error, connect, disconnect };
+  // ── Poll session status periodically ──────────────────────────────────
+  useEffect(() => {
+    if (!isConnected) return;
+    let mounted = true;
+    
+    const interval = setInterval(async () => {
+      try {
+        const res = await aiTradingService.getStatus();
+        if (mounted && res.success) {
+          if (!res.data?.connected) {
+            setIsReconnecting(true);
+          } else {
+            setIsReconnecting(false);
+          }
+        }
+      } catch (err) {
+        if (mounted) setIsReconnecting(true);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [isConnected]);
+
+  return { isConnected, isReconnecting, isConnecting, isCheckingSession, error, connect, disconnect };
 }
