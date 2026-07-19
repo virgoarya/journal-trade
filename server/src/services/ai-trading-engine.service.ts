@@ -2,6 +2,7 @@
 // Combines all 7 trading methodologies via the Confluence Engine.
 
 import { mt5McpService, type MT5Rate, type MT5Symbol } from "./mt5-mcp.service";
+import { silentLogger } from "../utils/silent-logger";
 import {
   marketStructureService,
   smcStrategy,
