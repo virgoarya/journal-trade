@@ -36,6 +36,7 @@ import { systemMonitorAgent } from "./agents/system-monitor-agent";
 // This Express app now acts strictly as an API and WebSocket server.
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(corsMiddleware);
 app.use(express.json());
 
