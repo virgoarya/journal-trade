@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
-import Head from "next/head";
 import "./globals.css";
 
 const inter = Inter({
