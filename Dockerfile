@@ -43,6 +43,5 @@ RUN cd server && npm ci --only=production --ignore-scripts
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/frontend ./server/dist/frontend
 
-EXPOSE 5000
 
 CMD ["node", "server/dist/index.js"]
