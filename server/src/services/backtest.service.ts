@@ -1422,7 +1422,7 @@ class BacktestService {
             pipelineConfigSnapshot: merged,
           }
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
       );
       savedDocId = saved?._id?.toString();
     } catch (dbError: any) {
