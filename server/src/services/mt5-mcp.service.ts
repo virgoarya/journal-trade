@@ -650,19 +650,18 @@ class MT5MCPService {
       return data;
 
     } catch (error: any) {
-      // Record failure in circuit breaker on any caught error (including retried ones)
-      this.circuitBreaker.recordFailure();
-      
       const errorMsg = error.message || "";
       const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
       const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("32001") || errorMsg.includes("timeout"); // True hard connection drops
 
       if (isConnError) {
+        // Record failure in circuit breaker ONLY on connection errors
+        this.circuitBreaker.recordFailure();
+        
         logErrorStructured(tool, error, { args }, "error");
         silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
         this.connected = false;
         this.accountInfo = null;
-        this.circuitBreaker.recordFailure();
         this.startAutoReconnect();
       } else if (!isExpectedError) {
         logErrorStructured(tool, error, { args }, "warn");
