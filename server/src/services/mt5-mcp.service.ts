@@ -399,10 +399,17 @@ class MT5MCPService {
         try { await this.client.close(); } catch {}
       }
       this.client = null;
-      if (!this.isReconnecting) {
-        silentLogger.error(`[MT5-MCP] Init failed: ${error.message}`);
+      
+      const errMsg = error.message || "";
+      const isConnError = errMsg.includes("not connected") || errMsg.includes("ECONN") || errMsg.includes("transport") || errMsg.includes("socket") || errMsg.includes("32001") || errMsg.includes("timeout") || errMsg.includes("fetch failed");
+      
+      if (isConnError) {
+        silentLogger.warn(`[MT5-MCP] Init connection failed (network drop): ${errMsg}`);
+      } else {
+        silentLogger.error(`[MT5-MCP] Init failed: ${errMsg}`);
         logErrorStructured("init", error, {}, "error");
       }
+      
       throw error;
     }
   }
@@ -417,9 +424,9 @@ class MT5MCPService {
       try { await this.client.close(); } catch {}
       this.client = null;
     }
-    await this.ensureClient(config.tunnelUrl);
-
     try {
+      await this.ensureClient(config.tunnelUrl);
+
       const result = await withRetry(
         () => this.client!.callTool({
           name: "mt5_connect",
@@ -448,10 +455,13 @@ class MT5MCPService {
       this.startKeepAlive();
       return { success: true, accountInfo: this.accountInfo ?? undefined };
     } catch (error: any) {
-      if (!this.isReconnecting) {
+      const errMsg = error.message || "";
+      const isConnError = errMsg.includes("not connected") || errMsg.includes("ECONN") || errMsg.includes("transport") || errMsg.includes("socket") || errMsg.includes("32001") || errMsg.includes("timeout") || errMsg.includes("fetch failed");
+      
+      if (!isConnError) {
         logErrorStructured("connectToMT5", error, { config }, "error");
       }
-      return { success: false, error: error.message };
+      return { success: false, error: errMsg };
     }
   }
 
