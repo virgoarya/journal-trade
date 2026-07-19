@@ -727,8 +727,15 @@ router.post("/analyze-multi", heavyLimiter, async (req, res, next) => {
  */
 router.get("/performance", async (req, res, next) => {
   try {
-    const accountInfo = await mt5McpService.getAccountInfo();
-    const accountId = accountInfo?.login?.toString();
+    let accountId;
+    if (mt5McpService.isConnected) {
+      try {
+        const accountInfo = await mt5McpService.getAccountInfo();
+        accountId = accountInfo?.login?.toString();
+      } catch (e) {
+        silentLogger.warn(`[PERFORMANCE] Could not get account info: ${e}`);
+      }
+    }
 
     const query: any = {
       userId: req.user.id,

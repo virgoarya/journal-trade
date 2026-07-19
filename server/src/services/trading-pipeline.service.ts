@@ -537,15 +537,27 @@ const pipeline = {
         };
       }
       // Get current MT5 account ID
-      const accountInfo = await mt5McpService.getAccountInfo();
-      const accountId = accountInfo?.login?.toString();
+      let accountId;
+      if (mt5McpService.isConnected) {
+        try {
+          const accountInfo = await mt5McpService.getAccountInfo();
+          accountId = accountInfo?.login?.toString();
 
-      // Open positions langsung dari MT5 (filter only AI trades)
-      const positions = await mt5McpService.getPositions();
-      const aiPositions = positions.filter(p => p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")));
-      openPositions = aiPositions.length;
-      // Hitung total floating PnL dari semua posisi AI
-      totalPnL = aiPositions.reduce((sum, p) => sum + (p.profit || 0), 0);
+          // Open positions langsung dari MT5 (filter only AI trades)
+          const positions = await mt5McpService.getPositions();
+          const aiPositions = positions.filter(p => p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")));
+          openPositions = aiPositions.length;
+          // Hitung total floating PnL dari semua posisi AI
+          totalPnL = aiPositions.reduce((sum, p) => sum + (p.profit || 0), 0);
+
+          // Drawdown sederhana: negatif dari total floating
+          currentDrawdown = aiPositions
+            .filter(p => p.profit < 0)
+            .reduce((sum, p) => sum + Math.abs(p.profit), 0);
+        } catch (e) {
+          silentLogger.warn(`[PIPELINE] Could not get MT5 stats: ${e}`);
+        }
+      }
 
       // Trade history dari DB (closed trades)
       const today = new Date();
@@ -574,10 +586,6 @@ const pipeline = {
       totalPnL += allTimePnL;
       dailyPnL = dailyPnLSum;
 
-      // Drawdown sederhana: negatif dari total floating
-      currentDrawdown = aiPositions
-        .filter(p => p.profit < 0)
-        .reduce((sum, p) => sum + Math.abs(p.profit), 0);
 
     } catch (err) {
       silentLogger.warn(`[PIPELINE] Status metrics query error: ${err}`);
