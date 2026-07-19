@@ -133,7 +133,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
               ))}
             </div>
             <span className="text-[10px] text-text-muted font-mono">
-              {finalSignal.totalAgreeing}/{Object.keys(confluence.methodologyBreakdown).length} methodologies agreeing
+              {finalSignal.totalAgreeing}/{Object.keys(METHODOLOGY_LABELS).length} methodologies agreeing
             </span>
           </div>
 
@@ -181,14 +181,16 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
       {Object.keys(confluence.methodologyBreakdown).length > 0 && (
         <div className="space-y-1.5">
           <span className="text-[9px] text-accent-gold-dim uppercase tracking-widest font-mono">Individual Signals</span>
-          {Object.entries(confluence.methodologyBreakdown).map(([key, data]) => {
+          {Object.entries(confluence.methodologyBreakdown)
+            .filter(([key]) => key in METHODOLOGY_LABELS)
+            .map(([key, data]) => {
             const method = key as MethodologyName;
             const color = METHODOLOGY_COLORS[method] || "#6B7280";
             return (
               <div key={key} className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                 <span className="flex-1 text-[10px] text-text-muted truncate flex items-center gap-1 font-mono">
-                  {METHODOLOGY_LABELS[method] || method}
+                  {METHODOLOGY_LABELS[method]}
                   {data.direction === "BUY" && <span title="Sinyal BUY"><TrendingUp className="w-3 h-3 text-neon-green" /></span>}
                   {data.direction === "SELL" && <span title="Sinyal SELL"><TrendingDown className="w-3 h-3 text-neon-red" /></span>}
                 </span>

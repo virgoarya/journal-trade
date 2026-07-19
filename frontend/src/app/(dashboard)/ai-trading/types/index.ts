@@ -34,7 +34,7 @@ export type LlmModelStatus = "active" | "hibernasi" | "circuit_open";
  * Consolidates duplicates from LLMConsensusViz.tsx and LLMProviderCard.tsx.
  */
 export interface LlmModelNode {
-  name: string;          // provider key: deepseek, qwen, gemini, mistral, nemotron, claude-opus
+  name: string;          // provider key: deepseek, gpt, gemini, mistral, nemotron, claude-opus
   label: string;         // human-readable name for UI
   model: string;         // model identifier used by the provider
   status: LlmModelStatus; // connection/perceived health
@@ -46,7 +46,7 @@ export interface LlmModelNode {
  */
 export const MODEL_COLORS: Record<string, string> = {
   deepseek: "#8B5CF6",    // violet
-  qwen: "#3B82F6",        // blue
+  gpt: "#3B82F6",        // blue
   gemini: "#10B981",      // emerald
   mistral: "#F59E0B",     // amber
   nemotron: "#EF4444",    // red
@@ -157,7 +157,7 @@ export const VERDICT_STYLES: Record<string, { bg: string; text: string; border: 
  */
 export const ALL_LLM_PROVIDERS: LlmModelNode[] = [
   { name: "deepseek", label: "DeepSeek V4", model: "deepseek-v4", status: "active" },
-  { name: "qwen", label: "Qwen 3 32B", model: "qwen3.5-32b-chat", status: "active" },
+  { name: "gpt", label: "GPT OSS 120B", model: "groq/openai/gpt-oss-120b", status: "active" },
   { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", status: "active" },
   { name: "nemotron", label: "Nemotron 3 Ultra", model: "nemotron-4-340b-instruct", status: "active" },

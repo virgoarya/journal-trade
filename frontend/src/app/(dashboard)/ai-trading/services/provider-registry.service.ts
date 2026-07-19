@@ -8,7 +8,7 @@ import { ALL_LLM_PROVIDERS } from "../types";
  */
 const DEFAULT_PROVIDERS: LlmProviderConfig[] = [
   { name: "deepseek", label: "DeepSeek V4", model: "deepseek-v4", color: MODEL_COLORS.deepseek, status: "active" },
-  { name: "qwen", label: "Qwen 3 32B", model: "qwen3.5-32b-chat", color: MODEL_COLORS.qwen, status: "active" },
+  { name: "gpt", label: "GPT OSS 120B", model: "groq/openai/gpt-oss-120b", color: MODEL_COLORS.gpt, status: "active" },
   { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", color: MODEL_COLORS.gemini, status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", color: MODEL_COLORS.mistral, status: "active" },
   { name: "nemotron", label: "Nemotron 3 Ultra", model: "nemotron-4-340b-instruct", color: MODEL_COLORS.nemotron, status: "active" },

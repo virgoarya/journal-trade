@@ -63,7 +63,7 @@ interface LLMProvider {
 
 const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> = [
   { name: "deepseek",   label: "DeepSeek V4",      model: "oc/deepseek-v4-flash-free" },
-  { name: "qwen",       label: "Qwen 3 32B",       model: "groq/qwen/qwen3-32b" },
+  { name: "gpt",          label: "GPT OSS 120B",     model: "groq/openai/gpt-oss-120b" },
   { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash" },
   { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
   { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
@@ -917,8 +917,13 @@ isAvailable(): boolean {
       return { verdict: "SKIP", reasoning: thinkBlock.slice(0, 300) + "..." };
     }
 
-    // Jika kita tidak bisa menyimpulkan sinyal dengan format baku/pasti, lebih baik kembalikan SKIP daripada false positive.
-    return { verdict: "SKIP", reasoning: "Could not parse valid JSON or strict verdict from response" };
+    // Jika kita tidak bisa menyimpulkan sinyal dengan format baku/pasti, 
+    // gunakan teks asli (cleaned) sebagai reasoning agar hasil analisis model tidak hilang.
+    const fallbackReasoning = cleaned.length > 5 
+      ? cleaned.replace(/[\n\r]+/g, ' ').slice(0, 300) + (cleaned.length > 300 ? "..." : "")
+      : "Format output tidak dikenali dan teks terlalu pendek.";
+      
+    return { verdict: "SKIP", reasoning: fallbackReasoning };
   }
 }
 

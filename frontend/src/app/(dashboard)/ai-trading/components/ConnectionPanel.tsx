@@ -7,6 +7,7 @@ interface MT5Credentials {
   server: string;
   login: string;
   password: string;
+  tunnelUrl?: string;
 }
 
 interface ConnectionPanelProps {
@@ -23,7 +24,9 @@ export function ConnectionPanel({
   const [server, setServer] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [tunnelUrl, setTunnelUrl] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("mt5_last_server");
@@ -36,7 +39,7 @@ export function ConnectionPanel({
     e.preventDefault();
     localStorage.setItem("mt5_last_server", server);
     localStorage.setItem("mt5_last_login", login);
-    await onConnect({ server, login, password });
+    await onConnect({ server, login, password, tunnelUrl: tunnelUrl.trim() || undefined });
   };
 
   return (
@@ -60,6 +63,12 @@ export function ConnectionPanel({
             <p className="text-text-muted mt-2 text-sm">
               Link your broker account to activate the AI engine
             </p>
+            <button
+              onClick={() => setShowGuide(true)}
+              className="mt-4 text-xs font-semibold text-accent-gold/80 hover:text-accent-gold underline decoration-accent-gold/50 underline-offset-4"
+            >
+              Cara Hubungkan MT5 (User Guide)
+            </button>
           </div>
 
           {/* Form */}
@@ -119,6 +128,19 @@ export function ConnectionPanel({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">
+                Connection URL <span className="text-accent-gold-dim lowercase">(Opsional - Untuk Jarak Jauh)</span>
+              </label>
+              <input
+                type="text"
+                value={tunnelUrl}
+                onChange={(e) => setTunnelUrl(e.target.value)}
+                placeholder="https://xxx.ngrok.app (Kosongkan jika di PC yang sama)"
+                className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/50 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm"
+              />
+            </div>
+
             {/* Error message */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
@@ -159,6 +181,65 @@ export function ConnectionPanel({
           
         </div>
       </div>
+
+      {/* User Guide Modal */}
+      {showGuide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-bg-elevated border border-accent-gold/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-4 border-b border-accent-gold/20 pb-3">
+              <h2 className="text-lg font-bold text-accent-gold uppercase tracking-wider">Cara Menghubungkan MT5</h2>
+              <button onClick={() => setShowGuide(false)} className="text-text-muted hover:text-white">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="space-y-5 text-sm text-text-primary">
+              <div className="flex gap-4 items-start">
+                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">1</div>
+                <div>
+                  <p className="font-semibold text-white mb-1">Dapatkan Ngrok Authtoken</p>
+                  <p className="text-text-muted leading-relaxed">Karena aplikasi ini butuh URL Publik, Anda wajib mendaftar di <a href="https://dashboard.ngrok.com" target="_blank" rel="noreferrer" className="text-accent-gold underline hover:text-white">dashboard.ngrok.com</a>. Setelah login, masuk ke menu <strong>Your Authtoken</strong> lalu Copy token Anda.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 items-start">
+                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</div>
+                <div>
+                  <p className="font-semibold text-white mb-1">Unduh & Jalankan Aplikasi</p>
+                  <p className="text-text-muted leading-relaxed">Download <span className="text-accent-gold font-mono">Mulai_AI_Trading.exe</span> dan jalankan di PC yang sudah terinstal MetaTrader 5.</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-4 items-start">
+                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">3</div>
+                <div>
+                  <p className="font-semibold text-white mb-1">Masukkan Token & Salin URL</p>
+                  <p className="text-text-muted leading-relaxed">Saat pertama kali dibuka, layar CMD akan meminta Ngrok Authtoken. Paste token dari Langkah 1 lalu tekan Enter. Jika berhasil, akan muncul <span className="text-accent-gold">URL Koneksi Anda</span> (berakhiran .ngrok-free.dev). Blok dan Copy URL tersebut.</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-4 items-start">
+                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">4</div>
+                <div>
+                  <p className="font-semibold text-white mb-1">Hubungkan ke Web</p>
+                  <p className="text-text-muted leading-relaxed">Paste URL Koneksi tadi ke kolom <strong>Connection URL</strong> di halaman ini beserta Broker dan Login MT5 Anda, lalu klik Connect.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setShowGuide(false)}
+                className="px-6 py-2 bg-accent-gold text-black rounded-lg font-semibold hover:bg-accent-gold/90 transition-colors"
+              >
+                Mengerti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

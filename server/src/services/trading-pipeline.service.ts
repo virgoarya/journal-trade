@@ -1053,7 +1053,7 @@ const pipeline = {
         if (pipeline.config.llmConsensus?.enabled && !pipeline.llmCircuitOpen) {
           // Check LLM circuit breaker - skip if all providers are OPEN
           const availableLLMProviders = this.llmCircuitBreaker.getAvailableProviders(
-            ["deepseek", "qwen", "gemini", "mistral", "nemotron", "claude-opus"]
+            ["deepseek", "gpt", "gemini", "mistral", "nemotron", "claude-opus"]
           );
           if (availableLLMProviders.length === 0) {
             this.addLog(userId, "ERROR", `[${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Consensus.`);

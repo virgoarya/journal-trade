@@ -36,20 +36,20 @@ function DeepSeekLogo({ size = 40, className }: LogoProps) {
   );
 }
 
-/** Qwen — stylized "Q" with ring and small tail */
-function QwenLogo({ size = 40, className }: LogoProps) {
+/** GPT — OpenAI/Groq OSS */
+function GptLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#6366f1] shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-[#6366f1]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#10a37f] shadow-[0_0_15px_rgba(16,163,127,0.5)] border border-[#10a37f]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
-        src="/qwen.png" 
-        alt="Qwen" 
+        src="/gpt.png" 
+        alt="GPT" 
         className="w-full h-full object-cover p-1"
         onError={(e) => {
-          // Fallback to official Qwen avatar if the user hasn't saved the file yet
-          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/148330874?v=4";
+          // Fallback to OpenAI generic avatar if the user hasn't saved the file yet
+          (e.target as HTMLImageElement).src = "https://avatars.githubusercontent.com/u/14957082?v=4";
         }}
       />
     </div>
@@ -156,7 +156,7 @@ function GenericAILogo({ size = 40, className }: LogoProps) {
 
 const LOGO_MAP: Record<string, React.FC<LogoProps>> = {
   deepseek: DeepSeekLogo,
-  qwen: QwenLogo,
+  gpt: GptLogo,
   gemini: GeminiLogo,
   mistral: MistralLogo,
   nemotron: NemotronLogo,
@@ -169,5 +169,5 @@ export function LLMProviderLogo({ provider, size = 40, className }: LogoProps & 
   return <Component size={size} className={className} />;
 }
 
-export { DeepSeekLogo, QwenLogo, GeminiLogo, MistralLogo, NemotronLogo, ClaudeLogo, GenericAILogo };
+export { DeepSeekLogo, GptLogo, GeminiLogo, MistralLogo, NemotronLogo, ClaudeLogo, GenericAILogo };
 export type { LogoProps };

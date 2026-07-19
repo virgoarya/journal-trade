@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
@@ -137,6 +138,7 @@ export interface MT5Config {
   server: string;
   login: string;
   password: string;
+  tunnelUrl?: string;
 }
 
 export interface MT5AccountInfo {
@@ -234,6 +236,8 @@ class MT5MCPService {
   private accountInfo: MT5AccountInfo | null = null;
   private _circuitBreaker: CircuitBreaker;
 
+  private currentTunnelUrl?: string;
+
   constructor() {
     this._circuitBreaker = new CircuitBreaker();
   }
@@ -258,38 +262,15 @@ class MT5MCPService {
     return this.accountInfo;
   }
 
-  /** Register & connect to the MT5 MCP server (stdio). */
-  async init(): Promise<void> {
-    if (this.client) return;
-
-    // Validate prerequisites before starting Python server
-    const serverScript = path.join(__dirname, "..", "..", "mcp-mt5-server", "server.py");
-    const pythonPath = path.join(__dirname, "..", "..", ".venv-mcp", "Scripts", "python.exe");
-
-    // Check Python executable
-    if (!fs.existsSync(pythonPath)) {
-      const err = new Error(`Python executable not found at: ${pythonPath}. Please create .venv-mcp virtual environment.`);
-      silentLogger.error(`[MT5-MCP] ${err.message}`);
-      throw err;
+  /** Register & connect to the MT5 MCP server (stdio or sse). */
+  async init(tunnelUrl?: string): Promise<void> {
+    if (this.client) {
+      if (this.currentTunnelUrl === tunnelUrl) return;
+      try { await this.client.close(); } catch {}
+      this.client = null;
     }
-
-    // Check server script
-    if (!fs.existsSync(serverScript)) {
-      const err = new Error(`MCP server script not found at: ${serverScript}`);
-      silentLogger.error(`[MT5-MCP] ${err.message}`);
-      throw err;
-    }
-
-    // Optional: Check if MT5 terminal is running (basic check)
-    try {
-      const { execSync } = require("child_process");
-      const output = execSync('tasklist /FI "IMAGENAME eq terminal64.exe" /FI "IMAGENAME eq terminal.exe"', { encoding: 'utf8', stdio: 'pipe' });
-      if (!output.includes("terminal64.exe") && !output.includes("terminal.exe")) {
-        silentLogger.warn("[MT5-MCP] MetaTrader 5 terminal does not appear to be running. Connection may fail.");
-      }
-    } catch {
-      silentLogger.warn("[MT5-MCP] Could not check MT5 terminal status (tasklist failed).");
-    }
+    
+    this.currentTunnelUrl = tunnelUrl;
 
     try {
       const client = new Client(
@@ -297,10 +278,50 @@ class MT5MCPService {
         { capabilities: {} },
       );
 
-      const transport = new StdioClientTransport({
-        command: pythonPath,
-        args: [serverScript],
-      });
+      let transport;
+      if (tunnelUrl) {
+        // Mode Jaringan Web (Railway)
+        let formattedUrl = tunnelUrl;
+        if (!formattedUrl.endsWith("/sse")) {
+            formattedUrl = formattedUrl.endsWith("/") ? `${formattedUrl}sse` : `${formattedUrl}/sse`;
+        }
+        transport = new SSEClientTransport(new URL(formattedUrl));
+      } else {
+        // Mode Lokal (Localhost Desktop)
+        // Validate prerequisites before starting Python server
+        const serverScript = path.join(__dirname, "..", "..", "mcp-mt5-server", "server.py");
+        const pythonPath = path.join(__dirname, "..", "..", ".venv-mcp", "Scripts", "python.exe");
+
+        // Check Python executable
+        if (!fs.existsSync(pythonPath)) {
+          const err = new Error(`Python executable not found at: ${pythonPath}. Please create .venv-mcp virtual environment.`);
+          silentLogger.error(`[MT5-MCP] ${err.message}`);
+          throw err;
+        }
+
+        // Check server script
+        if (!fs.existsSync(serverScript)) {
+          const err = new Error(`MCP server script not found at: ${serverScript}`);
+          silentLogger.error(`[MT5-MCP] ${err.message}`);
+          throw err;
+        }
+
+        // Optional: Check if MT5 terminal is running (basic check)
+        try {
+          const { execSync } = require("child_process");
+          const output = execSync('tasklist /FI "IMAGENAME eq terminal64.exe" /FI "IMAGENAME eq terminal.exe"', { encoding: 'utf8', stdio: 'pipe' });
+          if (!output.includes("terminal64.exe") && !output.includes("terminal.exe")) {
+            silentLogger.warn("[MT5-MCP] MetaTrader 5 terminal does not appear to be running. Connection may fail.");
+          }
+        } catch {
+          silentLogger.warn("[MT5-MCP] Could not check MT5 terminal status (tasklist failed).");
+        }
+        
+        transport = new StdioClientTransport({
+          command: pythonPath,
+          args: [serverScript, "--transport", "stdio"],
+        });
+      }
 
       await client.connect(transport, { timeout: 300000 });
       this.client = client;
@@ -318,7 +339,7 @@ class MT5MCPService {
 
   /** Connect to MT5 terminal with broker credentials. */
   async connectToMT5(config: MT5Config): Promise<{ success: boolean; accountInfo?: MT5AccountInfo; error?: string }> {
-    await this.ensureClient();
+    await this.ensureClient(config.tunnelUrl);
 
     try {
       const result = await withRetry(
@@ -478,17 +499,17 @@ class MT5MCPService {
 
   // ── Private ────────────────────────────────────────────────────────
 
-  private async ensureClient(): Promise<void> {
+  private async ensureClient(tunnelUrl?: string): Promise<void> {
     if (!this.client) {
-      await this.init();
+      await this.init(tunnelUrl);
     }
   }
 
   /** Retry init with exponential backoff — used by external trigger. */
-  async ensureInit(maxRetries = 3, baseDelayMs = 2000): Promise<void> {
+  async ensureInit(maxRetries = 3, baseDelayMs = 2000, tunnelUrl?: string): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.init();
+        await this.init(tunnelUrl);
         return;
       } catch {
         if (attempt < maxRetries) {

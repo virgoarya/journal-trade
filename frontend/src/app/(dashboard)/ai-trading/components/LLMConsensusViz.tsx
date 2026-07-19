@@ -16,7 +16,7 @@ interface Props {
 
 const MODEL_ICONS: Record<string, string> = {
   deepseek: "/deepseek.png",
-  qwen: "/qwen.png",
+  gpt: "/gpt.png",
   gemini: "/gemini.png",
   mistral: "/mistral.png",
   nemotron: "/nemotron.png",

@@ -1,2 +1,7 @@
 MetaTrader5>=5.0.45
 mcp>=1.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+sse-starlette>=1.6.5
+pyngrok>=7.0.0
+pyinstaller>=6.3.0

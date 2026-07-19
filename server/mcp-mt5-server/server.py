@@ -9,6 +9,7 @@ via the Model Context Protocol (MCP).
 import asyncio
 import json
 import sys
+import os
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -956,11 +957,102 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 # ---------------------------------------------------------------------------
 # Main entrypoint
 # ---------------------------------------------------------------------------
+import os
+import argparse
+import uvicorn
+from fastapi import FastAPI
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.middleware.cors import CORSMiddleware
+from mcp.server.sse import SseServerTransport
 
-async def main():
+async def run_stdio():
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
+def run_sse(port: int, use_ngrok: bool):
+    sse = SseServerTransport("/messages")
+    api = FastAPI(title="MT5 MCP Server")
+
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @api.get("/sse")
+    async def handle_sse(request: Request):
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+            await app.run(streams[0], streams[1], app.create_initialization_options())
+
+    @api.post("/messages")
+    async def handle_messages(request: Request):
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    @api.get("/health")
+    async def health():
+        return {"status": "ok", "connected": mt5_connected}
+
+    if use_ngrok:
+        try:
+            from pyngrok import ngrok
+            
+            # UX: Prompt for Ngrok token if not set
+            base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+            token_file = os.path.join(base_dir, ".ngrok_token")
+            
+            if not os.environ.get("NGROK_AUTHTOKEN"):
+                if os.path.exists(token_file):
+                    with open(token_file, "r") as f:
+                        token = f.read().strip()
+                        if token:
+                            os.environ["NGROK_AUTHTOKEN"] = token
+                else:
+                    print("\n" + "="*55)
+                    print("="*12 + " NGROK AUTHTOKEN DIBUTUHKAN " + "="*15)
+                    print("="*55)
+                    print("Anda belum mengatur Ngrok Authtoken.")
+                    print("1. Daftar/Login ke https://dashboard.ngrok.com")
+                    print("2. Ke menu 'Your Authtoken' (atau https://dashboard.ngrok.com/get-started/your-authtoken)")
+                    print("3. Copy token Anda dan Paste di bawah ini.")
+                    print("="*55)
+                    
+                    token = input("Masukkan Ngrok Authtoken Anda: ").strip()
+                    if token:
+                        try:
+                            with open(token_file, "w") as f:
+                                f.write(token)
+                            os.environ["NGROK_AUTHTOKEN"] = token
+                            print("\n[+] Token berhasil disimpan!")
+                        except Exception as write_err:
+                            print(f"\n[-] Gagal menyimpan token ke file: {write_err}")
+                            os.environ["NGROK_AUTHTOKEN"] = token
+                    else:
+                        print("\n[!] Token kosong. Mencoba tanpa token (kemungkinan error ERR_NGROK_4018).")
+
+            print("\nMemulai Ngrok Tunnel...")
+
+            from pyngrok import ngrok
+            public_url = ngrok.connect(port).public_url
+            print(f"\n" + "="*50)
+            print(f"Koneksi Berhasil!")
+            print(f"URL Koneksi Anda: {public_url}/sse")
+            print(f"="*50 + "\n")
+        except Exception as e:
+            print(f"Failed to start ngrok: {e}")
+
+    uvicorn.run(api, host="0.0.0.0", port=port, log_level="info")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="MT5 MCP Server")
+    parser.add_argument("--transport", choices=["stdio", "sse"], default="sse", help="Transport mode")
+    parser.add_argument("--port", type=int, default=8000, help="Port for SSE mode")
+    parser.add_argument("--no-ngrok", action="store_true", help="Disable Ngrok tunnel")
+    args = parser.parse_args()
+
+    if args.transport == "sse":
+        run_sse(args.port, not args.no_ngrok)
+    else:
+        asyncio.run(run_stdio())
