@@ -1,56 +1,46 @@
 # System Monitoring Report
 
-**Generated:** 19/7/2026, 21.54.08 WIB
-**Status:** 🔴 CRITICAL
+**Generated:** 19/7/2026, 22.06.58 WIB
+**Status:** 🟡 WARNING
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-- MT5 connection gagal karena memory full. 95.8% RAM gunakan. Restart service MT5 setelah memory drop di bawah 80%.
-- Memory leak kemungkinan besar. Cek task manager untuk proses yang CPU tinggi. Kill proses yang tidak perlu.
-- Pipeline auto-paused karena MT5 down. Verify connectivity ke MT5 server. Cek firewall dan port 443.
-- High memory usage berbahaya pada 5.93GB total. Upgrade RAM ke minimal 8GB atau optimize data cache.
-- Uptime 56.7h terlalu lama tanpa restart. Schedule restart harian di low-traffic hour.
+- Memory 97.9% used. Win32 host 5.93GB total. Reason: leak atau buffer trade data tidak dibatasi. Action: cek `process.memoryUsage()` dan profile heap pakai `--inspect`. Next step: restart service jika tidak turun setelah purge cache.
+
+- Uptime 56.9h tanpa recycle. Reason: long-run node accumulasi objek mati. Action: enable periodic worker restart tiap 24h via task scheduler. Next step: pasang `--max-old-space-size=4096` agar OOM predictable.
+
+- `memoryUsagePercent` metric raw dari OS. Reason: tidak ada alert threshold otomatis. Action: tambah alert >90% kirim ke monitoring. Next step: cek `win32` API `os.freemem()` di log.
+
+- `activePipelines: 1` dari 6 provider. Reason: konsensus idle tapi memori tinggi. Action: verifikasi pipeline tidak hold array histori besar. Next step: `console.log` size state tiap tick.
+
+- CPU 4 core idle relatif. Reason: bottleneck memory bukan compute. Action: jangan scale horizontal dulu. Next step: fix mem leak dulu baru observasi `cpuCount` load.
 
 ---
 
 ## Executive Summary
 
-2 critical issue(s), 10 warning(s)
-
-## 🔴 Critical Issues
-
-- [mt5] MT5 connection lost
--   -> MT5 tidak terhubung - pipeline auto-paused
+6 warning(s), no critical issues
 
 ## 🟡 Warnings
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 95.8% used (5.93GB total)
--   -> Uptime: 56.7h
+-   -> Memory: 97.9% used (5.93GB total)
+-   -> Uptime: 56.9h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 95.8% (threshold: 85%)
-- [data_quality] Data quality issues detected (3)
--   -> [XAUUSD.l] MT5 not connected - cannot query rates
--   -> [BTCUSD.l] MT5 not connected - cannot query rates
--   -> [NAS100.l] MT5 not connected - cannot query rates
-
-## Recommended Actions
-
-| # | Action | Component |
-|---|--------|-----------|
-| 1 | Restart MT5 MCP service | - |
-| 2 | Verify MT5 terminal is running on broker VPS | - |
-| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
+-   -> ⚠️ Memory usage tinggi: 97.9% (threshold: 85%)
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 0 |
+| connected | 1 |
 | circuitState | CLOSED |
+| balance | 47192.91 |
+| equity | 49940.91 |
+| marginLevel | 750.5047104808763 |
 | activePipelines | 1 |
 | 6a26146a9cad211ba0631027.running | 1 |
 | 6a26146a9cad211ba0631027.paused | 0 |
@@ -71,26 +61,26 @@
 | availableForConsensus | 6 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 95.8 |
-| uptimeHours | 56.7 |
+| memoryUsagePercent | 97.9 |
+| uptimeHours | 56.9 |
 | checkedPipelines | 1 |
-| dataIssues | 3 |
+| dataIssues | 0 |
 
 ## Detailed Health Checks
 
-### 🔴 MT5
+### 🟢 MT5
 
-- **Severity:** critical
-- **Summary:** MT5 connection lost
-- **Time:** 2026-07-19T14:54:08.441Z
+- **Severity:** healthy
+- **Summary:** MT5 connected and operational
+- **Time:** 2026-07-19T15:06:58.118Z
 
-- MT5 tidak terhubung - pipeline auto-paused
+- Balance: $47192.91, Equity: $49940.91
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
 - **Summary:** 1 pipeline(s) running
-- **Time:** 2026-07-19T14:54:08.467Z
+- **Time:** 2026-07-19T15:06:58.177Z
 
 - Found 1 active pipeline(s)
 
@@ -98,7 +88,7 @@
 
 - **Severity:** healthy
 - **Summary:** 6 provider(s) available for consensus
-- **Time:** 2026-07-19T14:54:08.442Z
+- **Time:** 2026-07-19T15:06:58.115Z
 
 - ✅ DeepSeek V4 (deepseek): active
 - ✅ GPT OSS 120B (gpt): active
@@ -111,24 +101,20 @@
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-07-19T14:54:08.442Z
+- **Time:** 2026-07-19T15:06:58.116Z
 
 - CPU: 4 cores
-- Memory: 95.8% used (5.93GB total)
-- Uptime: 56.7h
+- Memory: 97.9% used (5.93GB total)
+- Uptime: 56.9h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 95.8% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 97.9% (threshold: 85%)
 
-### 🟡 DATA_QUALITY
+### 🟢 DATA_QUALITY
 
-- **Severity:** warning
-- **Summary:** Data quality issues detected (3)
-- **Time:** 2026-07-19T14:54:08.467Z
-
-- [XAUUSD.l] MT5 not connected - cannot query rates
-- [BTCUSD.l] MT5 not connected - cannot query rates
-- [NAS100.l] MT5 not connected - cannot query rates
+- **Severity:** healthy
+- **Summary:** All data feeds operational
+- **Time:** 2026-07-19T15:06:58.156Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 19/7/2026, 22.54.11 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 19/7/2026, 23.07.07 WIB*

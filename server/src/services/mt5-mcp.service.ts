@@ -339,6 +339,12 @@ class MT5MCPService {
 
   /** Connect to MT5 terminal with broker credentials. */
   async connectToMT5(config: MT5Config): Promise<{ success: boolean; accountInfo?: MT5AccountInfo; error?: string }> {
+    // Selalu force re-init jika lewat tunnel (SSE) agar session_id selalu fresh
+    // dan menghindari error "Could not find session" akibat stale connection.
+    if (config.tunnelUrl && this.client) {
+      try { await this.client.close(); } catch {}
+      this.client = null;
+    }
     await this.ensureClient(config.tunnelUrl);
 
     try {

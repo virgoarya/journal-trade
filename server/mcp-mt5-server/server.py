@@ -982,14 +982,25 @@ def run_sse(port: int, use_ngrok: bool):
         allow_headers=["*"],
     )
 
-    @api.get("/sse")
-    async def handle_sse(request: Request):
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await app.run(streams[0], streams[1], app.create_initialization_options())
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    api.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
-    @api.post("/messages")
-    async def handle_messages(request: Request):
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+    # Bypassing FastAPI's route wrapping for SSE and Messages to prevent 
+    # 'Unexpected ASGI message' and connection drops.
+    original_app = api
+    async def asgi_wrapper(scope, receive, send):
+        if scope["type"] == "http":
+            if scope["method"] == "GET" and scope["path"] == "/sse":
+                async with sse.connect_sse(scope, receive, send) as streams:
+                    await app.run(streams[0], streams[1], app.create_initialization_options())
+                return
+            elif scope["method"] == "POST" and scope["path"] == "/messages":
+                await sse.handle_post_message(scope, receive, send)
+                return
+        await original_app(scope, receive, send)
+
+    # Use the wrapper as the main ASGI app
+    runnable_app = asgi_wrapper
 
     @api.get("/health")
     async def health():
@@ -1043,7 +1054,7 @@ def run_sse(port: int, use_ngrok: bool):
         except Exception as e:
             print(f"Failed to start ngrok: {e}")
 
-    uvicorn.run(api, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(runnable_app, host="0.0.0.0", port=port, log_level="info")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MT5 MCP Server")
