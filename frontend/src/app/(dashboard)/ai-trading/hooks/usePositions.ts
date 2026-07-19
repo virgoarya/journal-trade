@@ -26,7 +26,9 @@ export function usePositions(pollInterval = 10000) {
         setFetchError(null);
         return true;
       } else {
-        setFetchError(result.error || "Failed to fetch positions");
+        if (!result.error?.includes("aborted")) {
+          setFetchError(result.error || "Failed to fetch positions");
+        }
         return false;
       }
     } catch (e: any) {
