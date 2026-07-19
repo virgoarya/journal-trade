@@ -237,6 +237,7 @@ class MT5MCPService {
   private _circuitBreaker: CircuitBreaker;
 
   private currentTunnelUrl?: string;
+  private keepAliveTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this._circuitBreaker = new CircuitBreaker();
@@ -255,7 +256,27 @@ class MT5MCPService {
   }
 
   forceDisconnect() {
+    this.stopKeepAlive();
     this.connected = false;
+  }
+
+  private startKeepAlive() {
+    this.stopKeepAlive();
+    // Ping every 30 seconds to keep Cloudflare/Ngrok SSE tunnel alive
+    this.keepAliveTimer = setInterval(() => {
+      if (this.client && this.connected) {
+        this.client.ping().catch((err) => {
+          silentLogger.debug(`[MT5-MCP] Keep-alive ping failed: ${err.message}`);
+        });
+      }
+    }, 30000);
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
+    }
   }
 
   get account(): MT5AccountInfo | null {
@@ -371,6 +392,7 @@ class MT5MCPService {
         this.accountInfo = data.accountInfo as MT5AccountInfo;
       }
       this.connected = true;
+      this.startKeepAlive();
       return { success: true, accountInfo: this.accountInfo ?? undefined };
     } catch (error: any) {
       logErrorStructured("connectToMT5", error, { config }, "error");
@@ -387,6 +409,7 @@ class MT5MCPService {
     } catch {
       // ignore
     }
+    this.stopKeepAlive();
     this.connected = false;
     this.accountInfo = null;
     silentLogger.info("[MT5-MCP] Disconnected from MT5");
