@@ -66,12 +66,13 @@ router.post(
   validate({ body: mt5ConnectSchema }),
   async (req, res, next) => {
     try {
-      const { server, login, password, save } = req.body;
+      const { server, login, password, save, tunnelUrl } = req.body;
 
       const result = await mt5McpService.connectToMT5({
         server,
         login,
         password,
+        tunnelUrl,
       });
 
       if (!result.success) {

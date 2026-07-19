@@ -25,6 +25,7 @@ export const mt5ConnectSchema = z.object({
   server: z.string().min(1, "Server required (e.g. ICMarkets-Demo)"),
   login: z.string().min(1, "Login required"),
   password: z.string().min(1, "Password required"),
+  tunnelUrl: z.string().url("Must be a valid URL").optional(),
 });
 
 // ─── Trading ─────────────────────────────────────────────────────────
