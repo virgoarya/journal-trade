@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   type AIBacktestSkill,
   type PipelineConfig,
@@ -184,6 +184,18 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshSettings();
   }, [refreshSettings]);
+
+  // Auto-refresh when reconnect succeeds
+  const prevReconnecting = useRef(isReconnecting);
+  useEffect(() => {
+    if (prevReconnecting.current && !isReconnecting && isConnected) {
+      refetchAccount();
+      refetchPositions();
+      refreshPipelineData();
+      refreshLlmStatus();
+    }
+    prevReconnecting.current = isReconnecting;
+  }, [isReconnecting, isConnected, refetchAccount, refetchPositions, refreshPipelineData, refreshLlmStatus]);
 
   // Save settings to backend when they change
   const saveSettings = useCallback(async () => {
