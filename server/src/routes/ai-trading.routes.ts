@@ -141,6 +141,7 @@ router.get("/status", async (req, res, next) => {
 
     return apiResponse.success(res, {
       connected: isConnected,
+      reconnecting: mt5McpService.isReconnectingStatus,
       accountInfo: mt5McpService.account,
       pipeline: pipelineStatus,
     });

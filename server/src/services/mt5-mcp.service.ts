@@ -257,6 +257,10 @@ class MT5MCPService {
     return this.connected;
   }
 
+  get isReconnectingStatus(): boolean {
+    return this.isReconnecting;
+  }
+
   get circuitBreakerState(): string {
     return this._circuitBreaker.getState();
   }

@@ -59,8 +59,14 @@ export function useMT5Connection() {
     (async () => {
       try {
         const res = await aiTradingService.getStatus();
-        if (mounted && res.success && res.data?.connected) {
-          setIsConnected(true);
+        if (mounted && res.success) {
+          if (res.data?.connected) {
+            setIsConnected(true);
+            setIsReconnecting(false);
+          } else if (res.data?.reconnecting) {
+            setIsConnected(true);
+            setIsReconnecting(true);
+          }
         }
       } catch {
         // Silently ignore — user will see connection panel
@@ -83,7 +89,12 @@ export function useMT5Connection() {
         const res = await aiTradingService.getStatus();
         if (mounted && res.success) {
           if (!res.data?.connected) {
-            setIsReconnecting(true);
+            if (res.data?.reconnecting) {
+              setIsReconnecting(true);
+            } else {
+              setIsConnected(false);
+              setIsReconnecting(false);
+            }
           } else {
             setIsReconnecting(false);
           }
