@@ -1,4 +1,4 @@
-﻿import axios from "axios";
+import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { geoRiskService } from "./geo-risk.service";
@@ -877,7 +877,7 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
                 // If the user asks for crypto like BTC, AlphaVantage requires the market (e.g. BTCUSD) or sometimes just BTC works if it's an exchange symbol. But for technical indicators, typically it accepts standard symbols.
                 const url = `https://www.alphavantage.co/query?function=${args.function_name}&symbol=${args.symbol}&interval=${args.interval}&time_period=${args.time_period}&series_type=close&apikey=${env.ALPHA_VANTAGE_API_KEY}`;
                 const response = await fetch(url);
-                const data = await response.json();
+                const data = (await response.json()) as Record<string, any>;
 
                 if (data["Information"] || data["Note"] || data["Error Message"]) {
                    return JSON.stringify(data); // Limit reached or error

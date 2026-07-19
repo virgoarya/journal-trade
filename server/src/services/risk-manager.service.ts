@@ -177,9 +177,10 @@ class RiskManagerService {
       const contractSize = symInfo?.tradeContractSize || (pos.symbol.includes("XAU") ? 100 : 100000);
 
       // Check for risk-free positions (Trailing Stop / Break Even)
-      if (pos.type === "BUY" || pos.type === 0) {
+      const posType = pos.type as string | number;
+      if (posType === "BUY" || posType === 0) {
         if (pos.sl >= pos.priceOpen) continue;
-      } else if (pos.type === "SELL" || pos.type === 1) {
+      } else if (posType === "SELL" || posType === 1) {
         if (pos.sl <= pos.priceOpen) continue;
       }
 
