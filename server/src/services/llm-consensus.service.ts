@@ -693,7 +693,7 @@ isAvailable(): boolean {
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: prompt },
           ],
-          max_tokens: 500,
+          max_tokens: 1500,
           temperature: 0.1,
           stream: false,
         }),
@@ -879,11 +879,11 @@ isAvailable(): boolean {
     // 4. Fallback: extract verdict and reasoning from free-form text
     let verdict: LLMVerdict | null = null;
 
-    if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*GOOD/i.test(cleaned) || /^\s*[\*\-]*\s*GOOD\b/i.test(cleaned)) {
+    if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)["*\s:\-]*GOOD/i.test(cleaned) || /^\s*["*\-]*\s*GOOD\b/i.test(cleaned)) {
       verdict = "GOOD";
-    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*BAD/i.test(cleaned) || /^\s*[\*\-]*\s*BAD\b/i.test(cleaned)) {
+    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)["*\s:\-]*BAD/i.test(cleaned) || /^\s*["*\-]*\s*BAD\b/i.test(cleaned)) {
       verdict = "BAD";
-    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)[*\s:\-]*SKIP/i.test(cleaned) || /^\s*[\*\-]*\s*SKIP\b/i.test(cleaned)) {
+    } else if (/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS)["*\s:\-]*SKIP/i.test(cleaned) || /^\s*["*\-]*\s*SKIP\b/i.test(cleaned)) {
       verdict = "SKIP";
     }
 
