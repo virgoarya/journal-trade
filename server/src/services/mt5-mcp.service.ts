@@ -106,6 +106,11 @@ export function logErrorStructured(
   const errorMsg = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
 
+  // Supress verbose JSON logging for expected secondary drops while reconnecting
+  if (errorMsg === "MT5 not connected") {
+    return;
+  }
+
   const logEntry = {
     timestamp: new Date().toISOString(),
     level,
