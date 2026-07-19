@@ -658,8 +658,11 @@ class MT5MCPService {
         // Record failure in circuit breaker ONLY on connection errors
         this.circuitBreaker.recordFailure();
         
-        logErrorStructured(tool, error, { args }, "error");
-        silentLogger.warn(`[MT5-MCP] Connection error on ${tool}, resetting flag: ${error.message}`);
+        // Hanya log kalau ini error koneksi ASLI (bukan lemparan sekunder dari check !this.connected)
+        if (errorMsg !== "MT5 not connected") {
+          silentLogger.warn(`[MT5-MCP] Connection dropped during ${tool}: ${errorMsg}. Triggering reconnect...`);
+        }
+        
         this.connected = false;
         this.accountInfo = null;
         this.startAutoReconnect();
