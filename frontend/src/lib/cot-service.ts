@@ -1,4 +1,5 @@
-﻿import type { CotItem, MarketPhase } from "@/types/cot";
+import type { CotItem, MarketPhase } from "@/types/cot";
+import { env } from "@/lib/env";
 
 const COT_API_BASE = "https://api.iextrading.com/1/data/CFTC/1";
 const API_KEY = process.env.NASDAQ_API_KEY;
@@ -53,7 +54,7 @@ function formatPosition(value: number | null | undefined): string {
 }
 
 export async function getCotData(): Promise<CotItem[]> {
-  const backendUrl = "http://localhost:5000/api/v1/market-data/cot";
+  const backendUrl = `${env.backendUrl}/api/v1/market-data/cot`;
   
   try {
     const response = await fetch(backendUrl, {
@@ -105,7 +106,7 @@ export async function getCotData(): Promise<CotItem[]> {
 
 export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: string; warnings: string; conclusion: string } | null> {
   try {
-    const response = await fetch("http://localhost:5000/api/v1/market-data/cot/analyze", {
+    const response = await fetch(`${env.backendUrl}/api/v1/market-data/cot/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cotItem),

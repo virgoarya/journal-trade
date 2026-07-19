@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
@@ -189,7 +189,7 @@ export function TerminalChatPanel() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const response = await fetch("http://localhost:5000/api/v1/macro-ai/chat", {
+      const response = await fetch("/api/v1/macro-ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

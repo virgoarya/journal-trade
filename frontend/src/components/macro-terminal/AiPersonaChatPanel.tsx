@@ -242,7 +242,7 @@ export function AiPersonaChatPanel() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const resp = await fetch("http://localhost:5000/api/v1/macro-ai/chat", {
+      const resp = await fetch("/api/v1/macro-ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
