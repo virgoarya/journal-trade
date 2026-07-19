@@ -733,7 +733,7 @@ router.get("/performance", async (req, res, next) => {
         const accountInfo = await mt5McpService.getAccountInfo();
         accountId = accountInfo?.login?.toString();
       } catch (e) {
-        silentLogger.warn(`[PERFORMANCE] Could not get account info: ${e}`);
+        console.warn(`[PERFORMANCE] Could not get account info: ${e}`);
       }
     }
 
