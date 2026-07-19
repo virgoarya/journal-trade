@@ -399,8 +399,10 @@ class MT5MCPService {
         try { await this.client.close(); } catch {}
       }
       this.client = null;
-      silentLogger.error(`[MT5-MCP] Init failed: ${error.message}`);
-      logErrorStructured("init", error, {}, "error"); // Log error structure
+      if (!this.isReconnecting) {
+        silentLogger.error(`[MT5-MCP] Init failed: ${error.message}`);
+        logErrorStructured("init", error, {}, "error");
+      }
       throw error;
     }
   }
@@ -446,7 +448,9 @@ class MT5MCPService {
       this.startKeepAlive();
       return { success: true, accountInfo: this.accountInfo ?? undefined };
     } catch (error: any) {
-      logErrorStructured("connectToMT5", error, { config }, "error");
+      if (!this.isReconnecting) {
+        logErrorStructured("connectToMT5", error, { config }, "error");
+      }
       return { success: false, error: error.message };
     }
   }

@@ -554,8 +554,10 @@ const pipeline = {
           currentDrawdown = aiPositions
             .filter(p => p.profit < 0)
             .reduce((sum, p) => sum + Math.abs(p.profit), 0);
-        } catch (e) {
-          silentLogger.warn(`[PIPELINE] Could not get MT5 stats: ${e}`);
+        } catch (e: any) {
+          if (e.message !== "MT5 not connected") {
+            silentLogger.warn(`[PIPELINE] Could not get MT5 stats: ${e}`);
+          }
         }
       }
 
