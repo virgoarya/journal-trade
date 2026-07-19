@@ -33,7 +33,11 @@ export const createAuth = () => {
     },
     advanced: {
       disableCSRFCheck: env.NODE_ENV === "development",
+      crossSubDomainCookies: {
+        domain: env.NODE_ENV === "production" ? ".vercel.app" : undefined,
+      }
     },
+    trustHost: true,
   });
 
   return auth;
