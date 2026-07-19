@@ -223,11 +223,22 @@ class AITradingEngine {
     methodologyWeights?: MethodologyWeights,
     activeMethodologies?: MethodologyName[],
   ): Promise<MultiStrategySymbolAnalysis[]> {
-    const results = await Promise.all(
-      symbols.map((s) =>
-        this.analyzeSymbol(s, timeframe, riskPercent, methodologyWeights, activeMethodologies),
-      ),
-    );
+    const results: MultiStrategySymbolAnalysis[] = [];
+    // Process in batches to avoid overwhelming the MT5 MCP connection
+    const concurrency = 2;
+    for (let i = 0; i < symbols.length; i += concurrency) {
+      const batch = symbols.slice(i, i + concurrency);
+      const batchPromises = batch.map((s) =>
+        this.analyzeSymbol(s, timeframe, riskPercent, methodologyWeights, activeMethodologies).catch(err => {
+          silentLogger.warn(`[AI-Engine] Failed to analyze ${s}: ${(err as Error).message}`);
+          return null;
+        })
+      );
+      const batchResults = await Promise.all(batchPromises);
+      for (const res of batchResults) {
+        if (res) results.push(res);
+      }
+    }
     return results;
   }
 

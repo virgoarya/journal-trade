@@ -589,7 +589,7 @@ class MT5MCPService {
       
       const errorMsg = error.message || "";
       const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
-      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("timeout") || errorMsg.includes("32001"); // MT5_RET_NO_CONNECTION
+      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket"); // True hard connection drops
 
       if (isConnError) {
         logErrorStructured(tool, error, { args }, "error");
