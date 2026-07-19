@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { signIn } from "@/lib/auth-client";
 
@@ -8,7 +8,7 @@ export default function LoginPage() {
       console.log("[AUTH] Starting Discord login...");
       await signIn.social({
         provider: "discord",
-        callbackURL: `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
+        callbackURL: `${window.location.origin}/dashboard`,
       });
       console.log("[AUTH] Redirect to Discord initiated.");
     } catch (error) {
