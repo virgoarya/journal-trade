@@ -208,7 +208,7 @@ export function ConnectionPanel({
                 <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</div>
                 <div>
                   <p className="font-semibold text-white mb-1">Unduh & Jalankan Aplikasi</p>
-                  <p className="text-text-muted leading-relaxed">Download <span className="text-accent-gold font-mono">Mulai_AI_Trading.exe</span> dan jalankan di PC yang sudah terinstal MetaTrader 5.</p>
+                  <p className="text-text-muted leading-relaxed">Download <a href={process.env.NEXT_PUBLIC_MCP_DOWNLOAD_URL || "#"} target="_blank" rel="noreferrer" className="text-accent-gold font-mono underline hover:text-white">Mulai_AI_Trading.exe</a> dan jalankan di PC yang sudah terinstal MetaTrader 5.</p>
                 </div>
               </div>
               

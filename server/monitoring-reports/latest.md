@@ -1,38 +1,56 @@
 # System Monitoring Report
 
-**Generated:** 19/7/2026, 21.38.09 WIB
-**Status:** 🟡 WARNING
+**Generated:** 19/7/2026, 21.54.08 WIB
+**Status:** 🔴 CRITICAL
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-We need to produce 3-5 actionable insights in Bahasa Indonesia, focusing on root cause and immediate action. Use terse style: bullet points, short, technical, no fluff. Must follow the "terse caveman" style: drop articles, filler, pleasantries, hedging. Use pattern: [thing] [action] [reason]. [next step]. Fragments OK. Must not use articles like "a/an/the". Must avoid filler words like "just/really/basically/actually/simply". Must not use pleasantries. Must not use hedging. Must be active every response. Must not self-reference. No decorative emojis. No narrating tool calls. Must be in Bahasa Indonesia (user wrote English? Actually user wrote English but with some Indonesian words like "hibernasiProviders". The user wrote English but with some Indonesian terms. The instruction: "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User wrote English, reply English." The user wrote English (the report is English). So we must reply in English. However the user asks: "Berikan 3-5 actionable insights dalam Bahasa Indonesia untuk perbaikan sistem." That's a request to give insights in Bahasa Indonesia. The user wrote English but request is in Bahasa Indonesia. The dominant language? The user wrote English but request is Bahasa Indonesia. The instruction: "Preserve the user's dominant language." The user wrote English in the content, but the request is Bahasa Indonesia. Which is dominant? The user wrote English in the report, but the request line is Bahasa Indonesia. Likely the dominant language is English because the majority of the message is English. However the explicit request is to give insights in Bahasa Indonesia. The instruction says preserve the user's dominant language. If we give Bahasa Indonesia, we are following request but maybe violating preserve dominant language? The instruction says: "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User wrote English, reply English." So we should reply in English. But the user explicitly asks for Bahasa Indonesia. There's a conflict. Usually we follow the higher-level instruction: preserve dominant language. The user wrote English in the report, but the request line is Bahasa Indonesia. The request line is part of the user message. The dominant language overall? Let's count: The report is English (many words). The request line is Bahasa Indonesia (short). So dominant is
+- MT5 connection gagal karena memory full. 95.8% RAM gunakan. Restart service MT5 setelah memory drop di bawah 80%.
+- Memory leak kemungkinan besar. Cek task manager untuk proses yang CPU tinggi. Kill proses yang tidak perlu.
+- Pipeline auto-paused karena MT5 down. Verify connectivity ke MT5 server. Cek firewall dan port 443.
+- High memory usage berbahaya pada 5.93GB total. Upgrade RAM ke minimal 8GB atau optimize data cache.
+- Uptime 56.7h terlalu lama tanpa restart. Schedule restart harian di low-traffic hour.
 
 ---
 
 ## Executive Summary
 
-6 warning(s), no critical issues
+2 critical issue(s), 10 warning(s)
+
+## 🔴 Critical Issues
+
+- [mt5] MT5 connection lost
+-   -> MT5 tidak terhubung - pipeline auto-paused
 
 ## 🟡 Warnings
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 89.4% used (5.93GB total)
--   -> Uptime: 56.4h
+-   -> Memory: 95.8% used (5.93GB total)
+-   -> Uptime: 56.7h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 89.4% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 95.8% (threshold: 85%)
+- [data_quality] Data quality issues detected (3)
+-   -> [XAUUSD.l] MT5 not connected - cannot query rates
+-   -> [BTCUSD.l] MT5 not connected - cannot query rates
+-   -> [NAS100.l] MT5 not connected - cannot query rates
+
+## Recommended Actions
+
+| # | Action | Component |
+|---|--------|-----------|
+| 1 | Restart MT5 MCP service | - |
+| 2 | Verify MT5 terminal is running on broker VPS | - |
+| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 1 |
+| connected | 0 |
 | circuitState | CLOSED |
-| balance | 47192.91 |
-| equity | 49940.91 |
-| marginLevel | 750.5047104808763 |
 | activePipelines | 1 |
 | 6a26146a9cad211ba0631027.running | 1 |
 | 6a26146a9cad211ba0631027.paused | 0 |
@@ -41,72 +59,76 @@ We need to produce 3-5 actionable insights in Bahasa Indonesia, focusing on root
 | 6a26146a9cad211ba0631027.pnl | 0 |
 | 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 5 |
-| hibernasiProviders | 1 |
+| activeProviders | 6 |
+| hibernasiProviders | 0 |
 | circuitOpenProviders | 0 |
 | provider.deepseek | active |
 | provider.gpt | active |
 | provider.gemini | active |
 | provider.mistral | active |
-| provider.nemotron | hibernasi |
+| provider.nemotron | active |
 | provider.claude-opus | active |
-| availableForConsensus | 5 |
+| availableForConsensus | 6 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 89.4 |
-| uptimeHours | 56.4 |
+| memoryUsagePercent | 95.8 |
+| uptimeHours | 56.7 |
 | checkedPipelines | 1 |
-| dataIssues | 0 |
+| dataIssues | 3 |
 
 ## Detailed Health Checks
 
-### 🟢 MT5
+### 🔴 MT5
 
-- **Severity:** healthy
-- **Summary:** MT5 connected and operational
-- **Time:** 2026-07-19T14:38:09.737Z
+- **Severity:** critical
+- **Summary:** MT5 connection lost
+- **Time:** 2026-07-19T14:54:08.441Z
 
-- Balance: $47192.91, Equity: $49940.91
+- MT5 tidak terhubung - pipeline auto-paused
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
 - **Summary:** 1 pipeline(s) running
-- **Time:** 2026-07-19T14:38:09.797Z
+- **Time:** 2026-07-19T14:54:08.467Z
 
 - Found 1 active pipeline(s)
 
 ### 🟢 LLM_CONSENSUS
 
 - **Severity:** healthy
-- **Summary:** 5 provider(s) available for consensus
-- **Time:** 2026-07-19T14:38:09.734Z
+- **Summary:** 6 provider(s) available for consensus
+- **Time:** 2026-07-19T14:54:08.442Z
 
 - ✅ DeepSeek V4 (deepseek): active
 - ✅ GPT OSS 120B (gpt): active
 - ✅ Gemini 2.5 Flash (gemini): active
 - ✅ Mistral Large (mistral): active
-- 💤 Nemotron 3 Ultra (nemotron): hibernasi
+- ✅ Nemotron 3 Ultra (nemotron): active
 - ✅ Claude Opus 4.7 (claude-opus): active
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-07-19T14:38:09.735Z
+- **Time:** 2026-07-19T14:54:08.442Z
 
 - CPU: 4 cores
-- Memory: 89.4% used (5.93GB total)
-- Uptime: 56.4h
+- Memory: 95.8% used (5.93GB total)
+- Uptime: 56.7h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 89.4% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 95.8% (threshold: 85%)
 
-### 🟢 DATA_QUALITY
+### 🟡 DATA_QUALITY
 
-- **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-07-19T14:38:09.778Z
+- **Severity:** warning
+- **Summary:** Data quality issues detected (3)
+- **Time:** 2026-07-19T14:54:08.467Z
+
+- [XAUUSD.l] MT5 not connected - cannot query rates
+- [BTCUSD.l] MT5 not connected - cannot query rates
+- [NAS100.l] MT5 not connected - cannot query rates
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 19/7/2026, 22.38.14 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 19/7/2026, 22.54.11 WIB*
