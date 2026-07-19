@@ -106,11 +106,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const { isConnected, isReconnecting, isConnecting, isCheckingSession, error: connectError, connect, disconnect } = useMT5Connection();
 
   // Account Info
-  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(10000);
+  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(isConnected, 10000);
 
   // Positions
   const { positions, orders, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
-    usePositions(10000);
+    usePositions(isConnected, 10000);
 
   // LLM Status
   const { models: llmModels, loading: llmLoading, activeCount: llmActiveCount, refresh: refreshLlmStatus } = useLlmStatus();
@@ -237,6 +237,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const contextValue = useMemo(
     () => ({
       isConnected,
+      isReconnecting,
       isConnecting,
       isCheckingSession,
       connectError,
