@@ -45,6 +45,7 @@ function AITradingPageContent() {
   const {
     isConnected,
     isConnecting,
+    isCheckingSession,
     connectError,
     connectMT5,
     disconnectMT5,
@@ -87,6 +88,14 @@ function AITradingPageContent() {
   }, [isConnected, refetchAccountInfo, refetchPositions, refreshPipelineData]);
 
   if (!isConnected) {
+    if (isCheckingSession) {
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    
     return (
       <div className="min-h-screen relative z-10 flex flex-col pt-4">
         <div className="px-4">

@@ -13,6 +13,7 @@ interface MT5Credentials {
 export function useMT5Connection() {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const connect = useCallback(async (credentials: MT5Credentials) => {
@@ -61,10 +62,14 @@ export function useMT5Connection() {
         }
       } catch {
         // Silently ignore — user will see connection panel
+      } finally {
+        if (mounted) {
+          setIsCheckingSession(false);
+        }
       }
     })();
     return () => { mounted = false; };
   }, []);
 
-  return { isConnected, isConnecting, error, connect, disconnect };
+  return { isConnected, isConnecting, isCheckingSession, error, connect, disconnect };
 }

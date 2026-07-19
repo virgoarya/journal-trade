@@ -33,12 +33,15 @@ export function ConnectionPanel({
     if (saved) setServer(saved);
     const savedLogin = localStorage.getItem("mt5_last_login");
     if (savedLogin) setLogin(savedLogin);
+    const savedTunnel = localStorage.getItem("mt5_last_tunnel");
+    if (savedTunnel) setTunnelUrl(savedTunnel);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("mt5_last_server", server);
     localStorage.setItem("mt5_last_login", login);
+    localStorage.setItem("mt5_last_tunnel", tunnelUrl.trim());
     await onConnect({ server, login, password, tunnelUrl: tunnelUrl.trim() || undefined });
   };
 

@@ -25,6 +25,7 @@ interface AiTradingContextType {
   // MT5 Connection
   isConnected: boolean;
   isConnecting: boolean;
+  isCheckingSession: boolean;
   connectError: string | null;
   connectMT5: (payload: any) => Promise<boolean>;
   disconnectMT5: () => Promise<void>;
@@ -101,7 +102,7 @@ const AiTradingContext = createContext<AiTradingContextType | undefined>(undefin
 
 export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   // MT5 Connection
-  const { isConnected, isConnecting, error: connectError, connect, disconnect } = useMT5Connection();
+  const { isConnected, isConnecting, isCheckingSession, error: connectError, connect, disconnect } = useMT5Connection();
 
   // Account Info
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(1000);
@@ -224,6 +225,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isConnected,
       isConnecting,
+      isCheckingSession,
       connectError,
       connectMT5,
       disconnectMT5,
@@ -287,6 +289,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
     [
       isConnected,
       isConnecting,
+      isCheckingSession,
       connectError,
       connectMT5,
       disconnectMT5,
