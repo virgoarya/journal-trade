@@ -265,7 +265,7 @@ class MT5MCPService {
     // Ping every 30 seconds to keep Cloudflare/Ngrok SSE tunnel alive
     this.keepAliveTimer = setInterval(() => {
       if (this.client && this.connected) {
-        this.client.ping().catch((err) => {
+        this.callWithCircuit("mt5_account_info", {}).catch((err) => {
           silentLogger.debug(`[MT5-MCP] Keep-alive ping failed: ${err.message}`);
         });
       }
@@ -612,7 +612,7 @@ class MT5MCPService {
       
       const errorMsg = error.message || "";
       const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
-      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket"); // True hard connection drops
+      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("32001") || errorMsg.includes("timeout"); // True hard connection drops
 
       if (isConnError) {
         logErrorStructured(tool, error, { args }, "error");

@@ -1,33 +1,17 @@
 # System Monitoring Report
 
-**Generated:** 19/7/2026, 23.36.02 WIB
+**Generated:** 20/7/2026, 00.03.50 WIB
 **Status:** 🟡 WARNING
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-**AI Trading Health Check - Actionable Insights**
+- **Memory leak kemungkinan besar** — 96.4% setelah 58.8h uptime tanpa active pipelines menandakan akumulasi objek (cache, buffer, connection pool) yang tidak dibebaskan. **Action:** `heap snapshot` / `dotnet-dump` / `py-spy` sekarang; bandingkan 2 snapshot 10 menit interval.
 
-- **Memory leak / accumulation.** 94.4% RAM usage setelah 58.4h uptime. Process kemungkinan tidak release memory dari pipeline execution history atau provider state cache. Immediate action: restart process atau implement memory limit dengan auto-restart trigger pada threshold 90%.
+- **Provider idle memegang resource** — 6 provider aktif tapi 0 pipeline berarti connection pool / WebSocket / subscription market data tetap terbuka. **Action:** Set `idleTimeout` / `maxIdleConnections` pada setiap provider; implementasi `hibernate()` setelah N menit tidak dipakai.
 
-- **Uptime terlalu panjang.** 58.4h tanpa restart. Node.js process accumulate V8 heap fragmentation. Fix: schedule daily/12h restart via PM2 `pm2 restart ai-trading --update-env` atau systemd timer.
-
-- **Memory monitoring absent.** Tidak ada alert threshold untuk memory >85%. Add: `pm2 monit` atau external monitoring (Grafana/Prometheus) dengan alert webhook sebelum OOM kill terjadi di tengah trading session.
-
-- **Equity margin healthy.** Margin level 750% → tidak ada risk pressure. Tidak perlu action di sini, hanya monitoring.
-
-**Immediate action (pick one):**
-```bash
-pm2 restart ai-trading  # quick fix, verify stability after
-```
-lalu setup restart policy:
-```bash
-pm2 startup && pm2 save
-pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
-```
-
-→ skipped: detailed heap dump analysis, provider pooling optimization. Add when memory rises again after restart (indicates leak) or uptime target >7 days.
+- **GC pressure di Windows** — .NET/Node/Go di win32 sering butuh `GCHeapHardLimit` / `GOMEMLIMIT` / `--max-old-space-size` agar GC agresif sebelum OOM. **Action:** Set hard limit 80% total RAM (≈4.7
 
 ---
 
@@ -39,10 +23,10 @@ pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 94.4% used (5.93GB total)
--   -> Uptime: 58.4h
+-   -> Memory: 96.4% used (5.93GB total)
+-   -> Uptime: 58.8h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 94.4% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 96.4% (threshold: 85%)
 
 ## Metrics Dashboard
 
@@ -50,16 +34,7 @@ pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
 |--------|-------|
 | connected | 1 |
 | circuitState | CLOSED |
-| balance | 47192.91 |
-| equity | 49940.91 |
-| marginLevel | 750.5047104808763 |
-| activePipelines | 1 |
-| 6a26146a9cad211ba0631027.running | 1 |
-| 6a26146a9cad211ba0631027.paused | 0 |
-| 6a26146a9cad211ba0631027.error | 0 |
-| 6a26146a9cad211ba0631027.totalTrades | 0 |
-| 6a26146a9cad211ba0631027.pnl | 0 |
-| 6a26146a9cad211ba0631027.errors1h | 0 |
+| activePipelines | 0 |
 | totalProviders | 6 |
 | activeProviders | 6 |
 | hibernasiProviders | 0 |
@@ -73,10 +48,9 @@ pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
 | availableForConsensus | 6 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 94.4 |
-| uptimeHours | 58.4 |
-| checkedPipelines | 1 |
-| dataIssues | 0 |
+| memoryUsagePercent | 96.4 |
+| uptimeHours | 58.8 |
+| checkedPipelines | 0 |
 
 ## Detailed Health Checks
 
@@ -84,23 +58,23 @@ pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
 
 - **Severity:** healthy
 - **Summary:** MT5 connected and operational
-- **Time:** 2026-07-19T16:36:02.882Z
+- **Time:** 2026-07-19T17:03:50.678Z
 
-- Balance: $47192.91, Equity: $49940.91
+- Gagal fetch account info: MT5 not connected. Call mt5_connect first.
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
-- **Summary:** 1 pipeline(s) running
-- **Time:** 2026-07-19T16:36:02.918Z
+- **Summary:** No active pipelines
+- **Time:** 2026-07-19T17:03:48.249Z
 
-- Found 1 active pipeline(s)
+- Tidak ada pipeline yang aktif saat ini
 
 ### 🟢 LLM_CONSENSUS
 
 - **Severity:** healthy
 - **Summary:** 6 provider(s) available for consensus
-- **Time:** 2026-07-19T16:36:02.811Z
+- **Time:** 2026-07-19T17:03:48.224Z
 
 - ✅ DeepSeek V4 (deepseek): active
 - ✅ GPT OSS 120B (gpt): active
@@ -113,20 +87,20 @@ pm2 conf ai-trading --restart-delay 43200000  # 12h restart interval
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-07-19T16:36:02.811Z
+- **Time:** 2026-07-19T17:03:48.224Z
 
 - CPU: 4 cores
-- Memory: 94.4% used (5.93GB total)
-- Uptime: 58.4h
+- Memory: 96.4% used (5.93GB total)
+- Uptime: 58.8h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 94.4% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 96.4% (threshold: 85%)
 
 ### 🟢 DATA_QUALITY
 
 - **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-07-19T16:36:02.900Z
+- **Summary:** No active pipelines to check
+- **Time:** 2026-07-19T17:03:48.249Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 20/7/2026, 00.36.25 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 20/7/2026, 01.04.00 WIB*
