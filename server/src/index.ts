@@ -6,7 +6,6 @@ dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 process.env.PYTHONIOENCODING = "utf-8";
 
 import express from "express";
-import next from "next";
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { env } from "./config/env";
@@ -33,10 +32,8 @@ import path from "node:path";
 // System Monitor Agent
 import { systemMonitorAgent } from "./agents/system-monitor-agent";
 
-// nextapp
-const nextAppDir = path.join(__dirname, "..", "..", "frontend");
-const isDev = process.env.NODE_ENV !== 'production';
-const nextApp = next({ dev: isDev, dir: nextAppDir });
+// Next.js frontend has been moved to Vercel.
+// This Express app now acts strictly as an API and WebSocket server.
 
 const app = express();
 app.use(corsMiddleware);
