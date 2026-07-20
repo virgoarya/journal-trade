@@ -967,7 +967,7 @@ import os
 import argparse
 import asyncio
 
-def run_ws_client():
+def run_ws_client(app_instance=None):
     # URL WebSocket Railway (pastikan sesuai dengan environment production)
     WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
     
@@ -1046,6 +1046,8 @@ def run_ws_client():
             try:
                 async with websockets.connect(WS_URL) as ws:
                     print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway: {WS_URL}")
+                    if app_instance:
+                        app_instance.set_status(True)
                     
                     task1 = asyncio.create_task(tick_streamer(ws))
                     task2 = asyncio.create_task(rpc_listener(ws))
@@ -1061,6 +1063,8 @@ def run_ws_client():
                         
             except Exception as e:
                 print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
+                if app_instance:
+                    app_instance.set_status(False)
                 await asyncio.sleep(3)
                 
     loop = asyncio.new_event_loop()
@@ -1071,4 +1075,13 @@ def run_ws_client():
         print("\nExiting...")
 
 if __name__ == "__main__":
-    run_ws_client()
+    try:
+        from gui import launch_gui
+        
+        def on_start(app_instance):
+            run_ws_client(app_instance)
+            
+        launch_gui(on_start)
+    except ImportError as e:
+        print(f"GUI not available: {e}, falling back to CLI")
+        run_ws_client()

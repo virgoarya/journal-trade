@@ -763,7 +763,7 @@ isAvailable(): boolean {
       if (!rawText && json?.choices?.[0]?.message?.thought) {
         rawText = json.choices[0].message.thought;
       }
-      const parsed = this.parseVerdict(rawText);
+      console.log("[LLM-CONSENSUS] Raw response before parsing:", rawText); const parsed = this.parseVerdict(rawText);
       const latency = Date.now() - startTime;
 
       circuit.recordSuccess(); // Record success
