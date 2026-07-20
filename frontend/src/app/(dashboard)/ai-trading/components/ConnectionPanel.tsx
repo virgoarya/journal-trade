@@ -131,18 +131,7 @@ export function ConnectionPanel({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">
-                Connection URL <span className="text-accent-gold-dim lowercase">(Opsional - Untuk Jarak Jauh)</span>
-              </label>
-              <input
-                type="text"
-                value={tunnelUrl}
-                onChange={(e) => setTunnelUrl(e.target.value)}
-                placeholder="https://xxx.ngrok.app (Kosongkan jika di PC yang sama)"
-                className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/50 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm"
-              />
-            </div>
+
 
             {/* Error message */}
             {error && (
@@ -202,32 +191,16 @@ export function ConnectionPanel({
               <div className="flex gap-4 items-start">
                 <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">1</div>
                 <div>
-                  <p className="font-semibold text-white mb-1">Dapatkan Ngrok Authtoken</p>
-                  <p className="text-text-muted leading-relaxed">Karena aplikasi ini butuh URL Publik, Anda wajib mendaftar di <a href="https://dashboard.ngrok.com" target="_blank" rel="noreferrer" className="text-accent-gold underline hover:text-white">dashboard.ngrok.com</a>. Setelah login, masuk ke menu <strong>Your Authtoken</strong> lalu Copy token Anda.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-4 items-start">
-                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</div>
-                <div>
                   <p className="font-semibold text-white mb-1">Unduh & Jalankan Aplikasi</p>
                   <p className="text-text-muted leading-relaxed">Download <a href={process.env.NEXT_PUBLIC_MCP_DOWNLOAD_URL || "#"} target="_blank" rel="noreferrer" className="text-accent-gold font-mono underline hover:text-white">Mulai_AI_Trading.exe</a> dan jalankan di PC yang sudah terinstal MetaTrader 5.</p>
                 </div>
               </div>
               
               <div className="flex gap-4 items-start">
-                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">3</div>
+                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</div>
                 <div>
-                  <p className="font-semibold text-white mb-1">Masukkan Token & Salin URL</p>
-                  <p className="text-text-muted leading-relaxed">Saat pertama kali dibuka, layar CMD akan meminta Ngrok Authtoken. Paste token dari Langkah 1 lalu tekan Enter. Jika berhasil, akan muncul <span className="text-accent-gold">URL Koneksi Anda</span> (berakhiran .ngrok-free.dev). Blok dan Copy URL tersebut.</p>
-                </div>
-              </div>
-              
-              <div className="flex gap-4 items-start">
-                <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">4</div>
-                <div>
-                  <p className="font-semibold text-white mb-1">Hubungkan ke Web</p>
-                  <p className="text-text-muted leading-relaxed">Paste URL Koneksi tadi ke kolom <strong>Connection URL</strong> di halaman ini beserta Broker dan Login MT5 Anda, lalu klik Connect.</p>
+                  <p className="font-semibold text-white mb-1">Hubungkan ke MT5</p>
+                  <p className="text-text-muted leading-relaxed">Setelah layar hitam (CMD) muncul dan tertulis "Berhasil terhubung ke Railway", cukup isi Broker, Login MT5, dan Password Anda di form sebelah kiri, lalu klik <strong>Establish Connection</strong>.</p>
                 </div>
               </div>
             </div>
