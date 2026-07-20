@@ -5,7 +5,7 @@ import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
 import { execSync } from 'child_process';
-import { Agent } from "undici";
+import { Agent, setGlobalDispatcher } from "undici";
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
 export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
@@ -355,15 +355,16 @@ class MT5MCPService {
             formattedUrl = formattedUrl.endsWith("/") ? `${formattedUrl}sse` : `${formattedUrl}/sse`;
         }
         const dispatcher = new Agent({
-          allowH2: false, // Disables HTTP/2 to prevent Cloudflare/Ngrok GOAWAY TLS drop issues
+          allowH2: false, // Disables HTTP/2 globally to prevent Cloudflare GOAWAY TLS drops
           keepAliveTimeout: 10,
           keepAliveMaxTimeout: 10,
           connect: { rejectUnauthorized: false }
         });
+        setGlobalDispatcher(dispatcher);
 
         transport = new SSEClientTransport(new URL(formattedUrl), {
           requestInit: {
-            // @ts-ignore: undocumented dispatcher property for native Node fetch
+            // @ts-ignore: Keep this just in case SDK bypasses global dispatcher
             dispatcher
           }
         });
