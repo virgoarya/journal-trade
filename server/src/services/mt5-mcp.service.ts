@@ -356,8 +356,8 @@ class MT5MCPService {
         }
         const dispatcher = new Agent({
           allowH2: false, // Disables HTTP/2 globally to prevent Cloudflare GOAWAY TLS drops
-          keepAliveTimeout: 10,
-          keepAliveMaxTimeout: 10,
+          keepAliveTimeout: 60000, // 60 seconds (keeps socket open to avoid TLS handshake rate-limits)
+          keepAliveMaxTimeout: 600000, // 10 minutes
           connect: { rejectUnauthorized: false }
         });
         setGlobalDispatcher(dispatcher);
