@@ -1045,7 +1045,50 @@ def run_sse(port: int, use_ngrok: bool):
 
             print("\nMemulai Ngrok Tunnel...")
 
-            from pyngrok import ngrok
+            from pyngrok import ngrok, conf
+            import threading
+            import time
+
+            ngrok_restart_lock = threading.Lock()
+            ngrok_fail_count = 0
+
+            def restart_ngrok():
+                global ngrok_fail_count
+                if not ngrok_restart_lock.acquire(blocking=False):
+                    return
+                try:
+                    print("\n[!] Mendeteksi Ngrok macet karena koneksi terputus. Memulai ulang Ngrok...")
+                    ngrok_fail_count = 0
+                    try:
+                        ngrok.kill()
+                    except:
+                        pass
+                    
+                    time.sleep(2)
+                    
+                    print("[+] Menyambungkan kembali Ngrok...")
+                    public_url = ngrok.connect(port).public_url
+                    print(f"\n" + "="*50)
+                    print(f"Koneksi Ngrok Berhasil Dipulihkan!")
+                    print(f"URL Koneksi Anda: {public_url}/sse")
+                    print(f"="*50 + "\n")
+                except Exception as e:
+                    print(f"[-] Gagal memulihkan Ngrok: {e}")
+                finally:
+                    ngrok_restart_lock.release()
+
+            def ngrok_log_callback(log):
+                global ngrok_fail_count
+                msg = log.msg.lower() if log.msg else ""
+                if "failed to reconnect session" in msg or "no such host" in msg or "timeout" in msg:
+                    ngrok_fail_count += 1
+                    if ngrok_fail_count >= 3:
+                        threading.Thread(target=restart_ngrok, daemon=True).start()
+                elif "session established" in msg or "client session established" in msg:
+                    ngrok_fail_count = 0
+
+            conf.get_default().log_event_callback = ngrok_log_callback
+
             public_url = ngrok.connect(port).public_url
             print(f"\n" + "="*50)
             print(f"Koneksi Berhasil!")
