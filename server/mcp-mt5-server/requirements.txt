@@ -5,3 +5,4 @@ uvicorn>=0.23.0
 sse-starlette>=1.6.5
 pyngrok>=7.0.0
 pyinstaller>=6.3.0
+websockets>=12.0

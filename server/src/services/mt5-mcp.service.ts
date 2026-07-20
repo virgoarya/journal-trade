@@ -4,6 +4,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
+import { mt5StreamCache } from "../mt5-streamer";
 import { execSync } from 'child_process';
 import { Agent, setGlobalDispatcher } from "undici";
 
@@ -497,6 +498,12 @@ class MT5MCPService {
 
   /** Refresh account info from MT5. */
   async getAccountInfo(): Promise<MT5AccountInfo> {
+    const cached = mt5StreamCache.getAccountInfo();
+    if (cached) {
+      this.accountInfo = cached as MT5AccountInfo;
+      return this.accountInfo;
+    }
+
     const result = await this.callWithCircuit("mt5_account_info", {});
     this.accountInfo = result as MT5AccountInfo;
     return this.accountInfo;
@@ -544,6 +551,12 @@ class MT5MCPService {
 
   /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
+    const cached = mt5StreamCache.getPositions();
+    if (cached && cached.length > 0) {
+      return cached as MT5Position[];
+    }
+    
+    // Fallback if cache is completely empty or hasn't received ticks yet
     const result = await this.callWithCircuit("mt5_positions_get", {});
     return (result as any).positions ?? [];
   }

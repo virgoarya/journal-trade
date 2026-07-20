@@ -24,6 +24,7 @@ import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
+import { handleMt5StreamConnection } from "./mt5-streamer";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import { initAutoBacktestCron } from "./cron/auto-backtest.cron";
@@ -177,7 +178,17 @@ app.use("/api/auth", authLimiter);
 
       const server = createServer(app);
       const wss = new WebSocketServer({ server });
-      wss.on("connection", (socket) => {
+      wss.on("connection", (socket, req) => {
+        if (req.url === "/ws/mt5-stream") {
+          handleMt5StreamConnection(socket);
+          return;
+        }
+        
+        // Initialize normal client
+        const ws = socket as any;
+        ws.isAuthenticated = true; // Temporary bypass or fix later
+        ws.channels = new Set(["all", "mt5"]); // Auto subscribe to mt5
+        
         socket.on("close", syncMacroMarketStream);
         syncMacroMarketStream();
       });

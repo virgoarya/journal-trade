@@ -10,6 +10,8 @@ import asyncio
 import json
 import sys
 import os
+import threading
+import websockets
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -1100,6 +1102,79 @@ def run_sse(port: int, use_ngrok: bool):
             print(f"="*50 + "\n")
         except Exception as e:
             print(f"Failed to start ngrok: {e}")
+
+    # ===== WEBSOCKET STREAMER THREAD =====
+    def ws_streamer_thread():
+        # URL WebSocket Railway (pastikan sesuai dengan environment production)
+        WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
+        
+        async def streamer():
+            while True:
+                try:
+                    async with websockets.connect(WS_URL) as ws:
+                        print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway Streamer: {WS_URL}")
+                        while True:
+                            if not mt5_connected:
+                                await asyncio.sleep(1)
+                                continue
+                            
+                            # 1. Tarik posisi terbuka
+                            positions = mt5.positions_get()
+                            pos_data = []
+                            if positions:
+                                for p in positions:
+                                    pos_data.append({
+                                        "ticket": p.ticket,
+                                        "orderId": p.ticket,
+                                        "symbol": p.symbol,
+                                        "profit": p.profit,
+                                        "volume": p.volume,
+                                        "priceOpen": p.price_open,
+                                        "priceCurrent": p.price_current,
+                                        "type": "BUY" if p.type == 0 else "SELL",
+                                        "sl": p.sl,
+                                        "tp": p.tp,
+                                        "time": p.time,
+                                        "timeUpdate": p.time_update,
+                                        "comment": p.comment,
+                                        "externalId": p.external_id
+                                    })
+                            
+                            # 2. Tarik info akun
+                            acc = mt5.account_info()
+                            acc_data = None
+                            if acc:
+                                acc_data = {
+                                    "login": str(acc.login),
+                                    "balance": acc.balance,
+                                    "equity": acc.equity,
+                                    "margin": acc.margin,
+                                    "freeMargin": acc.margin_free,
+                                    "marginLevel": acc.margin_level,
+                                    "currency": acc.currency
+                                }
+                                
+                            payload = {
+                                "type": "mt5_tick",
+                                "data": {
+                                    "positions": pos_data,
+                                    "accountInfo": acc_data
+                                }
+                            }
+                            
+                            await ws.send(json.dumps(payload))
+                            await asyncio.sleep(1) # Refresh setiap 1 detik!
+                            
+                except Exception as e:
+                    print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
+                    await asyncio.sleep(3)
+                    
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(streamer())
+
+    threading.Thread(target=ws_streamer_thread, daemon=True).start()
+    # =====================================
 
     uvicorn.run(runnable_app, host="0.0.0.0", port=port, log_level="info")
 

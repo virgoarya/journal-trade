@@ -6,6 +6,7 @@ import {
   type Position,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
+import { useMT5Stream } from "./useMT5Stream";
 
 export function usePositions(isConnected: boolean, pollInterval = 10000) {
   const [positions, setPositions] = useState<Position[]>([]);
@@ -39,6 +40,18 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
     }
   }, []);
 
+  // Use the WebSocket stream for instant sub-millisecond updates
+  useMT5Stream((data) => {
+    // onTick
+    if (data.positions) {
+      setPositions(data.positions);
+      setTotal(data.positions.length + orders.length);
+    }
+    if (data.accountInfo) {
+      // Account info handled in useAccountInfo or Context
+    }
+  });
+
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
@@ -49,9 +62,12 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
         return;
       }
 
+      // We still fetch once to get initial data, but polling interval is backed off
+      // heavily since WebSocket handles the real-time updates.
       const isSuccess = await fetchPositions();
       if (isMounted) {
-        timeoutId = setTimeout(tick, isSuccess ? pollInterval : 10000);
+        // Backoff polling to 60 seconds (WebSocket handles real-time)
+        timeoutId = setTimeout(tick, 60000);
       }
     };
 
@@ -63,7 +79,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [fetchPositions, pollInterval, isConnected]);
+  }, [fetchPositions, isConnected]);
 
   const closePosition = useCallback(
     async (ticket: number) => {

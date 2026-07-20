@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { aiTradingService, type ACCOUNTInfo } from "@/services/ai-trading.service";
+import { useMT5Stream } from "./useMT5Stream";
+
 export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
   const [accountInfo, setAccountInfo] = useState<ACCOUNTInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,6 +27,12 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
     }
   }, []);
 
+  useMT5Stream((data) => {
+    if (data.accountInfo) {
+      setAccountInfo(data.accountInfo);
+    }
+  });
+
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
@@ -37,7 +45,7 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
 
       const isSuccess = await fetchInfo();
       if (isMounted) {
-        timeoutId = setTimeout(tick, isSuccess ? pollInterval : 10000);
+        timeoutId = setTimeout(tick, 60000);
       }
     };
 
