@@ -28,12 +28,15 @@ export function AccountOverview({
     );
   }
 
-  const pnlColor = accountInfo.profit >= 0 ? "text-neon-green" : "text-neon-red";
-  const pnlBg = accountInfo.profit >= 0 ? "bg-neon-green/10 border-neon-green/20" : "bg-neon-red/10 border-neon-red/20";
-  const dailyColor = accountInfo.dailyPnL >= 0 ? "text-neon-green" : "text-neon-red";
+  const pnlColor = (accountInfo.profit ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
+  const pnlBg = (accountInfo.profit ?? 0) >= 0 ? "bg-neon-green/10 border-neon-green/20" : "bg-neon-red/10 border-neon-red/20";
+  const dailyColor = (accountInfo.dailyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
 
-  const riskPercent = Math.min((accountInfo.openRisk / (accountInfo.balance || 1)) * 100, 10);
-  const marginHealth = accountInfo.marginLevel > 500 ? "text-neon-green" : accountInfo.marginLevel > 200 ? "text-yellow-400" : "text-neon-red";
+  const riskPercent = accountInfo.balance && accountInfo.balance > 0
+    ? Math.min((accountInfo.openRisk / accountInfo.balance) * 100, 10)
+    : 0;
+  const marginHealth = (accountInfo.marginLevel ?? 0) > 500 ? "text-neon-green" 
+    : (accountInfo.marginLevel ?? 0) > 200 ? "text-yellow-400" : "text-neon-red";
 
   return (
     <div className="glass p-4 border-accent-gold/10 shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-xl">
@@ -150,7 +153,7 @@ export function AccountOverview({
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Level</span>
               <span className={`text-sm font-mono font-bold ${marginHealth} drop-shadow-[0_0_4px_currentColor]`}>
-                {accountInfo.marginLevel.toFixed(0)}%
+                {(accountInfo.marginLevel ?? 0).toFixed(0)}%
               </span>
             </div>
           </div>
@@ -161,7 +164,8 @@ export function AccountOverview({
   );
 }
 
-function formatMoney(amount: number, currency = "USD"): string {
+function formatMoney(amount: number | null | undefined, currency = "USD"): string {
+  if (amount == null || isNaN(amount)) return "$0.00";
   const abs = Math.abs(amount);
   const formatted = abs.toLocaleString("en-US", {
     minimumFractionDigits: 2,
