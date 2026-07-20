@@ -5,6 +5,8 @@ import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
 import { execSync } from 'child_process';
+import fetch from "node-fetch";
+import https from "node:https";
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
 export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
@@ -353,8 +355,13 @@ class MT5MCPService {
         if (!formattedUrl.endsWith("/sse")) {
             formattedUrl = formattedUrl.endsWith("/") ? `${formattedUrl}sse` : `${formattedUrl}/sse`;
         }
+        const httpsAgent = new https.Agent({
+          keepAlive: false,
+          rejectUnauthorized: false // Helps bypass strict TLS inspection from some edge tunnels
+        });
+
         transport = new SSEClientTransport(new URL(formattedUrl), {
-          requestInit: { keepalive: false }
+          fetch: (url, init) => fetch(url, { ...init, agent: httpsAgent } as any) as any
         });
       } else {
         // Mode Lokal (Localhost Desktop)
