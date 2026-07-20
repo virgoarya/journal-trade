@@ -189,6 +189,14 @@ class TradingPipelineService {
       currentDrawdownPct?: number;
       currentGrowthPct?: number;
       currentRiskMultiplier?: number;
+      cachedMetrics?: {
+        totalTrades: number;
+        winningTrades: number;
+        losingTrades: number;
+        allTimePnL: number;
+        dailyPnLSum: number;
+      };
+      lastMetricsUpdate?: number;
     }
   > = new Map();
 
@@ -326,13 +334,13 @@ const pipeline = {
       pipeline.intervals.set(symbol, intervalId);
     });
 
-    // Trailing stop & pending order management runs more frequently (every 10s)
+    // Trailing stop & pending order management runs more frequently (every 2s for realtime floating PnL)
     pipeline.trailingInterval = setInterval(
       async () => {
         await this.managePositions(userId);
         await this.syncClosedPositions(userId);
       },
-      10_000,
+      2_000,
     );
 
     if (!isRecovery) {
@@ -561,28 +569,48 @@ const pipeline = {
         }
       }
 
-      // Trade history dari DB (closed trades)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Trade history dari DB (closed trades) - Cache for 10s to avoid DB spam during realtime polling
+      const now = Date.now();
+      if (!pipeline.cachedMetrics || now - (pipeline.lastMetricsUpdate || 0) > 10_000) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      const query: any = { userId, closed: true };
-      if (accountId) query.accountId = accountId;
+        const query: any = { userId, closed: true };
+        if (accountId) query.accountId = accountId;
 
-      const closedTrades = await AITradeLog.find(query).lean();
+        const closedTrades = await AITradeLog.find(query).lean();
 
-      totalTrades = closedTrades.length;
-      let allTimePnL = 0;
-      let dailyPnLSum = 0;
+        let tTrades = closedTrades.length;
+        let aPnL = 0;
+        let dPnL = 0;
+        let wTrades = 0;
+        let lTrades = 0;
 
-      for (const t of closedTrades) {
-        const pnl = (t as any).pnl || 0;
-        allTimePnL += pnl;
-        if (t.executionTime && new Date(t.executionTime) >= today) {
-          dailyPnLSum += pnl;
+        for (const t of closedTrades) {
+          const pnl = (t as any).pnl || 0;
+          aPnL += pnl;
+          if (t.executionTime && new Date(t.executionTime) >= today) {
+            dPnL += pnl;
+          }
+          if (pnl > 0) wTrades++;
+          else if (pnl < 0) lTrades++;
         }
-        if (pnl > 0) winningTrades++;
-        else if (pnl < 0) losingTrades++;
+
+        pipeline.cachedMetrics = {
+          totalTrades: tTrades,
+          winningTrades: wTrades,
+          losingTrades: lTrades,
+          allTimePnL: aPnL,
+          dailyPnLSum: dPnL,
+        };
+        pipeline.lastMetricsUpdate = now;
       }
+
+      totalTrades = pipeline.cachedMetrics.totalTrades;
+      winningTrades = pipeline.cachedMetrics.winningTrades;
+      losingTrades = pipeline.cachedMetrics.losingTrades;
+      let allTimePnL = pipeline.cachedMetrics.allTimePnL;
+      let dailyPnLSum = pipeline.cachedMetrics.dailyPnLSum;
 
       // Combine floating PnL + closed PnL
       totalPnL += allTimePnL;

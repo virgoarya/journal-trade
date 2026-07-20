@@ -21,7 +21,7 @@ import {
  * Components should NOT fetch `getPipelineStatus()` or `getPipelineLogs()` directly.
  */
 export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
-  const { pollIntervalMs = 5000 } = opts;
+  const { pollIntervalMs = 2000 } = opts;
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [logs, setLogs] = useState<PipelineLog[]>([]);
   const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);

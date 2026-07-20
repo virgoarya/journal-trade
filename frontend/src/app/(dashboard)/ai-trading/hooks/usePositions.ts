@@ -6,15 +6,13 @@ import {
   type Position,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
-import { useMT5Connection } from "./useMT5Connection";
 
-export function usePositions(pollInterval = 10000) {
+export function usePositions(isConnected: boolean, pollInterval = 10000) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const { isConnected } = useMT5Connection();
 
   const fetchPositions = useCallback(async (): Promise<boolean> => {
     try {

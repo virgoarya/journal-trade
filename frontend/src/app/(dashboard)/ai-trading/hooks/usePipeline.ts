@@ -112,7 +112,7 @@ export function usePipeline() {
         } catch {
           // ignore
         }
-      }, 10000);
+      }, 2000);
 
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);

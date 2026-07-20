@@ -2,15 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { aiTradingService, type ACCOUNTInfo } from "@/services/ai-trading.service";
-import { useMT5Connection } from "./useMT5Connection";
-
-export function useAccountInfo(pollInterval = 30000) {
+export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
   const [accountInfo, setAccountInfo] = useState<ACCOUNTInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const { isConnected } = useMT5Connection();
 
   const fetchInfo = useCallback(async (): Promise<boolean> => {
     try {
