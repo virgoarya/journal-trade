@@ -1055,24 +1055,6 @@ def run_sse(port: int, use_ngrok: bool):
             import threading
             import time
 
-            ngrok_restart_lock = threading.Lock()
-            ngrok_fail_count = 0
-
-            def restart_ngrok():
-                global ngrok_fail_count
-                if not ngrok_restart_lock.acquire(blocking=False):
-                    return
-                try:
-                    print("\n[!] Mendeteksi Ngrok macet karena koneksi terputus. Memulai ulang Ngrok...")
-                    ngrok_fail_count = 0
-                    try:
-                        ngrok.kill()
-                    except:
-                        pass
-                    
-                    time.sleep(2)
-                    
-                    print("[+] Menyambungkan kembali Ngrok...")
                     public_url = ngrok.connect(port).public_url
                     print(f"\n" + "="*50)
                     print(f"Koneksi Ngrok Berhasil Dipulihkan!")
@@ -1108,62 +1090,95 @@ def run_sse(port: int, use_ngrok: bool):
         # URL WebSocket Railway (pastikan sesuai dengan environment production)
         WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
         
+        async def tick_streamer(ws):
+            while True:
+                try:
+                    if not mt5_connected:
+                        await asyncio.sleep(1)
+                        continue
+                    
+                    # 1. Tarik posisi terbuka
+                    positions = mt5.positions_get()
+                    pos_data = []
+                    if positions:
+                        for p in positions:
+                            pos_data.append(_pos_dict(p))
+                    
+                    # 2. Tarik info akun
+                    acc = mt5.account_info()
+                    acc_data = _account_dict(acc) if acc else None
+                        
+                    payload = {
+                        "type": "mt5_tick",
+                        "data": {
+                            "positions": pos_data,
+                            "accountInfo": acc_data
+                        }
+                    }
+                    
+                    await ws.send(json.dumps(payload))
+                    await asyncio.sleep(1) # Refresh setiap 1 detik!
+                except Exception as e:
+                    print(f"[WS-STREAM] Tick Error: {e}")
+                    await asyncio.sleep(3)
+
+        async def rpc_listener(ws):
+            async for message in ws:
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "rpc_request":
+                        req_id = data.get("id")
+                        action = data.get("action")
+                        payload = data.get("payload", {})
+                        
+                        print(f"[RPC] Menerima request {action} (ID: {req_id})")
+                        
+                        # Jalankan command (di thread utama atau di async)
+                        try:
+                            # sync_call_tool mengembalikan list[TextContent]
+                            # Contoh: [TextContent(type='text', text='{"success": true}')]
+                            res = sync_call_tool(action, payload)
+                            if res and len(res) > 0:
+                                res_json = json.loads(res[0].text)
+                                await ws.send(json.dumps({
+                                    "type": "rpc_response",
+                                    "id": req_id,
+                                    "result": res_json
+                                }))
+                            else:
+                                await ws.send(json.dumps({
+                                    "type": "rpc_response",
+                                    "id": req_id,
+                                    "error": "No response from tool"
+                                }))
+                        except Exception as ex:
+                            print(f"[RPC] Tool Error: {ex}")
+                            await ws.send(json.dumps({
+                                "type": "rpc_response",
+                                "id": req_id,
+                                "error": str(ex)
+                            }))
+                            
+                except Exception as e:
+                    print(f"[RPC] Listener error: {e}")
+
         async def streamer():
             while True:
                 try:
                     async with websockets.connect(WS_URL) as ws:
-                        print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway Streamer: {WS_URL}")
-                        while True:
-                            if not mt5_connected:
-                                await asyncio.sleep(1)
-                                continue
-                            
-                            # 1. Tarik posisi terbuka
-                            positions = mt5.positions_get()
-                            pos_data = []
-                            if positions:
-                                for p in positions:
-                                    pos_data.append({
-                                        "ticket": p.ticket,
-                                        "orderId": p.ticket,
-                                        "symbol": p.symbol,
-                                        "profit": p.profit,
-                                        "volume": p.volume,
-                                        "priceOpen": p.price_open,
-                                        "priceCurrent": p.price_current,
-                                        "type": "BUY" if p.type == 0 else "SELL",
-                                        "sl": p.sl,
-                                        "tp": p.tp,
-                                        "time": p.time,
-                                        "timeUpdate": p.time_update,
-                                        "comment": p.comment,
-                                        "externalId": p.external_id
-                                    })
-                            
-                            # 2. Tarik info akun
-                            acc = mt5.account_info()
-                            acc_data = None
-                            if acc:
-                                acc_data = {
-                                    "login": str(acc.login),
-                                    "balance": acc.balance,
-                                    "equity": acc.equity,
-                                    "margin": acc.margin,
-                                    "freeMargin": acc.margin_free,
-                                    "marginLevel": acc.margin_level,
-                                    "currency": acc.currency
-                                }
-                                
-                            payload = {
-                                "type": "mt5_tick",
-                                "data": {
-                                    "positions": pos_data,
-                                    "accountInfo": acc_data
-                                }
-                            }
-                            
-                            await ws.send(json.dumps(payload))
-                            await asyncio.sleep(1) # Refresh setiap 1 detik!
+                        print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway: {WS_URL}")
+                        
+                        task1 = asyncio.create_task(tick_streamer(ws))
+                        task2 = asyncio.create_task(rpc_listener(ws))
+                        
+                        # Wait for any of them to crash (e.g. connection drop)
+                        done, pending = await asyncio.wait(
+                            [task1, task2],
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+                        
+                        for p in pending:
+                            p.cancel()
                             
                 except Exception as e:
                     print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
@@ -1173,19 +1188,12 @@ def run_sse(port: int, use_ngrok: bool):
         asyncio.set_event_loop(loop)
         loop.run_until_complete(streamer())
 
-    threading.Thread(target=ws_streamer_thread, daemon=True).start()
-    # =====================================
-
-    uvicorn.run(runnable_app, host="0.0.0.0", port=port, log_level="info")
+    try:
+        # Prevent the main thread from exiting since we don't have Uvicorn anymore
+        while True:
+            sys.stdin.read(1)
+    except KeyboardInterrupt:
+        print("\nExiting...")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="MT5 MCP Server")
-    parser.add_argument("--transport", choices=["stdio", "sse"], default="sse", help="Transport mode")
-    parser.add_argument("--port", type=int, default=8000, help="Port for SSE mode")
-    parser.add_argument("--no-ngrok", action="store_true", help="Disable Ngrok tunnel")
-    args = parser.parse_args()
-
-    if args.transport == "sse":
-        run_sse(args.port, not args.no_ngrok)
-    else:
-        asyncio.run(run_stdio())
+    run_sse(8000, False)
