@@ -353,7 +353,9 @@ class MT5MCPService {
         if (!formattedUrl.endsWith("/sse")) {
             formattedUrl = formattedUrl.endsWith("/") ? `${formattedUrl}sse` : `${formattedUrl}/sse`;
         }
-        transport = new SSEClientTransport(new URL(formattedUrl));
+        transport = new SSEClientTransport(new URL(formattedUrl), {
+          requestInit: { keepalive: false }
+        });
       } else {
         // Mode Lokal (Localhost Desktop)
         // Validate prerequisites before starting Python server

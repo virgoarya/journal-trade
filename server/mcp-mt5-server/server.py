@@ -406,8 +406,7 @@ async def list_tools():
 # Tool handlers
 # ---------------------------------------------------------------------------
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
     global mt5_connected, mt5_config
 
     # ── Connection ────────────────────────────────────────────────────
@@ -952,6 +951,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         })
 
     return _err(f"Unknown tool: {name}")
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    import asyncio
+    return await asyncio.to_thread(sync_call_tool, name, arguments)
 
 
 # ---------------------------------------------------------------------------
