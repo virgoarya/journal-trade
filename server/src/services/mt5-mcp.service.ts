@@ -658,7 +658,7 @@ class MT5MCPService {
         (e) => {
           // Define which errors are retryable
           const errMsg = e.message || "";
-          return !errMsg.includes("not connected") && !errMsg.includes("ECONN") && !errMsg.includes("socket") && !errMsg.includes("timeout") && !errMsg.includes("32001") && !errMsg.includes("fetch failed"); // Retry unless it's a connection error or credential error
+          return !errMsg.includes("not connected") && !errMsg.includes("ECONN") && !errMsg.includes("socket") && !errMsg.includes("fetch failed"); // Retry unless it's a hard socket error
         }
       );
 
@@ -675,7 +675,7 @@ class MT5MCPService {
     } catch (error: any) {
       const errorMsg = error.message || "";
       const isExpectedError = errorMsg.includes("10025") || errorMsg.includes("No changes") || errorMsg.includes("10018") || errorMsg.includes("Market closed");
-      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("32001") || errorMsg.includes("timeout") || errorMsg.includes("fetch failed"); // True hard connection drops
+      const isConnError = errorMsg.includes("not connected") || errorMsg.includes("ECONN") || errorMsg.includes("transport") || errorMsg.includes("socket") || errorMsg.includes("fetch failed"); // True hard connection drops
 
       if (isConnError) {
         // Record failure in circuit breaker ONLY on connection errors
