@@ -11,14 +11,14 @@ interface SkeletonLoaderProps {
 
 /**
  * SkeletonLoader - HUD-themed shimmer loading states for AI Trading components.
- * Uses hud-panel and gold-accent colors for visual consistency.
+ * Uses glass and gold-accent colors for visual consistency.
  */
 export function SkeletonLoader({ type, className = "", count = 3 }: SkeletonLoaderProps) {
   const shimmer = "bg-accent-gold/10 animate-pulse rounded";
 
   if (type === "card") {
     return (
-      <div className={`hud-panel p-4 animate-pulse ${className}`}>
+      <div className={`glass p-4 animate-pulse ${className}`}>
         <div className="space-y-3">
           <div className={`h-4 ${shimmer} w-3/4`}></div>
           <div className={`h-3 ${shimmer} w-full`}></div>
@@ -31,7 +31,7 @@ export function SkeletonLoader({ type, className = "", count = 3 }: SkeletonLoad
 
   if (type === "table") {
     return (
-      <div className={`hud-panel overflow-hidden animate-pulse ${className}`}>
+      <div className={`glass overflow-hidden animate-pulse ${className}`}>
         <div className="px-4 py-3 border-b border-accent-gold/20 bg-black/20">
           <div className={`h-3 ${shimmer} w-32`}></div>
         </div>
@@ -63,7 +63,7 @@ export function SkeletonLoader({ type, className = "", count = 3 }: SkeletonLoad
 
   if (type === "chart") {
     return (
-      <div className={`hud-panel p-4 animate-pulse ${className}`}>
+      <div className={`glass p-4 animate-pulse ${className}`}>
         <div className="space-y-3">
           <div className={`h-4 ${shimmer} w-1/4`}></div>
           <div className="h-48 bg-accent-gold/5 rounded flex items-end justify-around px-4 pb-4 border border-accent-gold/10">
@@ -80,7 +80,7 @@ export function SkeletonLoader({ type, className = "", count = 3 }: SkeletonLoad
     return (
       <div className={`animate-pulse space-y-2 ${className}`}>
         {[...Array(count)].map((_, i) => (
-          <div key={i} className="hud-panel p-3 flex items-center gap-3">
+          <div key={i} className="glass p-3 flex items-center gap-3">
             <div className={`w-8 h-8 ${shimmer} rounded-full`}></div>
             <div className="flex-1 space-y-2">
               <div className={`h-3 ${shimmer} w-3/4`}></div>

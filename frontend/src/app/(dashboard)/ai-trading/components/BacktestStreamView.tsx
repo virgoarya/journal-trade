@@ -452,7 +452,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const winRate = globalWins + globalLosses > 0 ? (globalWins / (globalWins + globalLosses)) * 100 : 0;
 
   return (
-    <div className="h-full min-h-[500px] flex flex-col hud-panel overflow-hidden relative">
+    <div className="h-full min-h-[500px] flex flex-col glass overflow-hidden relative">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: "linear-gradient(#d4af37 1px, transparent 1px), linear-gradient(90deg, #d4af37 1px, transparent 1px)",

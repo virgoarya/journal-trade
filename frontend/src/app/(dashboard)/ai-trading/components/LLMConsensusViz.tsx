@@ -229,7 +229,7 @@ export function LLMConsensusViz({ votes, modelStatus, threshold = 0.5 }: Props) 
   const activeCount = currentProviders.filter((m) => m.status === "active").length;
 
   return (
-    <div className="hud-panel p-0 overflow-hidden relative flex flex-col h-[500px]">
+    <div className="glass p-0 overflow-hidden relative flex flex-col h-[500px]">
       {/* Overlay UI */}
       <div className="absolute inset-x-0 top-0 p-4 z-10 pointer-events-none flex justify-between items-start">
         <div className="space-y-2">

@@ -284,7 +284,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   };
 
   return (
-    <div className="hud-panel p-4 space-y-4 relative overflow-hidden">
+    <div className="glass p-4 space-y-4 relative overflow-hidden">
       <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent-gold/5 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3 relative">

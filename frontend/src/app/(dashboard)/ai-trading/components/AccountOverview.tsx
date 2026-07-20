@@ -36,7 +36,7 @@ export function AccountOverview({
   const marginHealth = accountInfo.marginLevel > 500 ? "text-neon-green" : accountInfo.marginLevel > 200 ? "text-yellow-400" : "text-neon-red";
 
   return (
-    <div className="hud-panel p-4 border-accent-gold/10 shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-xl">
+    <div className="glass p-4 border-accent-gold/10 shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-xl">
       <div className="flex flex-col md:flex-row items-center md:items-center gap-6 md:gap-8">
         
         {/* Left: Holographic Account Ring (Enlarged) */}

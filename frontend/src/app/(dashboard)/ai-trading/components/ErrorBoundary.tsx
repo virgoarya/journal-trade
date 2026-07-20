@@ -36,7 +36,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         return this.props.fallback;
       }
       return (
-        <div className="hud-panel p-6 flex flex-col items-center justify-center gap-3 min-h-[200px]">
+        <div className="glass p-6 flex flex-col items-center justify-center gap-3 min-h-[200px]">
           <div className="w-12 h-12 rounded-full border-2 border-neon-red/50 flex items-center justify-center bg-neon-red/10">
             <span className="text-neon-red text-lg">⚠</span>
           </div>

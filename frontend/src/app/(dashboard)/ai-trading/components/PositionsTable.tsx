@@ -107,7 +107,7 @@ export function PositionsTable({
   }
 
   return (
-    <div className="hud-panel overflow-hidden">
+    <div className="glass overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
         <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">

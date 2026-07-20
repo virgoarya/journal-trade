@@ -72,7 +72,7 @@ export function EmptyState({
   const Icon = content.icon;
 
   return (
-    <div className={`hud-panel p-6 text-center ${className}`}>
+    <div className={`glass p-6 text-center ${className}`}>
       <div className="flex flex-col items-center justify-center space-y-3">
         <div className="w-12 h-12 rounded-full border border-accent-gold/20 bg-black/40 flex items-center justify-center">
           <Icon className="w-6 h-6 text-accent-gold-dim" />

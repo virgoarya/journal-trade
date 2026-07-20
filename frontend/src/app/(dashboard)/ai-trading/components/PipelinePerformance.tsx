@@ -110,7 +110,7 @@ export function PipelinePerformance() {
     : null;
 
   return (
-    <div className="hud-panel p-4 space-y-3">
+    <div className="glass p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold flex items-center gap-2 drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">

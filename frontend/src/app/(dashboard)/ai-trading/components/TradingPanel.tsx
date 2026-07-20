@@ -95,7 +95,7 @@ export function TradingPanel({
   const gradeInfo = getOverallGrade();
 
   return (
-    <div className="hud-panel p-4 space-y-4">
+    <div className="glass p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3 relative">
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-gold/50 to-transparent"></div>

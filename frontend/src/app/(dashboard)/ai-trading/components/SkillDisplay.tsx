@@ -107,7 +107,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
   const userHasData = skill && (skill.symbolRankings?.length > 0 || skill.methodologyRankings?.length > 0);
 
   return (
-    <div className="hud-panel p-4 space-y-4">
+    <div className="glass p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3">
         <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-widest flex items-center gap-2 drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">

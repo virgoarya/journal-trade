@@ -69,7 +69,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="hud-panel p-6 space-y-6 relative overflow-hidden">
+      className="glass p-6 space-y-6 relative overflow-hidden">
       <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-3xl pointer-events-none ${isProfitable ? "bg-green-500/10" : "bg-red-500/10"}`} />
 
       {/* Header */}
