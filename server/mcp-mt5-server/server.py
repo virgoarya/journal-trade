@@ -965,235 +965,110 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 # ---------------------------------------------------------------------------
 import os
 import argparse
-import uvicorn
-from fastapi import FastAPI
-from starlette.requests import Request
-from starlette.responses import JSONResponse
-from starlette.middleware.cors import CORSMiddleware
-from mcp.server.sse import SseServerTransport
+import asyncio
 
-async def run_stdio():
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(read_stream, write_stream, app.create_initialization_options())
-
-def run_sse(port: int, use_ngrok: bool):
-    sse = SseServerTransport("/messages")
-    api = FastAPI(title="MT5 MCP Server")
-
-    api.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-    api.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
-    # Bypassing FastAPI's route wrapping for SSE and Messages to prevent 
-    # 'Unexpected ASGI message' and connection drops.
-    original_app = api
-    async def asgi_wrapper(scope, receive, send):
-        if scope["type"] == "http":
-            if scope["method"] == "GET" and scope["path"] == "/sse":
-                async with sse.connect_sse(scope, receive, send) as streams:
-                    await app.run(streams[0], streams[1], app.create_initialization_options())
-                return
-            elif scope["method"] == "POST" and scope["path"] == "/messages":
-                await sse.handle_post_message(scope, receive, send)
-                return
-        await original_app(scope, receive, send)
-
-    # Use the wrapper as the main ASGI app
-    runnable_app = asgi_wrapper
-
-    @api.get("/health")
-    async def health():
-        return {"status": "ok", "connected": mt5_connected}
-
-    if use_ngrok:
-        try:
-            from pyngrok import ngrok
-            
-            # UX: Prompt for Ngrok token if not set
-            base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-            token_file = os.path.join(base_dir, ".ngrok_token")
-            
-            if not os.environ.get("NGROK_AUTHTOKEN"):
-                if os.path.exists(token_file):
-                    with open(token_file, "r") as f:
-                        token = f.read().strip()
-                        if token:
-                            os.environ["NGROK_AUTHTOKEN"] = token
-                else:
-                    print("\n" + "="*55)
-                    print("="*12 + " NGROK AUTHTOKEN DIBUTUHKAN " + "="*15)
-                    print("="*55)
-                    print("Anda belum mengatur Ngrok Authtoken.")
-                    print("1. Daftar/Login ke https://dashboard.ngrok.com")
-                    print("2. Ke menu 'Your Authtoken' (atau https://dashboard.ngrok.com/get-started/your-authtoken)")
-                    print("3. Copy token Anda dan Paste di bawah ini.")
-                    print("="*55)
+def run_ws_client():
+    # URL WebSocket Railway (pastikan sesuai dengan environment production)
+    WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
+    
+    async def tick_streamer(ws):
+        while True:
+            try:
+                if not mt5_connected:
+                    await asyncio.sleep(1)
+                    continue
+                
+                # 1. Tarik posisi terbuka
+                positions = mt5.positions_get()
+                pos_data = []
+                if positions:
+                    for p in positions:
+                        pos_data.append(_pos_dict(p))
+                
+                # 2. Tarik info akun
+                acc = mt5.account_info()
+                acc_data = _account_dict(acc) if acc else None
                     
-                    token = input("Masukkan Ngrok Authtoken Anda: ").strip()
-                    if token:
-                        try:
-                            with open(token_file, "w") as f:
-                                f.write(token)
-                            os.environ["NGROK_AUTHTOKEN"] = token
-                            print("\n[+] Token berhasil disimpan!")
-                        except Exception as write_err:
-                            print(f"\n[-] Gagal menyimpan token ke file: {write_err}")
-                            os.environ["NGROK_AUTHTOKEN"] = token
-                    else:
-                        print("\n[!] Token kosong. Mencoba tanpa token (kemungkinan error ERR_NGROK_4018).")
-
-            print("\nMemulai Ngrok Tunnel...")
-
-            from pyngrok import ngrok, conf
-            import threading
-            import time
-
-                    public_url = ngrok.connect(port).public_url
-                    print(f"\n" + "="*50)
-                    print(f"Koneksi Ngrok Berhasil Dipulihkan!")
-                    print(f"URL Koneksi Anda: {public_url}/sse")
-                    print(f"="*50 + "\n")
-                except Exception as e:
-                    print(f"[-] Gagal memulihkan Ngrok: {e}")
-                finally:
-                    ngrok_restart_lock.release()
-
-            def ngrok_log_callback(log):
-                global ngrok_fail_count
-                msg = log.msg.lower() if log.msg else ""
-                if "failed to reconnect session" in msg or "no such host" in msg or "timeout" in msg:
-                    ngrok_fail_count += 1
-                    if ngrok_fail_count >= 3:
-                        threading.Thread(target=restart_ngrok, daemon=True).start()
-                elif "session established" in msg or "client session established" in msg:
-                    ngrok_fail_count = 0
-
-            conf.get_default().log_event_callback = ngrok_log_callback
-
-            public_url = ngrok.connect(port).public_url
-            print(f"\n" + "="*50)
-            print(f"Koneksi Berhasil!")
-            print(f"URL Koneksi Anda: {public_url}/sse")
-            print(f"="*50 + "\n")
-        except Exception as e:
-            print(f"Failed to start ngrok: {e}")
-
-    # ===== WEBSOCKET STREAMER THREAD =====
-    def ws_streamer_thread():
-        # URL WebSocket Railway (pastikan sesuai dengan environment production)
-        WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
-        
-        async def tick_streamer(ws):
-            while True:
-                try:
-                    if not mt5_connected:
-                        await asyncio.sleep(1)
-                        continue
-                    
-                    # 1. Tarik posisi terbuka
-                    positions = mt5.positions_get()
-                    pos_data = []
-                    if positions:
-                        for p in positions:
-                            pos_data.append(_pos_dict(p))
-                    
-                    # 2. Tarik info akun
-                    acc = mt5.account_info()
-                    acc_data = _account_dict(acc) if acc else None
-                        
-                    payload = {
-                        "type": "mt5_tick",
-                        "data": {
-                            "positions": pos_data,
-                            "accountInfo": acc_data
-                        }
+                payload = {
+                    "type": "mt5_tick",
+                    "data": {
+                        "positions": pos_data,
+                        "accountInfo": acc_data
                     }
-                    
-                    await ws.send(json.dumps(payload))
-                    await asyncio.sleep(1) # Refresh setiap 1 detik!
-                except Exception as e:
-                    print(f"[WS-STREAM] Tick Error: {e}")
-                    await asyncio.sleep(3)
+                }
+                
+                await ws.send(json.dumps(payload))
+                await asyncio.sleep(1) # Refresh setiap 1 detik!
+            except Exception as e:
+                print(f"[WS-STREAM] Tick Error: {e}")
+                await asyncio.sleep(3)
 
-        async def rpc_listener(ws):
-            async for message in ws:
-                try:
-                    data = json.loads(message)
-                    if data.get("type") == "rpc_request":
-                        req_id = data.get("id")
-                        action = data.get("action")
-                        payload = data.get("payload", {})
-                        
-                        print(f"[RPC] Menerima request {action} (ID: {req_id})")
-                        
-                        # Jalankan command (di thread utama atau di async)
-                        try:
-                            # sync_call_tool mengembalikan list[TextContent]
-                            # Contoh: [TextContent(type='text', text='{"success": true}')]
-                            res = sync_call_tool(action, payload)
-                            if res and len(res) > 0:
-                                res_json = json.loads(res[0].text)
-                                await ws.send(json.dumps({
-                                    "type": "rpc_response",
-                                    "id": req_id,
-                                    "result": res_json
-                                }))
-                            else:
-                                await ws.send(json.dumps({
-                                    "type": "rpc_response",
-                                    "id": req_id,
-                                    "error": "No response from tool"
-                                }))
-                        except Exception as ex:
-                            print(f"[RPC] Tool Error: {ex}")
+    async def rpc_listener(ws):
+        async for message in ws:
+            try:
+                data = json.loads(message)
+                if data.get("type") == "rpc_request":
+                    req_id = data.get("id")
+                    action = data.get("action")
+                    payload = data.get("payload", {})
+                    
+                    print(f"[RPC] Menerima request {action} (ID: {req_id})")
+                    
+                    # Jalankan command (di thread utama atau di async)
+                    try:
+                        res = sync_call_tool(action, payload)
+                        if res and len(res) > 0:
+                            res_json = json.loads(res[0].text)
                             await ws.send(json.dumps({
                                 "type": "rpc_response",
                                 "id": req_id,
-                                "error": str(ex)
+                                "result": res_json
                             }))
-                            
-                except Exception as e:
-                    print(f"[RPC] Listener error: {e}")
+                        else:
+                            await ws.send(json.dumps({
+                                "type": "rpc_response",
+                                "id": req_id,
+                                "error": "No response from tool"
+                            }))
+                    except Exception as ex:
+                        print(f"[RPC] Tool Error: {ex}")
+                        await ws.send(json.dumps({
+                            "type": "rpc_response",
+                            "id": req_id,
+                            "error": str(ex)
+                        }))
+                        
+            except Exception as e:
+                print(f"[RPC] Listener error: {e}")
 
-        async def streamer():
-            while True:
-                try:
-                    async with websockets.connect(WS_URL) as ws:
-                        print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway: {WS_URL}")
-                        
-                        task1 = asyncio.create_task(tick_streamer(ws))
-                        task2 = asyncio.create_task(rpc_listener(ws))
-                        
-                        # Wait for any of them to crash (e.g. connection drop)
-                        done, pending = await asyncio.wait(
-                            [task1, task2],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                        
-                        for p in pending:
-                            p.cancel()
-                            
-                except Exception as e:
-                    print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
-                    await asyncio.sleep(3)
-                    
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(streamer())
-
-    try:
-        # Prevent the main thread from exiting since we don't have Uvicorn anymore
+    async def streamer():
         while True:
-            sys.stdin.read(1)
+            try:
+                async with websockets.connect(WS_URL) as ws:
+                    print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway: {WS_URL}")
+                    
+                    task1 = asyncio.create_task(tick_streamer(ws))
+                    task2 = asyncio.create_task(rpc_listener(ws))
+                    
+                    # Wait for any of them to crash (e.g. connection drop)
+                    done, pending = await asyncio.wait(
+                        [task1, task2],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    for p in pending:
+                        p.cancel()
+                        
+            except Exception as e:
+                print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
+                await asyncio.sleep(3)
+                
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(streamer())
     except KeyboardInterrupt:
         print("\nExiting...")
 
 if __name__ == "__main__":
-    run_sse(8000, False)
+    run_ws_client()
