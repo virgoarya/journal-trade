@@ -142,7 +142,7 @@ function AITradingPageContent() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between mb-6 hud-panel p-3">
+      <header className="flex items-center justify-between mb-6 glass p-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/dashboard")}
@@ -228,7 +228,7 @@ function AITradingPageContent() {
                   <PipelinePerformance />
 
                   {pipelineStatus && (
-                    <div className="hud-panel p-5 space-y-3 h-fit flex flex-col">
+                    <div className="glass p-5 space-y-3 h-fit flex flex-col">
                       <h4 className="text-[10px] font-semibold text-accent-gold/70 uppercase tracking-widest border-b border-accent-gold/20 pb-2 mb-2">
                         Pipeline Data Stream
                       </h4>

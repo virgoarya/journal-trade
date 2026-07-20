@@ -65,7 +65,7 @@ export function VixRegimePanel() {
 
   if (vix.value === null) {
     return (
-      <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
+      <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4">
         <div className="flex items-center justify-between mb-6 shrink-0 relative z-10">
           <div className="flex items-center gap-2 min-w-0">
             <AlertOctagon size={14} className="text-accent-gold flex-shrink-0" />
@@ -86,7 +86,7 @@ export function VixRegimePanel() {
   }
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4">
       <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: vixColor, opacity: 0.08 }} />
       <div className="absolute -left-24 -bottom-24 h-56 w-56 rounded-full blur-3xl pointer-events-none" style={{ backgroundColor: vixColor, opacity: 0.05 }} />
 

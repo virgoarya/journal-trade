@@ -102,7 +102,7 @@ function ScoreBar({ score }: { score: number }) {
 function SignalBadge({ signal, contrarian }: { signal: string; contrarian: "BEARISH" | "BULLISH" | "NEUTRAL" }) {
   if (signal === "NEUTRAL") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-mono font-bold uppercase text-text-muted border-border-subtle bg-surface-elevated">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-mono font-bold uppercase text-text-muted border-border-subtle glass">
         <Minus className="w-2.5 h-2.5" /> NEUTRAL
       </span>
     );
@@ -173,7 +173,7 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
                   ? "border-data-loss/30 bg-data-loss/5"
                   : result.score >= 4
                   ? "border-amber-400/20 bg-amber-400/5"
-                  : "border-border-subtle bg-surface-elevated/30"
+                  : "border-border-subtle glass"
               }`}
             >
               {/* Card Header */}
@@ -200,7 +200,7 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
               {isOpen && (
                 <div className="px-3 pb-3 pt-0 border-t border-white/5">
                   <div className="grid grid-cols-2 gap-2 mt-2 mb-2 text-[9px] font-mono">
-                    <div className="p-2 rounded bg-surface-elevated/50 border border-border-subtle">
+                    <div className="p-2 rounded glass border border-border-subtle">
                       <div className="text-text-muted mb-0.5">Non-Comm (Spekulan)</div>
                       <div className="text-text-primary font-bold">
                         L: {item.nonCommercialLong.toLocaleString()} / S: {item.nonCommercialShort.toLocaleString()}
@@ -209,7 +209,7 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
                         Net: {((item.nonCommercialLong - item.nonCommercialShort) > 0 ? "+" : "") + (item.nonCommercialLong - item.nonCommercialShort).toLocaleString()}
                       </div>
                     </div>
-                    <div className="p-2 rounded bg-surface-elevated/50 border border-border-subtle">
+                    <div className="p-2 rounded glass border border-border-subtle">
                       <div className="text-text-muted mb-0.5">Commercial (Smart Money)</div>
                       <div className="text-text-primary font-bold">
                         L: {item.commercialLong.toLocaleString()} / S: {item.commercialShort.toLocaleString()}
@@ -220,7 +220,7 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
                     </div>
                   </div>
                   {/* Probability & Interpretation */}
-                  <div className="p-2 rounded bg-surface-elevated/50 border border-border-subtle">
+                  <div className="p-2 rounded glass border border-border-subtle">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[8px] font-mono text-text-muted uppercase tracking-wider">Reversal Probability</span>
                       <span className={`text-[11px] font-mono font-black ${result.probability >= 65 ? "text-data-loss" : result.probability >= 55 ? "text-amber-400" : "text-text-muted"}`}>

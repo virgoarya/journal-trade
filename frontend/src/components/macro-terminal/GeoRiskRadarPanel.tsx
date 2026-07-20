@@ -284,7 +284,7 @@ function RingGauge({ score, size = 56 }: { score: number; size?: number }) {
 
 function SkeletonPanel() {
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4 animate-pulse">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4 animate-pulse">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-3.5 h-3.5 bg-surface-elevated rounded" />
         <div className="w-28 h-3 bg-surface-elevated rounded" />
@@ -425,7 +425,7 @@ export function GeoRiskRadarPanel() {
   const postureMeta = POSTURE_META[posture];
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-1.5 pb-1 shrink-0">
         <div className="flex items-center gap-2 min-w-0">

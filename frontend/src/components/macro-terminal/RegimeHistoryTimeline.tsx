@@ -138,7 +138,7 @@ export function RegimeHistoryTimeline({ history, currentRegime }: RegimeHistoryT
 
         {/* Duration & Last Shift Info */}
         {duration && (
-          <div className="flex flex-col gap-1.5 rounded border border-border-subtle bg-surface-elevated/30 p-2">
+          <div className="flex flex-col gap-1.5 rounded border border-border-subtle glass p-2">
             <div className="flex items-center gap-2">
               <span className="text-[9px] font-mono text-text-muted">DURASI REZIM AKTIF:</span>
               <span className="text-xs font-mono font-bold" style={{ color: cfg.color }}>
@@ -197,7 +197,7 @@ export function RegimeTransitionPlaybook({ regime, playbook, color, onClose }: R
   const biasStyle = (bias: "bullish" | "bearish" | "neutral") => {
     if (bias === "bullish") return "text-data-profit bg-data-profit/10 border-data-profit/30";
     if (bias === "bearish") return "text-data-loss bg-data-loss/10 border-data-loss/30";
-    return "text-text-muted bg-surface-elevated border-border-subtle";
+    return "text-text-muted glass border-border-subtle";
   };
 
   return (

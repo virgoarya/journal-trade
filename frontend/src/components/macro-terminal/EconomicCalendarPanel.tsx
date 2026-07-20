@@ -112,7 +112,7 @@ export function EconomicCalendarPanel({ className }: { className?: string }) {
       return "text-[#ef4444] bg-[#ef4444]/20 border-[#ef4444]/50"; // Bright Red
     if (impact === "Medium")
       return "text-[#f59e0b] bg-[#f59e0b]/20 border-[#f59e0b]/50"; // Bright Orange
-    return "text-text-muted bg-surface-elevated border-border-subtle";
+    return "text-text-muted glass border-border-subtle";
   };
 
   const getActualColor = (
@@ -139,7 +139,7 @@ export function EconomicCalendarPanel({ className }: { className?: string }) {
   };
 
   return (
-    <div className={`flex flex-col w-full glass-panel overflow-hidden relative ${className ?? ""}`}>
+    <div className={`flex flex-col w-full glass overflow-hidden relative ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-border-subtle p-2 shrink-0">
         <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
           <CalendarDays size={14} className="text-accent-gold flex-shrink-0" /> Economic Calendar

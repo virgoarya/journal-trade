@@ -265,7 +265,7 @@ export function TerminalChatPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative">
       <div className="bg-bg-surface/80 border-b border-border-subtle p-2 flex justify-between items-center z-10 shadow-sm">
         <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
           <TerminalIcon size={14} className="text-accent-gold flex-shrink-0" aria-hidden />

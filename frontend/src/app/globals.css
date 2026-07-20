@@ -262,27 +262,25 @@
   }
 
   .glass-panel {
-    background: linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(10, 10, 10, 0.6) 100%);
+    background-color: var(--color-bg-elevated);
     border-top: 1px solid rgba(212, 175, 55, 0.4);
     border-left: 1px solid rgba(212, 175, 55, 0.3);
     border-right: 1px solid rgba(0, 0, 0, 0.6);
     border-bottom: 1px solid rgba(0, 0, 0, 0.8);
-    box-shadow: 
-      0 8px 24px rgba(0, 0, 0, 0.6), 
-      inset 1px 1px 3px rgba(212, 175, 55, 0.3);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(212, 175, 55, 0.1);
     border-radius: 0.75rem;
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   .glass-panel:hover {
-    background: linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0%, rgba(10, 10, 10, 0.8) 100%);
+    background-color: rgba(25, 25, 38, 1);
     border-top: 1px solid rgba(212, 175, 55, 0.5);
     border-left: 1px solid rgba(212, 175, 55, 0.4);
-    box-shadow: 
-      0 12px 32px rgba(0, 0, 0, 0.7), 
-      inset 1px 1px 4px rgba(212, 175, 55, 0.4);
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(212, 175, 55, 0.15);
   }
 
   .panel {

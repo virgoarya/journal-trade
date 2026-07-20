@@ -8,7 +8,7 @@ export function HunterAIReasoningPanel({ className }: { className?: string }) {
   const { aiReasoning, isAnalyzing, lastUpdated, analyzeRegime, regimeData, dataStatus } = useMacroTerminal();
 
   return (
-    <div className={`flex flex-col w-full glass-panel overflow-hidden relative ${className ?? ""}`}>
+    <div className={`flex flex-col w-full glass overflow-hidden relative ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-border-subtle p-2 shrink-0">
         <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
           <BrainCircuit size={14} className="text-accent-gold flex-shrink-0" />
@@ -61,7 +61,7 @@ export function HunterAIReasoningPanel({ className }: { className?: string }) {
                   const content = parts[i+1] ? parts[i+1].trim() : "";
                   
                   elements.push(
-                    <div key={`section-${i}`} className="mb-3 bg-surface-elevated/30 border border-border-subtle rounded p-3">
+                    <div key={`section-${i}`} className="mb-3 glass border border-border-subtle rounded p-3">
                       <span className="text-accent-gold font-bold block mb-2 text-[10px] tracking-widest uppercase">{header}</span>
                       <div className="text-xs text-text-secondary leading-relaxed font-mono break-words whitespace-pre-wrap">
                         {content}

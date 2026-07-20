@@ -6,9 +6,9 @@ export function CurveExplainerPanel() {
   const { yieldCurve, dataStatus } = useMacroTerminal();
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative">
       {/* HEADER */}
-      <div className="flex-none p-4 border-b border-border-subtle bg-surface-base/50 sticky top-0 z-10 flex justify-between items-center">
+      <div className="flex-none p-4 border-b border-border-subtle glass sticky top-0 z-10 flex justify-between items-center">
         <div className="flex items-center gap-2 min-w-0">
           <BrainCircuit size={14} className="text-accent-gold flex-shrink-0" />
           <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
@@ -28,7 +28,7 @@ export function CurveExplainerPanel() {
           </div>
         ) : yieldCurve.aiExplainer ? (
           <div className="flex flex-col gap-4">
-            <div className="inline-flex items-center self-start px-3 py-1.5 bg-surface-elevated/50 border border-accent-gold/30 rounded text-[11px] font-mono font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(251,191,36,0.1)]">
+            <div className="inline-flex items-center self-start px-3 py-1.5 glass border border-accent-gold/30 rounded text-[11px] font-mono font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(251,191,36,0.1)]">
               <span className="text-text-muted mr-2">CURRENT REGIME:</span> 
               <span className="text-accent-gold">{yieldCurve.curveRegime}</span>
             </div>
@@ -46,7 +46,7 @@ export function CurveExplainerPanel() {
       </div>
 
       {/* FOOTER */}
-      <div className="flex-none p-3 border-t border-border-subtle bg-surface-elevated/30">
+      <div className="flex-none p-3 border-t border-border-subtle glass">
         <p className="text-[10px] text-text-muted font-mono text-center">
           Analisis ini digenerate secara otomatis oleh spesialis AI saat terjadi perubahan rezim yield curve.
         </p>

@@ -241,7 +241,7 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
   }, "");
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative">
       {/* Panel Header */}
       <div className="flex items-center justify-between border-b border-border-subtle p-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">

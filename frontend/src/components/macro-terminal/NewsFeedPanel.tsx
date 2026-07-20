@@ -236,7 +236,7 @@ export function NewsFeedPanel({ className }: { className?: string }) {
         onClose={() => setAnalysisState((prev) => ({ ...prev, show: false }))}
       />
       
-      <div className={`flex flex-col w-full glass-panel overflow-hidden relative ${className ?? ""}`}>
+      <div className={`flex flex-col w-full glass overflow-hidden relative ${className ?? ""}`}>
         <div className="flex items-center justify-between border-b border-border-subtle p-2 shrink-0">
           <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs flex items-center gap-2 min-w-0">
             <Search size={14} className="text-accent-gold flex-shrink-0" /> Macro Feed

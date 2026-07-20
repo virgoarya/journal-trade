@@ -120,7 +120,7 @@ export function HeatmapPanel({ className }: { className?: string }) {
   };
 
   return (
-    <div className={`flex flex-col w-full glass-panel overflow-hidden relative ${className ?? ""}`}>
+    <div className={`flex flex-col w-full glass overflow-hidden relative ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-border-subtle p-2">
         <div className="flex items-center gap-2 min-w-0">
           <h2

@@ -277,7 +277,7 @@ export function YieldCurvePanel() {
     : "";
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel overflow-hidden relative p-4">
+    <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-accent-gold" />
@@ -381,7 +381,7 @@ export function YieldCurvePanel() {
 
 
       <div className="grid grid-cols-5 gap-2 mb-3 shrink-0">
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+        <div className="rounded border border-border-subtle glass p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             3M
           </div>
@@ -389,7 +389,7 @@ export function YieldCurvePanel() {
             {data?.y3m != null ? `${data.y3m.toFixed(2)}%` : "—"}
           </div>
         </div>
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+        <div className="rounded border border-border-subtle glass p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             2Y
           </div>
@@ -397,7 +397,7 @@ export function YieldCurvePanel() {
             {data?.y2y != null ? `${data.y2y.toFixed(2)}%` : "—"}
           </div>
         </div>
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+        <div className="rounded border border-border-subtle glass p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             5Y
           </div>
@@ -405,7 +405,7 @@ export function YieldCurvePanel() {
             {data?.y5 != null ? `${data.y5.toFixed(2)}%` : "—"}
           </div>
         </div>
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+        <div className="rounded border border-border-subtle glass p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             10Y
           </div>
@@ -413,7 +413,7 @@ export function YieldCurvePanel() {
             {data?.y10 != null ? `${data.y10.toFixed(2)}%` : "—"}
           </div>
         </div>
-        <div className="rounded border border-border-subtle bg-surface-elevated/20 p-2 text-center">
+        <div className="rounded border border-border-subtle glass p-2 text-center">
           <div className="text-[8px] text-text-muted font-mono uppercase">
             30Y
           </div>

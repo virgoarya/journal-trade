@@ -1301,7 +1301,7 @@ export default function Nexus() {
     <div className="flex flex-col gap-3">
       <div
         ref={containerRef}
-        className="relative w-full aspect-[16/10] min-h-[500px] max-h-[850px] glass-panel overflow-hidden"
+        className="relative w-full aspect-[16/10] min-h-[500px] max-h-[850px] glass overflow-hidden"
       >
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.06]"
@@ -1453,7 +1453,7 @@ export default function Nexus() {
         })}
       </div>
 
-      <div className="w-full glass-panel overflow-hidden relative p-5">
+      <div className="w-full glass overflow-hidden relative p-5">
         <div className="flex items-center gap-2 mb-3 min-w-0">
           <Terminal size={14} className="text-accent-gold flex-shrink-0" />
           <h2 className="font-bold text-text-primary uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
