@@ -1,5 +1,4 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
   "snapshot": false,
-  "rules": ".kilo/RULES.md"
 }

@@ -45,7 +45,7 @@ function MetricCard({ icon: Icon, label, value, color = "text-text-primary", sub
   icon: React.ElementType; label: string; value: string; color?: string; sub?: string;
 }) {
   return (
-    <div className="bg-bg-elevated border border-border-subtle p-4 rounded-xl flex flex-col items-center justify-center text-center transition hover:border-border-subtle">
+    <div className="panel p-4 flex flex-col items-center justify-center text-center transition">
       <Icon className={`w-5 h-5 ${color.includes("text-") ? color : "text-text-muted"} mb-3`} />
       <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">{label}</p>
       <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
