@@ -772,10 +772,15 @@ isAvailable(): boolean {
 
       const json: any = await res.json();
       let rawText = "";
+      let reasoningContent = "";
 
       // Multi-strategy extraction: handle different provider response formats
       const msg = json?.choices?.[0]?.message;
       if (msg) {
+        // Save reasoning_content separately for DeepSeek/Qwen thinking models
+        if (msg.reasoning_content) {
+          reasoningContent = String(msg.reasoning_content).trim();
+        }
         // 1. Standard content field (string)
         if (typeof msg.content === "string" && msg.content.trim()) {
           rawText = msg.content.trim();
@@ -788,9 +793,9 @@ isAvailable(): boolean {
             .join("\n")
             .trim();
         }
-        // 3. Reasoning content (DeepSeek/Qwen thinking models)
-        if (!rawText && msg.reasoning_content) {
-          rawText = String(msg.reasoning_content).trim();
+        // 3. Reasoning content (DeepSeek/Qwen) — fallback if content empty
+        if (!rawText && reasoningContent) {
+          rawText = reasoningContent;
         }
         // 4. Thought field (some models)
         if (!rawText && msg.thought) {
@@ -810,8 +815,8 @@ isAvailable(): boolean {
         rawText = typeof json.output === "string" ? json.output.trim() : JSON.stringify(json.output);
       }
 
-      console.log("[LLM-CONSENSUS] Raw response before parsing:", rawText || "[EMPTY]", "provider:", provider.name); const parsed = this.parseVerdict(rawText);
-      const latency = Date.now() - startTime;
+      console.log(`[LLM-CONSENSUS] provider=${provider.name} rawText=${rawText ? rawText.slice(0, 100) + "..." : "[EMPTY]"} reasoningContent=${reasoningContent ? "yes(" + reasoningContent.length + " chars)" : "no"}`);
+      const parsed = this.parseVerdict(rawText || "Empty response", reasoningContent || "");
 
       circuit.recordSuccess(); // Record success
       updateProviderReliability(provider.name, true); // Track reliability
@@ -849,7 +854,7 @@ isAvailable(): boolean {
    * Parse the model's response into a structured verdict.
    * Handles both strict JSON and free-form text.
    */
-  private parseVerdict(text: string): { verdict: LLMVerdict; reasoning: string } {
+  private parseVerdict(text: string, reasoningContent?: string): { verdict: LLMVerdict; reasoning: string } {
     if (!text) return { verdict: "SKIP", reasoning: "Empty response" };
 
     // Extract <think>...</think> reasoning tags (DeepSeek/Qwen style)
@@ -956,6 +961,11 @@ isAvailable(): boolean {
         reasoning = "Analisis teknikal tidak disediakan oleh model.";
       }
       
+      // If reasoning is still generic fallback, use reasoningContent from DeepSeek/Qwen (with Indonesian forcing)
+      if ((reasoning === "Analisis teknikal tidak disediakan oleh model." || reasoning === "Empty response") && reasoningContent && reasoningContent.length > 5) {
+        reasoning = forceIndonesian(reasoningContent).slice(0, 300);
+      }
+      
       // Force Bahasa Indonesia: if reasoning contains English patterns, wrap with ID prefix
       reasoning = forceIndonesian(reasoning);
       
@@ -1011,24 +1021,61 @@ isAvailable(): boolean {
 function forceIndonesian(text: string): string {
   if (!text) return "";
   
-  // Detection: if common EN words exist but common ID words don't
-  const enWords = ["the", "and", "is", "trend", "with", "buy", "sell", "entry", "strong", "weak"];
-  const idWords = ["dan", "adalah", "tren", "dengan", "beli", "jual", "kuat", "lemah"];
+  // Heuristic detection: if text contains common English trading terms WITHOUT Indonesian counterpart, force-wrap
+  const enTradingWords = [
+    "the", "trend", "buy", "sell", "entry", "price", "level", "strong", "weak",
+    "signal", "market", "trade", "order", "block", "break", "high", "low",
+    "area", "zone", "point", "move", "look", "show", "confirm", "reject",
+    "support", "resistance", "structure", "pattern",
+  ];
+  const idTradingWords = [
+    "tren", "beli", "jual", "level", "sinyal", "pasar", "order", "blok",
+    "tinggi", "rendah", "area", "titik", "konfirmasi",
+  ];
   
-  const hasEn = enWords.some(w => new RegExp(`\\b${w}\\b`, "i").test(text));
-  const hasId = idWords.some(w => new RegExp(`\\b${w}\\b`, "i").test(text));
+  const textLower = text.toLowerCase();
+  const enCount = enTradingWords.filter(w => new RegExp(`\\b${w}\\b`).test(textLower)).length;
+  const idCount = idTradingWords.filter(w => new RegExp(`\\b${w}\\b`).test(textLower)).length;
   
-  if (hasEn && !hasId) {
-    // Simple replacement for common trading phrases to make it "look" like ID if model fails
+  if (enCount > 0 && idCount === 0) {
     return text
-      .replace(/\bthe trend is\b/gi, "tren adalah")
+      .replace(/\bthe trend is\b/gi, "tren")
+      .replace(/\btrend is\b/gi, "tren")
       .replace(/\bstrong buy\b/gi, "beli kuat")
       .replace(/\bstrong sell\b/gi, "jual kuat")
-      .replace(/\bconfirm\b/gi, "konfirmasi")
-      .replace(/\bagree\b/gi, "setuju")
-      .replace(/\breasoning\b/gi, "alasan")
+      .replace(/\bprice action\b/gi, "aksi harga")
+      .replace(/\bmarket structure\b/gi, "struktur pasar")
+      .replace(/\bbreak of structure\b/gi, "breakdown struktur")
+      .replace(/\bsupport\b/gi, "support")
+      .replace(/\bresistance\b/gi, "resistance")
+      .replace(/\bconfirmation\b/gi, "konfirmasi")
+      .replace(/\brejection\b/gi, "penolakan")
+      .replace(/\bentry\b/gi, "entry")
+      .replace(/\bsignal\b/gi, "sinyal")
+      .replace(/\btrend\b/gi, "tren")
+      .replace(/\bbullish\b/gi, "bullish")
+      .replace(/\bbearish\b/gi, "bearish")
+      .replace(/\bthe\b/gi, "")
+      .replace(/\bis\b/gi, "adalah")
+      .replace(/\band\b/gi, "dan")
       .replace(/\bwith\b/gi, "dengan")
-      .replace(/\bsignal\b/gi, "sinyal");
+      .replace(/\bfor\b/gi, "untuk")
+      .replace(/\bin order to\b/gi, "untuk")
+      .replace(/\bthis suggests\b/gi, "ini menandakan")
+      .replace(/\bthis indicates\b/gi, "ini menandakan")
+      .replace(/\bhigh probability\b/gi, "probabilitas tinggi")
+      .replace(/\blong position\b/gi, "posisi beli")
+      .replace(/\bshort position\b/gi, "posisi jual")
+      .replace(/\bthe market\b/gi, "pasar")
+      .replace(/\bthe price\b/gi, "harga")
+      .replace(/\bthe level\b/gi, "level")
+      .replace(/\bprovides?\b/gi, "memberikan")
+      .replace(/\bshows?\b/gi, "menunjukkan")
+      .replace(/\bclearly\b/gi, "")
+      .replace(/\bquite\b/gi, "")
+      .replace(/\bso\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
   
   return text;
