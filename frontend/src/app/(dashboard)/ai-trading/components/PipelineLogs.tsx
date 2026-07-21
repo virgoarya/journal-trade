@@ -307,6 +307,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "SIGNAL") {
+      if (stages.SIGNAL.status === "error") return { ...stages.SIGNAL, status: "error" };
+      if (stages.SIGNAL.status === "success") return { ...stages.SIGNAL, status: "success" };
       if (stages.SIGNAL.status !== "pending") return { ...stages.SIGNAL, status: "passed" };
       if (stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
         return { status: "passed", message: "Signal detected." };
@@ -315,6 +317,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "CONFLUENCE") {
+      if (stages.CONFLUENCE.status === "error") return { ...stages.CONFLUENCE, status: "error" };
+      if (stages.CONFLUENCE.status === "success") return { ...stages.CONFLUENCE, status: "success" };
       if (stages.CONFLUENCE.status !== "pending") return { ...stages.CONFLUENCE, status: "passed" };
       if (stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
         return { status: "passed", message: "Confluence checks completed." };
