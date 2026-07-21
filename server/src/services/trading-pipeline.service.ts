@@ -665,6 +665,7 @@ const pipeline = {
     tp?: number,
     minRRRatio: number = 1.0,
     isPending: boolean = false,
+    signalEntry?: number,
   ): Promise<{ valid: boolean; error?: string }> {
     try {
       // 1. Cek symbol ada di broker
@@ -685,7 +686,9 @@ const pipeline = {
           return { valid: false, error: `Tidak bisa mendapatkan tick untuk ${symbol}` };
         }
 
-        const entryPrice = action === "BUY" ? tick.ask : tick.bid;
+        const entryPrice = isPending && signalEntry !== undefined
+          ? signalEntry
+          : (action === "BUY" ? tick.ask : tick.bid);
         const slDistance = Math.abs(entryPrice - sl);
         const tpDistance = Math.abs(tp - entryPrice);
 
@@ -1275,6 +1278,7 @@ const llmResult = await llmConsensusService.evaluate(
           signal.tp,
           minRR,
           isPending,
+          signal.entry,
         );
 
         if (!validation.valid) {
