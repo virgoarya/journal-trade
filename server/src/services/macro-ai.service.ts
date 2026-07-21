@@ -2,10 +2,22 @@ import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { geoRiskService } from "./geo-risk.service";
-import { generateText, tool, jsonSchema } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { mcpService } from "./mcp.service";
+
+// Dynamic imports for ESM-only packages
+let ai: typeof import("ai") | null = null;
+let createOpenAI: typeof import("@ai-sdk/openai").createOpenAI | null = null;
+let createGoogleGenerativeAI: typeof import("@ai-sdk/google").createGoogleGenerativeAI | null = null;
+
+async function ensureAI() {
+  if (!ai) {
+    ai = await import("ai");
+    const oai = await import("@ai-sdk/openai");
+    createOpenAI = oai.createOpenAI;
+    const gg = await import("@ai-sdk/google");
+    createGoogleGenerativeAI = gg.createGoogleGenerativeAI;
+  }
+  return ai;
+}
 
 const GEMINI_API_URL_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
@@ -756,22 +768,25 @@ INSTRUKSI PENTING TOOLS:
 
 RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdampak. Balas dalam Bahasa Indonesia institusional.`;
 
-    try {
-      const openRouter = createOpenAI({
+      // Ensure AI deps loaded
+      await ensureAI();
+      const { generateText, tool, jsonSchema } = ai!;
+
+      const openRouter = createOpenAI!({
         baseURL: env.ANTHROPIC_BASE_URL?.includes("/v1") ? env.ANTHROPIC_BASE_URL : "https://openrouter.ai/api/v1",
         apiKey: env.ANTHROPIC_AUTH_TOKEN,
       });
 
-      const groq = createOpenAI({
+      const groq = createOpenAI!({
         baseURL: env.GROQ_BASE_URL,
         apiKey: env.GROQ_API_KEY,
       });
 
-      const google = createGoogleGenerativeAI({
+      const google = createGoogleGenerativeAI!({
         apiKey: env.GEMINI_API_KEY,
       });
 
-      const dashscope = createOpenAI({
+      const dashscope = createOpenAI!({
         baseURL: env.DASHSCOPE_BASE_URL || "https://ws-u59n2if85mr2x9mq.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
         apiKey: env.DASHSCOPE_API_KEY,
       });
@@ -781,7 +796,7 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
       
       // 9Router acts as the ultimate fallback proxy to handle rate limits automatically
       if (env.NINE_ROUTER_URL) {
-        const nineRouter = createOpenAI({
+        const nineRouter = createOpenAI!({
           baseURL: env.NINE_ROUTER_URL,
           apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
         });
@@ -826,10 +841,9 @@ RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdamp
           // Log what we're registering
           silentLogger.info(`[MacroAI Agent] Registering tool '${safeName}' with schema: ${JSON.stringify(cleanSchema)}`);
           
-          toolsConfig[safeName] = tool({
+          toolsConfig[safeName] = tool!({
             description: t.description || `Tool: ${t.name}`,
-            parameters: jsonSchema(cleanSchema, {
-              // Permissive validate: accept whatever the AI model sends
+            parameters: jsonSchema!(cleanSchema, {
               validate: (value: unknown) => ({ success: true as const, value: value as any }),
             }) as any,
             execute: async (args: any) => {
