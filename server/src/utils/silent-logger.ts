@@ -1,12 +1,8 @@
 import { logger } from "./logger";
 
 export const silentLogger = {
-  debug: (msg?: any, ...args: any[]) => {
-    if (args.length > 0) {
-      logger.debug({ extra: args }, msg);
-    } else {
-      logger.debug(msg);
-    }
+  debug: () => {
+    // Silently discard debug logs to reduce backend noise
   },
   info: (msg?: any, ...args: any[]) => {
     if (args.length > 0) {
