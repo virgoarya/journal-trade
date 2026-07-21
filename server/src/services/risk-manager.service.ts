@@ -231,58 +231,66 @@ class RiskManagerService {
     winRate: number;
   } | null> {
     try {
-      // Get today's timestamp
+      // Get date timestamps
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const todayTs = Math.floor(todayStart.getTime() / 1000);
-
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthTs = Math.floor(monthStart.getTime() / 1000);
-
       const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
       const weekTs = Math.floor(weekStart.getTime() / 1000);
 
-      // Get ALL-TIME MT5 deals to calculate overall winrate accurately
+      // Get deals from MT5 (all-time)
       const deals = await mt5McpService.getHistory(0);
-
-      // Add current floating PnL from open positions
       const positions = await mt5McpService.getPositions();
       const floatingPnL = positions.reduce((sum, p) => sum + p.profit, 0);
 
-      let dailyPnL = floatingPnL;
-      let weeklyPnL = floatingPnL;
-      let monthlyPnL = floatingPnL;
+      // Calculate PnL from deals only (one pass)
+      let dailyPnL = 0;
+      let weeklyPnL = 0;
+      let monthlyPnL = 0;
 
       for (const d of deals) {
-        if (d.time >= monthTs) monthlyPnL += d.profit;
-        if (d.time >= weekTs) weeklyPnL += d.profit;
-        if (d.time >= todayTs) dailyPnL += d.profit;
+        const profit = d.profit || 0;
+        if (d.time >= todayTs) dailyPnL += profit;
+        if (d.time >= weekTs) weeklyPnL += profit;
+        if (d.time >= monthTs) monthlyPnL += profit;
       }
 
-      silentLogger.debug(`[RISK] getDailyMetrics for userId ${userId}: deals=${deals.length}, positions=${positions.length}, floatingPnL=${floatingPnL.toFixed(2)}`);
-      silentLogger.debug(`[RISK] Daily PnL (initial): ${dailyPnL.toFixed(2)}, Weekly PnL: ${weeklyPnL.toFixed(2)}, Monthly PnL: ${monthlyPnL.toFixed(2)}`);
+      // Add current floating PnL so daily/weekly/monthly includes open positions
+      // (a position opened intraday contributes its floating PnL to daily total)
+      dailyPnL += floatingPnL;
+      weeklyPnL += floatingPnL;
+      monthlyPnL += floatingPnL;
 
-      for (const d of deals) {
-        if (d.time >= monthTs) monthlyPnL += d.profit;
-        if (d.time >= weekTs) weeklyPnL += d.profit;
-        if (d.time >= todayTs) dailyPnL += d.profit;
-        // silentLogger.debug(`[RISK] Deal #${d.ticket} time=${new Date(d.time * 1000).toISOString()} profit=${d.profit} -> daily=${dailyPnL.toFixed(2)}, weekly=${weeklyPnL.toFixed(2)}, monthly=${monthlyPnL.toFixed(2)}`);
-      }
-      silentLogger.debug(`[RISK] Daily PnL (after deals): ${dailyPnL.toFixed(2)}, Weekly PnL: ${weeklyPnL.toFixed(2)}, Monthly PnL: ${monthlyPnL.toFixed(2)}`);
+      silentLogger.debug(`[RISK] getDailyMetrics: deals=${deals.length}, positions=${positions.length}, floatingPnL=${floatingPnL.toFixed(2)}`);
+      silentLogger.debug(`[RISK] Daily=${dailyPnL.toFixed(2)}, Weekly=${weeklyPnL.toFixed(2)}, Monthly=${monthlyPnL.toFixed(2)}`);
 
-      // --- Win Rate Calculation ---
-      // We rely on AITradeLog for robust winRate calculation as MT5 deal history can be complex.
+      // --- Win Rate from AITradeLog (closed trades with PnL) ---
       let winRate = 0;
       try {
         const account = await TradingAccount.findOne({ userId });
+        // First try tradeService
         if (account) {
           const summary = await tradeService.getSummary(userId, account._id.toString());
           if (summary.totalTrades > 0) {
             winRate = summary.winRate;
           }
         }
+        // Fallback: query AITradeLog directly
+        if (winRate === 0) {
+          const closedTrades = await AITradeLog.find({
+            userId,
+            closed: true,
+            pnl: { $exists: true },
+          }).lean();
+          if (closedTrades.length > 0) {
+            const wins = closedTrades.filter(t => (t.pnl ?? 0) > 0).length;
+            winRate = (wins / closedTrades.length) * 100;
+          }
+        }
       } catch (err: any) {
-        silentLogger.error("Failed to fetch winrate from Journal (getDailyMetrics):", err.message);
+        silentLogger.error("[RISK] WinRate calc error:", err.message);
       }
       silentLogger.debug(`[RISK] Final Win Rate: ${winRate.toFixed(2)}%`);
 
@@ -294,7 +302,7 @@ class RiskManagerService {
         winRate: parseFloat(winRate.toFixed(2)),
       };
     } catch (err: any) {
-      silentLogger.error(`[RISK] getDailyMetrics failed for user ${userId}: ${err.message}`, err);
+      silentLogger.error(`[RISK] getDailyMetrics failed: ${err.message}`, err);
       return null;
     }
   }
