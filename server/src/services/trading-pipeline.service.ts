@@ -1520,10 +1520,12 @@ const llmResult = await llmConsensusService.evaluate(
       // 2. Fetch active positions from MT5
       const activePositions = await mt5McpService.getPositions();
       const activeTickets = new Set(activePositions.map(p => p.ticket));
+      silentLogger.debug(`[PIPELINE] syncClosedPositions: ${openLogs.length} open logs, ${activePositions.length} active positions`);
 
       // 3. Find trade logs whose positions are no longer in MT5 active positions (meaning they closed)
       const closedLogs = openLogs.filter(log => log.mt5Ticket && !activeTickets.has(log.mt5Ticket));
       if (closedLogs.length === 0) return;
+      silentLogger.debug(`[PIPELINE] syncClosedPositions: ${closedLogs.length} logs detected as closed`);
 
       // 4. Fetch last 7 days of deal history from MT5 (fast path)
       const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);

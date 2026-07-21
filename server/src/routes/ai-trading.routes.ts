@@ -167,6 +167,8 @@ router.get("/account", async (req, res, next) => {
       req.user.id,
     );
 
+    silentLogger.debug(`[ACCOUNT] API response: dailyPnL=${riskMetrics.dailyPnL}, weeklyPnL=${riskMetrics.weeklyPnL}, monthlyPnL=${riskMetrics.monthlyPnL}, winRate=${riskMetrics.winRate}, openRisk=${riskMetrics.openRisk}, marginLevel=${riskMetrics.marginLevel}`);
+
     return apiResponse.success(res, {
       ...accountInfo,
       ...riskMetrics,

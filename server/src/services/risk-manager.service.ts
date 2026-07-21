@@ -157,60 +157,66 @@ class RiskManagerService {
    * Calculate current risk metrics from MT5.
    */
   async calculateRiskMetrics(userId: string): Promise<RiskMetrics> {
-    const accountInfo = await mt5McpService.getAccountInfo();
-    const positions = await mt5McpService.getPositions();
+    try {
+      const accountInfo = await mt5McpService.getAccountInfo();
+      const positions = await mt5McpService.getPositions();
 
-    // Calculate open risk (sum of distance to SL * lot value * contract size)
-    let openRisk = 0;
-    const symbolCache: Record<string, any> = {};
+      // Calculate open risk (sum of distance to SL * lot value * contract size)
+      let openRisk = 0;
+      const symbolCache: Record<string, any> = {};
 
-    for (const pos of positions) {
-      if (!pos.sl || pos.sl === 0) continue;
+      for (const pos of positions) {
+        if (!pos.sl || pos.sl === 0) continue;
 
-      if (!symbolCache[pos.symbol]) {
-        const info = await mt5McpService.getSymbolInfo(pos.symbol);
-        if (info) symbolCache[pos.symbol] = info;
+        if (!symbolCache[pos.symbol]) {
+          const info = await mt5McpService.getSymbolInfo(pos.symbol);
+          if (info) symbolCache[pos.symbol] = info;
+        }
+        
+        const symInfo = symbolCache[pos.symbol];
+        // Smart contract size detection with fallbacks
+        let contractSize = symInfo?.tradeContractSize;
+        
+        if (!contractSize) {
+          const s = pos.symbol.toUpperCase();
+          if (s.includes("XAU") || s.includes("GOLD")) contractSize = 100;
+          else if (s.includes("BTC") || s.includes("CRYPTO")) contractSize = 1;
+          else if (s.includes("NAS") || s.includes("USA100") || s.includes("US30") || s.includes("DE40")) contractSize = 10;
+          else contractSize = 100000; // default forex
+        }
+
+        // Check for risk-free positions (Trailing Stop / Break Even)
+        const posType = pos.type as string | number;
+        if (posType === "BUY" || posType === 0) {
+          if (pos.sl >= pos.priceOpen) continue;
+        } else if (posType === "SELL" || posType === 1) {
+          if (pos.sl <= pos.priceOpen) continue;
+        }
+
+        const slDist = Math.abs(pos.priceOpen - pos.sl);
+        openRisk += slDist * pos.volume * contractSize;
       }
-      
-      const symInfo = symbolCache[pos.symbol];
-      // Smart contract size detection with fallbacks
-      let contractSize = symInfo?.tradeContractSize;
-      
-      if (!contractSize) {
-        const s = pos.symbol.toUpperCase();
-        if (s.includes("XAU") || s.includes("GOLD")) contractSize = 100;
-        else if (s.includes("BTC") || s.includes("CRYPTO")) contractSize = 1;
-        else if (s.includes("NAS") || s.includes("USA100") || s.includes("US30") || s.includes("DE40")) contractSize = 10;
-        else contractSize = 100000; // default forex
-      }
+      silentLogger.debug(`[RISK] calculateRiskMetrics: openRisk=${openRisk.toFixed(2)}, positions=${positions.length}`);
 
-      // Check for risk-free positions (Trailing Stop / Break Even)
-      const posType = pos.type as string | number;
-      if (posType === "BUY" || posType === 0) {
-        if (pos.sl >= pos.priceOpen) continue;
-      } else if (posType === "SELL" || posType === 1) {
-        if (pos.sl <= pos.priceOpen) continue;
-      }
+      // Get daily metrics from DB
+      const todayMetrics = await this.getDailyMetrics(userId);
 
-      const slDist = Math.abs(pos.priceOpen - pos.sl);
-      openRisk += slDist * pos.volume * contractSize;
+      return {
+        dailyPnL: todayMetrics?.dailyPnL ?? accountInfo.profit ?? 0,
+        weeklyPnL: todayMetrics?.weeklyPnL ?? 0,
+        monthlyPnL: todayMetrics?.monthlyPnL ?? accountInfo.profit ?? 0,
+        dailyDrawdown: todayMetrics?.dailyDrawdown ?? 0,
+        maxDrawdown: 0, // TODO: track from DB
+        openRisk: parseFloat(openRisk.toFixed(2)),
+        marginLevel: accountInfo.marginLevel,
+        marginUsed: accountInfo.margin,
+        openPositions: positions.length,
+        winRate: todayMetrics?.winRate ?? 0,
+      };
+    } catch (err: any) {
+      silentLogger.error(`[RISK] calculateRiskMetrics failed: ${err.message}`, err);
+      throw err; // Re-throw to let route handler catch
     }
-
-    // Get daily metrics from DB
-    const todayMetrics = await this.getDailyMetrics(userId);
-
-    return {
-      dailyPnL: todayMetrics?.dailyPnL ?? accountInfo.profit ?? 0,
-      weeklyPnL: todayMetrics?.weeklyPnL ?? 0,
-      monthlyPnL: todayMetrics?.monthlyPnL ?? accountInfo.profit ?? 0,
-      dailyDrawdown: todayMetrics?.dailyDrawdown ?? 0,
-      maxDrawdown: 0, // TODO: track from DB
-      openRisk,
-      marginLevel: accountInfo.marginLevel,
-      marginUsed: accountInfo.margin,
-      openPositions: positions.length,
-      winRate: todayMetrics?.winRate ?? 0,
-    };
   }
 
   /**
@@ -252,68 +258,42 @@ class RiskManagerService {
         if (d.time >= todayTs) dailyPnL += d.profit;
       }
 
-      // Remove the complex Deals winrate loop and use tradeService for Journal accuracy
-      let winRate = 0;
-      
-      const positionPnL: Record<string, { net: number; hasOut: boolean }> = {};
-      
+      silentLogger.debug(`[RISK] getDailyMetrics for userId ${userId}: deals=${deals.length}, positions=${positions.length}, floatingPnL=${floatingPnL.toFixed(2)}`);
+      silentLogger.debug(`[RISK] Daily PnL (initial): ${dailyPnL.toFixed(2)}, Weekly PnL: ${weeklyPnL.toFixed(2)}, Monthly PnL: ${monthlyPnL.toFixed(2)}`);
+
       for (const d of deals) {
-        if (d.type === "BUY" || d.type === "SELL" || (d as any).type === 0 || (d as any).type === 1) {
-          // MT5 Deal objects might have position_id. If missing, we can't reliably group them.
-          // BUT wait! "order" is usually the same as position_id for the first entry. 
-          // However, MT5 history_deals_get in python returns `position_id`. Let's use it.
-          const posId = (d as any).position_id || d.ticket; 
-          
-          if (!positionPnL[posId]) {
-            positionPnL[posId] = { net: 0, hasOut: false };
-          }
-          
-          positionPnL[posId].net += d.profit + (d.commission || 0) + (d.swap || 0);
-
-          if (d.entry === 1 || d.entry === 2 || Math.abs(d.profit) > 0.0001) {
-            positionPnL[posId].hasOut = true;
-          }
-        }
+        if (d.time >= monthTs) monthlyPnL += d.profit;
+        if (d.time >= weekTs) weeklyPnL += d.profit;
+        if (d.time >= todayTs) dailyPnL += d.profit;
+        // silentLogger.debug(`[RISK] Deal #${d.ticket} time=${new Date(d.time * 1000).toISOString()} profit=${d.profit} -> daily=${dailyPnL.toFixed(2)}, weekly=${weeklyPnL.toFixed(2)}, monthly=${monthlyPnL.toFixed(2)}`);
       }
+      silentLogger.debug(`[RISK] Daily PnL (after deals): ${dailyPnL.toFixed(2)}, Weekly PnL: ${weeklyPnL.toFixed(2)}, Monthly PnL: ${monthlyPnL.toFixed(2)}`);
 
-      let winCount = 0;
-      let totalClosed = 0;
-
-      for (const posId in positionPnL) {
-        const pos = positionPnL[posId];
-        if (pos.hasOut) {
-          totalClosed++;
-          if (pos.net > 0) winCount++;
-        }
-      }
-
-      winRate = totalClosed > 0 ? (winCount / totalClosed) * 100 : 0;
-
-      // Also try to sync with Trade model if possible
+      // --- Win Rate Calculation ---
+      // We rely on AITradeLog for robust winRate calculation as MT5 deal history can be complex.
+      let winRate = 0;
       try {
-        const accountInfo = await mt5McpService.getAccountInfo();
-        const account = await TradingAccount.findOne({
-          userId,
-        });
-        
+        const account = await TradingAccount.findOne({ userId });
         if (account) {
           const summary = await tradeService.getSummary(userId, account._id.toString());
           if (summary.totalTrades > 0) {
             winRate = summary.winRate;
           }
         }
-      } catch (err) {
-        console.error("Failed to fetch winrate from Journal:", err);
+      } catch (err: any) {
+        silentLogger.error("Failed to fetch winrate from Journal (getDailyMetrics):", err.message);
       }
+      silentLogger.debug(`[RISK] Final Win Rate: ${winRate.toFixed(2)}%`);
 
       return {
-        dailyPnL,
-        weeklyPnL,
-        dailyDrawdown: dailyPnL < 0 ? Math.abs(dailyPnL) : 0,
-        monthlyPnL,
-        winRate,
+        dailyPnL: parseFloat(dailyPnL.toFixed(2)),
+        weeklyPnL: parseFloat(weeklyPnL.toFixed(2)),
+        dailyDrawdown: dailyPnL < 0 ? Math.abs(parseFloat(dailyPnL.toFixed(2))) : 0,
+        monthlyPnL: parseFloat(monthlyPnL.toFixed(2)),
+        winRate: parseFloat(winRate.toFixed(2)),
       };
-    } catch {
+    } catch (err: any) {
+      silentLogger.error(`[RISK] getDailyMetrics failed for user ${userId}: ${err.message}`, err);
       return null;
     }
   }
