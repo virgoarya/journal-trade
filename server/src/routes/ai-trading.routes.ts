@@ -12,6 +12,7 @@ import { autoBacktestService } from "../services/auto-backtest.service";
 import { aiBacktestSkillService } from "../services/ai-backtest-skill.service";
 import { llmConsensusService } from "../services/llm-consensus.service";
 import { newsCalendarService } from "../services/news-calendar.service";
+import { silentLogger } from "../utils/silent-logger";
 import {
   mt5ConnectSchema,
   openPositionSchema,
