@@ -170,28 +170,23 @@ export function PipelinePerformance() {
           {showMeth && (
             <div className="space-y-1.5">
               {data.methodologyStats.map((m) => {
-                const isBest = bestMethodology && m.methodology === bestMethodology.methodology;
-                const isWorst = worstMethodology && m.methodology === worstMethodology.methodology;
                 const maxPnl = Math.max(...data.methodologyStats.map(x => Math.abs(x.totalPnL)), 1);
                 const barPct = (Math.abs(m.totalPnL) / maxPnl) * 100;
+                const isPositive = m.totalPnL >= 0;
                 return (
-                  <div key={m.methodology} className="bg-black/30 border border-accent-gold/5 rounded px-2.5 py-1.5">
+                  <div key={m.methodology} className="glass border border-accent-gold/10 rounded px-2.5 py-1.5">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-text-primary capitalize font-mono">{m.methodology}</span>
-                        {isBest && <span className="text-[8px] bg-neon-green/20 text-neon-green px-1 rounded border border-neon-green/30">BEST</span>}
-                        {isWorst && <span className="text-[8px] bg-neon-red/20 text-neon-red px-1 rounded border border-neon-red/30">WORST</span>}
-                      </div>
+                      <span className="text-xs font-semibold text-text-primary capitalize font-mono">{m.methodology}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-text-muted font-mono">{m.totalTrades} trades</span>
                         <span className="text-[10px] text-accent-gold-dim font-mono">{m.winRate}% WR</span>
-                        <span className={`text-xs font-mono font-medium ${m.totalPnL >= 0 ? "text-neon-green" : "text-neon-red"}`}>
-                          {m.totalPnL >= 0 ? "+" : ""}${m.totalPnL.toFixed(2)}
+                        <span className={`text-xs font-mono font-medium ${isPositive ? "text-neon-green" : "text-neon-red"}`}>
+                          {isPositive ? "+" : ""}${m.totalPnL.toFixed(2)}
                         </span>
                       </div>
                     </div>
-                    <div className="w-full h-1 bg-black rounded-full mt-1 overflow-hidden border border-accent-gold/10">
-                      <div className={`h-full rounded-full ${m.totalPnL >= 0 ? "bg-neon-green/60" : "bg-neon-red/60"}`} style={{ width: `${barPct}%` }} />
+                    <div className="w-full h-1 bg-black/50 rounded-full mt-1 overflow-hidden border border-accent-gold/5">
+                      <div className={`h-full rounded-full ${isPositive ? "bg-neon-green/60" : "bg-neon-red/60"}`} style={{ width: `${barPct}%` }} />
                     </div>
                   </div>
                 );
@@ -220,7 +215,7 @@ export function PipelinePerformance() {
                 const maxTrades = Math.max(...data.symbolStats.map(x => x.totalTrades), 1);
                 const pct = (s.totalTrades / maxTrades) * 100;
                 return (
-                  <div key={s.symbol} className="bg-black/30 border border-accent-gold/5 rounded px-2.5 py-1.5">
+                  <div key={s.symbol} className="glass border border-accent-gold/10 rounded px-2.5 py-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-text-primary font-mono">{s.symbol}</span>
                       <div className="flex items-center gap-2">
@@ -231,7 +226,7 @@ export function PipelinePerformance() {
                         </span>
                       </div>
                     </div>
-                    <div className="w-full h-1 bg-black rounded-full mt-1 overflow-hidden border border-accent-gold/10">
+                    <div className="w-full h-1 bg-black/50 rounded-full mt-1 overflow-hidden border border-accent-gold/5">
                       <div className="h-full bg-accent-gold/60 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>

@@ -233,13 +233,13 @@ function AITradingPageContent() {
                         Pipeline Data Stream
                       </h4>
                       <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="bg-black/30 p-2 rounded border border-accent-gold/10">
+                        <div className="glass p-2 rounded border border-accent-gold/10">
                           <span className="text-accent-gold-dim text-[9px] uppercase tracking-wider block mb-1">Total Trades</span>
                           <p className="text-text-primary font-bold text-lg font-mono">
                             {pipelineStatus.metrics.totalTrades}
                           </p>
                         </div>
-                        <div className="bg-black/30 p-2 rounded border border-accent-gold/10">
+                        <div className="glass p-2 rounded border border-accent-gold/10">
                           <span className="text-accent-gold-dim text-[9px] uppercase tracking-wider block mb-1">Win/Loss</span>
                           <p className="text-text-primary font-bold text-lg font-mono">
                             <span className="text-neon-green">{pipelineStatus.metrics.winningTrades}</span>
@@ -247,13 +247,13 @@ function AITradingPageContent() {
                             <span className="text-neon-red">{pipelineStatus.metrics.losingTrades}</span>
                           </p>
                         </div>
-                        <div className="bg-black/30 p-2 rounded border border-accent-gold/10">
+                        <div className="glass p-2 rounded border border-accent-gold/10">
                           <span className="text-accent-gold-dim text-[9px] uppercase tracking-wider block mb-1">Total P&L</span>
                           <p className={`font-bold text-lg font-mono drop-shadow-md ${pipelineStatus.metrics.totalPnL >= 0 ? "text-neon-green shadow-neon-green" : "text-neon-red shadow-neon-red"}`}>
                             ${pipelineStatus.metrics.totalPnL.toFixed(2)}
                           </p>
                         </div>
-                        <div className="bg-black/30 p-2 rounded border border-accent-gold/10">
+                        <div className="glass p-2 rounded border border-accent-gold/10">
                           <span className="text-accent-gold-dim text-[9px] uppercase tracking-wider block mb-1">Open Positions</span>
                           <p className="text-text-primary font-bold text-lg font-mono">
                             {pipelineStatus.metrics.openPositions}
@@ -266,7 +266,7 @@ function AITradingPageContent() {
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-accent-gold/5 to-transparent terminal-scanline pointer-events-none" />
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[10px] text-accent-gold uppercase tracking-widest font-bold flex items-center gap-1.5">
-                              <Brain className="w-3.5 h-3.5" /> AI Reasoning Trace
+                              <Brain className="w-3.5 h-3.5" /> Last Signal Reason
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] text-text-primary font-bold font-mono bg-black/60 px-1.5 py-0.5 rounded border border-accent-gold/30">

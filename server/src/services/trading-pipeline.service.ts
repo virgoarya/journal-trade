@@ -657,7 +657,15 @@ const pipeline = {
 
   // ─── Order Validation ─────────────────────────────────────────────
 
-  private async validateOrderParams(symbol: string, action: "BUY" | "SELL", volume: number, sl?: number, tp?: number): Promise<{ valid: boolean; error?: string }> {
+  private async validateOrderParams(
+    symbol: string,
+    action: "BUY" | "SELL",
+    volume: number,
+    sl?: number,
+    tp?: number,
+    minRRRatio: number = 1.0,
+    isPending: boolean = false,
+  ): Promise<{ valid: boolean; error?: string }> {
     try {
       // 1. Cek symbol ada di broker
       const symbolInfo = await mt5McpService.getSymbolInfo(symbol);
@@ -701,11 +709,22 @@ const pipeline = {
           return { valid: false, error: "Take Profit harus di bawah Stop Loss untuk posisi SELL" };
         }
 
-        // Cek R:R ratio minimal 1:1
+        // Cek R:R ratio minimal (lebih longgar untuk market execution)
         if (slDistance > 0) {
           const rrRatio = tpDistance / slDistance;
-          if (rrRatio < 1.0) {
-            return { valid: false, error: `Risk:Reward ratio terlalu rendah (${rrRatio.toFixed(2)}:1, minimal 1:1)` };
+          if (isPending) {
+            // Pending order: strict minimum from config (default 1:1)
+            if (rrRatio < minRRRatio) {
+              return { valid: false, error: `Risk:Reward ratio terlalu rendah (${rrRatio.toFixed(2)}:1, minimal ${minRRRatio}:1)` };
+            }
+          } else {
+            // Market execution: warn if below min, block only if extreme
+            if (rrRatio < 0.3) {
+              return { valid: false, error: `Risk:Reward ratio sangat rendah (${rrRatio.toFixed(2)}:1). Trade ditolak karena risiko berlebihan.` };
+            }
+            if (rrRatio < minRRRatio) {
+              silentLogger.warn(`[PIPELINE] Market order RR ${rrRatio.toFixed(2)}:1 (below min ${minRRRatio}:1) — executing anyway`);
+            }
           }
         }
       }
@@ -1217,19 +1236,6 @@ const llmResult = await llmConsensusService.evaluate(
           continue;
         }
 
-        const validation = await this.validateOrderParams(
-          signal.symbol,
-          signal.direction,
-          volume,
-          signal.sl,
-          signal.tp
-        );
-
-        if (!validation.valid) {
-          this.addLog(userId, "ERROR", `Order dibatalkan: ${validation.error}`);
-          continue;
-        }
-
         // ── Tentukan Jenis Order (Market / Limit / Stop) berdasarkan Tick ──
         let finalAction: any = signal.direction;
         let orderPrice: number | undefined = undefined;
@@ -1256,6 +1262,24 @@ const llmResult = await llmConsensusService.evaluate(
           }
         } catch (e: any) {
           silentLogger.warn(`[Pipeline] Gagal mendapatkan tick untuk ${signal.symbol}, fallback ke Market Order. Error: ${e.message}`);
+        }
+
+        const isPending = finalAction !== signal.direction; // BUY_LIMIT/BUY_STOP etc
+        const minRR = pipeline.config.maxRiskPerTrade; // Re-use maxRiskPerTrade as minRRRatio for now
+
+        const validation = await this.validateOrderParams(
+          signal.symbol,
+          signal.direction,
+          volume,
+          signal.sl,
+          signal.tp,
+          minRR,
+          isPending,
+        );
+
+        if (!validation.valid) {
+          this.addLog(userId, "ERROR", `Order dibatalkan: ${validation.error}`);
+          continue;
         }
 
         const orderResult = await mt5McpService.openOrder({
