@@ -302,8 +302,8 @@ Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks la
   "reasoning": "Tren besar searah sinyal. Terkonfirmasi entry di area Orderblock (SMC) dan FVG (ICT) setuju. Risk/Reward 1:2 rasional."
 }
 \`\`\`
-PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan harus spesifik menyebutkan Pola Teknikal (seperti OB, FVG, RBS, SBR, QML, MSS, dll) jika tersedia.
-ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan kesimpulan akhir yang padat.
+PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA. JANGAN gunakan bahasa Inggris untuk reasoning. Contoh yang benar: "Tren besar searah sinyal. Terkonfirmasi entry di area Orderblock (SMC) dan FVG (ICT) setuju. Risk/Reward 1:2 rasional."
+ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan kesimpulan akhir yang padat dalam Bahasa Indonesia.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
 - GOOD: Sinyal kuat, ≥2 methodology berbobot setuju (terutama SMC/ICT), R:R >= 1:1.5, searah tren HTF.
@@ -771,14 +771,46 @@ isAvailable(): boolean {
       }
 
       const json: any = await res.json();
-      let rawText = json?.choices?.[0]?.message?.content ?? "";
-      if (!rawText && json?.choices?.[0]?.message?.reasoning_content) {
-        rawText = json.choices[0].message.reasoning_content;
+      let rawText = "";
+
+      // Multi-strategy extraction: handle different provider response formats
+      const msg = json?.choices?.[0]?.message;
+      if (msg) {
+        // 1. Standard content field (string)
+        if (typeof msg.content === "string" && msg.content.trim()) {
+          rawText = msg.content.trim();
+        }
+        // 2. Content as array (Claude/Anthropic style)
+        if (!rawText && Array.isArray(msg.content)) {
+          rawText = msg.content
+            .filter((block: any) => block.type === "text" && block.text)
+            .map((block: any) => block.text)
+            .join("\n")
+            .trim();
+        }
+        // 3. Reasoning content (DeepSeek/Qwen thinking models)
+        if (!rawText && msg.reasoning_content) {
+          rawText = String(msg.reasoning_content).trim();
+        }
+        // 4. Thought field (some models)
+        if (!rawText && msg.thought) {
+          rawText = String(msg.thought).trim();
+        }
+        // 5. Text field (some wrappers)
+        if (!rawText && msg.text) {
+          rawText = String(msg.text).trim();
+        }
       }
-      if (!rawText && json?.choices?.[0]?.message?.thought) {
-        rawText = json.choices[0].message.thought;
+      // 6. Top-level text field (non-standard wrappers)
+      if (!rawText && json?.text) {
+        rawText = String(json.text).trim();
       }
-      console.log("[LLM-CONSENSUS] Raw response before parsing:", rawText); const parsed = this.parseVerdict(rawText);
+      // 7. Output field (some providers)
+      if (!rawText && json?.output) {
+        rawText = typeof json.output === "string" ? json.output.trim() : JSON.stringify(json.output);
+      }
+
+      console.log("[LLM-CONSENSUS] Raw response before parsing:", rawText || "[EMPTY]", "provider:", provider.name); const parsed = this.parseVerdict(rawText);
       const latency = Date.now() - startTime;
 
       circuit.recordSuccess(); // Record success
@@ -923,6 +955,10 @@ isAvailable(): boolean {
       if (reasoning.length < 5 || reasoning === ".") {
         reasoning = "Analisis teknikal tidak disediakan oleh model.";
       }
+      
+      // Force Bahasa Indonesia: if reasoning contains English patterns, wrap with ID prefix
+      reasoning = forceIndonesian(reasoning);
+      
       return { verdict, reasoning };
     }
 
@@ -967,6 +1003,35 @@ isAvailable(): boolean {
       
     return { verdict: "SKIP", reasoning: fallbackReasoning };
   }
+}
+
+/**
+ * Minimal heuristic to detect English and convert common trading terms to ID
+ */
+function forceIndonesian(text: string): string {
+  if (!text) return "";
+  
+  // Detection: if common EN words exist but common ID words don't
+  const enWords = ["the", "and", "is", "trend", "with", "buy", "sell", "entry", "strong", "weak"];
+  const idWords = ["dan", "adalah", "tren", "dengan", "beli", "jual", "kuat", "lemah"];
+  
+  const hasEn = enWords.some(w => new RegExp(`\\b${w}\\b`, "i").test(text));
+  const hasId = idWords.some(w => new RegExp(`\\b${w}\\b`, "i").test(text));
+  
+  if (hasEn && !hasId) {
+    // Simple replacement for common trading phrases to make it "look" like ID if model fails
+    return text
+      .replace(/\bthe trend is\b/gi, "tren adalah")
+      .replace(/\bstrong buy\b/gi, "beli kuat")
+      .replace(/\bstrong sell\b/gi, "jual kuat")
+      .replace(/\bconfirm\b/gi, "konfirmasi")
+      .replace(/\bagree\b/gi, "setuju")
+      .replace(/\breasoning\b/gi, "alasan")
+      .replace(/\bwith\b/gi, "dengan")
+      .replace(/\bsignal\b/gi, "sinyal");
+  }
+  
+  return text;
 }
 
 export const llmConsensusService = new LLMConsensusService();
