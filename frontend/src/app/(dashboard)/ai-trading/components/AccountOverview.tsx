@@ -35,8 +35,11 @@ export function AccountOverview({
   const riskPercent = accountInfo.balance && accountInfo.balance > 0
     ? Math.min((accountInfo.openRisk / accountInfo.balance) * 100, 10)
     : 0;
-  const marginHealth = (accountInfo.marginLevel ?? 0) > 500 ? "text-neon-green" 
+  const marginHealth = (accountInfo.marginLevel ?? 0) > 500 ? "text-neon-green"
     : (accountInfo.marginLevel ?? 0) > 200 ? "text-yellow-400" : "text-neon-red";
+
+  // Use openRisk from backend if available, otherwise calculate from balance
+  const displayRisk = accountInfo.openRisk ?? (accountInfo.balance * riskPercent / 100);
 
   return (
     <div className="glass p-4 border-accent-gold/10 shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-xl">
@@ -118,8 +121,8 @@ export function AccountOverview({
             <div className="w-px h-8 bg-neon-green/10" />
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Weekly</span>
-              <span className={`text-sm font-mono font-bold ${((accountInfo as any).weeklyPnL || 0) >= 0 ? "text-neon-green" : "text-neon-red"} drop-shadow-[0_0_4px_currentColor]`}>
-                {((accountInfo as any).weeklyPnL || 0) >= 0 ? "+" : ""}{formatMoney((accountInfo as any).weeklyPnL || 0, accountInfo.currency)}
+              <span className={`text-sm font-mono font-bold ${(accountInfo.weeklyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red"} drop-shadow-[0_0_4px_currentColor]`}>
+                {(accountInfo.weeklyPnL ?? 0) >= 0 ? "+" : ""}{formatMoney(accountInfo.weeklyPnL ?? 0, accountInfo.currency)}
               </span>
             </div>
           </div>
@@ -129,14 +132,14 @@ export function AccountOverview({
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Risk</span>
               <span className="text-sm font-mono font-bold text-white drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]">
-                {formatMoney(accountInfo.openRisk, accountInfo.currency)}
+                {formatMoney(displayRisk, accountInfo.currency)}
               </span>
             </div>
             <div className="w-px h-8 bg-neon-green/10" />
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Winrate</span>
               <span className="text-sm font-mono font-bold text-neon-green drop-shadow-[0_0_4px_rgba(57,255,136,0.3)]">
-                {((accountInfo as any).winRate || 0).toFixed(1)}%
+                {((accountInfo.winRate || 0)).toFixed(1)}%
               </span>
             </div>
           </div>

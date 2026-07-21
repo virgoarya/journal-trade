@@ -21,12 +21,14 @@ export interface ACCOUNTInfo {
   profit: number;
   name: string;
 
-  // Risk metrics
+  // Risk metrics (from riskManagerService)
   dailyPnL: number;
   monthlyPnL: number;
   dailyDrawdown: number;
   openRisk: number;
   openPositions: number;
+  weeklyPnL: number;
+  winRate: number;
 }
 
 export interface Position {
