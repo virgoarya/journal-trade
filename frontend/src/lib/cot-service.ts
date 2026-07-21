@@ -95,8 +95,9 @@ export async function getCotData(): Promise<CotItem[]> {
     // Server-side: fetch CFTC directly (no CORS)
     // Client-side: proxy via Next.js API route
     const isServer = typeof window === "undefined";
+    const codes = Object.keys(SYMBOLS_MAP).map(c => `'${c}'`).join(",");
     const url = isServer
-      ? `${COT_API}?$where=cftc_contract_market_code in ('${Object.keys(SYMBOLS_MAP).join("','")}')&$limit=9&$order=report_date_as_yyyy_mm_dd DESC`
+      ? `${COT_API}?$where=${encodeURIComponent(`cftc_contract_market_code in (${codes})`)}&$limit=9&$order=${encodeURIComponent("report_date_as_yyyy_mm_dd DESC")}`
       : `/api/macro/cot`;
 
     const res = await fetch(url, isServer ? { next: { revalidate: 3600 } } : {});
@@ -117,6 +118,9 @@ export async function getCotData(): Promise<CotItem[]> {
   } catch (e) {
     console.error("[COT] fetch failed:", e);
   }
+
+  return getFallbackData();
+}
 
 export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: string; warnings: string; conclusion: string } | null> {
   try {

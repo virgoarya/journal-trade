@@ -17,8 +17,8 @@ const SYMBOLS_MAP: Record<string, { symbol: string; name: string; category: stri
 
 export async function GET() {
   try {
-    const codes = Object.keys(SYMBOLS_MAP);
-    const url = `${CFTC_URL}?$where=cftc_contract_market_code in ('${codes.join("','")}')&$limit=9&$order=report_date_as_yyyy_mm_dd DESC`;
+    const codes = Object.keys(SYMBOLS_MAP).map(c => `'${c}'`).join(",");
+    const url = `${CFTC_URL}?$where=${encodeURIComponent(`cftc_contract_market_code in (${codes})`)}&$limit=9&$order=${encodeURIComponent("report_date_as_yyyy_mm_dd DESC")}`;
     
     const response = await fetch(url, { next: { revalidate: 3600 } });
 
