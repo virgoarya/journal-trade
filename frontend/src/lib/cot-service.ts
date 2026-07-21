@@ -54,12 +54,11 @@ function formatPosition(value: number | null | undefined): string {
 }
 
 export async function getCotData(): Promise<CotItem[]> {
-  const backendUrl = `${env.backendUrl}/api/v1/market-data/cot`;
-  
-  // Railway: use NEXT_PUBLIC_BACKEND_URL if set, else same-server proxy
+  // Server-side: fetch from internal Next.js API route
+  // Client-side: fetch from browser's origin
   const fetchUrl = typeof window !== "undefined" 
     ? `${window.location.origin}/api/macro/cot`
-    : backendUrl;
+    : `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/macro/cot`;
 
   try {
     const response = await fetch(fetchUrl, {
