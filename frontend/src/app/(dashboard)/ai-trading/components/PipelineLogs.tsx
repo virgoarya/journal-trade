@@ -252,17 +252,24 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
           track.stages.EXECUTION = { status: "pending" };
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "CONFLUENCE") {
-          let status: "active" | "error" | "success" = "active";
-          if (log.message.includes("LLM Consensus Result: NO TRADE")) status = "error";
-          else if (log.message.includes("LLM Consensus Result: TRADE")) status = "success";
+          let status: "active" | "error" | "success" | "pending" = "active";
+          if (log.message.includes("NO TRADE") || log.message.includes("SKIP") || log.message.includes("tidak valid") || log.message.includes("dibatalkan")) {
+            status = "error";
+          } else if (log.message.includes("TRADE") || log.message.includes("GOOD")) {
+            status = "success";
+          }
           
           track.stages.CONFLUENCE = { status, message: log.message, time };
-          // Reset tahapan berikutnya
-          track.stages.EXECUTION = { status: "pending" };
+          track.stages.EXECUTION = { status: "pending" }; // Reset execution
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "TRADE") {
-          track.stages.EXECUTION = { status: "success", message: log.message, time };
-          track.stages.TRAILING = { status: "pending" }; // Reset trailing untuk trade baru
+          // Check if this is a pending order placement or a filled market order
+          if (log.message.toLowerCase().includes("pending") || log.message.toLowerCase().includes("limit") || log.message.toLowerCase().includes("stop")) {
+            track.stages.EXECUTION = { status: "active", message: log.message, time }; // Yellow: pending order waiting
+          } else {
+            track.stages.EXECUTION = { status: "success", message: log.message, time }; // Green: filled/executed
+          }
+          track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "ERROR") {
           track.stages.EXECUTION = { status: "error", message: log.message, time };
           track.stages.TRAILING = { status: "pending" };
@@ -316,8 +323,12 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     }
     
     if (stepKey === "EXECUTION") {
-      if (stages.EXECUTION.status === "success") return { ...stages.EXECUTION, status: "success" };
       if (stages.EXECUTION.status === "error") return { ...stages.EXECUTION, status: "error" };
+      if (stages.EXECUTION.status === "success") return { ...stages.EXECUTION, status: "success" };
+      
+      // Jika status aktif tapi belum sukses, tandai sebagai 'active' (kuning) untuk pending order
+      if (stages.EXECUTION.status === "active") return { ...stages.EXECUTION, status: "active" };
+
       if (stages.TRAILING.status !== "pending") {
         return { status: "success", message: "Trade executed." };
       }
