@@ -173,8 +173,16 @@ class RiskManagerService {
       }
       
       const symInfo = symbolCache[pos.symbol];
-      // Default to 100 if XAUUSD, otherwise 100000 (typical forex)
-      const contractSize = symInfo?.tradeContractSize || (pos.symbol.includes("XAU") ? 100 : 100000);
+      // Smart contract size detection with fallbacks
+      let contractSize = symInfo?.tradeContractSize;
+      
+      if (!contractSize) {
+        const s = pos.symbol.toUpperCase();
+        if (s.includes("XAU") || s.includes("GOLD")) contractSize = 100;
+        else if (s.includes("BTC") || s.includes("CRYPTO")) contractSize = 1;
+        else if (s.includes("NAS") || s.includes("USA100") || s.includes("US30") || s.includes("DE40")) contractSize = 10;
+        else contractSize = 100000; // default forex
+      }
 
       // Check for risk-free positions (Trailing Stop / Break Even)
       const posType = pos.type as string | number;

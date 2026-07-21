@@ -1525,9 +1525,9 @@ const llmResult = await llmConsensusService.evaluate(
       const closedLogs = openLogs.filter(log => log.mt5Ticket && !activeTickets.has(log.mt5Ticket));
       if (closedLogs.length === 0) return;
 
-      // 4. Fetch last 24h deal history from MT5
-      const oneDayAgo = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-      const deals = await mt5McpService.getHistory(oneDayAgo);
+      // 4. Fetch last 7 days of deal history from MT5 (expand from 24h to cover weekend/holiday)
+      const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+      const deals = await mt5McpService.getHistory(sevenDaysAgo);
 
       for (const log of closedLogs) {
         if (!log.mt5Ticket) continue;
