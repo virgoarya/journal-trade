@@ -816,6 +816,7 @@ isAvailable(): boolean {
       }
 
       console.log(`[LLM-CONSENSUS] provider=${provider.name} rawText=${rawText ? rawText.slice(0, 100) + "..." : "[EMPTY]"} reasoningContent=${reasoningContent ? "yes(" + reasoningContent.length + " chars)" : "no"}`);
+      const latency = Date.now() - startTime;
       const parsed = this.parseVerdict(rawText || "Empty response", reasoningContent || "");
 
       circuit.recordSuccess(); // Record success
