@@ -1525,17 +1525,30 @@ const llmResult = await llmConsensusService.evaluate(
       const closedLogs = openLogs.filter(log => log.mt5Ticket && !activeTickets.has(log.mt5Ticket));
       if (closedLogs.length === 0) return;
 
-      // 4. Fetch last 7 days of deal history from MT5 (expand from 24h to cover weekend/holiday)
+      // 4. Fetch last 7 days of deal history from MT5 (fast path)
       const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
       const deals = await mt5McpService.getHistory(sevenDaysAgo);
+
+      // 4b. Also fetch full history as fallback for older trades
+      let fullDeals: any[] | null = null;
 
       for (const log of closedLogs) {
         if (!log.mt5Ticket) continue;
 
         // Find the OUT deal (entry === 1) that closed this position
-        const closingDeal = deals.find(
-          d => d.position_id === log.mt5Ticket && d.entry === 1
+        let closingDeal = deals.find(
+          d => String(d.position_id) === String(log.mt5Ticket) && d.entry === 1
         );
+
+        // Fallback: if not found in 7-day window, try full history
+        if (!closingDeal) {
+          if (!fullDeals) {
+            fullDeals = await mt5McpService.getHistory(0); // fetch all available
+          }
+          closingDeal = fullDeals.find(
+            d => String(d.position_id) === String(log.mt5Ticket) && d.entry === 1
+          );
+        }
 
         if (closingDeal) {
           const pnl = closingDeal.profit + closingDeal.commission + closingDeal.swap;
@@ -1585,15 +1598,9 @@ const llmResult = await llmConsensusService.evaluate(
             `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) terdeteksi tutup. Hasil: ${closeReason} | PnL: $${log.pnl.toFixed(2)} (${log.pnlPercent}%)`
           );
         } else {
-          // Fallback if no deal found in 24h deals history
-          log.closed = true;
-          log.closedAt = new Date();
-          log.closeReason = "MANUAL";
-          log.pnl = 0;
-          await log.save();
-          
+          // Fallback: jangan tutup paksa — biarkan retry di siklus berikutnya
           this.addLog(userId, "INFO",
-            `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) terdeteksi tutup tanpa catatan deal.`
+            `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) menunggu konfirmasi deal. Akan retry siklus berikutnya.`
           );
         }
       }
