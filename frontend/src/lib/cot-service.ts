@@ -56,8 +56,13 @@ function formatPosition(value: number | null | undefined): string {
 export async function getCotData(): Promise<CotItem[]> {
   const backendUrl = `${env.backendUrl}/api/v1/market-data/cot`;
   
+  // Railway: use NEXT_PUBLIC_BACKEND_URL if set, else same-server proxy
+  const fetchUrl = typeof window !== "undefined" 
+    ? `${window.location.origin}/api/macro/cot`
+    : backendUrl;
+
   try {
-    const response = await fetch(backendUrl, {
+    const response = await fetch(fetchUrl, {
       next: { revalidate: 3600 },
       headers: { "Accept": "application/json" },
     });
