@@ -29,7 +29,7 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
 
   useMT5Stream((data) => {
     if (data.accountInfo) {
-      setAccountInfo(data.accountInfo);
+      setAccountInfo(prev => ({ ...prev, ...data.accountInfo }));
     }
   });
 
@@ -45,7 +45,7 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
 
       const isSuccess = await fetchInfo();
       if (isMounted) {
-        timeoutId = setTimeout(tick, 60000);
+        timeoutId = setTimeout(tick, pollInterval);
       }
     };
 
