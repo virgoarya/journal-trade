@@ -299,11 +299,14 @@ Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks la
 \`\`\`json
 {
   "verdict": "GOOD",
-  "reasoning": "Tren besar searah sinyal. Terkonfirmasi entry di area Orderblock (SMC) dan FVG (ICT) setuju. Risk/Reward 1:2 rasional."
+  "reasoning": "- Struktur pasar searah tren utama.\n- Entry terkonfirmasi oleh Orderblock (SMC) dan FVG (ICT).\n- Risk/Reward 1:2 rasional dan dapat diterima."
 }
 \`\`\`
-PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA. JANGAN gunakan bahasa Inggris untuk reasoning. Contoh yang benar: "Tren besar searah sinyal. Terkonfirmasi entry di area Orderblock (SMC) dan FVG (ICT) setuju. Risk/Reward 1:2 rasional."
-ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan kesimpulan akhir yang padat dalam Bahasa Indonesia.
+PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan HARUS menggunakan format LIST (poin-poin) diawali tanda "- " setiap baris. JANGAN gunakan bahasa Inggris. Contoh yang benar:
+{
+  "reasoning": "- Tren besar searah sinyal.\n- Konfirmasi Orderblock SMC dan FVG ICT.\n- Risk/Reward 1:2 masuk akal."
+}
+ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan 2-4 poin kesimpulan akhir yang padat dalam Bahasa Indonesia.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
 - GOOD: Sinyal kuat, ≥2 methodology berbobot setuju (terutama SMC/ICT), R:R >= 1:1.5, searah tren HTF.
@@ -879,7 +882,7 @@ isAvailable(): boolean {
     if (!cleaned) {
       if (thinkBlock.length > 5) {
         // If we only got a think block and no verdict, we still don't know the verdict
-        return { verdict: "SKIP", reasoning: thinkBlock.slice(0, 300) + "..." };
+        return { verdict: "SKIP", reasoning: ensureListFormat(forceIndonesian(thinkBlock.slice(0, 300) + "...")) };
       }
       return { verdict: "SKIP", reasoning: "Empty response after cleaning" };
     }
@@ -969,6 +972,7 @@ isAvailable(): boolean {
       
       // Force Bahasa Indonesia: if reasoning contains English patterns, wrap with ID prefix
       reasoning = forceIndonesian(reasoning);
+      reasoning = ensureListFormat(reasoning);
       
       return { verdict, reasoning };
     }
@@ -996,20 +1000,20 @@ isAvailable(): boolean {
       } else {
         reasoning = "Analisis teknikal tidak disediakan oleh model.";
       }
-      return { verdict, reasoning: reasoning.slice(0, 300) + (reasoning.length > 300 ? "..." : "") };
+      return { verdict, reasoning: ensureListFormat(forceIndonesian(reasoning.slice(0, 300) + (reasoning.length > 300 ? "..." : ""))) };
     }
 
 
     // Jika tidak ada JSON dan tidak ada format baku, tapi kita punya thinkBlock,
     // asumsikan SKIP dan gunakan thinkBlock sebagai alasannya (daripada false positive)
     if (thinkBlock.length > 5) {
-      return { verdict: "SKIP", reasoning: thinkBlock.slice(0, 300) + "..." };
+      return { verdict: "SKIP", reasoning: ensureListFormat(forceIndonesian(thinkBlock.slice(0, 300) + "...")) };
     }
 
     // Jika kita tidak bisa menyimpulkan sinyal dengan format baku/pasti, 
     // gunakan teks asli (cleaned) sebagai reasoning agar hasil analisis model tidak hilang.
     const fallbackReasoning = cleaned.length > 5 
-      ? cleaned.replace(/[\n\r]+/g, ' ').slice(0, 300) + (cleaned.length > 300 ? "..." : "")
+      ? ensureListFormat(forceIndonesian(cleaned.replace(/[\n\r]+/g, ' ').slice(0, 300) + (cleaned.length > 300 ? "..." : "")))
       : "Format output tidak dikenali dan teks terlalu pendek.";
       
     return { verdict: "SKIP", reasoning: fallbackReasoning };
@@ -1080,6 +1084,34 @@ function forceIndonesian(text: string): string {
   }
   
   return text;
+}
+
+/**
+ * Post-process reasoning to ensure it's in format list (bulleted points).
+ * If plain text, split by sentences and convert to list items.
+ */
+function ensureListFormat(text: string): string {
+  if (!text) return "";
+  
+  // If already in list format, return as-is
+  if (text.startsWith("- ")) return text;
+  
+  // If JSON array markdown is found, use that
+  const listMatch = text.match(/^(- .+(?:\n- .+)*)/m);
+  if (listMatch) return listMatch[1];
+  
+  // Otherwise, split by sentence boundaries and make a list
+  const sentences = text
+    .split(/[.!?]\s*/)
+    .map(s => s.trim())
+    .filter(s => s.length > 10);
+  
+  if (sentences.length >= 2) {
+    return sentences.map(s => `- ${s}.`).join("\n");
+  }
+  
+  // Fallback: single bullet point
+  return `- ${text}`;
 }
 
 export const llmConsensusService = new LLMConsensusService();
