@@ -3,6 +3,7 @@ import { AITradeLog } from "../models/AITradeLog";
 import { type TradingSignal } from "./ai-trading-engine.service";
 import { mt5McpService } from "./mt5-mcp.service";
 import { tradeService } from "./trade.service";
+import { silentLogger } from "../utils/silent-logger";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
