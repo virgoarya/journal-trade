@@ -406,7 +406,8 @@ function buildSignalPrompt(
     methodologyPnL?: number;
     pattern?: string;
   },
-  correlationWarnings?: string
+  correlationWarnings?: string,
+  candleContext?: string
 ): string {
   let extra = "";
   if (signal.htfTrend) extra += `\nTren HTF (Timeframe Tinggi): ${signal.htfTrend} (keyakinan: ${signal.htfConfidence}%)`;
@@ -430,10 +431,12 @@ Rasio Risk/Reward: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.t
 Alasan Dasar: ${signal.reason}
 
 Struktur Tren Market: ${signal.marketTrend}
-Jumlah Metode yang Menyetujui: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}
+Jumlah Metode yang Menyetujui: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}${candleContext ? `\n${candleContext}` : ""}
 
 Rincian Detail Metode:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}
+
+Instruksi Tambahan: Jika data candle menunjukkan pembalikan tren, divergensi, atau breakdown struktur yang bertentangan dengan sinyal, utamakan FAKTOR GABUNGAN (metodologi + candle). Berikan verdict dan reasoning tetap singkat, padat, dan berbasis bukti teknikal.
 
 Ingat: Berikan keputusan akhir (verdict) dan analisis teknikal (reasoning) eksklusif dalam Bahasa Indonesia. Balas hanya dengan format JSON yang valid, tanpa teks pengantar maupun penutup.`;
 }
@@ -517,9 +520,21 @@ class LLMConsensusService {
 
     // Fetch active open positions to analyze correlation risk
     let correlationWarnings = "";
+    let candleContext = "";
     try {
       const isConnected = mt5McpService.isConnected;
       if (isConnected) {
+        // --- Fetch recent candles for LLM context ---
+        const rates = await mt5McpService.getRates(signal.symbol, "H1", 5);
+        if (rates && rates.length > 0) {
+          const candleLines = rates.slice(-5).map((r: any) => {
+            const time = new Date(r.time * 1000).toISOString().slice(11, 16);
+            return `${time} O:${r.open.toFixed(5)} H:${r.high.toFixed(5)} L:${r.low.toFixed(5)} C:${r.close.toFixed(5)} V:${r.volume}`;
+          });
+          candleContext = `\n\nCandle Terbaru (H1 x5):\n${candleLines.join("\n")}`;
+        }
+        // --- End candle fetch ---
+
         const positions = await mt5McpService.getPositions();
         if (positions && positions.length > 0) {
           const warningsList: string[] = [];
@@ -543,7 +558,7 @@ class LLMConsensusService {
       silentLogger.warn(`[LLM-CONSENSUS] Gagal menganalisis korelasi portofolio: ${e.message}`);
     }
 
-    const prompt = buildSignalPrompt(signal, correlationWarnings);
+    const prompt = buildSignalPrompt(signal, correlationWarnings, candleContext || undefined);
 
     // Run all providers in PARALLEL with timeout (minimum 15s, maximum 45s for slow/thinking models)
     const results = await Promise.all(
@@ -910,6 +925,33 @@ isAvailable(): boolean {
       }
       return { verdict, reasoning };
     }
+
+    // Fallback: If no structured JSON or recognized format, check for common patterns or just use the cleaned text.
+    if (verdict === null) {
+      // Try to find verdict in text directly if no keywords were found
+      if (/\bGOOD\b/i.test(cleaned)) verdict = "GOOD";
+      else if (/\bBAD\b/i.test(cleaned)) verdict = "BAD";
+      else if (/\bSKIP\b/i.test(cleaned)) verdict = "SKIP";
+    }
+
+    if (verdict) {
+      let reasoning = "";
+      // Attempt to extract reasoning more broadly from remaining text if verdict found
+      const potentialReasoning = cleaned
+        .replace(new RegExp(verdict, "i"), "") // Remove the verdict itself
+        .replace(/(?:VERDICT|KEPUTUSAN|KESIMPULAN|STATUS|REASONING|ALASAN|PENJELASAN|KARENA)[\s:\-]*/gi, '') // Remove keywords
+        .trim();
+
+      if (potentialReasoning.length > 5) {
+        reasoning = potentialReasoning;
+      } else if (thinkBlock.length > 5) {
+        reasoning = thinkBlock;
+      } else {
+        reasoning = "Analisis teknikal tidak disediakan oleh model.";
+      }
+      return { verdict, reasoning: reasoning.slice(0, 300) + (reasoning.length > 300 ? "..." : "") };
+    }
+
 
     // Jika tidak ada JSON dan tidak ada format baku, tapi kita punya thinkBlock,
     // asumsikan SKIP dan gunakan thinkBlock sebagai alasannya (daripada false positive)
