@@ -1,8 +1,7 @@
 import type { CotItem, MarketPhase } from "@/types/cot";
 import { env } from "@/lib/env";
 
-const COT_API_BASE = "https://api.iextrading.com/1/data/CFTC/1";
-const API_KEY = process.env.NASDAQ_API_KEY;
+const COT_API = "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
 
 const EXTREME_THRESHOLD = 1.5;
 
@@ -53,60 +52,71 @@ function formatPosition(value: number | null | undefined): string {
   return Math.round(value).toLocaleString();
 }
 
+const SYMBOLS_MAP: Record<string, { symbol: string; name: string; category: string }> = {
+  "067651": { symbol: "CL=F", name: "Crude Oil", category: "Energy" },
+  "088691": { symbol: "GC=F", name: "Gold", category: "Metals" },
+  "099741": { symbol: "EUR/USD", name: "Euro FX", category: "Currencies" },
+  "13874A": { symbol: "ES=F", name: "E-Mini S&P 500", category: "Indices" },
+  "209742": { symbol: "NQ=F", name: "Nasdaq 100", category: "Indices" },
+  "084691": { symbol: "SI=F", name: "Silver", category: "Metals" },
+  "096742": { symbol: "GBP/USD", name: "British Pound", category: "Currencies" },
+  "097741": { symbol: "JPY/USD", name: "Japanese Yen", category: "Currencies" },
+  "232741": { symbol: "AUD/USD", name: "Australian Dollar", category: "Currencies" },
+};
+
+function mapRecord(item: any) {
+  const meta = SYMBOLS_MAP[item.cftc_contract_market_code] || {
+    symbol: "UNKNOWN", name: item.contract_market_name || "Unknown", category: "Other"
+  };
+  const nonCL = parseInt(item.noncomm_positions_long_all || "0", 10);
+  const nonCS = parseInt(item.noncomm_positions_short_all || "0", 10);
+  const net = nonCL - nonCS;
+  const total = nonCL + nonCS;
+  let sentiment = "NEUTRAL";
+  if (total > 0 && Math.abs(net) / total >= 0.1) sentiment = net > 0 ? "BULLISH" : "BEARISH";
+
+  return {
+    symbol: meta.symbol, name: meta.name, category: meta.category,
+    commercialLong: parseInt(item.comm_positions_long_all || "0", 10),
+    commercialShort: parseInt(item.comm_positions_short_all || "0", 10),
+    commercialSpread: Math.abs(parseInt(item.comm_positions_long_all || "0", 10) - parseInt(item.comm_positions_short_all || "0", 10)),
+    nonCommercialLong: nonCL, nonCommercialShort: nonCS,
+    nonCommercialSpread: Math.abs(nonCL - nonCS),
+    retailLong: parseInt(item.nonrept_positions_long_all || "0", 10),
+    retailShort: parseInt(item.nonrept_positions_short_all || "0", 10),
+    retailSpread: Math.abs(parseInt(item.nonrept_positions_long_all || "0", 10) - parseInt(item.nonrept_positions_short_all || "0", 10)),
+    sentiment,
+    lastUpdate: item.report_date_as_yyyy_mm_dd || new Date().toISOString(),
+  };
+}
+
 export async function getCotData(): Promise<CotItem[]> {
-  // Server-side: fetch from internal Next.js API route
-  // Client-side: fetch from browser's origin
-  const fetchUrl = typeof window !== "undefined" 
-    ? `${window.location.origin}/api/macro/cot`
-    : `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/macro/cot`;
-
   try {
-    const response = await fetch(fetchUrl, {
-      next: { revalidate: 3600 },
-      headers: { "Accept": "application/json" },
-    });
+    // Server-side: fetch CFTC directly (no CORS)
+    // Client-side: proxy via Next.js API route
+    const isServer = typeof window === "undefined";
+    const url = isServer
+      ? `${COT_API}?$where=cftc_contract_market_code in ('${Object.keys(SYMBOLS_MAP).join("','")}')&$limit=9&$order=report_date_as_yyyy_mm_dd DESC`
+      : `/api/macro/cot`;
 
-    if (!response.ok) {
-      console.error("[COT SERVICE] Backend API Error:", response.status);
-      return getFallbackData();
+    const res = await fetch(url, isServer ? { next: { revalidate: 3600 } } : {});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    let records: any[];
+    if (isServer) {
+      records = await res.json();
+    } else {
+      const json = await res.json();
+      records = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
     }
 
-    const resJson = await response.json();
-    const dataArray = Array.isArray(resJson.data) ? resJson.data : 
-                      Array.isArray(resJson) ? resJson : 
-                      Object.values(resJson).filter((v: any) => v && typeof v === 'object' && 'symbol' in v);
-
-    const transformed: CotItem[] = (dataArray as any[]).map((item: any) => {
-      const managedMoneyNet = (item.nonCommercialLong || 0) - (item.nonCommercialShort || 0);
-      const commercialsNet = (item.commercialLong || 0) - (item.commercialShort || 0);
-      const phase = getMarketPhase(managedMoneyNet, commercialsNet);
-
-      return {
-        symbol: item.symbol || "UNKNOWN",
-        name: item.name || item.symbol || "UNKNOWN",
-        category: item.category || "Other",
-        sentiment: item.sentiment || "NEUTRAL",
-        commercialLong: item.commercialLong || 0,
-        commercialShort: item.commercialShort || 0,
-        commercialSpread: item.commercialSpread || 0,
-        nonCommercialLong: item.nonCommercialLong || 0,
-        nonCommercialShort: item.nonCommercialShort || 0,
-        nonCommercialSpread: item.nonCommercialSpread || 0,
-        retailLong: item.retailLong || 0,
-        retailShort: item.retailShort || 0,
-        retailSpread: item.retailSpread || 0,
-        lastUpdate: item.lastUpdate || new Date().toISOString(),
-        phase,
-      };
-    });
-
-    console.log("[COT SERVICE] Fetched", transformed.length, "items");
-    return transformed.length > 0 ? transformed : getFallbackData();
-  } catch (error) {
-    console.error("[COT SERVICE] Fetch error:", error);
-    return getFallbackData();
+    if (Array.isArray(records) && records.length > 0) {
+      const items = records.map(mapRecord) as CotItem[];
+      if (items.length > 0) return items;
+    }
+  } catch (e) {
+    console.error("[COT] fetch failed:", e);
   }
-}
 
 export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: string; warnings: string; conclusion: string } | null> {
   try {
