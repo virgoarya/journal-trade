@@ -16,9 +16,10 @@ import { useAiTrading } from "../context/AiTradingContext";
 
 interface BacktestTabProps {
   onBacktestComplete?: () => void;
+  onApplyToPipeline?: () => void;
 }
 
-export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
+export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestTabProps = {}) {
   const { refreshSettings } = useAiTrading();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -132,6 +133,7 @@ export function BacktestTab({ onBacktestComplete }: BacktestTabProps = {}) {
         toast.success("Backtest parameters applied to live pipeline!");
         setAnalysis(null);
         await refreshSettings();
+        onApplyToPipeline?.();
       } else {
         toast.error(applyRes.error || "Failed to apply");
       }

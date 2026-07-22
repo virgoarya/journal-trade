@@ -393,7 +393,7 @@ function AITradingPageContent() {
         </div>
       )}
 
-      {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(skillVersion + 1)} />}
+      {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(skillVersion + 1)} onApplyToPipeline={() => setSkillVersion(skillVersion + 1)} />}
     </div>
   );
 }
