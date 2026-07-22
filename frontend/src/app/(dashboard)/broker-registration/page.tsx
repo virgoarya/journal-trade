@@ -66,8 +66,8 @@ export default function BrokerRegistrationPage() {
   if (sessionPending) return null;
 
   return (
-    <div className="min-h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
-      <main className="w-full max-w-[640px] flex flex-col gap-8">
+    <div className="h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
+      <main className="w-full max-w-[640px] flex flex-col gap-6">
         <button
           onClick={() => (step === "select" ? router.push("/dashboard") : setStep("select"))}
           className="flex items-center gap-2 text-text-muted hover:text-accent-gold transition text-xs uppercase tracking-widest self-start"
