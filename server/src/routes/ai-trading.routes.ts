@@ -516,11 +516,19 @@ router.post(
       if (req.body.useAppliedConfig) {
         const { UserSettings } = require("../models/UserSettings");
         const settings = await UserSettings.findOne({ userId: req.user.id }).lean();
-        if (settings?.savedPipelineConfig) {
+        
+        // Get broker-specific config: prefer savedPipelineConfigs[server], fallback to savedPipelineConfig
+        const conn = await MT5Connection.findOne({ userId: req.user.id }).lean();
+        const server = conn?.server || "unknown";
+        const brokerConfig = settings?.savedPipelineConfigs?.[server];
+        const configToUse = brokerConfig || settings?.savedPipelineConfig;
+        
+        if (configToUse) {
           finalConfig = { 
-            ...settings.savedPipelineConfig,
+            ...configToUse,
             llmConsensus: {
                ...(settings.aiTrading?.llmConsensus || {}),
+               ...(configToUse.llmConsensus || {}),
                enabled: true // FORCE LLM TO ALWAYS BE ACTIVE
             }
           };

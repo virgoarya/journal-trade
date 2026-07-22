@@ -151,11 +151,11 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [lastAutoBacktestAt, setLastAutoBacktestAt] = useState<string | null>(null);
 
   // Load AI trading settings from backend
-  const refreshSettings = useCallback(async () => {
+  const refreshSettings = useCallback(async (server?: string) => {
     try {
       const [res, skillRes] = await Promise.all([
-        aiTradingService.getAiTradingSettings(),
-        aiTradingService.getSkill().catch(() => null)
+        aiTradingService.getAiTradingSettings(server),
+        aiTradingService.getSkill(server).catch(() => null)
       ]);
       
       if (res.success && res.data) {
@@ -184,6 +184,16 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshSettings();
   }, [refreshSettings]);
+
+  // Re-fetch settings when broker server changes (per-broker isolation)
+  const prevServer = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const currentServer = accountInfo?.server;
+    if (currentServer && currentServer !== prevServer.current) {
+      prevServer.current = currentServer;
+      refreshSettings(currentServer);
+    }
+  }, [accountInfo?.server, refreshSettings]);
 
   // Auto-refresh when reconnect succeeds
   const prevReconnecting = useRef(isReconnecting);

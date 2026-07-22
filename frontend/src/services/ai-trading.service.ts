@@ -519,7 +519,8 @@ class AITradingService {
   }
 
   // ── AI Trading Settings ────────────────────────────────────────────
-  async getAiTradingSettings() {
+  async getAiTradingSettings(server?: string) {
+    const query = server ? `?server=${encodeURIComponent(server)}` : "";
     const res = await apiClient.get<{
       methodologyWeights: MethodologyWeights;
       activeMethodologies: MethodologyName[];
@@ -531,7 +532,7 @@ class AITradingService {
       };
       savedPipelineConfig?: PipelineConfig;
       lastAutoBacktestAt?: string;
-    }>("/api/v1/settings/ai-trading");
+    }>(`/api/v1/settings/ai-trading${query}`);
     return res;
   }
 

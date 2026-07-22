@@ -1,6 +1,7 @@
 import { BacktestExperience } from "../models/BacktestExperience";
 import { tradingPipelineService, type PipelineConfig } from "./trading-pipeline.service";
 import { backtestService } from "./backtest.service";
+import { MT5Connection } from "../models/MT5Connection";
 import { silentLogger } from "../utils/silent-logger";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -500,16 +501,22 @@ class AILearningService {
     // Apply to pipeline
     await tradingPipelineService.updateConfig(userId, updatedConfig);
 
-    // Save persistently so it can be loaded when pipeline starts
+    // Save persistently per-broker so config doesn't leak across brokers
     const { UserSettings } = require("../models/UserSettings");
+    const conn = await MT5Connection.findOne({ userId }).lean();
+    const server = conn?.server || "unknown";
+    const setOp: Record<string, any> = {
+      savedPipelineConfig: updatedConfig,
+      [`savedPipelineConfigs.${server}`]: updatedConfig,
+    };
     await UserSettings.findOneAndUpdate(
       { userId },
-      { $set: { savedPipelineConfig: updatedConfig } },
+      { $set: setOp },
       { upsert: true }
     );
 
     silentLogger.info(
-      `[AI-LEARN] Applied backtest ${backtestId} to pipeline for user ${userId}: ${JSON.stringify(changes)}`,
+      `[AI-LEARN] Applied backtest ${backtestId} to pipeline for user ${userId} (server=${server}): ${JSON.stringify(changes)}`,
     );
 
     return {

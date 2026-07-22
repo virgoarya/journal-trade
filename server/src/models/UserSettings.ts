@@ -27,6 +27,7 @@ export interface IUserSettings extends Document {
     };
   };
   savedPipelineConfig?: Record<string, any>;
+  savedPipelineConfigs?: Map<string, Record<string, any>>;
   lastAutoBacktestAt?: Date;
 }
 
@@ -74,6 +75,7 @@ const UserSettingsSchema = new Schema<IUserSettings>({
     },
   },
   savedPipelineConfig: { type: Schema.Types.Mixed },
+  savedPipelineConfigs: { type: Schema.Types.Mixed, default: {} },
   lastAutoBacktestAt: { type: Date },
 }, {
   timestamps: true,
