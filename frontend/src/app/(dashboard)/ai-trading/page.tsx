@@ -142,11 +142,11 @@ function AITradingPageContent() {
       <div className="min-h-screen relative z-10 flex flex-col pt-4">
         <div className="px-4">
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/broker-registration")}
             className="flex items-center gap-2 text-text-muted hover:text-accent-gold transition text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            Kembali ke Dashboard
+            Switch Broker
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center">
