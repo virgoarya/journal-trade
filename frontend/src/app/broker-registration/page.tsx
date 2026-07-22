@@ -209,12 +209,6 @@ export default function BrokerRegistrationPage() {
                 "Konfirmasi & Selesai"
               )}
             </button>
-
-            <p className="text-[10px] text-text-muted leading-relaxed text-center">
-              <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
-              Dengan menekan tombol di atas, Anda menyetujui bahwa segala risiko dan kerugian dari penggunaan AI Trading
-              sepenuhnya menjadi tanggung jawab Anda. Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
-            </p>
           </section>
         )}
 
