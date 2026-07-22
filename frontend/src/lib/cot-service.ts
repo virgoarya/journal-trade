@@ -124,10 +124,14 @@ export async function getCotData(): Promise<CotItem[]> {
 
 export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: string; warnings: string; conclusion: string } | null> {
   try {
-    const response = await fetch(`${env.backendUrl}/api/v1/market-data/cot/analyze`, {
+    const url = typeof window !== "undefined"
+      ? `/api/macro/cot`
+      : `${env.backendUrl}/api/v1/market-data/cot/analyze`;
+
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cotItem),
+      body: JSON.stringify({ action: "analyze", ...cotItem }),
     });
     if (!response.ok) return null;
     const json = await response.json();

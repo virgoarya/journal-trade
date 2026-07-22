@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
 const CFTC_URL =
   "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
 
@@ -98,5 +99,31 @@ export async function GET() {
       { success: false, error: "Internal server error" },
       { status: 500 },
     );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { action } = body;
+
+    if (action === "analyze") {
+      // Proxy COT analysis to backend
+      const response = await fetch(`${BACKEND_URL}/api/v1/market-data/cot/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        return NextResponse.json({ success: false, error: `Backend error: ${response.status}` }, { status: 502 });
+      }
+      const data = await response.json();
+      return NextResponse.json(data);
+    }
+
+    return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
+  } catch (error) {
+    console.error("[COT API POST] Error:", error);
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
