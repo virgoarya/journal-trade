@@ -53,7 +53,7 @@
     transition: background-color 0.4s ease, color 0.4s ease;
   }
 
-  /* Custom Scrollbar for Terminal Noir */
+/* Custom Scrollbar for Terminal Noir */
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(212, 175, 55, 0.3) transparent;
