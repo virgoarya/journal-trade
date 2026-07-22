@@ -1,18 +1,38 @@
 import { AIBacktestSkill } from "../models/AIBacktestSkill";
+import { MT5Connection } from "../models/MT5Connection";
 import type { BacktestResult } from "./backtest.service";
 import { silentLogger } from "../utils/silent-logger";
 
 class AIBacktestSkillService {
+  /** Get current MT5 server for the user */
+  private async getServer(userId: string): Promise<string> {
+    try {
+      const conn = await MT5Connection.findOne({ userId }).lean();
+      return conn?.server || "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  /** Query filter for per-broker skill data */
+  private async filter(userId: string, server?: string): Promise<{ userId: string; server?: string }> {
+    return {
+      userId,
+      server: server || await this.getServer(userId) || "unknown",
+    };
+  }
+
   /**
    * Aggregate a new backtest result into the user's AI Skill dataset.
-   * Updates rankings, veridic judgments, and parameters.
+   * Uses server from MT5 connection for per-broker isolation.
    */
-  async updateSkill(userId: string, result: BacktestResult): Promise<void> {
+  async updateSkill(userId: string, result: BacktestResult, server?: string): Promise<void> {
     try {
-      let skill = await AIBacktestSkill.findOne({ userId });
+      const q = await this.filter(userId, server);
+      let skill = await AIBacktestSkill.findOne(q);
       if (!skill) {
         skill = new AIBacktestSkill({
-          userId,
+          ...q,
           symbolRankings: [],
           methodologyRankings: [],
           globalRecoveryFactor: 0,
@@ -190,14 +210,16 @@ class AIBacktestSkillService {
     }
   }
 
-  /** Retrieve the current skill metrics for a user */
-  async getSkill(userId: string) {
-    return AIBacktestSkill.findOne({ userId });
+  /** Retrieve the current skill metrics for a user (per broker) */
+  async getSkill(userId: string, server?: string) {
+    const q = await this.filter(userId, server);
+    return AIBacktestSkill.findOne(q);
   }
 
-  /** Get top N best symbols by score */
-  async getBestSymbols(userId: string, limit = 5) {
-    const skill = await AIBacktestSkill.findOne({ userId });
+  /** Get top N best symbols by score (per broker) */
+  async getBestSymbols(userId: string, limit = 5, server?: string) {
+    const q = await this.filter(userId, server);
+    const skill = await AIBacktestSkill.findOne(q);
     if (!skill) return [];
     return skill.symbolRankings
       .filter((s: any) => s.totalBacktests >= 2 && s.score >= 40)
@@ -205,22 +227,24 @@ class AIBacktestSkillService {
       .slice(0, limit);
   }
 
-  /** Get methodology verdicts for disabling poor performers */
-  async getMethodologyVerdicts(userId: string) {
-    const skill = await AIBacktestSkill.findOne({ userId });
+  /** Get methodology verdicts for disabling poor performers (per broker) */
+  async getMethodologyVerdicts(userId: string, server?: string) {
+    const q = await this.filter(userId, server);
+    const skill = await AIBacktestSkill.findOne(q);
     if (!skill) return [];
     return skill.methodologyRankings.filter((m: any) => m.totalTrades >= 5);
   }
 
-  /** Get recommended params for a specific symbol */
-  async getRecommendedParams(userId: string, symbol: string) {
-    const skill = await AIBacktestSkill.findOne({ userId });
+  /** Get recommended params for a specific symbol (per broker) */
+  async getRecommendedParams(userId: string, symbol: string, server?: string) {
+    const q = await this.filter(userId, server);
+    const skill = await AIBacktestSkill.findOne(q);
     if (!skill) return null;
     const entry = skill.symbolRankings.find((s: any) => s.symbol === symbol);
     return entry?.recommendedParams || null;
   }
 
-  /** Lightweight inline skill update from auto-backtest partial result */
+  /** Lightweight inline skill update from auto-backtest partial result (per broker) */
   async updateFromAutoResult(
     userId: string,
     symbol: string,
@@ -229,11 +253,13 @@ class AIBacktestSkillService {
     winRate: number,
     profitFactor: number,
     recoveryFactor: number,
+    server?: string,
   ): Promise<void> {
     try {
-      let skill = await AIBacktestSkill.findOne({ userId });
+      const q = await this.filter(userId, server);
+      let skill = await AIBacktestSkill.findOne(q);
       if (!skill) {
-        skill = new AIBacktestSkill({ userId, symbolRankings: [], methodologyRankings: [], globalRecoveryFactor: 0, totalBacktests: 0 });
+        skill = new AIBacktestSkill({ ...q, symbolRankings: [], methodologyRankings: [], globalRecoveryFactor: 0, totalBacktests: 0 });
       }
 
       let symSkill = skill.symbolRankings.find((s: any) => s.symbol === symbol);

@@ -31,6 +31,7 @@ export interface IMethodologySkill {
 
 export interface IAIBacktestSkill extends Document {
   userId: string;
+  server?: string;
   symbolRankings: ISymbolSkill[];
   methodologyRankings: IMethodologySkill[];
   globalRecoveryFactor: number;
@@ -73,7 +74,8 @@ const MethodologySkillSchema = new Schema<IMethodologySkill>({
 
 const AIBacktestSkillSchema = new Schema<IAIBacktestSkill>(
   {
-    userId: { type: String, required: true, unique: true, index: true },
+    userId: { type: String, required: true, index: true },
+    server: { type: String, default: "unknown", index: true },
     symbolRankings: [SymbolSkillSchema],
     methodologyRankings: [MethodologySkillSchema],
     globalRecoveryFactor: { type: Number, required: true, default: 0 },
@@ -84,6 +86,9 @@ const AIBacktestSkillSchema = new Schema<IAIBacktestSkill>(
     collection: "ai_backtest_skills",
   }
 );
+
+// Compound index for per-broker skill data
+AIBacktestSkillSchema.index({ userId: 1, server: 1 }, { unique: true });
 
 export const AIBacktestSkill =
   mongoose.models.AIBacktestSkill ||
