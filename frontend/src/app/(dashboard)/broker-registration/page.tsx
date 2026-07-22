@@ -101,11 +101,9 @@ export default function BrokerRegistrationPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => handleSelect("exness")}
-                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-center hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex flex-col items-center gap-3"
               >
-                <div className="w-16 h-16 rounded-lg bg-white/5 flex items-center justify-center p-3">
-                  <img src="/exness.png" alt="Exness" className="w-full h-full object-contain" />
-                </div>
+                <img src="/exness.png" alt="Exness" className="w-26 h-26 object-contain" />
                 <div>
                   <h3 className="text-sm font-bold text-text-primary">Exness</h3>
                   <p className="text-[10px] text-text-muted mt-1">
@@ -116,11 +114,9 @@ export default function BrokerRegistrationPage() {
 
               <button
                 onClick={() => handleSelect("valetax")}
-                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-center hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex flex-col items-center gap-3"
               >
-                <div className="w-16 h-16 rounded-lg bg-white/5 flex items-center justify-center p-3">
-                  <img src="/valetax.png" alt="Valetax" className="w-full h-full object-contain" />
-                </div>
+                <img src="/valetax.png" alt="Valetax" className="w-26 h-26 object-contain" />
                 <div>
                   <h3 className="text-sm font-bold text-text-primary">Valetax</h3>
                   <p className="text-[10px] text-text-muted mt-1">
