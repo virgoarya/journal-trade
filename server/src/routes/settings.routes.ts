@@ -73,7 +73,7 @@ router.get("/ai-trading", async (req, res, next) => {
     const brokerServer = server || conn?.server || "unknown";
 
     const brokerConfig = (settings.savedPipelineConfigs as any)?.[brokerServer];
-    const configToReturn = brokerConfig || settings.savedPipelineConfig;
+    const configToReturn = brokerConfig || null;
     
     return apiResponse.success(res, {
       methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,

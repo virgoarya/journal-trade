@@ -521,7 +521,7 @@ router.post(
         const conn = await MT5Connection.findOne({ userId: req.user.id }).lean();
         const server = conn?.server || "unknown";
         const brokerConfig = settings?.savedPipelineConfigs?.[server];
-        const configToUse = brokerConfig || settings?.savedPipelineConfig;
+        const configToUse = brokerConfig || null;
         
         if (configToUse) {
           finalConfig = { 
