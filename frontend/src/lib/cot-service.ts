@@ -70,22 +70,27 @@ function mapRecord(item: any) {
   };
   const nonCL = parseInt(item.noncomm_positions_long_all || "0", 10);
   const nonCS = parseInt(item.noncomm_positions_short_all || "0", 10);
+  const commLong = parseInt(item.comm_positions_long_all || "0", 10);
+  const commShort = parseInt(item.comm_positions_short_all || "0", 10);
+  const retailLong = parseInt(item.nonrept_positions_long_all || "0", 10);
+  const retailShort = parseInt(item.nonrept_positions_short_all || "0", 10);
   const net = nonCL - nonCS;
   const total = nonCL + nonCS;
   let sentiment = "NEUTRAL";
   if (total > 0 && Math.abs(net) / total >= 0.1) sentiment = net > 0 ? "BULLISH" : "BEARISH";
 
+  const managedMoneyNet = nonCL - nonCS;
+  const commercialsNet = commLong - commShort;
+  const phase = getMarketPhase(managedMoneyNet, commercialsNet);
+
   return {
     symbol: meta.symbol, name: meta.name, category: meta.category,
-    commercialLong: parseInt(item.comm_positions_long_all || "0", 10),
-    commercialShort: parseInt(item.comm_positions_short_all || "0", 10),
-    commercialSpread: Math.abs(parseInt(item.comm_positions_long_all || "0", 10) - parseInt(item.comm_positions_short_all || "0", 10)),
+    commercialLong: commLong, commercialShort: commShort,
+    commercialSpread: Math.abs(commLong - commShort),
     nonCommercialLong: nonCL, nonCommercialShort: nonCS,
     nonCommercialSpread: Math.abs(nonCL - nonCS),
-    retailLong: parseInt(item.nonrept_positions_long_all || "0", 10),
-    retailShort: parseInt(item.nonrept_positions_short_all || "0", 10),
-    retailSpread: Math.abs(parseInt(item.nonrept_positions_long_all || "0", 10) - parseInt(item.nonrept_positions_short_all || "0", 10)),
-    sentiment,
+    retailLong, retailShort, retailSpread: Math.abs(retailLong - retailShort),
+    sentiment, phase,
     lastUpdate: item.report_date_as_yyyy_mm_dd || new Date().toISOString(),
   };
 }
