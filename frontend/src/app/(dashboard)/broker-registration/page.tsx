@@ -110,6 +110,15 @@ export default function BrokerRegistrationPage() {
           </section>
         )}
 
+        {/* Disclaimer */}
+        <div className="p-4 bg-data-loss/5 border border-data-loss/10 rounded-xl text-center">
+          <p className="text-[10px] text-text-muted leading-relaxed">
+            <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
+            AI Trading melibatkan risiko finansial yang signifikan. Segala kerugian yang timbul dari penggunaan AI Trading
+            sepenuhnya menjadi tanggung jawab pengguna. Platform Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
+          </p>
+        </div>
+
         {step === "register" && selectedBroker && (
           <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6">
             {selectedBroker === "exness" && (
@@ -200,6 +209,12 @@ export default function BrokerRegistrationPage() {
                 "Konfirmasi & Selesai"
               )}
             </button>
+
+            <p className="text-[10px] text-text-muted leading-relaxed text-center">
+              <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
+              Dengan menekan tombol di atas, Anda menyetujui bahwa segala risiko dan kerugian dari penggunaan AI Trading
+              sepenuhnya menjadi tanggung jawab Anda. Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
+            </p>
           </section>
         )}
 
