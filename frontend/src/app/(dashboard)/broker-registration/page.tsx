@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { brokerRegistrationService } from "@/services/broker-registration.service";
@@ -170,10 +170,12 @@ export default function BrokerRegistrationPage() {
                 </div>
 
                 <div className="bg-bg-surface rounded-xl overflow-hidden border border-border-subtle">
-                  <div
-                    dangerouslySetInnerHTML={{ __html: VALETAX_EMBED }}
-                    className="[&_iframe]:w-full"
-                  />
+                  {useMemo(() => (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: VALETAX_EMBED }}
+                      className="[&_iframe]:w-full"
+                    />
+                  ), [])}
                 </div>
 
                 <div className="border-t border-border-subtle pt-6">
