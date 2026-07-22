@@ -8,6 +8,7 @@ import { tradingPipelineService } from "../services/trading-pipeline.service";
 import { riskManagerService } from "../services/risk-manager.service";
 import { apiResponse } from "../utils/api-response";
 import { AITradeLog } from "../models/AITradeLog";
+import { MT5Connection } from "../models/MT5Connection";
 import { autoBacktestService } from "../services/auto-backtest.service";
 import { aiBacktestSkillService } from "../services/ai-backtest-skill.service";
 import { llmConsensusService } from "../services/llm-consensus.service";
@@ -848,9 +849,12 @@ router.get("/performance", async (req, res, next) => {
  */
 router.get("/skill", async (req, res, next) => {
   try {
-    const server = (req.query.server as string) || undefined;
-    const skill = await aiBacktestSkillService.getSkill(req.user.id, server);
+    const conn = await MT5Connection.findOne({ userId: req.user.id }).lean();
+    const server = conn?.server || "unknown";
+    silentLogger.info(`[SKILL-DEBUG] Fetching skill for user=${req.user.id}, server=${server}`);
+    const skill = await aiBacktestSkillService.getSkill(req.user.id);
     if (!skill) {
+      silentLogger.info(`[SKILL-DEBUG] No skill found for server=${server}`);
       return apiResponse.success(res, {
         totalBacktests: 0,
         symbolRankings: [],
@@ -858,6 +862,7 @@ router.get("/skill", async (req, res, next) => {
         globalRecoveryFactor: 0,
       });
     }
+    silentLogger.info(`[SKILL-DEBUG] Found skill: totalBacktests=${skill.totalBacktests}, symbols=${skill.symbolRankings.length}, methodologies=${skill.methodologyRankings.length}`);
     return apiResponse.success(res, {
       totalBacktests: skill.totalBacktests,
       symbolRankings: skill.symbolRankings.sort((a: any, b: any) => b.score - a.score),

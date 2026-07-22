@@ -492,10 +492,9 @@ class AITradingService {
     return res;
   }
 
-  async getSkill(server?: string) {
-    const query = server ? `?server=${encodeURIComponent(server)}` : "";
+  async getSkill() {
     const res = await apiClient.get<AIBacktestSkill>(
-      `/api/v1/ai-trading/skill${query}`,
+      "/api/v1/ai-trading/skill",
     );
     return res;
   }

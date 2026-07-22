@@ -385,7 +385,7 @@ function AITradingPageContent() {
               />
             )}
 
-            <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
+            <SkillDisplay key={skillVersion} onApplySkill={(skill) => {
               setSkillConfig(skill);
               if (isTradingDrawerOpen) setIsTradingDrawerOpen(false);
             }} />
