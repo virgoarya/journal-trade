@@ -28,6 +28,9 @@ export interface ITradingAccount extends Document {
   lastMt5SyncAt?: Date;
   mt5AutoSyncEnabled?: boolean;
   mt5SyncIntervalMinutes?: number;
+  referralBroker?: "exness" | "valetax";
+  referralEmail?: string;
+  referralVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,7 +86,13 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
     min: 1,
     max: 60,
     default: 5
-  }
+  },
+  referralBroker: {
+    type: String,
+    enum: ["exness", "valetax"],
+  },
+  referralEmail: { type: String },
+  referralVerified: { type: Boolean, default: false },
 }, {
   timestamps: true,
   collection: "trading_accounts",

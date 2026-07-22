@@ -16,8 +16,10 @@ import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain } from "lucide-react";
+import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain, Loader2 } from "lucide-react";
 import { Suspense } from "react";
+import { brokerRegistrationService } from "@/services/broker-registration.service";
+import { useSession } from "@/lib/auth-client";
 
 type Tab = "trading" | "backtest";
 
@@ -38,6 +40,8 @@ export default function AITradingPage() {
 function AITradingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, isPending: sessionPending } = useSession();
+  const [regCheck, setRegCheck] = useState<"loading" | "dev" | "ok" | "redirect">("loading");
   const tabParam = searchParams.get("tab") as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>("trading");
   const [isTradingDrawerOpen, setIsTradingDrawerOpen] = useState(false);
@@ -88,15 +92,52 @@ function AITradingPageContent() {
     }
   }, [isConnected, refetchAccountInfo, refetchPositions, refreshPipelineData]);
 
-  if (!isConnected) {
-    if (isCheckingSession) {
-      return (
-        <div className="min-h-screen bg-black flex items-center justify-center">
-          <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
-        </div>
-      );
+  useEffect(() => {
+    if (sessionPending) return;
+
+    (async () => {
+      try {
+        const devCheck = await brokerRegistrationService.checkDevStatus();
+        if (devCheck.success && devCheck.data?.isDev) {
+          setRegCheck("dev");
+          return;
+        }
+
+        const status = await brokerRegistrationService.getStatus();
+        if (status.success && status.data?.needsRegistration === false) {
+          setRegCheck("ok");
+        } else {
+          setRegCheck("redirect");
+        }
+      } catch {
+        setRegCheck("ok");
+      }
+    })();
+  }, [sessionPending]);
+
+  useEffect(() => {
+    if (regCheck === "redirect") {
+      router.push("/broker-registration");
     }
-    
+  }, [regCheck, router]);
+
+  if (regCheck === "loading" || sessionPending) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (regCheck === "redirect") {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!isConnected) {
     return (
       <div className="min-h-screen relative z-10 flex flex-col pt-4">
         <div className="px-4">

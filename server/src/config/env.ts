@@ -81,6 +81,9 @@ const envSchema = z.object({
   NINE_ROUTER_URL: z.string().optional(),
   NINE_ROUTER_API_KEY: z.string().optional(),
   NINE_ROUTER_MODEL: z.string().optional().default("free"),
+
+  // Dev whitelist emails (comma-separated) — skip broker registration
+  DEV_WHITELIST_EMAILS: z.string().optional().default(""),
 });
 
 const _env = envSchema.safeParse(process.env);

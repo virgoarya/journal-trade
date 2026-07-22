@@ -1,5 +1,6 @@
 import { Router } from "express";
 import tradingAccountRoutes from "./trading-account.routes";
+import brokerRegistrationRoutes from "./broker-registration-v1.routes";
 import tradeRoutes from "./trade.routes";
 import playbookRoutes from "./playbook.routes";
 import analyticsRoutes from "./analytics.routes";
@@ -46,5 +47,6 @@ router.use("/v1/nexus", nexusRoutes);
 router.use("/v1/ai-coach", aiLimiter, aiCoachRoutes);
 router.use("/v1/ai-trading", aiTradingRoutes);
 router.use("/v1/backtest", backtestRoutes);
+router.use("/v1/broker-registration", brokerRegistrationRoutes);
 
 export default router;

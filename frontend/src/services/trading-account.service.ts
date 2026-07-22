@@ -19,6 +19,9 @@ export interface TradingAccount {
   apiKey?: string;
   riskTier?: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE" | "SPECULATIVE";
   riskNotificationEnabled?: boolean;
+  referralBroker?: "exness" | "valetax";
+  referralEmail?: string;
+  referralVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }
