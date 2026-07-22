@@ -1,20 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  aiTradingService,
-  type AIBacktestSkill,
-  type AutoBacktestSummary,
-} from "@/services/ai-trading.service";
+import { aiTradingService, type AIBacktestSkill } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
 import {
-  Zap,
-  Loader2,
   TrendingUp,
   TrendingDown,
   BarChart3,
   Layers,
+  Loader2,
   CheckCircle,
   AlertTriangle,
   Shield,
@@ -34,8 +29,6 @@ interface SkillDisplayProps {
 export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
   const [skill, setSkill] = useState<AIBacktestSkill | null>(null);
   const [loading, setLoading] = useState(false);
-  const [autoScanning, setAutoScanning] = useState(false);
-  const [autoSummary, setAutoSummary] = useState<AutoBacktestSummary | null>(null);
   const [showSymbols, setShowSymbols] = useState(true);
   const [showMethodologies, setShowMethodologies] = useState(true);
 
@@ -55,32 +48,6 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
     fetchSkill();
   }, [fetchSkill]);
 
-  const handleAutoScan = async () => {
-    setAutoScanning(true);
-    setAutoSummary(null);
-    toast.info("AI Auto-Scan started — this may take several minutes...");
-
-    try {
-      const res = await aiTradingService.autoBacktest();
-      if (res.success && res.data) {
-        setAutoSummary(res.data);
-        if (res.data.status === "complete") {
-          toast.success(`Scan complete! ${res.data.qualifiedSymbols}/${res.data.totalSymbols} pairs qualified`);
-          // Refresh skill data
-          fetchSkill();
-        } else {
-          toast.error(res.data.error || "Auto scan failed");
-        }
-      } else {
-        toast.error(res.error || "Auto backtest failed");
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Auto backtest error");
-    } finally {
-      setAutoScanning(false);
-    }
-  };
-
   const handleApply = () => {
     if (skill && onApplySkill) {
       onApplySkill(skill);
@@ -97,9 +64,7 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
       <EmptyState
         type="data"
         title="No AI Skill Data"
-        description="No AI backtest skill data available yet."
-        actionText="Run Auto-Scan"
-        onAction={handleAutoScan}
+        description="No AI backtest skill data available yet. Run a manual backtest to build AI skill."
       />
     );
   }
@@ -126,38 +91,11 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
         </div>
       </div>
 
-      {/* Auto-Scan Button */}
-      <button
-        onClick={handleAutoScan}
-        disabled={autoScanning}
-        className="w-full py-2.5 px-3 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-bg-input disabled:border-border-subtle disabled:text-gray-600 text-accent-gold text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
-      >
-        {autoScanning ? (
-          <><Loader2 className="w-4 h-4 animate-spin" /> Scanning all pairs (0.5% risk)...</>
-        ) : (
-          <><Zap className="w-4 h-4 fill-current" /> AI Auto-Scan All Pairs</>
-        )}
-      </button>
-
-      {/* Auto-Scan Progress */}
-      {autoSummary && autoSummary.status === "complete" && (
-        <div className="bg-neon-green/10 border border-neon-green/30 rounded p-2.5 shadow-[0_0_8px_rgba(57,255,136,0.2)]">
-          <div className="flex items-center justify-between text-xs font-mono">
-            <span className="text-neon-green font-bold flex items-center gap-1 uppercase tracking-wider">
-              <CheckCircle className="w-3 h-3" /> Ready
-            </span>
-            <span className="text-neon-green/80">
-              {autoSummary.qualifiedSymbols}/{autoSummary.totalSymbols} qualified
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* No data state */}
       {!userHasData && !loading && (
         <div className="text-[10px] text-text-muted text-center py-3 leading-relaxed font-mono italic">
           No backtest data yet.<br />
-          Run an auto-scan or manual backtest to build AI skill.
+          Run a manual backtest to build AI skill.
         </div>
       )}
 
