@@ -66,8 +66,8 @@ export default function BrokerRegistrationPage() {
   if (sessionPending) return null;
 
   return (
-    <div className="h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
-      <main className="w-full max-w-[640px] flex flex-col gap-6">
+    <div className="h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-4 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
+      <main className="w-full max-w-[640px] flex flex-col gap-4">
         <button
           onClick={() => (step === "select" ? router.push("/dashboard") : setStep("select"))}
           className="flex items-center gap-2 text-text-muted hover:text-accent-gold transition text-xs uppercase tracking-widest self-start"
@@ -92,27 +92,27 @@ export default function BrokerRegistrationPage() {
               Akun ini akan digunakan khusus untuk AI Trading.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
                 onClick={() => handleSelect("exness")}
-                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-4 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
               >
-                <img src="/exness.png" alt="Exness" className="w-48 h-48 object-contain" />
+                <img src="/exness.png" alt="Exness" className="w-36 h-36 object-contain" />
               </button>
 
               <button
                 onClick={() => handleSelect("valetax")}
-                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-4 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
               >
-                <img src="/valetax.png" alt="Valetax" className="w-48 h-48 object-contain" />
+                <img src="/valetax.png" alt="Valetax" className="w-36 h-36 object-contain" />
               </button>
             </div>
           </section>
         )}
 
         {/* Disclaimer */}
-        <div className="p-4 bg-data-loss/5 border border-data-loss/10 rounded-xl text-center">
-          <p className="text-[10px] text-text-muted leading-relaxed">
+        <div className="p-3 bg-data-loss/5 border border-data-loss/10 rounded-xl text-center">
+          <p className="text-[9px] text-text-muted leading-relaxed">
             <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
             AI Trading melibatkan risiko finansial yang signifikan. Segala kerugian yang timbul dari penggunaan AI Trading
             sepenuhnya menjadi tanggung jawab pengguna. Platform Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
@@ -120,7 +120,7 @@ export default function BrokerRegistrationPage() {
         </div>
 
         {step === "register" && selectedBroker && (
-          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6">
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-6 space-y-4">
             {selectedBroker === "exness" && (
               <div className="space-y-4">
                 <div>
@@ -147,8 +147,8 @@ export default function BrokerRegistrationPage() {
                   {copied ? "Link tersalin" : "Atau salin link"}
                 </button>
 
-                <div className="border-t border-border-subtle pt-6">
-                  <p className="text-[10px] text-text-muted mb-3">
+                <div className="border-t border-border-subtle pt-4">
+                  <p className="text-[10px] text-text-muted mb-2">
                     Setelah selesai daftar, masukkan email yang digunakan:
                   </p>
                   <input
@@ -157,7 +157,7 @@ export default function BrokerRegistrationPage() {
                     placeholder="email@contoh.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-3 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-2 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
                   />
                 </div>
               </div>
@@ -174,8 +174,8 @@ export default function BrokerRegistrationPage() {
 
                 <ValetaxRegistrationIframe />
 
-                <div className="border-t border-border-subtle pt-6">
-                  <p className="text-[10px] text-text-muted mb-3">
+                <div className="border-t border-border-subtle pt-4">
+                  <p className="text-[10px] text-text-muted mb-2">
                     Setelah selesai daftar, masukkan email yang digunakan:
                   </p>
                   <input
@@ -184,7 +184,7 @@ export default function BrokerRegistrationPage() {
                     placeholder="email@contoh.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-3 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-2 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
                   />
                 </div>
               </div>
