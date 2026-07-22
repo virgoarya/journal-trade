@@ -9,6 +9,7 @@ import { msnrStrategy } from "./strategies/msnr.strategy";
 import { confluenceEngine } from "./strategies/confluence-engine";
 import { atrService } from "./strategies/atr.service";
 import { BacktestExperience } from "../models/BacktestExperience";
+import { MT5Connection } from "../models/MT5Connection";
 import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
@@ -1479,7 +1480,10 @@ class BacktestService {
     if (!merged.isOptimization) {
       try {
         const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
-        await aiBacktestSkillService.updateSkill(userId, result);
+        const conn = await MT5Connection.findOne({ userId }).lean();
+        const server = conn?.server || "unknown";
+        silentLogger.info(`[BACKTEST-SKILL] Saving skill for user=${userId}, server=${server}`);
+        await aiBacktestSkillService.updateSkill(userId, result, server);
       } catch (err: any) {
         silentLogger.error(`[BACKTEST] Failed to trigger skill aggregation: ${err.message}`);
       }

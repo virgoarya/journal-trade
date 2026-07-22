@@ -1,5 +1,6 @@
 import { backtestService, type BacktestResult } from "./backtest.service";
 import { aiBacktestSkillService } from "./ai-backtest-skill.service";
+import { MT5Connection } from "../models/MT5Connection";
 import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyName } from "./strategies/index";
 
@@ -176,7 +177,9 @@ class AutoBacktestService {
       for (const [symbol, fullResult] of fullResults.entries()) {
         if (fullResult.methodologyStats && fullResult.methodologyStats.length > 0) {
           try {
-            await aiBacktestSkillService.updateSkill(userId, fullResult);
+            const conn = await MT5Connection.findOne({ userId }).lean();
+            const server = conn?.server || "unknown";
+            await aiBacktestSkillService.updateSkill(userId, fullResult, server);
           } catch (err: any) {
             silentLogger.error(`[AUTO-BT] Skill update error for ${symbol}: ${err.message}`);
           }

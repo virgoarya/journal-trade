@@ -849,10 +849,9 @@ router.get("/performance", async (req, res, next) => {
  */
 router.get("/skill", async (req, res, next) => {
   try {
-    const conn = await MT5Connection.findOne({ userId: req.user.id }).lean();
-    const server = conn?.server || "unknown";
-    silentLogger.info(`[SKILL-DEBUG] Fetching skill for user=${req.user.id}, server=${server}`);
-    const skill = await aiBacktestSkillService.getSkill(req.user.id);
+    const server = (req.query.server as string) || undefined;
+    silentLogger.info(`[SKILL-DEBUG] Fetching skill for user=${req.user.id}, server=${server || "auto"}`);
+    const skill = await aiBacktestSkillService.getSkill(req.user.id, server);
     if (!skill) {
       silentLogger.info(`[SKILL-DEBUG] No skill found for server=${server}`);
       return apiResponse.success(res, {
