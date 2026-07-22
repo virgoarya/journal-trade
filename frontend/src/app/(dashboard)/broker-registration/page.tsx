@@ -67,11 +67,6 @@ export default function BrokerRegistrationPage() {
 
   return (
     <div className="min-h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent-gold/5 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-gold/5 rounded-full blur-[120px]"></div>
-      </div>
-
       <main className="w-full max-w-[640px] flex flex-col gap-8">
         <button
           onClick={() => (step === "select" ? router.push("/dashboard") : setStep("select"))}
