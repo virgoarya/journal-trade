@@ -147,6 +147,10 @@ export default function BrokerRegistrationPage() {
                   {copied ? "Link tersalin" : "Atau salin link"}
                 </button>
 
+                <p className="text-[10px] text-text-muted mt-2">
+                  Setelah pendaftaran berhasil, cek inbox email Anda untuk Verifikasi/KYC akun broker.
+                </p>
+
                 <div className="border-t border-border-subtle pt-4">
                   <p className="text-[10px] text-text-muted mb-2">
                     Setelah selesai daftar, masukkan email yang digunakan:
@@ -173,6 +177,10 @@ export default function BrokerRegistrationPage() {
                 </div>
 
                 <ValetaxRegistrationIframe />
+
+                <p className="text-[10px] text-text-muted mt-2">
+                  Setelah pendaftaran berhasil, cek inbox email Anda untuk Verifikasi/KYC akun broker.
+                </p>
 
                 <div className="border-t border-border-subtle pt-4">
                   <p className="text-[10px] text-text-muted mb-2">
