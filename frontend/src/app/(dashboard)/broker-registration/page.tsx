@@ -67,37 +67,33 @@ export default function BrokerRegistrationPage() {
   if (sessionPending) return null;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-[#e5e1e7] font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-[#d4af37]/30 selection:text-[#f2ca50]">
-      {/* Background */}
+    <div className="min-h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#d4af37]/5 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#d4af37]/5 rounded-full blur-[120px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent-gold/5 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-gold/5 rounded-full blur-[120px]"></div>
       </div>
 
       <main className="w-full max-w-[640px] flex flex-col gap-8">
-        {/* Back */}
         <button
           onClick={() => (step === "select" ? router.push("/dashboard") : setStep("select"))}
-          className="flex items-center gap-2 text-[#d0c5af]/60 hover:text-[#d4af37] transition text-xs uppercase tracking-widest self-start"
+          className="flex items-center gap-2 text-text-muted hover:text-accent-gold transition text-xs uppercase tracking-widest self-start"
         >
           <ArrowLeft className="w-4 h-4" />{" "}
           {step === "select" ? "Kembali" : "Ganti Broker"}
         </button>
 
-        {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-[#d4af37] text-xl font-bold tracking-[0.2em] uppercase">
+          <h1 className="text-accent-gold text-xl font-bold tracking-[0.2em] uppercase">
             Registrasi Broker
           </h1>
-          <p className="text-[#d0c5af]/60 text-xs tracking-wider">
+          <p className="text-text-muted text-xs tracking-wider">
             Daftar akun broker baru untuk digunakan dengan AI Trading
           </p>
         </div>
 
-        {/* Step: Select Broker */}
         {step === "select" && (
-          <section className="bg-[#0A0A12]/70 backdrop-blur-xl border border-white/5 rounded-2xl p-8 space-y-6">
-            <p className="text-sm text-[#d0c5af]/70">
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6">
+            <p className="text-sm text-text-secondary">
               Pilih salah satu broker di bawah untuk mendaftar akun baru.
               Akun ini akan digunakan khusus untuk AI Trading.
             </p>
@@ -105,14 +101,14 @@ export default function BrokerRegistrationPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => handleSelect("exness")}
-                className="group bg-[#1b1b1f] border border-white/5 rounded-xl p-6 text-left hover:border-[#d4af37]/50 hover:bg-[#d4af37]/5 transition-all space-y-3"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-[#d4af37]/10 flex items-center justify-center text-[#d4af37] font-mono text-sm font-bold">
+                <div className="w-10 h-10 rounded-lg bg-accent-gold/10 flex items-center justify-center text-accent-gold font-mono text-sm font-bold">
                   EX
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Exness</h3>
-                  <p className="text-[10px] text-[#d0c5af]/50 mt-1">
+                  <h3 className="text-sm font-bold text-text-primary">Exness</h3>
+                  <p className="text-[10px] text-text-muted mt-1">
                     Forex, indeks, komoditas, kripto
                   </p>
                 </div>
@@ -120,14 +116,14 @@ export default function BrokerRegistrationPage() {
 
               <button
                 onClick={() => handleSelect("valetax")}
-                className="group bg-[#1b1b1f] border border-white/5 rounded-xl p-6 text-left hover:border-[#d4af37]/50 hover:bg-[#d4af37]/5 transition-all space-y-3"
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-[#d4af37]/10 flex items-center justify-center text-[#d4af37] font-mono text-sm font-bold">
+                <div className="w-10 h-10 rounded-lg bg-accent-gold/10 flex items-center justify-center text-accent-gold font-mono text-sm font-bold">
                   VT
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Valetax</h3>
-                  <p className="text-[10px] text-[#d0c5af]/50 mt-1">
+                  <h3 className="text-sm font-bold text-text-primary">Valetax</h3>
+                  <p className="text-[10px] text-text-muted mt-1">
                     Forex, kripto, emas, saham
                   </p>
                 </div>
@@ -136,14 +132,13 @@ export default function BrokerRegistrationPage() {
           </section>
         )}
 
-        {/* Step: Register + Email Form */}
         {step === "register" && selectedBroker && (
-          <section className="bg-[#0A0A12]/70 backdrop-blur-xl border border-white/5 rounded-2xl p-8 space-y-6">
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6">
             {selectedBroker === "exness" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-1">Daftar Exness</h3>
-                  <p className="text-[10px] text-[#d0c5af]/50">
+                  <h3 className="text-sm font-bold text-text-primary mb-1">Daftar Exness</h3>
+                  <p className="text-[10px] text-text-muted">
                     Klik tombol di bawah untuk membuka halaman pendaftaran Exness
                   </p>
                 </div>
@@ -152,7 +147,7 @@ export default function BrokerRegistrationPage() {
                   href={EXNESS_REFERRAL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between w-full bg-[#d4af37] text-[#050508] px-5 py-3 rounded-xl text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all"
+                  className="flex items-center justify-between w-full bg-accent-gold text-bg-void px-5 py-3 rounded-xl text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all"
                 >
                   Buka Halaman Pendaftaran
                   <ExternalLink className="w-4 h-4" />
@@ -160,13 +155,13 @@ export default function BrokerRegistrationPage() {
 
                 <button
                   onClick={copyLink}
-                  className="w-full text-center text-[10px] text-[#d0c5af]/40 hover:text-[#d4af37] transition"
+                  className="w-full text-center text-[10px] text-text-muted hover:text-accent-gold transition"
                 >
                   {copied ? "Link tersalin" : "Atau salin link"}
                 </button>
 
-                <div className="border-t border-white/5 pt-6">
-                  <p className="text-[10px] text-[#d0c5af]/50 mb-3">
+                <div className="border-t border-border-subtle pt-6">
+                  <p className="text-[10px] text-text-muted mb-3">
                     Setelah selesai daftar, masukkan email yang digunakan:
                   </p>
                   <input
@@ -175,7 +170,7 @@ export default function BrokerRegistrationPage() {
                     placeholder="email@contoh.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#1b1b1f] border border-white/5 focus:border-[#f2ca50]/50 focus:ring-0 rounded-xl px-4 py-3 text-sm transition-all placeholder:text-white/10"
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-3 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
                   />
                 </div>
               </div>
@@ -184,21 +179,21 @@ export default function BrokerRegistrationPage() {
             {selectedBroker === "valetax" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-1">Daftar Valetax</h3>
-                  <p className="text-[10px] text-[#d0c5af]/50">
+                  <h3 className="text-sm font-bold text-text-primary mb-1">Daftar Valetax</h3>
+                  <p className="text-[10px] text-text-muted">
                     Gunakan form di bawah untuk mendaftar akun Valetax
                   </p>
                 </div>
 
-                <div className="bg-[#1b1b1f] rounded-xl overflow-hidden border border-white/5">
+                <div className="bg-bg-surface rounded-xl overflow-hidden border border-border-subtle">
                   <div
                     dangerouslySetInnerHTML={{ __html: VALETAX_EMBED }}
                     className="[&_iframe]:w-full"
                   />
                 </div>
 
-                <div className="border-t border-white/5 pt-6">
-                  <p className="text-[10px] text-[#d0c5af]/50 mb-3">
+                <div className="border-t border-border-subtle pt-6">
+                  <p className="text-[10px] text-text-muted mb-3">
                     Setelah selesai daftar, masukkan email yang digunakan:
                   </p>
                   <input
@@ -207,14 +202,14 @@ export default function BrokerRegistrationPage() {
                     placeholder="email@contoh.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#1b1b1f] border border-white/5 focus:border-[#f2ca50]/50 focus:ring-0 rounded-xl px-4 py-3 text-sm transition-all placeholder:text-white/10"
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-3 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
                   />
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs">
+              <div className="p-3 bg-data-loss/10 border border-data-loss/20 rounded-xl text-data-loss text-xs">
                 {error}
               </div>
             )}
@@ -222,7 +217,7 @@ export default function BrokerRegistrationPage() {
             <button
               onClick={handleConfirm}
               disabled={!email.trim() || isSubmitting}
-              className="w-full py-3 bg-[#d4af37] text-[#050508] text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all disabled:opacity-40 uppercase"
+              className="w-full py-3 bg-accent-gold text-bg-void text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all disabled:opacity-40 uppercase"
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -235,22 +230,21 @@ export default function BrokerRegistrationPage() {
           </section>
         )}
 
-        {/* Step: Confirmation */}
         {step === "confirm" && (
-          <section className="bg-[#0A0A12]/70 backdrop-blur-xl border border-white/5 rounded-2xl p-8 space-y-6 text-center">
-            <div className="w-16 h-16 bg-[#d4af37]/10 rounded-2xl flex items-center justify-center mx-auto">
-              <Check className="w-8 h-8 text-[#d4af37]" />
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6 text-center">
+            <div className="w-16 h-16 bg-accent-gold/10 rounded-2xl flex items-center justify-center mx-auto">
+              <Check className="w-8 h-8 text-accent-gold" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white mb-2">Registrasi Tersimpan</h2>
-              <p className="text-sm text-[#d0c5af]/70">
+              <h2 className="text-lg font-bold text-text-primary mb-2">Registrasi Tersimpan</h2>
+              <p className="text-sm text-text-secondary">
                 Data registrasi broker berhasil disimpan.
                 Kamu sekarang bisa menggunakan AI Trading.
               </p>
             </div>
             <button
               onClick={() => router.push("/ai-trading")}
-              className="px-10 py-3 bg-[#d4af37] text-[#050508] text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all uppercase"
+              className="px-10 py-3 bg-accent-gold text-bg-void text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all uppercase"
             >
               Lanjut ke AI Trading
             </button>
