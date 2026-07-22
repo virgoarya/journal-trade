@@ -848,7 +848,8 @@ router.get("/performance", async (req, res, next) => {
  */
 router.get("/skill", async (req, res, next) => {
   try {
-    const skill = await aiBacktestSkillService.getSkill(req.user.id);
+    const server = (req.query.server as string) || undefined;
+    const skill = await aiBacktestSkillService.getSkill(req.user.id, server);
     if (!skill) {
       return apiResponse.success(res, {
         totalBacktests: 0,

@@ -24,9 +24,10 @@ import { toast } from "sonner";
 
 interface SkillDisplayProps {
   onApplySkill?: (skill: AIBacktestSkill) => void;
+  server?: string;
 }
 
-export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
+export function SkillDisplay({ onApplySkill, server }: SkillDisplayProps) {
   const [skill, setSkill] = useState<AIBacktestSkill | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSymbols, setShowSymbols] = useState(true);
@@ -35,14 +36,14 @@ export function SkillDisplay({ onApplySkill }: SkillDisplayProps) {
   const fetchSkill = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await aiTradingService.getSkill();
+      const res = await aiTradingService.getSkill(server);
       if (res.success && res.data) setSkill(res.data);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [server]);
 
   useEffect(() => {
     fetchSkill();
