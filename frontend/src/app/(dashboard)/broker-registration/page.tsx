@@ -8,7 +8,7 @@ import { ArrowLeft, Check, ExternalLink, Loader2 } from "lucide-react";
 
 type Step = "select" | "register" | "confirm";
 
-const EXNESS_REFERRAL = "https://one.exnessonelink.com/a/c717fhr01j/?campaign=42313";
+const EXNESS_REFERRAL = "https://one.exnessonelink.com/boarding/sign-up/a/c717fhr01j/?campaign=42313";
 
 const VALETAX_EMBED = `<iframe src="https://ma.valetax.com/embed/register/block/%2FVnB%2BKHlS7fIPaqJdAVra770S6pPsLrWAulIB5XEzSxd7mrTkwAxNaF6l8n94tfVMK3cyIQFJvPY6Pi2Or%2BlTcwXADDWr2%2FU1%2FuaT0kelI6KExChGGcFvILbWhbleMpN?lang=en&background=dark" width="100%" height="490px" title="Valetax Registration"></iframe>`;
 
