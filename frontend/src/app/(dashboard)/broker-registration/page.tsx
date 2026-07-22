@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { brokerRegistrationService } from "@/services/broker-registration.service";
 import { ArrowLeft, Check, ExternalLink, Loader2 } from "lucide-react";
+import { ValetaxRegistrationIframe } from "./components/ValetaxRegistrationIframe";
 
 type Step = "select" | "register" | "confirm";
 
 const EXNESS_REFERRAL = "https://one.exnessonelink.com/boarding/sign-up/a/c717fhr01j/?campaign=42313";
-
-const VALETAX_EMBED = `<iframe src="https://ma.valetax.com/embed/register/block/%2FVnB%2BKHlS7fIPaqJdAVra770S6pPsLrWAulIB5XEzSxd7mrTkwAxNaF6l8n94tfVMK3cyIQFJvPY6Pi2Or%2BlTcwXADDWr2%2FU1%2FuaT0kelI6KExChGGcFvILbWhbleMpN?lang=en&background=dark" width="100%" height="490px" title="Valetax Registration"></iframe>`;
 
 export default function BrokerRegistrationPage() {
   const router = useRouter();
@@ -103,14 +102,14 @@ export default function BrokerRegistrationPage() {
                 onClick={() => handleSelect("exness")}
                 className="group bg-bg-surface border border-border-subtle rounded-xl p-6 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
               >
-                <img src="/exness.png" alt="Exness" className="w-36 h-36 object-contain" />
+                <img src="/exness.png" alt="Exness" className="w-48 h-48 object-contain" />
               </button>
 
               <button
                 onClick={() => handleSelect("valetax")}
                 className="group bg-bg-surface border border-border-subtle rounded-xl p-6 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
               >
-                <img src="/valetax.png" alt="Valetax" className="w-36 h-36 object-contain" />
+                <img src="/valetax.png" alt="Valetax" className="w-48 h-48 object-contain" />
               </button>
             </div>
           </section>
@@ -169,14 +168,7 @@ export default function BrokerRegistrationPage() {
                   </p>
                 </div>
 
-                <div className="bg-bg-surface rounded-xl overflow-hidden border border-border-subtle">
-                  {useMemo(() => (
-                    <div
-                      dangerouslySetInnerHTML={{ __html: VALETAX_EMBED }}
-                      className="[&_iframe]:w-full"
-                    />
-                  ), [])}
-                </div>
+                <ValetaxRegistrationIframe />
 
                 <div className="border-t border-border-subtle pt-6">
                   <p className="text-[10px] text-text-muted mb-3">
