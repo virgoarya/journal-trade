@@ -2,54 +2,80 @@ import type { CotItem, MarketPhase } from "@/types/cot";
 import { env } from "@/lib/env";
 
 const COT_API = "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
-
 const EXTREME_THRESHOLD = 1.5;
+const LOOKBACK_WEEKS = 52;
 
-function getMarketPhase(
-  managedMoneyNet: number,
-  commercialsNet: number
-): MarketPhase {
+function getMarketPhase(managedMoneyNet: number, commercialsNet: number): MarketPhase {
   const mmPositive = managedMoneyNet > 0;
   const commNetShort = commercialsNet < 0;
   const commNetLong = commercialsNet > 0;
   const commAbs = Math.abs(commercialsNet);
   const mmAbs = Math.abs(managedMoneyNet);
 
-  if (mmPositive && !commNetShort) {
-    return { label: "MARK UP", color: "green", isWarning: false };
-  }
-
-  if (mmPositive && commNetShort && commAbs > managedMoneyNet * EXTREME_THRESHOLD) {
-    return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
-  }
-
-  if (!mmPositive && !commNetLong) {
-    return { label: "MARK DOWN", color: "red", isWarning: false };
-  }
-
-  if (!mmPositive && commNetLong && commercialsNet > mmAbs * EXTREME_THRESHOLD) {
-    return { label: "ACCUMULATION", color: "blue", isWarning: true };
-  }
-
+  if (mmPositive && !commNetShort) return { label: "MARK UP", color: "green", isWarning: false };
+  if (mmPositive && commNetShort && commAbs > managedMoneyNet * EXTREME_THRESHOLD) return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
+  if (!mmPositive && !commNetLong) return { label: "MARK DOWN", color: "red", isWarning: false };
+  if (!mmPositive && commNetLong && commercialsNet > mmAbs * EXTREME_THRESHOLD) return { label: "ACCUMULATION", color: "blue", isWarning: true };
   return { label: "NEUTRAL", color: "gray", isWarning: false };
 }
 
-function calculateSentiment(nonCommercialLong: number, nonCommercialShort: number): "BULLISH" | "BEARISH" | "NEUTRAL" {
-  const netPosition = nonCommercialLong - nonCommercialShort;
-  const totalPosition = nonCommercialLong + nonCommercialShort;
-  
-  if (totalPosition === 0) return "NEUTRAL";
-  
-  const ratio = Math.abs(netPosition) / totalPosition;
-  
-  if (ratio < 0.1) return "NEUTRAL";
-  
-  return netPosition > 0 ? "BULLISH" : "BEARISH";
+// ── COT Index (normalized 0–100 over LOOKBACK_WEEKS) ──
+function calcCotIndex(net: number, history: number[]): number {
+  const sorted = [...history].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  if (max === min) return 50;
+  return ((net - min) / (max - min)) * 100;
 }
 
-function formatPosition(value: number | null | undefined): string {
-  if (value === null || value === undefined || isNaN(value)) return "0";
-  return Math.round(value).toLocaleString();
+// ── Direction Bias Score (−10 .. +10) ──
+function calcDBS(netSM: number, netLS: number, cotSM: number, cotLS: number, wowSM: number): number {
+  // Component 1: Smart Money alignment (0–4)
+  let scoreSM = 0;
+  if (netSM > 0) {
+    if (cotSM >= 75) scoreSM = 4;
+    else if (cotSM >= 50) scoreSM = 2;
+    else scoreSM = 1;
+  } else if (netSM < 0) {
+    if (cotSM <= 25) scoreSM = -4;
+    else if (cotSM <= 50) scoreSM = -2;
+    else scoreSM = -1;
+  }
+
+  // Component 2: Divergence (0–4)
+  const diverging = Math.sign(netSM) !== Math.sign(netLS);
+  let scoreDiv = 0;
+  if (diverging) {
+    if (netSM > 0) { // SM long, LS short
+      if (cotLS < 15) scoreDiv = 4;
+      else if (cotLS < 30) scoreDiv = 3;
+      else if (cotLS < 45) scoreDiv = 2;
+      else scoreDiv = 1;
+    } else { // SM short, LS long
+      if (cotLS > 85) scoreDiv = -4;
+      else if (cotLS > 70) scoreDiv = -3;
+      else if (cotLS > 55) scoreDiv = -2;
+      else scoreDiv = -1;
+    }
+  }
+
+  // Component 3: WoW momentum (0–2)
+  let scoreWoW = 0;
+  const wowAbs = Math.abs(wowSM);
+  if (netSM > 0) scoreWoW = wowSM > 0 ? (wowAbs > 10000 ? 2 : 1) : (wowAbs > 10000 ? -2 : -1);
+  else if (netSM < 0) scoreWoW = wowSM < 0 ? (wowAbs > 10000 ? 2 : 1) : (wowAbs > 10000 ? -2 : -1);
+
+  return Math.max(-10, Math.min(10, scoreSM + scoreDiv + scoreWoW));
+}
+
+function dbLabel(dbs: number): string {
+  if (dbs >= 7) return "STRONG_BULLISH";
+  if (dbs >= 4) return "BULLISH";
+  if (dbs >= 1) return "MILD_BULLISH";
+  if (dbs >= -1) return "NEUTRAL";
+  if (dbs >= -3) return "MILD_BEARISH";
+  if (dbs >= -6) return "BEARISH";
+  return "STRONG_BEARISH";
 }
 
 const SYMBOLS_MAP: Record<string, { symbol: string; name: string; category: string }> = {
@@ -63,6 +89,19 @@ const SYMBOLS_MAP: Record<string, { symbol: string; name: string; category: stri
   "097741": { symbol: "JPY/USD", name: "Japanese Yen", category: "Currencies" },
   "232741": { symbol: "AUD/USD", name: "Australian Dollar", category: "Currencies" },
 };
+
+type GroupedHistory = Record<string, Array<{
+  date: string;
+  commNet: number;
+  nonCommNet: number;
+  retailNet: number;
+  commLong: number;
+  commShort: number;
+  nonCL: number;
+  nonCS: number;
+  retailLong: number;
+  retailShort: number;
+}>>;
 
 function mapRecord(item: any) {
   const meta = SYMBOLS_MAP[item.cftc_contract_market_code] || {
@@ -78,7 +117,6 @@ function mapRecord(item: any) {
   const total = nonCL + nonCS;
   let sentiment = "NEUTRAL";
   if (total > 0 && Math.abs(net) / total >= 0.1) sentiment = net > 0 ? "BULLISH" : "BEARISH";
-
   const managedMoneyNet = nonCL - nonCS;
   const commercialsNet = commLong - commShort;
   const phase = getMarketPhase(managedMoneyNet, commercialsNet);
@@ -95,14 +133,39 @@ function mapRecord(item: any) {
   };
 }
 
+function groupBySymbol(records: any[]): GroupedHistory {
+  const grouped: GroupedHistory = {};
+  for (const r of records) {
+    const code = r.cftc_contract_market_code;
+    if (!SYMBOLS_MAP[code]) continue;
+    if (!grouped[code]) grouped[code] = [];
+    const commLong = parseInt(r.comm_positions_long_all || "0", 10);
+    const commShort = parseInt(r.comm_positions_short_all || "0", 10);
+    const nonCL = parseInt(r.noncomm_positions_long_all || "0", 10);
+    const nonCS = parseInt(r.noncomm_positions_short_all || "0", 10);
+    const retailLong = parseInt(r.nonrept_positions_long_all || "0", 10);
+    const retailShort = parseInt(r.nonrept_positions_short_all || "0", 10);
+    grouped[code].push({
+      date: r.report_date_as_yyyy_mm_dd || "",
+      commNet: commLong - commShort,
+      nonCommNet: nonCL - nonCS,
+      retailNet: retailLong - retailShort,
+      commLong, commShort, nonCL, nonCS, retailLong, retailShort,
+    });
+  }
+  // Sort each group by date ascending (oldest first) for WoW
+  for (const code of Object.keys(grouped)) {
+    grouped[code].sort((a, b) => a.date.localeCompare(b.date));
+  }
+  return grouped;
+}
+
 export async function getCotData(): Promise<CotItem[]> {
   try {
-    // Server-side: fetch CFTC directly (no CORS)
-    // Client-side: proxy via Next.js API route
     const isServer = typeof window === "undefined";
     const codes = Object.keys(SYMBOLS_MAP).map(c => `'${c}'`).join(",");
     const url = isServer
-      ? `${COT_API}?$where=${encodeURIComponent(`cftc_contract_market_code in (${codes})`)}&$limit=9&$order=${encodeURIComponent("report_date_as_yyyy_mm_dd DESC")}`
+      ? `${COT_API}?$where=${encodeURIComponent(`cftc_contract_market_code in (${codes})`)}&$limit=500&$order=${encodeURIComponent("report_date_as_yyyy_mm_dd DESC")}`
       : `/api/macro/cot`;
 
     const res = await fetch(url, isServer ? { next: { revalidate: 3600 } } : {});
@@ -116,10 +179,80 @@ export async function getCotData(): Promise<CotItem[]> {
       records = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
     }
 
-    if (Array.isArray(records) && records.length > 0) {
-      const items = records.map(mapRecord) as CotItem[];
-      if (items.length > 0) return items;
+    if (!Array.isArray(records) || records.length === 0) return getFallbackData();
+
+    // 1. Map latest records for display
+    // CFTC returns sorted DESC → latest first. Group latest per symbol.
+    const seen = new Set<string>();
+    const latest: any[] = [];
+    for (const r of records) {
+      const code = r.cftc_contract_market_code;
+      if (!seen.has(code) && SYMBOLS_MAP[code]) {
+        seen.add(code);
+        latest.push(r);
+      }
     }
+
+    // 2. Build history for COT Index & WoW
+    const history = groupBySymbol(records);
+
+    // 3. Enhance each latest with analytics
+    const enhanced: CotItem[] = latest.map(r => {
+      const item = mapRecord(r);
+      const code = r.cftc_contract_market_code;
+      const hist = history[code] || [];
+
+      // COT Index for SM & LS
+      const smNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.commNet);
+      const lsNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.nonCommNet);
+      const currentSM = hist.length > 0 ? hist[hist.length - 1].commNet : 0;
+      const currentLS = hist.length > 0 ? hist[hist.length - 1].nonCommNet : 0;
+      const cotSM = smNets.length > 1 ? calcCotIndex(currentSM, smNets) : 50;
+      const cotLS = lsNets.length > 1 ? calcCotIndex(currentLS, lsNets) : 50;
+
+      // WoW Δ
+      let wowSM = 0, wowLS = 0;
+      if (hist.length >= 2) {
+        const prev = hist[hist.length - 2];
+        const curr = hist[hist.length - 1];
+        wowSM = curr.commNet - prev.commNet;
+        wowLS = curr.nonCommNet - prev.nonCommNet;
+      }
+
+      // Open Interest
+      const oi = hist.length > 0
+        ? hist[hist.length - 1].commLong + hist[hist.length - 1].commShort
+            + hist[hist.length - 1].nonCL + hist[hist.length - 1].nonCS
+            + hist[hist.length - 1].retailLong + hist[hist.length - 1].retailShort
+        : 0;
+
+      // Direction Bias Score
+      const dbs = calcDBS(currentSM, currentLS, cotSM, cotLS, wowSM);
+
+      // Enhanced sentiment with COT Index
+      const divergence = Math.sign(currentSM) !== Math.sign(currentLS);
+      let enhancedPhase = item.phase;
+      if (divergence && cotSM <= 15 && cotLS >= 75) {
+        enhancedPhase = { label: wowSM > 0 ? "ACCUMULATION" : "DISTRIBUTION", color: wowSM > 0 ? "blue" : "yellow", isWarning: true };
+      } else if (divergence && cotSM >= 85 && cotLS <= 25) {
+        enhancedPhase = { label: wowSM < 0 ? "DISTRIBUTION" : "MARK UP", color: wowSM < 0 ? "yellow" : "green", isWarning: wowSM < 0 };
+      }
+
+      return {
+        ...item,
+        phase: enhancedPhase,
+        cotIndexSM: Math.round(cotSM),
+        cotIndexLS: Math.round(cotLS),
+        wowDeltaSM: wowSM,
+        wowDeltaLS: wowLS,
+        openInterest: oi,
+        dbs,
+        directionBias: dbLabel(dbs),
+        divergence,
+      };
+    });
+
+    return enhanced.length > 0 ? enhanced : getFallbackData();
   } catch (e) {
     console.error("[COT] fetch failed:", e);
   }
@@ -132,7 +265,6 @@ export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: stri
     const url = typeof window !== "undefined"
       ? `/api/macro/cot`
       : `${env.backendUrl}/api/v1/market-data/cot/analyze`;
-
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -145,7 +277,6 @@ export async function analyzeCotData(cotItem: CotItem): Promise<{ momentum: stri
     return null;
   }
 }
-
 
 function getFallbackData(): CotItem[] {
   const d = new Date().toISOString();

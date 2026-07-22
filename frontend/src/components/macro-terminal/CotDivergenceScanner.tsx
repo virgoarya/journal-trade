@@ -208,6 +208,9 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
                       <div className={`font-bold mt-0.5 ${(item.nonCommercialLong - item.nonCommercialShort) > 0 ? "text-data-profit" : "text-data-loss"}`}>
                         Net: {((item.nonCommercialLong - item.nonCommercialShort) > 0 ? "+" : "") + (item.nonCommercialLong - item.nonCommercialShort).toLocaleString()}
                       </div>
+                      {item.cotIndexLS !== undefined && (
+                        <div className="text-text-muted mt-0.5">COT Index: {item.cotIndexLS}</div>
+                      )}
                     </div>
                     <div className="p-2 rounded glass border border-border-subtle">
                       <div className="text-text-muted mb-0.5">Commercial (Smart Money)</div>
@@ -217,8 +220,33 @@ export function CotDivergenceScanner({ items }: CotDivergenceScannerProps) {
                       <div className={`font-bold mt-0.5 ${(item.commercialLong - item.commercialShort) > 0 ? "text-data-profit" : "text-data-loss"}`}>
                         Net: {((item.commercialLong - item.commercialShort) > 0 ? "+" : "") + (item.commercialLong - item.commercialShort).toLocaleString()}
                       </div>
+                      {item.cotIndexSM !== undefined && (
+                        <div className="text-text-muted mt-0.5">COT Index: {item.cotIndexSM}</div>
+                      )}
                     </div>
                   </div>
+                  {/* DBS */}
+                  {item.dbs !== undefined && (
+                    <div className="p-2 rounded glass border border-border-subtle mb-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-mono text-text-muted uppercase tracking-wider">DBS</span>
+                        <span className={`text-[11px] font-mono font-black ${item.dbs >= 4 ? "text-data-profit" : item.dbs <= -4 ? "text-data-loss" : "text-text-muted"}`}>
+                          {item.dbs > 0 ? `+${item.dbs}` : item.dbs} · {item.directionBias?.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {/* WoW Δ */}
+                  {item.wowDeltaSM !== undefined && (
+                    <div className="p-2 rounded glass border border-border-subtle mb-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-mono text-text-muted uppercase tracking-wider">WoW Δ Smart Money</span>
+                        <span className={`text-[11px] font-mono font-black ${item.wowDeltaSM >= 0 ? "text-data-profit" : "text-data-loss"}`}>
+                          {item.wowDeltaSM > 0 ? "+" : ""}{item.wowDeltaSM.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {/* Probability & Interpretation */}
                   <div className="p-2 rounded glass border border-border-subtle">
                     <div className="flex items-center justify-between mb-1">

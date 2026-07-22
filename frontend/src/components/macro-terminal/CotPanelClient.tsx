@@ -268,6 +268,8 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
               <tr className="border-b border-border-subtle text-zinc-500 bg-[#0d0d0d]">
                 <th className="text-left px-3 py-2 font-medium">Market</th>
                 <th className="text-center px-3 py-2 font-medium">Sentimen</th>
+                <th className="text-center px-3 py-2 font-medium">COT Ind</th>
+                <th className="text-center px-3 py-2 font-medium">DBS</th>
                 <th className="text-center px-3 py-2 font-medium">
                   <span className="text-zinc-300">Smart Money</span>
                   <div className="text-[9px] text-zinc-500 font-normal">Commercials</div>
@@ -280,6 +282,7 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                   <span className="text-zinc-300">Retail</span>
                   <div className="text-[9px] text-zinc-500 font-normal">Small Traders</div>
                 </th>
+                <th className="text-center px-3 py-2 font-medium">WoW</th>
                 <th className="text-center px-3 py-2 font-medium">Analyze</th>
               </tr>
             </thead>
@@ -288,7 +291,7 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                 <React.Fragment key={category}>
                   {/* Category header */}
                   <tr className="bg-zinc-900/60">
-                    <td colSpan={6} className="px-3 py-1.5">
+                    <td colSpan={9} className="px-3 py-1.5">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                         {CATEGORY_ICONS[category] || "📌"} {category}
                       </span>
@@ -304,6 +307,32 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                       <td className="px-3 py-2.5 text-center">
                         <PhaseBadge phase={item.phase} />
                       </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <span className={`inline-flex items-center justify-center w-6 h-5 rounded text-[9px] font-mono font-bold ${(item.cotIndexSM ?? 50) >= 70 ? "text-emerald-400 bg-emerald-400/10" : (item.cotIndexSM ?? 50) <= 30 ? "text-red-400 bg-red-400/10" : "text-zinc-400 bg-zinc-400/10"}`}>
+                            {item.cotIndexSM ?? "-"}
+                          </span>
+                          <span className="text-[8px] text-zinc-600">/</span>
+                          <span className={`inline-flex items-center justify-center w-6 h-5 rounded text-[9px] font-mono font-bold ${(item.cotIndexLS ?? 50) >= 70 ? "text-emerald-400 bg-emerald-400/10" : (item.cotIndexLS ?? 50) <= 30 ? "text-red-400 bg-red-400/10" : "text-zinc-400 bg-zinc-400/10"}`}>
+                            {item.cotIndexLS ?? "-"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {item.dbs !== undefined ? (
+                          <span className={`inline-flex items-center justify-center w-7 h-5 rounded text-[9px] font-mono font-bold ${
+                            item.dbs >= 4 ? "text-emerald-400 bg-emerald-400/10 border border-emerald-400/30" :
+                            item.dbs >= 1 ? "text-emerald-400/70 bg-emerald-400/5" :
+                            item.dbs <= -4 ? "text-red-400 bg-red-400/10 border border-red-400/30" :
+                            item.dbs <= -1 ? "text-red-400/70 bg-red-400/5" :
+                            "text-zinc-500 bg-zinc-500/10"
+                          }`}>
+                            {item.dbs > 0 ? `+${item.dbs}` : item.dbs}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">-</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         <PositionCell long={item.commercialLong} short={item.commercialShort} />
                       </td>
@@ -312,6 +341,15 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                       </td>
                       <td className="px-3 py-2.5">
                         <PositionCell long={item.retailLong} short={item.retailShort} />
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          {item.wowDeltaSM !== undefined && (
+                            <span className={`font-mono text-[9px] font-bold ${item.wowDeltaSM >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                              {item.wowDeltaSM > 0 ? "▲" : item.wowDeltaSM < 0 ? "▼" : "―"}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <button

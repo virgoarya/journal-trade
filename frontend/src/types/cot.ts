@@ -14,6 +14,16 @@ export interface CotItem {
   retailSpread: number;
   lastUpdate: string;
   phase?: MarketPhase;
+
+  // Enhanced COT analysis fields
+  cotIndexSM?: number;        // COT Index Smart Money 0–100
+  cotIndexLS?: number;        // COT Index Large Specs 0–100
+  wowDeltaSM?: number;        // WoW change Smart Money
+  wowDeltaLS?: number;        // WoW change Large Specs
+  openInterest?: number;      // Total open interest
+  dbs?: number;              // Direction Bias Score -10..+10
+  directionBias?: string;    // STRONG_BULLISH .. STRONG_BEARISH
+  divergence?: boolean;      // true if SM sign ≠ LS sign
 }
 
 export interface CotAnalysis {
