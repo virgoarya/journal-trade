@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
+import { settingsService } from "@/services/settings.service";
 
 export default function BrokerRegistrationLayout({
   children,
@@ -13,6 +14,25 @@ export default function BrokerRegistrationLayout({
   const { data: session, isPending: sessionPending } = useSession();
   const [guildVerified, setGuildVerified] = useState<boolean | null>(null);
   const hasVerifiedRef = useRef(false);
+
+  useEffect(() => {
+    const applyGlobalSettings = async () => {
+      try {
+        const res = await settingsService.getSettings();
+        if (res.success && res.data) {
+          const { appearance } = res.data;
+          document.documentElement.classList.toggle("light", appearance.theme === "light");
+          document.documentElement.style.setProperty("--color-accent-gold", appearance.accentColor);
+          document.documentElement.style.setProperty("--color-accent-gold-dim", `${appearance.accentColor}88`);
+          localStorage.setItem("hunter-trades-theme", appearance.theme);
+          localStorage.setItem("hunter-trades-accent", appearance.accentColor);
+        }
+      } catch (e) {
+        console.error("BrokerRegistrationLayout: Failed to load global settings", e);
+      }
+    };
+    applyGlobalSettings();
+  }, []);
 
   useEffect(() => {
     if (sessionPending) return;
