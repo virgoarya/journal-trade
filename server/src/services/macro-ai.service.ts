@@ -1548,37 +1548,54 @@ export async function analyzeCotAsset(cotData: {
 
   const marketPhase = calculateMarketPhase(largeSpecsNet, commercialNet);
 
-  const systemPrompt = `Anda adalah professional quant analyst. Saat menganalisis data COT, gunakan persis logika Market Phases yang sama dengan dashboard:
+  const systemPrompt = `Anda adalah professional quant analyst spesialis COT (Commitment of Traders). Analisis menggunakan framework Multi-Dimensional Market Phase.
 
-FASE PASAR (WAJIB DITERAPKAN):
-- MARK UP (Hijau): ManagedMoney > 0 DAN Commercials BUKAN net short ekstrem.
-- DISTRIBUTION (Kuning): ManagedMoney > 0 DAN Commercials Net Short DAN |CommercialsNet| > 1.5x ManagedMoneyNet (commercial melawan tren secara ekstrem).
-- MARK DOWN (Merah): ManagedMoney < 0 DAN Commercials BUKAN net long ekstrem.
-- ACCUMULATION (Biru): ManagedMoney < 0 DAN Commercials Net Long DAN CommercialsNet > 1.5x |ManagedMoneyNet| (commercial melawan tren secara ekstrem).
-- NEUTRAL: Kondisi lain.
+FASE PASAR:
+- MARK UP: ManagedMoney > 0, Commercials bukan net short ekstrem — tren bullish sehat.
+- DISTRIBUTION ⚠️: ManagedMoney > 0 TAPI Commercials net short ekstrem (>1.5x MM) — smart money distribusi ke spekulan.
+- MARK DOWN: ManagedMoney < 0, Commercials bukan net long ekstrem — tren bearish.
+- ACCUMULATION: ManagedMoney < 0 TAPI Commercials net long ekstrem (>1.5x |MM|) — smart money akumulasi diam-diam.
+- NEUTRAL: Tidak ada sinyal dominan.
 
-INSTRUKSI KRITIS: MULAI analisis Anda dengan menyatakan Fase Pasar yang telah dihitung, lalu lanjutkan ke analisis mendalam.
+PANDUAN ANALISIS:
+1. COT Index 0-100: <15 = ekstrem (potensi reversal kontrarian), >85 = ekstrem (potensi reversal).
+2. WoW Δ: Perubahan posisi dibanding minggu lalu — apakah momentum menguat/melemah.
+3. Divergence: Smart Money vs Large Specs berlawanan arah = sinyal kuat.
+4. DBS (Direction Bias Score): -10 s/d +10 — skor agregat bias.
 
 WAJIB output format JSON (tanpa markdown):
 {
-  "momentum": "Analisis 1-2 kalimat tentang siapa yang mengontrol tren (Managed Money) dan bagaimana posisi Commercial dan Retail.",
-  "warnings": "Risiko utama 1-2 kalimat berdasarkan hedging Commercial (Smart Money) dan posisi Retail (kontrarian).",
-  "conclusion": "Kesimpulan eksekutif definitif dan seimbang, contoh: 'Tren masih Bullish didorong Large Specs, namun risiko koreksi tinggi karena Smart Money mulai hedging massal.'"
+  "momentum": "1-2 kalimat: siapa kontrol tren? Arah COT Index? WoW menguat/melemah?",
+  "warnings": "Risiko utama: divergence, ekstrem COT Index, arah retail (kontrarian), atau WoW berbalik.",
+  "conclusion": "Kesimpulan definitif: bias arah, level conviction, dan rekomendasi follow/reversal/skip."
 }
 
-WAJIB gunakan Bahasa Indonesia institusional.`;
+WAJIB gunakan Bahasa Indonesia institusional. Jangan sebut "saya", langsung ke analisis.`;
 
-  const userPrompt = `Analisis data COT untuk ${cotData.name} (${cotData.symbol}) menggunakan framework Multi-Dimensional Market Phase.
+  const cotSM = (cotData as any).cotIndexSM;
+  const cotLS = (cotData as any).cotIndexLS;
+  const wowSM = (cotData as any).wowDeltaSM;
+  const dbs = (cotData as any).dbs;
+  const divergence = (cotData as any).divergence;
 
-DATA POSISI:
-- Managed Money (Large Specs): Net = ${largeSpecsNet > 0 ? "+" : ""}${largeSpecsNet.toLocaleString()} (${largeSpecsNet > 0 ? "NET LONG" : "NET SHORT"})
-- Commercials (Smart Money): Net = ${commercialNet > 0 ? "+" : ""}${commercialNet.toLocaleString()} (${commercialNet > 0 ? "NET LONG" : "NET SHORT"})
-- Retail (Small Traders): Net = ${retailNet > 0 ? "+" : ""}${retailNet.toLocaleString()} (${retailNet > 0 ? "NET LONG" : "NET SHORT"})
+  const userPrompt = `Analisis data COT ${cotData.name} (${cotData.symbol}) menggunakan framework Market Phase.
+
+DATA POSISI (NET):
+- Managed Money (Large Specs): ${largeSpecsNet > 0 ? "+" : ""}${largeSpecsNet.toLocaleString()} (${largeSpecsNet > 0 ? "NET LONG" : (largeSpecsNet < 0 ? "NET SHORT" : "FLAT")})
+- Commercials (Smart Money): ${commercialNet > 0 ? "+" : ""}${commercialNet.toLocaleString()} (${commercialNet > 0 ? "NET LONG" : (commercialNet < 0 ? "NET SHORT" : "FLAT")})
+- Retail: ${retailNet > 0 ? "+" : ""}${retailNet.toLocaleString()} (${retailNet > 0 ? "NET LONG" : (retailNet < 0 ? "NET SHORT" : "FLAT")})
+
+METRIK LANJUTAN:
+- COT Index Smart Money: ${cotSM ?? "N/A"} (0-100)
+- COT Index Large Specs: ${cotLS ?? "N/A"} (0-100)
+- WoW Δ Smart Money: ${wowSM !== undefined ? (wowSM > 0 ? "+" : "") + wowSM.toLocaleString() : "N/A"}
+- DBS: ${dbs !== undefined ? (dbs > 0 ? "+" : "") + dbs : "N/A"}
+- Divergence: ${divergence === true ? "YA — Smart Money vs Large Specs berlawanan arah" : "Tidak ada divergence signifikan"}
 
 FASE PASAR TERHITUNG: ${marketPhase}
-Kategori: ${cotData.category} | Tanggal: ${cotData.lastUpdate}
+Kategori: ${cotData.category} | Update: ${cotData.lastUpdate}
 
-MULAI dengan menyatakan Fase Pasar di atas, lalu berikan analisis momentum, peringatan, dan kesimpulan.`;
+Berikan analisis momentum (arah COT Index + WoW), peringatan (divergence/ekstrem), dan kesimpulan eksekutif (dengan bias arah + conviction level).`;
 
   try {
     const raw = await callDualEngine(userPrompt, systemPrompt, {
