@@ -45,6 +45,21 @@ export const connectDB = async () => {
       });
       console.log("🚀 Mongoose Connected.");
     }
+
+    // 3. Drop legacy single-field index that conflicts with per-broker compound index
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const indexes = await db.collection("ai_backtest_skills").indexes();
+        const legacyIdx = indexes.find((i: any) => i.name === "userId_1");
+        if (legacyIdx) {
+          await db.collection("ai_backtest_skills").dropIndex("userId_1");
+          console.log("✅ Dropped legacy userId_1 index on ai_backtest_skills");
+        }
+      }
+    } catch (idxErr: any) {
+      console.warn(`⚠️ Index cleanup skipped: ${idxErr.message}`);
+    }
   } catch (error) {
     console.error("🔥 Error connecting to MongoDB:", error);
     process.exit(1);
