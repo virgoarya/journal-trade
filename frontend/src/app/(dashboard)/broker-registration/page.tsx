@@ -103,8 +103,8 @@ export default function BrokerRegistrationPage() {
                 onClick={() => handleSelect("exness")}
                 className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-accent-gold/10 flex items-center justify-center text-accent-gold font-mono text-sm font-bold">
-                  EX
+                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center p-2">
+                  <img src="/exness.png" alt="Exness" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-text-primary">Exness</h3>
@@ -118,8 +118,8 @@ export default function BrokerRegistrationPage() {
                 onClick={() => handleSelect("valetax")}
                 className="group bg-bg-surface border border-border-subtle rounded-xl p-6 text-left hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all space-y-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-accent-gold/10 flex items-center justify-center text-accent-gold font-mono text-sm font-bold">
-                  VT
+                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center p-2">
+                  <img src="/valetax.png" alt="Valetax" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-text-primary">Valetax</h3>
