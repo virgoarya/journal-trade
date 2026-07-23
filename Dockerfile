@@ -24,7 +24,8 @@ COPY server/ ./server/
 COPY frontend/ ./frontend/
 
 ENV NODE_ENV=production
-RUN cd server && npm run build
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN cd server && NODE_OPTIONS="--max-old-space-size=384" npm run build
 
 # Production stage - Alpine for smaller final image
 FROM node:20-alpine
