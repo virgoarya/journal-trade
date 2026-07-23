@@ -29,6 +29,7 @@ import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import { initAutoBacktestCron } from "./cron/auto-backtest.cron";
 import path from "node:path";
+import fs from "node:fs";
 
 // System Monitor Agent
 import { systemMonitorAgent } from "./agents/system-monitor-agent";
@@ -102,10 +103,14 @@ connectDB()
 
       // Register Multi-MCP Servers
       if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {
-        console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
-         mcpService.registerServer(
+        const financeMcpPath = path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-mcp.exe");
+        if (!fs.existsSync(financeMcpPath)) {
+          console.warn(`[MCP] FlowLLM-Finance binary not found at ${financeMcpPath}, skipping`);
+        } else {
+          console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
+          mcpService.registerServer(
           "FlowLLM-Finance",
-          path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-mcp.exe"),
+          financeMcpPath,
           [
             "config=default",
             "mcp.transport=stdio",
@@ -120,13 +125,18 @@ connectDB()
             PYTHONUNBUFFERED: "1",
           }
         ).catch(e => console.error("FlowLLM MCP error:", e));
+        }
       }
 
       if (env.AITRADOS_SECRET_KEY) {
-        console.log("Starting Aitrados MCP Server...");
-        mcpService.registerServer(
+        const aitradosMcpPath = path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-trading-ai-agents-mcp.exe");
+        if (!fs.existsSync(aitradosMcpPath)) {
+          console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
+        } else {
+          console.log("Starting Aitrados MCP Server...");
+          mcpService.registerServer(
           "Aitrados",
-          path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-trading-ai-agents-mcp.exe"),
+          aitradosMcpPath,
           [],
           {
             AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY,
@@ -134,6 +144,7 @@ connectDB()
             PYTHONUNBUFFERED: "1",
           }
         ).catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
+        }
       }
 
       // Initialize MT5 MCP Service (lazy - connects on first use)
