@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { spawn } from "node:child_process";
 import { silentLogger } from "../utils/silent-logger";
 
@@ -112,13 +112,13 @@ class MCPService {
           { name: "HunterTradesTerminal", version: "1.0.0" },
           { capabilities: {} },
         );
-        const transport = new SSEClientTransport(
-          new URL(`http://${host}:${port}/sse`)
+        const transport = new StreamableHTTPClientTransport(
+          new URL(`http://${host}:${port}/mcp`)
         );
         await client.connect(transport, { timeout: 60000 });
         this.clients.set(serverName, client);
         this.isConnected = true;
-        silentLogger.info(`[MCP] Connected to SSE Server '${serverName}' at http://${host}:${port}/sse`);
+        silentLogger.info(`[MCP] Connected to Streamable HTTP Server '${serverName}' at http://${host}:${port}/mcp`);
         await this.refreshTools();
         return;
       } catch (error: any) {
