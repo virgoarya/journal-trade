@@ -97,6 +97,7 @@ class ConfluenceEngine {
     signals: AllMethodologySignals,
     weights: MethodologyWeights = DEFAULT_METHODOLOGY_WEIGHTS,
     activeMethodologies: MethodologyName[] = Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
+    minConfidence: number = MIN_CONFIDENCE,
   ): ConfluenceResult {
     // ── 1. Collect & filter signals ─────────────────────────────────
     const allMethodologySignals: MethodologySignal[] = [];
@@ -105,7 +106,7 @@ class ConfluenceEngine {
     for (const methodology of activeMethodologies) {
       const signal = signals[methodology as keyof AllMethodologySignals];
       if (!signal) continue;
-      if (signal.confidence < MIN_CONFIDENCE) continue;
+      if (signal.confidence < minConfidence) continue;
 
       // For methodologies that can have multiple signals (like SMC, ICT, etc.),
       // just take the first/best one from the strategy output

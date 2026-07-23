@@ -155,7 +155,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   },
   methodologyWeights: { ...DEFAULT_METHODOLOGY_WEIGHTS },
   activeMethodologies: Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
-  llmConsensus: { enabled: false, minProviders: 4, threshold: 0.5, providerTimeoutMs: 45000 },
+  llmConsensus: { enabled: false, minProviders: 4, threshold: 0.7, providerTimeoutMs: 45000 },
 };
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -855,6 +855,7 @@ const pipeline = {
 
       // ── MARKET REGIME: Detect current market conditions ────────────
       let regimeMult: Record<string, number> = {};
+      let currentRegime: string = "UNKNOWN";
       try {
         const activeSymbolForRegime = symbolsToAnalyze[0] || pipeline.config.symbols[0];
         const cacheKey = `${activeSymbolForRegime}_${pipeline.config.timeframe}`;
@@ -863,8 +864,9 @@ const pipeline = {
         const cachedRegime = this.getCachedRegime(cacheKey);
         if (cachedRegime) {
           regimeMult = cachedRegime.multipliers;
+          currentRegime = cachedRegime.regime;
           this.addLog(userId, "SIGNAL",
-            `[REGIME] ${cachedRegime.regime} (cached) - Adjusted weights applied`
+            `[REGIME] ${currentRegime} (cached) - Adjusted weights applied`
           );
         } else {
           const rates = await mt5McpService.getRates(activeSymbolForRegime, pipeline.config.timeframe, 60);
@@ -873,14 +875,21 @@ const pipeline = {
               time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
             }));
             const regimeResult = marketRegimeService.analyze(candles);
-            regimeMult = marketRegimeService.getRegimeMultipliers(regimeResult.regime);
-            this.setCachedRegime(cacheKey, regimeResult.regime, regimeMult);
+            currentRegime = regimeResult.regime;
+            regimeMult = marketRegimeService.getRegimeMultipliers(currentRegime);
+            this.setCachedRegime(cacheKey, currentRegime, regimeMult);
             this.addLog(userId, "SIGNAL",
-              `[REGIME] ${regimeResult.regime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
+              `[REGIME] ${currentRegime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
             );
           }
         }
       } catch (e: any) { silentLogger.warn(`[PIPELINE] Regime check error: ${e.message}`); }
+
+      // Dynamic min-confidence based on regime
+      let minConfidence = 55;
+      if (currentRegime.includes("HIGH_VOLATILITY")) minConfidence = 70;
+      else if (currentRegime.includes("RANGING")) minConfidence = 65;
+      else if (currentRegime.includes("TRENDING")) minConfidence = 55;
 
       // ── Apply regime multipliers to methodology weights ────────────
       let adjustedWeights = pipeline.config.methodologyWeights;
@@ -975,6 +984,14 @@ const pipeline = {
                this.addLog(userId, "INFO", `[${analysis.symbol}] Memantau market... menunggu setup teknikal valid.`);
             }
           }
+          continue;
+        }
+
+        // ── REGIME-BASED CONFIDENCE FILTER ──────────────────────────
+        if (analysis.confluence.finalSignal.confidence < minConfidence) {
+          this.addLog(userId, "CONFLUENCE",
+            `No trade: ${analysis.symbol} confidence ${analysis.confluence.finalSignal.confidence}% < ${minConfidence}% minimum for ${currentRegime} regime`
+          );
           continue;
         }
 
