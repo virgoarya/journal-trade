@@ -3,6 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { spawn } from "node:child_process";
 import { silentLogger } from "../utils/silent-logger";
+import { env } from "../config/env";
 
 export interface MCPToolInfo {
   name: string;
@@ -77,15 +78,12 @@ class MCPService {
     }
   }
 
-  async registerSSEServer(
-    serverName: string,
-    command: string,
-    args: string[],
-    port: number,
+  async registerAitrados(
+    port: number = 11999,
     host: string = "127.0.0.1",
-    env?: Record<string, string>,
     retries = 2,
   ) {
+    const serverName = "Aitrados";
     if (this.clients.has(serverName)) {
       silentLogger.info(`[MCP] Server ${serverName} already registered.`);
       return;
@@ -94,31 +92,50 @@ class MCPService {
     for (let attempt = 1; attempt <= 1 + retries; attempt++) {
       let child: any = null;
       try {
-        child = spawn(command, args, {
-          env: {
-            ...process.env,
-            ...(env || {}),
-          } as Record<string, string>,
-          stdio: ["pipe", "inherit", "inherit"],
-          detached: false,
-        });
+        child = spawn(
+          "/usr/local/bin/finance-trading-ai-agents-mcp",
+          ["serve", "--port", String(port), "--host", host],
+          {
+            env: {
+              ...process.env,
+              AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY || "",
+              PYTHONIOENCODING: "utf-8",
+              PYTHONUNBUFFERED: "1",
+            } as Record<string, string>,
+            stdio: ["pipe", "inherit", "inherit"],
+          },
+        );
         child.on("error", (e: Error) => { throw e; });
         this.processes.set(serverName, child);
 
-        // Let server boot, then connect via SSE
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, 3000));
 
-        const client = new Client(
-          { name: "HunterTradesTerminal", version: "1.0.0" },
-          { capabilities: {} },
-        );
-        const transport = new StreamableHTTPClientTransport(
-          new URL(`http://${host}:${port}/mcp`)
-        );
-        await client.connect(transport, { timeout: 60000 });
-        this.clients.set(serverName, client);
+        // Discover MCP servers from Aitrados
+        const discRes = await fetch(`http://${host}:${port}/mcp_servers.json`);
+        const disc: any = await discRes.json();
+        const mcpList = disc?.mcpServers || {};
+
+        if (!Object.keys(mcpList).length) {
+          throw new Error("No MCP servers discovered from Aitrados");
+        }
+
+        // Connect to each discovered MCP server
+        const deptNames = Object.keys(mcpList);
+        silentLogger.info(`[MCP] Aitrados discovered ${deptNames.length} server(s): ${deptNames.join(", ")}`);
+
+        for (const deptName of deptNames) {
+          const cfg = mcpList[deptName];
+          const client = new Client(
+            { name: "HunterTradesTerminal", version: "1.0.0" },
+            { capabilities: {} },
+          );
+          const transport = new StreamableHTTPClientTransport(new URL(cfg.url));
+          await client.connect(transport, { timeout: 30000 });
+          this.clients.set(`${serverName}/${deptName}`, client);
+          silentLogger.info(`[MCP] Connected to Aitrados/${deptName} at ${cfg.url}`);
+        }
+
         this.isConnected = true;
-        silentLogger.info(`[MCP] Connected to Streamable HTTP Server '${serverName}' at http://${host}:${port}/mcp`);
         await this.refreshTools();
         return;
       } catch (error: any) {
@@ -128,10 +145,10 @@ class MCPService {
         }
         if (attempt <= retries) {
           const delay = 5000 * Math.pow(2, attempt - 1);
-          silentLogger.warn(`[MCP] SSE connection to '${serverName}' attempt ${attempt}/${1 + retries} failed: ${error.message}. Retrying in ${delay}ms...`);
+          silentLogger.warn(`[MCP] Aitrados connection attempt ${attempt}/${1 + retries} failed: ${error.message}. Retrying in ${delay}ms...`);
           await new Promise(r => setTimeout(r, delay));
         } else {
-          silentLogger.error(`[MCP] Failed to connect to SSE server '${serverName}': ${error.message}`);
+          silentLogger.error(`[MCP] Failed to connect to Aitrados: ${error.message}`);
         }
       }
     }
