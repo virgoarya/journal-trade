@@ -37,3 +37,23 @@
 **Root Cause**: Konflik versi antara `undici` yang di-bundle dalam package MCP dengan versi Node.js yang digunakan Railway. Versi undici terlalu baru untuk Node.js yang tersedia.
 **Solusi**: Hapus seluruh import `@modelcontextprotocol/sdk` dan `undici`. Ganti logika koneksi dengan implementasi WebSocket RPC langsung.
 **Hindari**: Jangan install atau menggunakan `undici` secara langsung dalam project ini.
+
+### [20260723] Pipeline config nyantol pair broker lama saat ganti broker
+**Area**: Backend / Database
+**Root Cause**: `savedPipelineConfig` disimpan global per user, bukan per broker server. Saat ganti broker (misal Valetax → Exness), TradingPanel masih load config lama yang berisi pair Valetax (`XAUUSD.vx`). Route `/settings/ai-trading` dan `/pipeline/start` fallback ke `savedPipelineConfig` lama kalo broker baru belum punya config.
+**Solusi**:
+1. Tambah field `savedPipelineConfigs: Map<server, config>` di `UserSettings` model — simpan config per broker.
+2. `applyToLivePipeline` di `ai-learning.service.ts` simpan config ke `savedPipelineConfigs[server]` (ambil server dari `MT5Connection`).
+3. Route `/settings/ai-trading` dan `/pipeline/start` ambil config dari `savedPipelineConfigs[server]` — **tanpa fallback** ke config lama. Kalo broker baru belum ada config, return `null` → TradingPanel tampil "No Config Found".
+4. Frontend `AiTradingContext` re-fetch settings pas `accountInfo.server` berubah (per-broker isolation).
+**Hindari**: Jangan simpan config global per user kalau sistem support multiple broker. Jangan fallback ke config lama kalau broker berbeda — itu bikin data leak antar broker.
+**Area**: Backend / Frontend / Database
+**Root Cause**: Dua masalah sekaligus:
+1. **DB index conflict**: Collection `ai_backtest_skills` punya index lama `userId_1` (unique) yang konflik sama compound index baru `userId_1_server_1` (unique). Saat `updateSkill` coba save → `E11000 duplicate key error` → skill ga tersimpan.
+2. **Server mismatch**: `updateSkill` auto-detect server dari `MT5Connection`, tapi `SkillDisplay` fetch pake `accountInfo.server` dari MT5 response. Kalo beda (manual input vs actual), skill ga ketemu.
+**Solusi**:
+1. Auto-drop index lama `userId_1` saat server startup di `db/mongoose.ts` `connectDB()`.
+2. Pass `server` dari `MT5Connection` ke `updateSkill(userId, result, server)` di `backtest.service.ts` dan `auto-backtest.service.ts`.
+3. Route `/skill` accept query param `server`, pass ke `getSkill(userId, server)`.
+4. Frontend pass `accountInfo?.server` ke `SkillDisplay` → `aiTradingService.getSkill(server)`.
+**Hindari**: Jangan tambah unique index baru tanpa hapus index lama yang konflik. Jangan auto-detect server di satu layer dan pass manual di layer lain — konsisten di satu sumber.

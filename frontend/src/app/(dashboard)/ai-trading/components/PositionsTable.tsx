@@ -7,8 +7,6 @@ import { EmptyState } from "./EmptyState";
 import {
   XCircle,
   Pencil,
-  TrendingUp,
-  TrendingDown,
   Loader2,
   Save,
   RefreshCw,
@@ -36,6 +34,15 @@ export function PositionsTable({
     if (price > 1000) return price.toFixed(2);
     if (price > 10) return price.toFixed(3);
     return price.toFixed(5);
+  };
+
+  const getSLTPColor = (pos: Position) => {
+    if (!pos.sl || !pos.tp || pos.sl === pos.tp) return "";
+    const ratio = (pos.priceCurrent - pos.sl) / (pos.tp - pos.sl);
+    const threshold = 0.2;
+    if (ratio < threshold) return "text-neon-red drop-shadow-[0_0_2px_rgba(255,56,100,0.4)]";
+    if (ratio > 1 - threshold) return "text-neon-green drop-shadow-[0_0_2px_rgba(57,255,136,0.4)]";
+    return "text-text-primary";
   };
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -97,13 +104,7 @@ export function PositionsTable({
   }
 
   if (positions.length === 0) {
-    return (
-      <EmptyState
-        type="positions"
-        title="No Open Positions"
-        description="You don't have any open positions at the moment."
-      />
-    );
+    return null;
   }
 
   return (
@@ -211,7 +212,7 @@ export function PositionsTable({
                       />
                     ) : (
                       <span
-                        className={`${pos.sl ? "text-neon-red drop-shadow-[0_0_2px_rgba(255,56,100,0.4)]" : "text-text-muted/50"}`}
+                        className={`${pos.sl ? getSLTPColor(pos) : "text-text-muted/50"}`}
                       >
                         {pos.sl ? formatPrice(pos.sl) : "-"}
                       </span>
@@ -230,7 +231,7 @@ export function PositionsTable({
                       />
                     ) : (
                       <span
-                        className={`${pos.tp ? "text-neon-green drop-shadow-[0_0_2px_rgba(57,255,136,0.4)]" : "text-text-muted/50"}`}
+                        className={`${pos.tp ? getSLTPColor(pos) : "text-text-muted/50"}`}
                       >
                         {pos.tp ? formatPrice(pos.tp) : "-"}
                       </span>
