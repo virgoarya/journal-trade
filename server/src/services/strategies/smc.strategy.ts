@@ -5,6 +5,7 @@
 import { marketStructureService, type Candle, type MarketStructure, type OrderBlock } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
+import type { IPDAContext } from "./ipda-context";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -29,11 +30,11 @@ class SMCStrategy {
   /**
    * Analyze market structure through the SMC lens using Fractal Timeframes.
    */
-  analyze(fractal: import("./market-structure.service").FractalContext): SMCSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext, ipda?: IPDAContext): SMCSignal[] {
     const signals: SMCSignal[] = [];
 
     if (!fractal.isAligned) {
-      return signals; // Tolak mentah-mentah jika arah H4, H1, M15 (atau TF bersangkutan) berlawanan!
+      return signals;
     }
 
     // 1. Market Structure Shift (MSS) / Change of Character (CHOCH)
@@ -52,7 +53,29 @@ class SMCStrategy {
     const lgSignal = this.detectLiquidityGrab(fractal);
     if (lgSignal) signals.push(lgSignal);
 
-    // Sort by confidence descending
+    // ── IPDA Context: adjust confidence based on daily bias + IPDA state ──
+    if (ipda && signals.length > 0) {
+      for (const sig of signals) {
+        // Daily bias alignment: if signal against daily bias, reduce confidence
+        if (ipda.dailyBias.bias !== "SIDEWAYS") {
+          const aligned = (sig.direction === "BUY" && ipda.dailyBias.bias === "BULLISH") ||
+                          (sig.direction === "SELL" && ipda.dailyBias.bias === "BEARISH");
+          if (!aligned) sig.confidence = Math.round(sig.confidence * 0.7);
+          else sig.confidence = Math.min(95, Math.round(sig.confidence * 1.1));
+        }
+        // IPDA reversal detection: if signal aligns with reversal, boost CHOCH/MSS
+        if (ipda.intraday.state === "REVERSAL" && sig.breachType === "CHOCH") {
+          sig.confidence = Math.min(95, sig.confidence + 10);
+        }
+        // IPDA retracement: signal against expansion trend is lower quality
+        if (ipda.intraday.state === "RETRACEMENT") {
+          const withExpansion = (sig.direction === "BUY" && ipda.intraday.state === "EXPANSION_BULL") ||
+                                (sig.direction === "SELL" && ipda.intraday.state === "EXPANSION_BEAR");
+          if (!withExpansion) sig.confidence = Math.round(sig.confidence * 0.85);
+        }
+      }
+    }
+
     return signals.sort((a, b) => b.confidence - a.confidence);
   }
 

@@ -41,3 +41,6 @@ export type {
 export { DEFAULT_METHODOLOGY_WEIGHTS } from "./confluence-engine";
 
 export { atrService } from "./atr.service";
+
+export { ipdaContextService } from "./ipda-context";
+export type { IPDAContext, DailyBias, DailyBiasAnalysis, IPDAState, IPDAObservation } from "./ipda-context";

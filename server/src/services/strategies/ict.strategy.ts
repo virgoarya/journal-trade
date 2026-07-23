@@ -19,6 +19,7 @@ import {
 } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
+import type { IPDAContext } from "./ipda-context";
 
 export interface ICTSignal {
   direction: "BUY" | "SELL";
@@ -47,7 +48,7 @@ class ICTStrategy {
   /**
    * Full ICT+CRT analysis. Only dual-confluenced setups pass through.
    */
-  analyze(fractal: import("./market-structure.service").FractalContext): ICTSignal[] {
+  analyze(fractal: import("./market-structure.service").FractalContext, ipda?: IPDAContext): ICTSignal[] {
     const signals: ICTSignal[] = [];
 
     if (!fractal.isAligned) return signals;
@@ -55,9 +56,9 @@ class ICTStrategy {
     const config = strategyConfigService.getICTConfig();
     const htfTrend = fractal.directionStr.trend.direction;
 
-    const setupCandles = fractal.setup;   // H1/H4 — CRT AMD context
-    const entryCandles = fractal.entry;   // M15/M5 — ICT entries
-    const entryStr = fractal.entryStr;    // MarketStructure at entry TF
+    const setupCandles = fractal.setup;
+    const entryCandles = fractal.entry;
+    const entryStr = fractal.entryStr;
 
     if (setupCandles.length < 3 || entryCandles.length < 3) return signals;
 
@@ -131,6 +132,24 @@ class ICTStrategy {
       config,
     );
     if (oteAmdSignal) signals.push(oteAmdSignal);
+
+    // ── IPDA Context: adjust confidence ──
+    if (ipda && signals.length > 0) {
+      for (const sig of signals) {
+        if (ipda.dailyBias.bias !== "SIDEWAYS") {
+          const aligned = (sig.direction === "BUY" && ipda.dailyBias.bias === "BULLISH") ||
+                          (sig.direction === "SELL" && ipda.dailyBias.bias === "BEARISH");
+          if (!aligned) sig.confidence = Math.round(sig.confidence * 0.7);
+          else sig.confidence = Math.min(95, Math.round(sig.confidence * 1.1));
+        }
+        // IPDA retracement: sweep+FVG signals in retracement toward daily bias are high quality
+        if (ipda.intraday.state === "RETRACEMENT" && sig.signalType.includes("FVG")) {
+          const towardBias = (ipda.dailyBias.bias === "BULLISH" && sig.direction === "BUY") ||
+                             (ipda.dailyBias.bias === "BEARISH" && sig.direction === "SELL");
+          if (towardBias) sig.confidence = Math.min(95, sig.confidence + 10);
+        }
+      }
+    }
 
     return signals.sort((a, b) => b.confidence - a.confidence);
   }

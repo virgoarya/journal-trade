@@ -10,6 +10,7 @@
 import { type Candle, type MalaysianSNR, type OrderBlock, type SwingHigh, type SwingLow, type MarketStructure, type FractalContext } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
+import type { IPDAContext } from "./ipda-context";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -29,7 +30,7 @@ export interface MSNRAnalysis {
 }
 
 class MSNRStrategy {
-  analyze(fractal: FractalContext): MSNRSignal[] {
+  analyze(fractal: FractalContext, ipda?: IPDAContext): MSNRSignal[] {
     const signals: MSNRSignal[] = [];
     if (!fractal.isAligned) return signals;
 
@@ -154,6 +155,16 @@ class MSNRStrategy {
         const reason = `MSNR Hybrid ${setup.direction}: HTF Sweep (${setup.sweepLevel.toFixed(5)}) at SNR (${setup.snr.price.toFixed(5)}) -> LTF MSS (${mssPrice.toFixed(5)}) -> OB Limit`;
         
         signals.push(this.buildSignal(setup.direction, entryPrice, slPrice, "TURTLE_SOUP_OB", reason, msnrConfig, 15));
+    }
+
+    // ── IPDA Context: daily bias filter for Turtle Soup ──
+    if (ipda && signals.length > 0 && ipda.dailyBias.bias !== "SIDEWAYS") {
+      for (const sig of signals) {
+        const aligned = (sig.direction === "BUY" && ipda.dailyBias.bias === "BULLISH") ||
+                        (sig.direction === "SELL" && ipda.dailyBias.bias === "BEARISH");
+        if (!aligned) sig.confidence = Math.round(sig.confidence * 0.6);
+        else sig.confidence = Math.min(95, Math.round(sig.confidence * 1.1));
+      }
     }
 
     return signals.sort((a, b) => b.confidence - a.confidence);

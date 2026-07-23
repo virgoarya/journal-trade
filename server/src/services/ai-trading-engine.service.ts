@@ -11,10 +11,12 @@ import {
 
   confluenceEngine,
   atrService,
+  ipdaContextService,
   type MarketStructure,
   type MethodologyWeights,
   type MethodologyName,
   type ConfluenceResult,
+  type IPDAContext,
   DEFAULT_METHODOLOGY_WEIGHTS,
 } from "./strategies/index";
 
@@ -184,13 +186,19 @@ class AITradingEngine {
       isAligned 
     };
 
-    // ── 2. Run all 7 strategies in parallel ────────────────────────
+    // ── IPDA Context for strategies ───────────────────────────────
+    const ipdaCtx = ipdaContextService.buildContext(
+      directionCandles, directionStructure,
+      entryCandles, entryStructure,
+      entryCandles[entryCandles.length - 1]?.time || 0,
+    );
+
+    // ── 2. Run all strategies in parallel ────────────────────────
     const [smcSignals, ictSignals, msnrSignals] =
       await Promise.all([
-        Promise.resolve(smcStrategy.analyze(fractalCtx)),
-        Promise.resolve(ictStrategy.analyze(fractalCtx)),
-        Promise.resolve(msnrStrategy.analyze(fractalCtx)),
-
+        Promise.resolve(smcStrategy.analyze(fractalCtx, ipdaCtx)),
+        Promise.resolve(ictStrategy.analyze(fractalCtx, ipdaCtx)),
+        Promise.resolve(msnrStrategy.analyze(fractalCtx, ipdaCtx)),
       ]);
 
     const confluence = confluenceEngine.calculateConfluence(

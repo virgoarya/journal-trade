@@ -893,12 +893,6 @@ const pipeline = {
         }
       } catch (e: any) { silentLogger.warn(`[PIPELINE] Regime check error: ${e.message}`); }
 
-      // Dynamic min-confidence based on regime
-      let minConfidence = 55;
-      if (currentRegime.includes("HIGH_VOLATILITY")) minConfidence = 70;
-      else if (currentRegime.includes("RANGING")) minConfidence = 65;
-      else if (currentRegime.includes("TRENDING")) minConfidence = 55;
-
       // ── Apply regime multipliers to methodology weights ────────────
       let adjustedWeights = pipeline.config.methodologyWeights;
       if (Object.keys(regimeMult).length > 0 && adjustedWeights) {
