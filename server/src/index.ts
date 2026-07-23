@@ -101,9 +101,17 @@ connectDB()
       startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
       initAutoBacktestCron();
 
+      // Resolve MCP binary path for current OS (Windows: Scripts/*.exe, Linux: bin/*)
+      const mcpBinPath = (name: string) => {
+        const venvRoot = path.join(__dirname, "..", ".venv-mcp");
+        const scriptsDir = process.platform === "win32" ? "Scripts" : "bin";
+        const exeName = process.platform === "win32" ? `${name}.exe` : name;
+        return path.join(venvRoot, scriptsDir, exeName);
+      };
+
       // Register Multi-MCP Servers
       if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {
-        const financeMcpPath = path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-mcp.exe");
+        const financeMcpPath = mcpBinPath("finance-mcp");
         if (!fs.existsSync(financeMcpPath)) {
           console.warn(`[MCP] FlowLLM-Finance binary not found at ${financeMcpPath}, skipping`);
         } else {
@@ -129,7 +137,7 @@ connectDB()
       }
 
       if (env.AITRADOS_SECRET_KEY) {
-        const aitradosMcpPath = path.join(__dirname, "..", ".venv-mcp", "Scripts", "finance-trading-ai-agents-mcp.exe");
+        const aitradosMcpPath = mcpBinPath("finance-trading-ai-agents-mcp");
         if (!fs.existsSync(aitradosMcpPath)) {
           console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
         } else {

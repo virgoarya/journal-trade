@@ -33,6 +33,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install Python for MCP servers
+RUN apk add --no-cache python3 py3-pip
+
 # Copy server package files
 COPY --from=builder /app/server/package*.json ./server/
 
@@ -43,5 +46,8 @@ RUN cd server && npm ci --only=production --ignore-scripts
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/frontend ./server/dist/frontend
 
+# Create Python venv & install MCP dependencies
+COPY server/install-mcp.sh ./server/install-mcp.sh
+RUN chmod +x ./server/install-mcp.sh && ./server/install-mcp.sh && rm ./server/install-mcp.sh
 
 CMD ["node", "server/dist/index.js"]
