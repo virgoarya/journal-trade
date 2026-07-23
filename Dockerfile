@@ -5,7 +5,8 @@ ENV NODE_ENV=production
 
 # Install Python + MCP dependencies
 RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --break-system-packages --no-cache-dir finance-mcp finance-trading-ai-agents-mcp flowllm==0.2.0.8 pathspec==0.11.2
+    pip3 install --break-system-packages --no-cache-dir finance-mcp finance-trading-ai-agents-mcp flowllm==0.2.0.8 && \
+    pip3 install --break-system-packages --no-cache-dir --no-deps --force-reinstall pathspec==0.11.2
 
 # Install server npm dependencies
 COPY server/package*.json ./server/
