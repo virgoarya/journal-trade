@@ -3,7 +3,6 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { spawn } from "node:child_process";
 import { silentLogger } from "../utils/silent-logger";
-import { env } from "../config/env";
 
 export interface MCPToolInfo {
   name: string;
@@ -98,7 +97,7 @@ class MCPService {
           {
             env: {
               ...process.env,
-              AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY || "",
+              AITRADOS_SECRET_KEY: process.env.AITRADOS_SECRET_KEY || "",
               PYTHONIOENCODING: "utf-8",
               PYTHONUNBUFFERED: "1",
             } as Record<string, string>,
@@ -110,30 +109,33 @@ class MCPService {
 
         await new Promise(r => setTimeout(r, 3000));
 
-        // Discover MCP servers from Aitrados
-        const discRes = await fetch(`http://${host}:${port}/mcp_servers.json`);
-        const disc: any = await discRes.json();
-        const mcpList = disc?.mcpServers || {};
+        // Known Aitrados MCP sub-app paths (not all discovered depts have mounted apps)
+        const knownPaths = [
+          "economic_calendar",
+          "traditional_indicator",
+          "price_action",
+          "news",
+        ];
+        const baseUrl = `http://${host}:${port}`;
+        let connectedCount = 0;
 
-        if (!Object.keys(mcpList).length) {
-          throw new Error("No MCP servers discovered from Aitrados");
+        for (const dept of knownPaths) {
+          try {
+            const client = new Client(
+              { name: "HunterTradesTerminal", version: "1.0.0" },
+              { capabilities: {} },
+            );
+            const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/${dept}/`));
+            await client.connect(transport, { timeout: 10000 });
+            this.clients.set(`${serverName}/${dept}`, client);
+            silentLogger.info(`[MCP] Connected to Aitrados/${dept}`);
+            connectedCount++;
+          } catch (e: any) {
+            silentLogger.warn(`[MCP] Aitrados/${dept} skipped: ${e.message}`);
+          }
         }
 
-        // Connect to each discovered MCP server
-        const deptNames = Object.keys(mcpList);
-        silentLogger.info(`[MCP] Aitrados discovered ${deptNames.length} server(s): ${deptNames.join(", ")}`);
-
-        for (const deptName of deptNames) {
-          const cfg = mcpList[deptName];
-          const client = new Client(
-            { name: "HunterTradesTerminal", version: "1.0.0" },
-            { capabilities: {} },
-          );
-          const transport = new StreamableHTTPClientTransport(new URL(cfg.url));
-          await client.connect(transport, { timeout: 30000 });
-          this.clients.set(`${serverName}/${deptName}`, client);
-          silentLogger.info(`[MCP] Connected to Aitrados/${deptName} at ${cfg.url}`);
-        }
+        if (connectedCount === 0) throw new Error("No Aitrados sub-servers connected");
 
         this.isConnected = true;
         await this.refreshTools();
