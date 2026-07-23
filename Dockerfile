@@ -1,6 +1,8 @@
 # Build stage - use Debian slim for reliable native module builds (lightningcss, sharp, etc.)
 FROM node:20-slim AS builder
 
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Install minimal build tools for native modules
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -13,7 +15,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 
-# Install server dependencies
+# Install server dependencies (skip puppeteer Chromium download — saves ~300MB)
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci
@@ -24,8 +26,7 @@ COPY server/ ./server/
 COPY frontend/ ./frontend/
 
 ENV NODE_ENV=production
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-RUN cd server && NODE_OPTIONS="--max-old-space-size=384" npm run build
+RUN cd server && npm run build
 
 # Production stage - Alpine for smaller final image
 FROM node:20-alpine
