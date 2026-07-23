@@ -989,14 +989,6 @@ const pipeline = {
           continue;
         }
 
-        // ── REGIME-BASED CONFIDENCE FILTER ──────────────────────────
-        if (analysis.confluence.finalSignal.confidence < minConfidence) {
-          this.addLog(userId, "CONFLUENCE",
-            `No trade: ${analysis.symbol} confidence ${analysis.confluence.finalSignal.confidence}% < ${minConfidence}% minimum for ${currentRegime} regime`
-          );
-          continue;
-        }
-
         const signal: TradingSignal = {
           symbol: analysis.symbol,
           direction: analysis.confluence.finalSignal.direction,
