@@ -31,6 +31,10 @@ export function AccountOverview({
   const pnlColor = (accountInfo.profit ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
   const pnlBg = (accountInfo.profit ?? 0) >= 0 ? "bg-neon-green/10 border-neon-green/20" : "bg-neon-red/10 border-neon-red/20";
   const dailyColor = (accountInfo.dailyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
+  const weeklyColor = (accountInfo.weeklyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
+
+  const dailyPct = accountInfo.balance > 0 ? (accountInfo.dailyPnL / accountInfo.balance) * 100 : 0;
+  const weeklyPct = accountInfo.balance > 0 ? ((accountInfo.weeklyPnL ?? 0) / accountInfo.balance) * 100 : 0;
 
   const riskPercent = accountInfo.balance && accountInfo.balance > 0
     ? Math.min((accountInfo.openRisk / accountInfo.balance) * 100, 10)
@@ -110,29 +114,35 @@ export function AccountOverview({
             </div>
           </div>
 
-          {/* Daily & Weekly P&L */}
+          {/* Daily % & Weekly % */}
           <div className="flex items-center gap-5 px-5 py-3 rounded-lg border border-neon-green/10 bg-black/40 flex-shrink-0">
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Daily</span>
               <span className={`text-sm font-mono font-bold ${dailyColor} drop-shadow-[0_0_4px_currentColor]`}>
+                {dailyPct >= 0 ? "+" : ""}{dailyPct.toFixed(2)}%
+              </span>
+              <span className="text-[9px] font-mono text-gray-500 block mt-0.5">
                 {accountInfo.dailyPnL >= 0 ? "+" : ""}{formatMoney(accountInfo.dailyPnL, accountInfo.currency)}
               </span>
             </div>
-            <div className="w-px h-8 bg-neon-green/10" />
+            <div className="w-px h-10 bg-neon-green/10" />
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Weekly</span>
-              <span className={`text-sm font-mono font-bold ${(accountInfo.weeklyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red"} drop-shadow-[0_0_4px_currentColor]`}>
+              <span className={`text-sm font-mono font-bold ${weeklyColor} drop-shadow-[0_0_4px_currentColor]`}>
+                {weeklyPct >= 0 ? "+" : ""}{weeklyPct.toFixed(2)}%
+              </span>
+              <span className="text-[9px] font-mono text-gray-500 block mt-0.5">
                 {(accountInfo.weeklyPnL ?? 0) >= 0 ? "+" : ""}{formatMoney(accountInfo.weeklyPnL ?? 0, accountInfo.currency)}
               </span>
             </div>
           </div>
 
-          {/* Risk & Winrate */}
+          {/* Risk % & Winrate */}
           <div className="flex items-center gap-5 px-5 py-3 rounded-lg border border-neon-green/10 bg-black/40 flex-shrink-0">
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Risk</span>
               <span className="text-sm font-mono font-bold text-white drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]">
-                {formatMoney(displayRisk, accountInfo.currency)}
+                {riskPercent.toFixed(1)}%
               </span>
             </div>
             <div className="w-px h-8 bg-neon-green/10" />
