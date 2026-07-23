@@ -929,8 +929,8 @@ const pipeline = {
 
           if (analyses.length > 0 && analyses[0].ipdaContext) {
             const ipda = analyses[0].ipdaContext;
-            this.addLog(userId, "SIGNAL",
-              `[IPDA] Bias: ${ipda.dailyBias.bias} (${ipda.dailyBias.confidence}%) | State: ${ipda.intraday.state} (${ipda.intraday.confidence}%) | KZ: ${ipda.currentKillzone}`,
+            this.addLog(userId, "IPDA",
+              `[${analyses[0].symbol}] Bias: ${ipda.dailyBias.bias} (${ipda.dailyBias.confidence}%) | State: ${ipda.intraday.state} (${ipda.intraday.confidence}%) | KZ: ${ipda.currentKillzone} | Retrace: ${(ipda.intraday.retracementRatio * 100).toFixed(0)}%`,
               { ipdaContext: ipda },
             );
           }
@@ -992,11 +992,14 @@ const pipeline = {
             // Log methodology votes even if no final signal
             const breakdown = analysis.confluence.methodologyBreakdown;
             const votes = Object.entries(breakdown)
-              .filter(([, v]) => v.confidence > 0)
-              .map(([k, v]) => `${k}=${v.direction}(${v.confidence}%)`)
+              .filter(([, v]) => (v as any).confidence > 0)
+              .map(([k, v]) => `${k}=${(v as any).direction ?? '-'}(${(v as any).confidence ?? 0}%)`)
               .join(", ");
+            const alignInfo = analysis.methodologySignals
+              ? ` | SMC:${analysis.methodologySignals.smc.length} ICT:${analysis.methodologySignals.ict.length} MSNR:${analysis.methodologySignals.msnr.length} raw signals`
+              : "";
             this.addLog(userId, "CONFLUENCE",
-              `[${analysis.symbol}] No signal. Votes: ${votes || "none"}`,
+              `[${analysis.symbol}] No signal. Votes: ${votes || "none"}${alignInfo}`,
               breakdown,
             );
           }

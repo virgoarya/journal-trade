@@ -98,6 +98,7 @@ export interface MultiStrategySymbolAnalysis {
 
   };
   confluence: ConfluenceResult;
+  ipdaContext?: IPDAContext;
   /** Legacy backwards‑compat shape */
   signal: SignalAnalysis;
 }
@@ -172,8 +173,12 @@ class AITradingEngine {
     const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
     const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);
 
-    const isAligned = directionStructure.trend.direction === setupStructure.trend.direction && 
-                      setupStructure.trend.direction === entryStructure.trend.direction;
+    // Relax alignment: allow 2-of-3 TF aligned OR direction TF aligned (major trend dominates)
+    const dirTrend = directionStructure.trend.direction;
+    const setupAligned = setupStructure.trend.direction === dirTrend;
+    const entryAligned = entryStructure.trend.direction === dirTrend;
+    const alignedCount = (dirTrend !== "SIDEWAYS" ? 1 : 0) + (setupAligned ? 1 : 0) + (entryAligned ? 1 : 0);
+    const isAligned = alignedCount >= 2;
 
     // Build fractal object to pass into methodologies
     const fractalCtx = { 
@@ -218,6 +223,7 @@ class AITradingEngine {
       marketStructure: directionStructure,
       methodologySignals: { smc: smcSignals, ict: ictSignals, msnr: msnrSignals },
       confluence,
+      ipdaContext: ipdaCtx,
       signal: { rsi, atr: atrPattern, pattern: pattern.type, currentPrice, signal: legacySignal },
     };
   }
