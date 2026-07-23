@@ -4,7 +4,7 @@
     "builder": "DOCKERFILE"
   },
   "deploy": {
-    "startCommand": "npx tsx server/src/index.ts",
+    "startCommand": "/app/server/node_modules/.bin/tsx server/src/index.ts",
     "restartPolicyType": "ON_FAILURE"
   }
 }
