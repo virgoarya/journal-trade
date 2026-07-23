@@ -33,9 +33,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install Python for MCP servers
+# Install Python + MCP dependencies (clean install — .venv-mcp is dockerignored)
 RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --upgrade pip && \
     pip3 install --no-cache-dir finance-mcp finance-trading-ai-agents-mcp flowllm==0.2.0.8 pathspec==0.11.2
 
 # Copy server package files

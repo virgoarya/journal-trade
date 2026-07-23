@@ -49,6 +49,12 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Python virtual environments
+.venv
+.venv-mcp
+*/venv/
+*/.venv/
+
 # Misc
 *.local
 
