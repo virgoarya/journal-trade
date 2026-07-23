@@ -292,8 +292,11 @@ class AITradingEngine {
 
     // ATR adjustment: ensure minimum SL distance is 1.5× ATR
     // Prevents stop-out from noise during high volatility
+    // Capped at 2× original SL to prevent extreme lot size reduction
     if (atr && atr > 0) {
-      slDistance = Math.max(slDistance, atr * 1.5);
+      const minSlByAtr = atr * 1.5;
+      const maxOverride = slDistance * 2;
+      slDistance = Math.max(slDistance, Math.min(minSlByAtr, maxOverride));
     }
 
     let lotSize = 0;

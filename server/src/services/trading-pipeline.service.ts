@@ -205,7 +205,7 @@ class TradingPipelineService {
   // ─── Cache ────────────────────────────────────────────────────────────
   private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
   private fundamentalCache = new Map<string, { score: any; timestamp: number }>();
-  private readonly REGIME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private readonly REGIME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
   private readonly FUNDAMENTAL_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
   private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
