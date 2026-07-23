@@ -143,11 +143,13 @@ connectDB()
         if (!fs.existsSync(aitradosMcpPath)) {
           console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
         } else {
-          console.log("Starting Aitrados MCP Server...");
-          mcpService.registerServer(
+          console.log("Starting Aitrados MCP Server (HTTP/SSE)...");
+          mcpService.registerSSEServer(
           "Aitrados",
           aitradosMcpPath,
-          [],
+          ["serve", "--port", "11999", "--host", "127.0.0.1"],
+          11999,
+          "127.0.0.1",
           {
             AITRADOS_SECRET_KEY: env.AITRADOS_SECRET_KEY,
             PYTHONIOENCODING: "utf-8",
