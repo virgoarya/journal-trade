@@ -766,6 +766,14 @@ const pipeline = {
 
       if (!this.isWithinTradingHours(pipeline.config)) return;
 
+      // ── MARKET SESSION: Skip volatile session switches ──────────
+      if (this.isInVolatileSessionWindow(pipeline.config.symbols[0] || "")) {
+        if (pipeline.config.symbols[0] === symbol) {
+          this.addLog(userId, "INFO", `[SESSION] Volatile session window — skipping analysis until market stabilizes`);
+        }
+        return;
+      }
+
       // ── Smart Risk Management State Updates ──
       try {
         const acc = await mt5McpService.getAccountInfo();
@@ -1010,6 +1018,21 @@ const pipeline = {
         };
 
         pipeline.lastSignal = signal;
+
+        // ── DATA FEED LOG: current bid/ask vs signal entry ─────────
+        try {
+          const tick = await mt5McpService.call("mt5_symbol_tick", { symbol: signal.symbol });
+          const feedBid = tick?.bid ?? 0;
+          const feedAsk = tick?.ask ?? 0;
+          const feedMid = (feedBid + feedAsk) / 2;
+          const entryDiff = Math.abs(feedMid - signal.entry);
+          const spreadPips = Math.abs(feedAsk - feedBid) / (tick?.point || 0.00001);
+          if (entryDiff > 0) {
+            this.addLog(userId, "SIGNAL",
+              `[FEED] ${signal.symbol} bid=${feedBid} ask=${feedAsk} spread=${spreadPips.toFixed(1)}pips | Signal entry=${signal.entry} diff=${(entryDiff * 10000).toFixed(1)}pips`
+            );
+          }
+        } catch {}
 
         // Ambil current positions
         let currentPosCount = 0;
@@ -1666,6 +1689,29 @@ const llmResult = await llmConsensusService.evaluate(
       case "H4": return 600_000;   // 600s — check ~24× per H4 candle
       default: return 120_000;
     }
+  }
+
+  private isInVolatileSessionWindow(symbol: string): boolean {
+    // Skip session filter for crypto (24/7 market)
+    if (/^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol)) return false;
+
+    const now = new Date();
+    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+    // Volatile windows (UTC):
+    // 07:00-08:00 — London open (first hour)
+    // 12:00-16:00 — London/NY overlap (+ NY open first hour)
+    // 20:30-21:30 — major US data releases (NY close)
+    const volatileWindows = [
+      { start: 7 * 60, end: 8 * 60 },       // 07:00-08:00
+      { start: 12 * 60, end: 16 * 60 },      // 12:00-16:00
+      { start: 20 * 60 + 30, end: 21 * 60 + 30 }, // 20:30-21:30
+    ];
+
+    for (const w of volatileWindows) {
+      if (utcMinutes >= w.start && utcMinutes < w.end) return true;
+    }
+    return false;
   }
 
   private isWithinTradingHours(config: PipelineConfig): boolean {
