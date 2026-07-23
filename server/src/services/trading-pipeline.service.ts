@@ -1703,21 +1703,29 @@ const llmResult = await llmConsensusService.evaluate(
     // Skip session filter for crypto (24/7 market)
     if (/^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol)) return false;
 
+    // Use NY time (EST/EDT = UTC-4/5). Daylight saving auto-handled by Intl API.
     const now = new Date();
-    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const nyFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = nyFormatter.formatToParts(now);
+    const nyHour = parseInt(parts.find(p => p.type === "hour")?.value ?? "0");
+    const nyMinutes = parseInt(parts.find(p => p.type === "minute")?.value ?? "0");
+    const nyMinutesOfDay = nyHour * 60 + nyMinutes;
 
-    // Volatile windows (UTC):
-    // 07:00-08:00 — London open (first hour)
-    // 12:00-16:00 — London/NY overlap (+ NY open first hour)
-    // 20:30-21:30 — major US data releases (NY close)
+    // Volatile windows (NY time):
+    // 03:00-04:00 — London open (first hour, spike volatility)
+    // 08:30-09:30 — NY open + major US data releases (NFP, CPI, FOMC)
+    // 15:30-16:30 — London close (liquidity withdrawal)
     const volatileWindows = [
-      { start: 7 * 60, end: 8 * 60 },       // 07:00-08:00
-      { start: 12 * 60, end: 16 * 60 },      // 12:00-16:00
-      { start: 20 * 60 + 30, end: 21 * 60 + 30 }, // 20:30-21:30
+      { start: 3 * 60, end: 4 * 60 },           // 03:00-04:00 NY
+      { start: 8 * 60 + 30, end: 9 * 60 + 30 }, // 08:30-09:30 NY
+      { start: 15 * 60 + 30, end: 16 * 60 + 30 }, // 15:30-16:30 NY
     ];
 
     for (const w of volatileWindows) {
-      if (utcMinutes >= w.start && utcMinutes < w.end) return true;
+      if (nyMinutesOfDay >= w.start && nyMinutesOfDay < w.end) return true;
     }
     return false;
   }
