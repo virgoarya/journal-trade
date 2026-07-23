@@ -201,7 +201,7 @@ export interface OrderResult {
 
 export interface PipelineLog {
   time: string;
-  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE";
+  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE" | "IPDA";
   message: string;
   data?: any;
 }

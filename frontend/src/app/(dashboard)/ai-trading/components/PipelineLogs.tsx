@@ -4,7 +4,7 @@ import { useState } from "react";
 import { type PipelineLog } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
-import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity, BrainCircuit, Layers } from "lucide-react";
+import { ScrollText, Signal, ShoppingCart, AlertTriangle, Activity, BrainCircuit, Layers, Compass } from "lucide-react";
 
 interface PipelineLogsProps {
   logs: PipelineLog[];
@@ -19,6 +19,7 @@ const LOG_ICONS: Record<
   INFO: { icon: ScrollText, color: "text-gray-400" },
   SIGNAL: { icon: Signal, color: "text-blue-400" },
   CONFLUENCE: { icon: BrainCircuit, color: "text-purple-400" },
+  IPDA: { icon: Compass, color: "text-cyan-400" },
   TRADE: { icon: ShoppingCart, color: "text-green-400" },
   ERROR: { icon: AlertTriangle, color: "text-red-400" },
   TRAILING: { icon: Activity, color: "text-yellow-400" },

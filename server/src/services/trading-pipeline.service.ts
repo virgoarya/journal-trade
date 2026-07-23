@@ -129,7 +129,7 @@ export interface PipelineStatus {
 
 export interface PipelineLog {
   time: string;
-  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE";
+  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE" | "IPDA";
   message: string;
   data?: any;
 }
@@ -918,14 +918,22 @@ const pipeline = {
 
       let analyses: MultiStrategySymbolAnalysis[] = [];
       try {
-        // Use multi-methodology analysis with regime-adjusted weights
-        analyses = await aiTradingEngine.analyzeSymbols(
-          symbolsToAnalyze,
-          pipeline.config.timeframe,
-          pipeline.config.maxRiskPerTrade,
-          adjustedWeights,
-          pipeline.config.activeMethodologies,
-        );
+          // Use multi-methodology analysis with regime-adjusted weights
+          analyses = await aiTradingEngine.analyzeSymbols(
+            symbolsToAnalyze,
+            pipeline.config.timeframe,
+            pipeline.config.maxRiskPerTrade,
+            adjustedWeights,
+            pipeline.config.activeMethodologies,
+          );
+
+          if (analyses.length > 0 && analyses[0].ipdaContext) {
+            const ipda = analyses[0].ipdaContext;
+            this.addLog(userId, "SIGNAL",
+              `[IPDA] Bias: ${ipda.dailyBias.bias} (${ipda.dailyBias.confidence}%) | State: ${ipda.intraday.state} (${ipda.intraday.confidence}%) | KZ: ${ipda.currentKillzone}`,
+              { ipdaContext: ipda },
+            );
+          }
       } catch (err: any) {
         silentLogger.error(`[PIPELINE] Error analyzing symbols: ${err.message}`);
         // Jika error jaringan MT5, putuskan status agar tick berikutnya masuk ke Auto-Pause
@@ -981,13 +989,28 @@ const pipeline = {
               analysis.confluence.methodologyBreakdown,
             );
           } else {
-            const min = new Date().getMinutes();
-            if (min % 15 === 0 && !pipeline.logs.find(l => l.message.includes(`[${analysis.symbol}] Memantau market`) && new Date(l.time).getTime() > Date.now() - 60000)) {
-               this.addLog(userId, "INFO", `[${analysis.symbol}] Memantau market... menunggu setup teknikal valid.`);
-            }
+            // Log methodology votes even if no final signal
+            const breakdown = analysis.confluence.methodologyBreakdown;
+            const votes = Object.entries(breakdown)
+              .filter(([, v]) => v.confidence > 0)
+              .map(([k, v]) => `${k}=${v.direction}(${v.confidence}%)`)
+              .join(", ");
+            this.addLog(userId, "CONFLUENCE",
+              `[${analysis.symbol}] No signal. Votes: ${votes || "none"}`,
+              breakdown,
+            );
           }
           continue;
         }
+
+        // ── Signal Accepted: Log confluence details ──────────────
+        this.addLog(userId, "CONFLUENCE",
+          `[${analysis.symbol}] Signal: ${analysis.confluence.finalSignal.direction} | ` +
+          `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${analysis.confluence.finalSignal.confidence}% | ` +
+          `Primary: ${analysis.confluence.finalSignal.primaryMethodology} | ` +
+          `Agreeing: ${analysis.confluence.finalSignal.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0}`,
+          analysis.confluence.methodologyBreakdown,
+        );
 
         const signal: TradingSignal = {
           symbol: analysis.symbol,
@@ -1030,8 +1053,8 @@ const pipeline = {
         } catch {}
 
         // Risk check
-        this.addLog(userId, "INFO", 
-          `Menghitung risk per trade (Max ${pipeline.config.maxRiskPerTrade}%) dan total open positions (Akun: ${currentPosCount}/${pipeline.config.maxOpenPositions}, Pair ${signal.symbol}: ${symbolPosCount}).`
+        this.addLog(userId, "SIGNAL",
+          `[RISK] Checking ${signal.symbol}: Max ${pipeline.config.maxRiskPerTrade}% | Open: ${currentPosCount}/${pipeline.config.maxOpenPositions} | Pair: ${symbolPosCount}`
         );
         const riskCheck = await riskManagerService.checkTradeAllowed(
           userId,
@@ -1045,10 +1068,12 @@ const pipeline = {
 
         if (!riskCheck.allowed) {
           this.addLog(userId, "ERROR",
-            `Risk rejected ${signal.symbol}: ${riskCheck.reason}`,
+            `[RISK] Rejected ${signal.symbol}: ${riskCheck.reason}`,
           );
           continue;
         }
+
+        this.addLog(userId, "INFO", `[RISK] ${signal.symbol} passed risk check. Proceeding to filters...`);
 
         // Log confluence breakdown (Signal Direction)
         const slDist = Math.abs(signal.entry - signal.sl);
@@ -1056,11 +1081,8 @@ const pipeline = {
         const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
 
         this.addLog(userId, "SIGNAL",
-          `Arah signal ${signal.symbol} ${signal.direction === "BUY" ? "BULLISH" : "BEARISH"} sesuai regime market. ` +
-          `R:R: 1:${rrRatio.toFixed(2)} | ` +
-          `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${signal.confidence}% | ` +
-          `Primary: ${analysis.confluence.finalSignal.primaryMethodology}`,
-          analysis.confluence.methodologyBreakdown,
+          `[SIGNAL] ${signal.symbol} ${signal.direction} | R:R 1:${rrRatio.toFixed(2)} | ` +
+          `Conf: ${signal.confidence}% | Entry: ${signal.entry} SL: ${signal.sl} TP: ${signal.tp}`
         );
 
 
