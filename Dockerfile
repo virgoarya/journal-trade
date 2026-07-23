@@ -34,7 +34,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install Python for MCP servers
-RUN apk add --no-cache python3 py3-pip
+RUN apk add --no-cache python3 py3-pip && \
+    pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir finance-mcp finance-trading-ai-agents-mcp flowllm==0.2.0.8 pathspec==0.11.2
 
 # Copy server package files
 COPY --from=builder /app/server/package*.json ./server/
@@ -45,9 +47,5 @@ RUN cd server && npm ci --only=production --ignore-scripts
 # Copy built files
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/frontend ./server/dist/frontend
-
-# Create Python venv & install MCP dependencies
-COPY server/install-mcp.sh ./server/install-mcp.sh
-RUN chmod +x ./server/install-mcp.sh && ./server/install-mcp.sh && rm ./server/install-mcp.sh
 
 CMD ["node", "server/dist/index.js"]

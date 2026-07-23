@@ -101,12 +101,14 @@ connectDB()
       startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
       initAutoBacktestCron();
 
-      // Resolve MCP binary path for current OS (Windows: Scripts/*.exe, Linux: bin/*)
+      // Resolve MCP binary path for current OS (Windows: Scripts/*.exe, Linux: system bin/*)
       const mcpBinPath = (name: string) => {
-        const venvRoot = path.join(__dirname, "..", ".venv-mcp");
-        const scriptsDir = process.platform === "win32" ? "Scripts" : "bin";
-        const exeName = process.platform === "win32" ? `${name}.exe` : name;
-        return path.join(venvRoot, scriptsDir, exeName);
+        if (process.platform === "win32") {
+          return path.join(__dirname, "..", ".venv-mcp", "Scripts", `${name}.exe`);
+        }
+        // On Linux (Docker) — try common pip install locations
+        const candidates = [`/usr/local/bin/${name}`, `/usr/bin/${name}`];
+        return candidates.find(fs.existsSync) || `/usr/local/bin/${name}`;
       };
 
       // Register Multi-MCP Servers
