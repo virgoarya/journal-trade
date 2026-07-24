@@ -1695,31 +1695,6 @@ const pipeline = {
       return currentMinutes >= startMin && currentMinutes <= endMin;
     }
     return currentMinutes >= startMin || currentMinutes <= endMin;
-}
-
-  private async validateOrderParams(
-    symbol: string,
-    direction: "BUY" | "SELL",
-    volume: number,
-    sl: number,
-    tp: number,
-    minRRRatio: number,
-    isPending: boolean,
-    entryPrice: number,
-  ): Promise<{ valid: boolean; error?: string }> {
-    if (volume <= 0) {
-      return { valid: false, error: "Volume lot calculation returned 0. Risk rejected or volume below minimum." };
-    }
-    const slDist = Math.abs(entryPrice - sl);
-    const tpDist = Math.abs(tp - entryPrice);
-    if (slDist <= 0 || tpDist <= 0) {
-      return { valid: false, error: "Invalid SL or TP distance (must be non-zero)" };
-    }
-    const rrRatio = tpDist / slDist;
-    if (rrRatio < 2.0) {
-      return { valid: false, error: `Risk:Reward ratio 1:${rrRatio.toFixed(2)} is below minimum 1:2 requirement` };
-    }
-    return { valid: true };
   }
 
   calculateATRSimple(rates: { high: number; low: number; close: number }[]): number {
