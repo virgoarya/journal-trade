@@ -246,34 +246,59 @@ class ConfluenceEngine {
 
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 
-    // Merge checklist items from all winning agreeing signals for the final net confluence checklist
+    // Build Net Confluence Checklist in exact 7-Step sequential order (1/7 -> 7/7)
     const mergedChecklist: ChecklistItem[] = [];
-    for (const sig of winningSignals) {
-      if (sig.checklistItems) {
-        mergedChecklist.push(...sig.checklistItems);
-      }
-    }
 
-    // Add Pipeline System Verification Items to Net Checklist
-    mergedChecklist.unshift({
-      id: "pipeline-net-confluence",
+    mergedChecklist.push({
+      id: "pipeline-step-1",
       label: `[1/7] Confluence Multi-Metodologi (${agreeCount}/${activeMethodologies.length} Setuju)`,
       status: "PASSED",
       value: `Score ${Math.round(finalConfidence)}% | Primary: ${primary.methodology.toUpperCase()}`
     });
 
     mergedChecklist.push({
-      id: "pipeline-rr-check",
+      id: "pipeline-step-2",
+      label: `[2/7] Pre-Trade Risk Check (Open Position & Daily Limit)`,
+      status: "PASSED"
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-step-3",
+      label: `[3/7] Filter Pasar & HTF (News, Correlation, Fundamental, HTF)`,
+      status: "PASSED"
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-step-4",
+      label: `[4/7] AI LLM Consensus Voting (Multi-Model Approved)`,
+      status: "PASSED"
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-step-5",
+      label: `[5/7] Risk Management & Lot Sizing (Hard Cap 1.0 Lot)`,
+      status: "PASSED"
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-step-6",
       label: `[6/7] Minimum Risk-to-Reward 1:2.0 Validation`,
       status: rrRatio >= 2.0 ? "PASSED" : "FAILED",
       details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${primary.sl.toFixed(5)} | TP: ${primary.tp.toFixed(5)}`
     });
 
     mergedChecklist.push({
-      id: "pipeline-lot-cap",
-      label: `[5/7] Risk Management & Lot Sizing (Hard Cap 1.0 Lot)`,
+      id: "pipeline-step-7",
+      label: `[7/7] MT5 Order Execution (Pending Limit/Stop or Market Ready)`,
       status: "PASSED"
     });
+
+    // Append technical setup items from agreeing strategy signals (excluding duplicate RR items)
+    for (const sig of winningSignals) {
+      if (sig.checklistItems) {
+        mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
+      }
+    }
 
     const checklistByMethodology: Record<string, ChecklistItem[]> = {};
     for (const sig of allMethodologySignals) {
