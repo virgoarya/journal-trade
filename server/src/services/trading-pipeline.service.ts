@@ -936,43 +936,37 @@ const pipeline = {
           }
       } catch (err: any) {
         silentLogger.error(`[PIPELINE] Error analyzing symbols: ${err.message}`);
-        // Jika error jaringan MT5, putuskan status agar tick berikutnya masuk ke Auto-Pause
         if (err.message.includes("MT5") || err.message.includes("connect") || err.message.includes("timeout") || err.message.includes("32001")) {
           mt5McpService.forceDisconnect();
         }
-        return; // Abort this iteration gracefully
+        return;
       }
 
       for (const analysis of analyses) {
-        // Store analysis for status display only if it contains a valid signal
         if (analysis.confluence.finalSignal) {
           pipeline.lastAnalysis = analysis;
         }
 
-        // Update the last analyzed candle time for this symbol
         const latestTime = latestCandleTimes.get(analysis.symbol);
         if (latestTime !== undefined) {
           pipeline.lastAnalyzedCandleTimes.set(analysis.symbol, latestTime);
         }
 
-        // Apply AI Backtest Skill filters (dynamically skip unprofitable pairs or methodologies)
         try {
           const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
           const skill = await aiBacktestSkillService.getSkill(userId);
           if (skill) {
-            // Check if symbol is marked unprofitable
-            const symRanking = skill.symbolRankings.find((s: any) => s.symbol === analysis.symbol);
+            const symRanking = skill.symbolRankings?.find((s: any) => s.symbol === analysis.symbol);
             if (symRanking && symRanking.totalBacktests >= 3 && symRanking.score < 40) {
-              this.addLog(userId, "INFO", `[AI-SKILL] Skipped trade signal on ${analysis.symbol} due to low backtest rating (Score: ${symRanking.score})`);
+              this.addLog(userId, "INFO", `[1/7] [${analysis.symbol}] SKIPPED (AI-SKILL): Low backtest rating (Score: ${symRanking.score})`);
               continue;
             }
 
-            // Skip signal if the primary methodology is marked as DISABLE
             const primaryMeth = analysis.confluence.finalSignal?.primaryMethodology;
             if (primaryMeth) {
-              const methRanking = skill.methodologyRankings.find((m: any) => m.methodology === primaryMeth);
+              const methRanking = skill.methodologyRankings?.find((m: any) => m.methodology === primaryMeth);
               if (methRanking && methRanking.verdict === "DISABLE") {
-                this.addLog(userId, "INFO", `[AI-SKILL] Skipped trade signal on ${analysis.symbol} - methodology [${primaryMeth}] is disabled based on backtest performance`);
+                this.addLog(userId, "INFO", `[1/7] [${analysis.symbol}] SKIPPED (AI-SKILL): Methodology [${primaryMeth}] disabled by backtest performance`);
                 continue;
               }
             }
@@ -982,71 +976,60 @@ const pipeline = {
         }
 
         if (!analysis.confluence.finalSignal) {
-          // Log methodology breakdown even when no trade
           if (analysis.confluence.conflictDetected) {
             this.addLog(userId, "CONFLUENCE",
-              `No trade: ${analysis.confluence.reason}`,
+              `[1/7] [${analysis.symbol}] NO TRADE: ${analysis.confluence.reason}`,
               analysis.confluence.methodologyBreakdown,
             );
           } else {
-            // Log methodology votes even if no final signal
             const breakdown = analysis.confluence.methodologyBreakdown;
             const votes = Object.entries(breakdown)
               .filter(([, v]) => (v as any).confidence > 0)
               .map(([k, v]) => `${k}=${(v as any).direction ?? '-'}(${(v as any).confidence ?? 0}%)`)
               .join(", ");
             const alignInfo = analysis.methodologySignals
-              ? ` | SMC:${analysis.methodologySignals.smc.length} ICT:${analysis.methodologySignals.ict.length} MSNR:${analysis.methodologySignals.msnr.length} raw signals`
+              ? ` | SMC:${analysis.methodologySignals.smc.length} ICT:${analysis.methodologySignals.ict.length} MSNR:${analysis.methodologySignals.msnr.length} raw`
               : "";
             this.addLog(userId, "CONFLUENCE",
-              `[${analysis.symbol}] No signal. Votes: ${votes || "none"}${alignInfo}`,
+              `[1/7] [${analysis.symbol}] NO SIGNAL. Votes: ${votes || "none"}${alignInfo}`,
               breakdown,
             );
           }
           continue;
         }
 
-        // ── Signal Accepted: Log confluence details ──────────────
+        const finalSig = analysis.confluence.finalSignal;
+        const slDistInitial = Math.abs(finalSig.entry - finalSig.sl);
+        const tpDistInitial = Math.abs(finalSig.tp - finalSig.entry);
+        const rrInitial = slDistInitial > 0 ? (tpDistInitial / slDistInitial) : 0;
+
+        // ── STEP 1: CONFLUENCE ANALYSIS ACCEPTED ─────────────────────────────
         this.addLog(userId, "CONFLUENCE",
-          `[${analysis.symbol}] Signal: ${analysis.confluence.finalSignal.direction} | ` +
-          `Score: ${analysis.confluence.finalSignal.confluenceScore}% → ${analysis.confluence.finalSignal.confidence}% | ` +
-          `Primary: ${analysis.confluence.finalSignal.primaryMethodology} | ` +
-          `Agreeing: ${analysis.confluence.finalSignal.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0}`,
+          `[1/7] [${analysis.symbol}] CONFLUENCE SIGNAL: ${finalSig.direction} | ` +
+          `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
+          `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
+          `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
+          `R:R 1:${rrInitial.toFixed(2)}`,
           analysis.confluence.methodologyBreakdown,
         );
 
         const signal: TradingSignal = {
           symbol: analysis.symbol,
-          direction: analysis.confluence.finalSignal.direction,
-          confidence: analysis.confluence.finalSignal.confidence,
-          entry: analysis.confluence.finalSignal.entry,
-          sl: analysis.confluence.finalSignal.sl,
-          tp: analysis.confluence.finalSignal.tp,
+          direction: finalSig.direction,
+          confidence: finalSig.confidence,
+          entry: finalSig.entry,
+          sl: finalSig.sl,
+          tp: finalSig.tp,
           reason: analysis.confluence.reason,
           riskPercent: pipeline.config.maxRiskPerTrade,
           timeframe: pipeline.config.timeframe,
           indicators: { rsi: analysis.signal.rsi, atr: analysis.signal.atr },
-          pattern: `MULTI_${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}`,
+          pattern: `MULTI_${finalSig.primaryMethodology.toUpperCase()}`,
         };
 
         pipeline.lastSignal = signal;
 
-        // ── DATA FEED LOG: current bid/ask vs signal entry ─────────
-        try {
-          const tick = await mt5McpService.call("mt5_symbol_tick", { symbol: signal.symbol });
-          const feedBid = tick?.bid ?? 0;
-          const feedAsk = tick?.ask ?? 0;
-          const feedMid = (feedBid + feedAsk) / 2;
-          const entryDiff = Math.abs(feedMid - signal.entry);
-          const spreadPips = Math.abs(feedAsk - feedBid) / (tick?.point || 0.00001);
-          if (entryDiff > 0) {
-            this.addLog(userId, "SIGNAL",
-              `[FEED] ${signal.symbol} bid=${feedBid} ask=${feedAsk} spread=${spreadPips.toFixed(1)}pips | Signal entry=${signal.entry} diff=${(entryDiff * 10000).toFixed(1)}pips`
-            );
-          }
-        } catch {}
-
-        // Ambil current positions
+        // ── STEP 2: PRE-TRADE RISK CHECK ─────────────────────────────────────
         let currentPosCount = 0;
         let symbolPosCount = 0;
         try {
@@ -1055,10 +1038,6 @@ const pipeline = {
           symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
         } catch {}
 
-        // Risk check
-        this.addLog(userId, "SIGNAL",
-          `[RISK] Checking ${signal.symbol}: Max ${pipeline.config.maxRiskPerTrade}% | Open: ${currentPosCount}/${pipeline.config.maxOpenPositions} | Pair: ${symbolPosCount}`
-        );
         const riskCheck = await riskManagerService.checkTradeAllowed(
           userId,
           signal,
@@ -1071,26 +1050,14 @@ const pipeline = {
 
         if (!riskCheck.allowed) {
           this.addLog(userId, "ERROR",
-            `[RISK] Rejected ${signal.symbol}: ${riskCheck.reason}`,
+            `[2/7] [${signal.symbol}] REJECTED (RISK): ${riskCheck.reason} (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`,
           );
           continue;
         }
 
-        this.addLog(userId, "INFO", `[RISK] ${signal.symbol} passed risk check. Proceeding to filters...`);
+        this.addLog(userId, "INFO", `[2/7] [${signal.symbol}] RISK CHECK: Passed (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`);
 
-        // Log confluence breakdown (Signal Direction)
-        const slDist = Math.abs(signal.entry - signal.sl);
-        const tpDist = Math.abs(signal.tp - signal.entry);
-        const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
-
-        this.addLog(userId, "SIGNAL",
-          `[SIGNAL] ${signal.symbol} ${signal.direction} | R:R 1:${rrRatio.toFixed(2)} | ` +
-          `Conf: ${signal.confidence}% | Entry: ${signal.entry} SL: ${signal.sl} TP: ${signal.tp}`
-        );
-
-
-
-        // ── CORRELATION: Prevent over-exposure to single currency ──────
+        // ── STEP 3: MARKET FILTERS (Correlation, News, Fundamental, HTF) ─────
         try {
           const symbolsCount = pipeline.config.symbols.length;
           const maxBase = symbolsCount <= 1 
@@ -1106,28 +1073,24 @@ const pipeline = {
             maxQuote
           );
           if (!corrCheck.allowed) {
-            this.addLog(userId, "ERROR", `[RISK] Skipped ${signal.symbol}: ${corrCheck.reason}`);
+            this.addLog(userId, "ERROR", `[3/7] [${signal.symbol}] REJECTED (CORRELATION): ${corrCheck.reason}`);
             continue;
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] Correlation check error: ${e.message}`); }
 
-        // ── NEWS: Skip if high-impact event within ±30 minutes ────────
         try {
           const newsWindow = await newsCalendarService.isHighImpactWindow(signal.symbol, 30);
           if (newsWindow) {
-            this.addLog(userId, "INFO", `[NEWS] Skipped ${signal.symbol} ${signal.direction} — high-impact event within 30 min`);
+            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (NEWS): High-impact event within 30 min window`);
             continue;
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] News check error: ${e.message}`); }
 
-        // ── FUNDAMENTAL: Skip if against strong trend ─────────────────
         try {
-          // Check cache first
           const cachedFundamental = this.getCachedFundamental(signal.symbol);
           let fundScore;
           if (cachedFundamental) {
             fundScore = cachedFundamental;
-            this.addLog(userId, "SIGNAL", `[FUNDAMENTAL] ${signal.symbol} (cached)`);
           } else {
             fundScore = await fundamentalResearchService.scorePair(signal.symbol);
             this.setCachedFundamental(signal.symbol, fundScore);
@@ -1137,123 +1100,108 @@ const pipeline = {
             (signal.direction === "SELL" && fundScore.trendAlignment === "BULLISH")
           );
           if (!aligned && Math.abs(fundScore.compositeScore) >= 30) {
-            this.addLog(userId, "INFO", `[NEWS] Skipped ${signal.symbol} — against fundamental trend (${fundScore.trendAlignment}, score: ${fundScore.compositeScore})`);
+            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (FUNDAMENTAL): Against fundamental trend (${fundScore.trendAlignment}, score: ${fundScore.compositeScore})`);
             continue;
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] Fundamental check error: ${e.message}`); }
 
-        // ── MULTI-TIMEFRAME: Verifikasi sinyal di higher timeframe ─────
         try {
           const htfCheck = await multiTimeframeService.checkConfluence(
             signal.symbol, pipeline.config.timeframe, signal.direction,
           );
           if (!htfCheck.isAligned && htfCheck.confidence < 50) {
-            this.addLog(userId, "SIGNAL", `[HTF] Skipped ${signal.symbol} ${signal.direction} — HTF conflict (${htfCheck.details})`);
+            this.addLog(userId, "SIGNAL", `[3/7] [${signal.symbol}] REJECTED (HTF): Conflict with higher timeframe (${htfCheck.details})`);
             continue;
           }
-          if (htfCheck.confidence < 80) {
-            this.addLog(userId, "SIGNAL", `[HTF] ${signal.symbol} ${signal.direction} — ${htfCheck.details}`);
-          }
+          this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] MARKET FILTERS PASSED (HTF: ${htfCheck.htfTrend ?? 'ALIGNED'}, Conf: ${htfCheck.confidence}%)`);
         } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
-        // ── OPTIONAL: LLM Consensus validation ─────────────────────
-        // Check LLM circuit breaker
+        // ── STEP 4: LLM CONSENSUS VOTING ─────────────────────────────────────
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
 
         if (pipeline.config.llmConsensus?.enabled && !pipeline.llmCircuitOpen) {
-          // Check LLM circuit breaker - skip if all providers are OPEN
           const availableLLMProviders = this.llmCircuitBreaker.getAvailableProviders(
             ["deepseek", "gpt", "gemini", "mistral", "nemotron", "claude-opus"]
           );
           if (availableLLMProviders.length === 0) {
-            this.addLog(userId, "ERROR", `[${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Consensus.`);
+            this.addLog(userId, "ERROR", `[4/7] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting.`);
           } else {
             this.addLog(userId, "CONFLUENCE",
-              `[${signal.symbol}] Meneruskan sinyal ke Confluence untuk memeriksa metodologi yang cocok. AI LLM memulai proses voting...`,
+              `[4/7] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
             );
 
-          // ── HTF conformance data ──
-          let llmHtfTrend: string | undefined;
-          let llmHtfConf: number | undefined;
-          try { const h = await multiTimeframeService.checkConfluence(signal.symbol, pipeline.config.timeframe, signal.direction); llmHtfTrend = h.htfTrend; llmHtfConf = h.confidence; } catch {}
-          let llmSymScore: number | undefined;
-          let llmMethV: string | undefined;
-          let llmMethWR: number | undefined;
-          let llmMethPnL: number | undefined;
-          try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
+            let llmHtfTrend: string | undefined;
+            let llmHtfConf: number | undefined;
+            try { const h = await multiTimeframeService.checkConfluence(signal.symbol, pipeline.config.timeframe, signal.direction); llmHtfTrend = h.htfTrend; llmHtfConf = h.confidence; } catch {}
+            let llmSymScore: number | undefined;
+            let llmMethV: string | undefined;
+            let llmMethWR: number | undefined;
+            let llmMethPnL: number | undefined;
+            try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
 
-const llmResult = await llmConsensusService.evaluate(
-             {
-               symbol: signal.symbol,
-               direction: signal.direction,
-               confidence: signal.confidence,
-               entry: signal.entry,
-               sl: signal.sl,
-               tp: signal.tp,
-               reason: signal.reason,
-               marketTrend: analysis.marketStructure.trend.direction,
-               methodologyBreakdown: Object.fromEntries(
-                 Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
-               ),
-               agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
-               totalMethodologies: pipeline.config.activeMethodologies?.length ?? 1,
-               htfTrend: llmHtfTrend,
-               htfConfidence: llmHtfConf,
-               symbolScore: llmSymScore,
-               methodologyVerdict: llmMethV,
-               methodologyWinRate: llmMethWR,
-               methodologyPnL: llmMethPnL,
-               pattern: analysis.confluence.finalSignal?.pattern,
-             },
-             pipeline.config.llmConsensus,
-           );
+            const llmResult = await llmConsensusService.evaluate(
+              {
+                symbol: signal.symbol,
+                direction: signal.direction,
+                confidence: signal.confidence,
+                entry: signal.entry,
+                sl: signal.sl,
+                tp: signal.tp,
+                reason: signal.reason,
+                marketTrend: analysis.marketStructure.trend.direction,
+                methodologyBreakdown: Object.fromEntries(
+                  Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
+                ),
+                agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
+                totalMethodologies: pipeline.config.activeMethodologies?.length ?? 1,
+                htfTrend: llmHtfTrend,
+                htfConfidence: llmHtfConf,
+                symbolScore: llmSymScore,
+                methodologyVerdict: llmMethV,
+                methodologyWinRate: llmMethWR,
+                methodologyPnL: llmMethPnL,
+                pattern: analysis.confluence.finalSignal?.pattern,
+              },
+              pipeline.config.llmConsensus,
+            );
 
-           // Update LLM circuit breaker based on result
-           // Note: In actual implementation, we'd track per-provider, but for now we track overall
-           // We'll just log the state
-           this.llmCircuitBreaker.getAllStates(); // Update pipeline state
+            this.llmCircuitBreaker.getAllStates();
 
-// Log LLM result
-           const isTrade = llmResult.verdict === "GOOD";
-           this.addLog(userId, "CONFLUENCE",
-             `[${signal.symbol}] LLM Consensus Result: ${isTrade ? "TRADE" : "NO TRADE"} | Reasoning: ${llmResult.details}`,
-             { llmConsensus: llmResult },
-           );
+            const isTrade = llmResult.verdict === "GOOD";
+            this.addLog(userId, "CONFLUENCE",
+              `[4/7] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"} | Reasoning: ${llmResult.details}`,
+              { llmConsensus: llmResult },
+            );
 
-           // Update LLM circuit breaker state based on available providers
-           const llmProvidersAfter = llmConsensusService.getAvailableProviders();
-           pipeline.llmCircuitOpen = llmProvidersAfter.filter(p => p.available).length === 0;
+            const llmProvidersAfter = llmConsensusService.getAvailableProviders();
+            pipeline.llmCircuitOpen = llmProvidersAfter.filter(p => p.available).length === 0;
 
-            // If LLMs say BAD or SKIP, skip the trade
             if (!isTrade) {
               continue;
             }
           }
-        } // End of LLM Consensus enabled block
+        }
 
-        // Position sizing
+        // ── STEP 5: SMART RISK & POSITION SIZING ─────────────────────────────
         const accountInfo = await mt5McpService.getAccountInfo();
         const symbolInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
 
-        // Calculate Smart Risk Multiplier
         let riskMultiplier = 1;
         if (pipeline.config.smartRisk?.enabled) {
           const smart = pipeline.config.smartRisk;
           
-          // 1. Drawdown Recovery (Priority 1)
           if (smart.drawdownRecovery?.enabled && pipeline.currentDrawdownPct !== undefined) {
              if (pipeline.currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
                riskMultiplier = smart.drawdownRecovery.riskReductionMultiplier;
-               this.addLog(userId, "INFO", `[SMART-RISK] Drawdown Recovery aktif (DD: ${pipeline.currentDrawdownPct.toFixed(2)}%). Risk diturunkan menjadi ${riskMultiplier}x.`);
+               this.addLog(userId, "INFO", `[5/7] [SMART-RISK] Drawdown Recovery Active (DD: ${pipeline.currentDrawdownPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x.`);
              }
           }
           
-          // 2. Capital Preservation (Tiered Scaling)
           if (riskMultiplier === 1 && smart.capitalPreservation?.enabled && pipeline.currentGrowthPct !== undefined) {
              if (pipeline.currentGrowthPct >= smart.capitalPreservation.activationGrowthPct) {
                riskMultiplier = smart.capitalPreservation.riskReductionMultiplier;
-               this.addLog(userId, "INFO", `[SMART-RISK] Capital Preservation aktif (Growth: ${pipeline.currentGrowthPct.toFixed(2)}%). Risk diturunkan menjadi ${riskMultiplier}x untuk melindungi profit.`);
+               this.addLog(userId, "INFO", `[5/7] [SMART-RISK] Capital Preservation Active (Growth: ${pipeline.currentGrowthPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x to protect profit.`);
              }
           }
         }
@@ -1272,25 +1220,27 @@ const llmResult = await llmConsensusService.evaluate(
             volumeMin: symbolInfo.volumeMin,
             volumeMax: symbolInfo.volumeMax,
             volumeStep: symbolInfo.volumeStep,
+            symbol: signal.symbol,
           });
 
           if (volume === 0) {
             this.addLog(userId, "ERROR",
-              `Risk rejected ${signal.symbol}: Stop Loss terlalu jauh (${Math.abs(signal.entry - signal.sl).toFixed(5)} poin). Lot terkecil (${symbolInfo.volumeMin}) akan mengakibatkan kerugian melebihi max risk per trade (${finalRiskPercent}%).`
+              `[5/7] [${signal.symbol}] REJECTED (POSITION SIZE): SL distance (${Math.abs(signal.entry - signal.sl).toFixed(5)}) too wide for minimum volume (${symbolInfo.volumeMin}) within ${finalRiskPercent}% risk limit.`
             );
             continue;
           }
         }
 
+        this.addLog(userId, "INFO",
+          `[5/7] [${signal.symbol}] POSITION SIZE: ${volume} Lot (Risk: ${finalRiskPercent}%, Balance: $${accountInfo.balance.toFixed(2)}, Cap: 1.0 Lot)`
+        );
 
-        // Execute trade
-        // Check MT5 circuit breaker before executing
+        // ── STEP 6: ORDER PARAMETER VALIDATION ───────────────────────────────
         if (pipeline.mt5CircuitOpen || !mt5McpService.isConnected) {
-          this.addLog(userId, "ERROR", `[${signal.symbol}] MT5 circuit breaker OPEN or not connected. Skipping trade execution.`);
+          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] MT5 circuit breaker OPEN or disconnected. Skipping execution.`);
           continue;
         }
 
-        // ── Tentukan Jenis Order (Market / Limit / Stop) berdasarkan Tick ──
         let finalAction: any = signal.direction;
         let orderPrice: number | undefined = undefined;
 
@@ -1299,12 +1249,10 @@ const llmResult = await llmConsensusService.evaluate(
           const currentPrice = signal.direction === "BUY" ? tickData.ask : tickData.bid;
           const pointDist = Math.abs(currentPrice - signal.entry);
           
-          // Threshold: hanya jadikan pending order jika jarak entry > 3× spread
-          // Jika dekat, gunakan market order langsung agar tidak miss entry
           const symInfoForThreshold = await mt5McpService.getSymbolInfo(signal.symbol);
           const minPendingDist = symInfoForThreshold
             ? symInfoForThreshold.spread * symInfoForThreshold.point * 3
-            : 0.0003; // fallback ~3 pips
+            : 0.0003;
           
           if (pointDist > minPendingDist) { 
             if (signal.direction === "BUY") {
@@ -1315,11 +1263,10 @@ const llmResult = await llmConsensusService.evaluate(
             orderPrice = signal.entry;
           }
         } catch (e: any) {
-          silentLogger.warn(`[Pipeline] Gagal mendapatkan tick untuk ${signal.symbol}, fallback ke Market Order. Error: ${e.message}`);
+          silentLogger.warn(`[Pipeline] Failed tick for ${signal.symbol}, fallback to Market Order. Error: ${e.message}`);
         }
 
-        const isPending = finalAction !== signal.direction; // BUY_LIMIT/BUY_STOP etc
-        const minRR = pipeline.config.maxRiskPerTrade; // Re-use maxRiskPerTrade as minRRRatio for now
+        const isPending = finalAction !== signal.direction;
 
         const validation = await this.validateOrderParams(
           signal.symbol,
@@ -1327,16 +1274,19 @@ const llmResult = await llmConsensusService.evaluate(
           volume,
           signal.sl,
           signal.tp,
-          minRR,
+          2.0,
           isPending,
           signal.entry,
         );
 
         if (!validation.valid) {
-          this.addLog(userId, "ERROR", `Order dibatalkan: ${validation.error}`);
+          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] REJECTED (VALIDATION): ${validation.error}`);
           continue;
         }
 
+        this.addLog(userId, "INFO", `[6/7] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
+
+        // ── STEP 7: ORDER EXECUTION ──────────────────────────────────────────
         const orderResult = await mt5McpService.openOrder({
           symbol: signal.symbol,
           action: finalAction,
@@ -1351,19 +1301,16 @@ const llmResult = await llmConsensusService.evaluate(
           const slDist = Math.abs(signal.entry - signal.sl);
           const tpDist = Math.abs(signal.tp - signal.entry);
           const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
-
-          const isPending = finalAction !== signal.direction; // BUY_LIMIT/BUY_STOP etc
           const methodologyStr = analysis.confluence.finalSignal.primaryMethodology.toUpperCase();
           const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
 
           this.addLog(userId, "TRADE",
-            `${isPending ? "Placed pending" : "Opened"} ${finalAction} ${signal.symbol} vol=${volume} ticket=${orderResult.ticket} | R:R: 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
+            `[7/7] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${orderResult.ticket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
             { signal, orderResult, confluence: analysis.confluence },
           );
 
-          // Track pending orders for expiry management
           if (isPending && orderResult.ticket) {
-            const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60; // 2 candles worth in real time
+            const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60;
             pipeline.pendingOrders.set(orderResult.ticket, {
               symbol: signal.symbol,
               placedAt: Date.now(),
@@ -1399,7 +1346,7 @@ const llmResult = await llmConsensusService.evaluate(
           });
         } else {
           this.addLog(userId, "ERROR",
-            `Order failed ${signal.symbol}: ${orderResult.error}`,
+            `[7/7] [${signal.symbol}] EXECUTION FAILED: ${orderResult.error}`,
             orderResult,
           );
         }
@@ -1749,6 +1696,31 @@ const llmResult = await llmConsensusService.evaluate(
     }
     return currentMinutes >= startMin || currentMinutes <= endMin;
 }
+
+  private async validateOrderParams(
+    symbol: string,
+    direction: "BUY" | "SELL",
+    volume: number,
+    sl: number,
+    tp: number,
+    minRRRatio: number,
+    isPending: boolean,
+    entryPrice: number,
+  ): Promise<{ valid: boolean; error?: string }> {
+    if (volume <= 0) {
+      return { valid: false, error: "Volume lot calculation returned 0. Risk rejected or volume below minimum." };
+    }
+    const slDist = Math.abs(entryPrice - sl);
+    const tpDist = Math.abs(tp - entryPrice);
+    if (slDist <= 0 || tpDist <= 0) {
+      return { valid: false, error: "Invalid SL or TP distance (must be non-zero)" };
+    }
+    const rrRatio = tpDist / slDist;
+    if (rrRatio < 2.0) {
+      return { valid: false, error: `Risk:Reward ratio 1:${rrRatio.toFixed(2)} is below minimum 1:2 requirement` };
+    }
+    return { valid: true };
+  }
 
   calculateATRSimple(rates: { high: number; low: number; close: number }[]): number {
     if (rates.length < 2) return 0;
