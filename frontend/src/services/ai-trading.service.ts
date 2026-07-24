@@ -210,11 +210,19 @@ export interface PipelineLog {
 
 export type MethodologyName = "smc" | "ict" | "msnr";
 
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  status: "PASSED" | "WAITING" | "FAILED";
+  value?: string;
+  timeframe?: string;
+  details?: string;
+}
+
 export interface MethodologyWeights {
   smc: number;
   ict: number;
   msnr: number;
-
 }
 
 export interface MethodologySignalResult {
@@ -226,6 +234,7 @@ export interface MethodologySignalResult {
   tp: number;
   signalType?: string;
   reason: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface MethodologyBreakdown {
@@ -234,6 +243,7 @@ export interface MethodologyBreakdown {
     weight: number;
     contribution: number;
     direction?: string;
+    checklistItems?: ChecklistItem[];
   };
 }
 
@@ -249,9 +259,11 @@ export interface ConfluenceResult {
     methodologyBreakdown: MethodologyBreakdown;
     agreeingSignals: MethodologySignalResult[];
     totalAgreeing: number;
+    checklistItems?: ChecklistItem[];
   } | null;
   allSignals: MethodologySignalResult[];
   methodologyBreakdown: MethodologyBreakdown;
+  checklistByMethodology?: Record<string, ChecklistItem[]>;
   conflictDetected: boolean;
   reason: string;
 }

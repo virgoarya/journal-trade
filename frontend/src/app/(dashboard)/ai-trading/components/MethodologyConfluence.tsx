@@ -1,10 +1,12 @@
 "use client";
 
-import { Brain, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { Brain, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock, XCircle, ListChecks } from "lucide-react";
 import type {
   ConfluenceResult,
   MarketStructureSummary,
   MethodologyName,
+  ChecklistItem,
 } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
@@ -16,12 +18,11 @@ interface Props {
   symbol?: string;
 }
 
-/**
- * Display panel for methodology confluence breakdown.
- * Shows which methodologies are agreeing, their confidence scores,
- * the primary methodology, and market structure context.
- */
+type TabType = "NET" | "smc" | "ict" | "msnr";
+
 export function MethodologyConfluence({ confluence, marketStructure, symbol }: Props) {
+  const [activeTab, setActiveTab] = useState<TabType>("NET");
+
   if (!confluence) {
     return <SkeletonLoader type="card" />;
   }
@@ -37,8 +38,6 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
   }
 
   const finalSignal = confluence.finalSignal;
-
-  // ── Market Structure Badges ────────────────────────────────────────
 
   const trendColor = (dir: string) => {
     switch (dir) {
@@ -57,16 +56,33 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
     }
   };
 
+  // Get active checklist based on selected tab
+  const getActiveChecklist = (): ChecklistItem[] => {
+    if (activeTab === "NET") {
+      return finalSignal.checklistItems || [];
+    }
+    const breakdownData = confluence.methodologyBreakdown?.[activeTab];
+    if (breakdownData?.checklistItems && breakdownData.checklistItems.length > 0) {
+      return breakdownData.checklistItems;
+    }
+    if (confluence.checklistByMethodology?.[activeTab]) {
+      return confluence.checklistByMethodology[activeTab];
+    }
+    return [];
+  };
+
+  const currentChecklist = getActiveChecklist();
+
   return (
     <div className="glass p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-          <h3 className="text-[11px] font-bold text-accent-gold flex items-center gap-2 uppercase tracking-widest drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
-            <Brain className="w-4 h-4" />
-            Methodology Confluence {symbol ? <span className="text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30">{symbol}</span> : ""}
-          </h3>
+        <h3 className="text-[11px] font-bold text-accent-gold flex items-center gap-2 uppercase tracking-widest drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+          <Brain className="w-4 h-4" />
+          Methodology Confluence {symbol ? <span className="text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30">{symbol}</span> : ""}
+        </h3>
         {confluence.conflictDetected && (
-          <span className="text-[10px] text-yellow-400 flex items-center gap-1">
+          <span className="text-[10px] text-yellow-400 flex items-center gap-1 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/30">
             <AlertTriangle className="w-3 h-3" />
             Conflict
           </span>
@@ -94,7 +110,43 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
         </div>
       )}
 
-      {/* Final Signal */}
+      {/* Methodology Tabs (Net Confluence, SMC, ICT, Malaysian SNR) */}
+      <div className="flex items-center gap-1 border-b border-accent-gold/10 pb-2">
+        <button
+          onClick={() => setActiveTab("NET")}
+          className={`text-[10px] font-mono px-2.5 py-1 rounded transition-all ${
+            activeTab === "NET"
+              ? "bg-accent-gold/20 text-accent-gold border border-accent-gold/40 font-bold shadow-[0_0_8px_rgba(212,175,55,0.2)]"
+              : "text-text-muted hover:text-white bg-black/30 border border-transparent"
+          }`}
+        >
+          NET (Confluence)
+        </button>
+        {(["smc", "ict", "msnr"] as MethodologyName[]).map((mKey) => {
+          const color = METHODOLOGY_COLORS[mKey] || "#6B7280";
+          const isActive = activeTab === mKey;
+          return (
+            <button
+              key={mKey}
+              onClick={() => setActiveTab(mKey as TabType)}
+              className={`text-[10px] font-mono px-2.5 py-1 rounded transition-all uppercase flex items-center gap-1.5 ${
+                isActive
+                  ? "bg-black border font-bold shadow-md"
+                  : "text-text-muted hover:text-white bg-black/30 border border-transparent"
+              }`}
+              style={{
+                borderColor: isActive ? color : "transparent",
+                color: isActive ? color : undefined,
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+              {METHODOLOGY_LABELS[mKey]}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Final Signal Banner */}
       {finalSignal ? (
         <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
@@ -163,10 +215,6 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
               <p className="text-neon-green font-mono">{finalSignal.tp.toFixed(5)}</p>
             </div>
           </div>
-
-          <p className="text-[10px] text-gray-500 leading-tight">
-            {confluence.reason}
-          </p>
         </div>
       ) : (
         <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
@@ -177,10 +225,66 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
         </div>
       )}
 
-      {/* Individual Methodology Breakdown */}
+      {/* ── Trading Plan Checklist Section ──────────────────────────────── */}
+      <div className="bg-black/50 border border-accent-gold/15 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between border-b border-accent-gold/10 pb-1.5">
+          <h4 className="text-[10px] font-bold text-accent-gold uppercase tracking-wider font-mono flex items-center gap-1.5">
+            <ListChecks className="w-3.5 h-3.5 text-accent-gold" />
+            Validasi Sinyal (Checklist) — {activeTab === "NET" ? "Net Confluence" : METHODOLOGY_LABELS[activeTab as MethodologyName]}
+          </h4>
+          <span className="text-[9px] text-text-muted font-mono">
+            {currentChecklist.filter(c => c.status === "PASSED").length}/{currentChecklist.length} Valid
+          </span>
+        </div>
+
+        {currentChecklist.length > 0 ? (
+          <div className="space-y-1.5">
+            {currentChecklist.map((item, idx) => {
+              let icon = <CheckCircle2 className="w-3.5 h-3.5 text-neon-green flex-shrink-0" />;
+              let textClass = "text-gray-200";
+              let badgeBg = "bg-neon-green/10 text-neon-green border-neon-green/30";
+
+              if (item.status === "WAITING") {
+                icon = <Clock className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0 animate-pulse" />;
+                textClass = "text-yellow-300";
+                badgeBg = "bg-yellow-500/10 text-yellow-400 border-yellow-500/30";
+              } else if (item.status === "FAILED") {
+                icon = <XCircle className="w-3.5 h-3.5 text-neon-red flex-shrink-0" />;
+                textClass = "text-gray-400 line-through opacity-70";
+                badgeBg = "bg-neon-red/10 text-neon-red border-neon-red/30";
+              }
+
+              return (
+                <div key={item.id || idx} className="flex items-start gap-2 bg-black/40 p-1.5 rounded border border-white/5 text-[11px] font-mono leading-tight">
+                  <div className="pt-0.5">{icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`${textClass} font-medium`}>{item.label}</span>
+                      {item.timeframe && (
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border ${badgeBg}`}>
+                          {item.timeframe}
+                        </span>
+                      )}
+                    </div>
+                    {item.details && (
+                      <p className="text-[9px] text-text-muted mt-0.5 truncate">{item.details}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[10px] text-text-muted italic py-1 font-mono">
+            Checklist validasi belum tersedia untuk metodologi ini.
+          </p>
+        )}
+      </div>
+
+      {/* Individual Methodology Breakdown Bars */}
       {Object.keys(confluence.methodologyBreakdown).length > 0 && (
-        <div className="space-y-1.5">
-          <span className="text-[9px] text-accent-gold-dim uppercase tracking-widest font-mono">Individual Signals</span>
+        <div className="space-y-1.5 pt-1">
+          <span className="text-[9px] text-accent-gold-dim uppercase tracking-widest font-mono">Individual Methodology Scores</span>
           {Object.entries(confluence.methodologyBreakdown)
             .filter(([key]) => key in METHODOLOGY_LABELS)
             .map(([key, data]) => {

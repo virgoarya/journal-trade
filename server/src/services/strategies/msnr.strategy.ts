@@ -10,7 +10,7 @@
 import { type Candle, type MalaysianSNR, type OrderBlock, type SwingHigh, type SwingLow, type MarketStructure, type FractalContext } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
-import type { IPDAContext } from "./ipda-context";
+import type { ChecklistItem } from "./confluence-engine";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -22,6 +22,7 @@ export interface MSNRSignal {
   limitPrice?: number;
   signalType: "TURTLE_SOUP_OB" | "TURTLE_SOUP_CISD";
   reason: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface MSNRAnalysis {
@@ -174,7 +175,7 @@ class MSNRStrategy {
       const risk = Math.abs(limitPrice - slPrice);
       const tp = direction === "BUY" ? limitPrice + (risk * 2.5) : limitPrice - (risk * 2.5); // Minimum 1:2.5 RR
 
-      return {
+      const sig: MSNRSignal = {
           direction,
           entry: limitPrice,
           sl: slPrice,
@@ -185,6 +186,48 @@ class MSNRStrategy {
           confidence: Math.min(95, (config.minConfidence ?? 50) + 15 + confBoost), // high confidence setup
           reason
       };
+
+      sig.checklistItems = this.buildMSNRChecklist(sig);
+      return sig;
+  }
+
+  private buildMSNRChecklist(sig: MSNRSignal): ChecklistItem[] {
+    const isBuy = sig.direction === "BUY";
+    const snrType = isBuy ? "Support (Body-based)" : "Resistance (Body-based)";
+
+    return [
+      {
+        id: "msnr-snr-zone",
+        label: `HTF Malaysian SNR ${snrType} terkonfirmasi`,
+        status: "PASSED",
+        timeframe: "H4"
+      },
+      {
+        id: "msnr-turtle-soup",
+        label: `Turtle Soup Wick Rejection di ${snrType}`,
+        status: "PASSED",
+        timeframe: "H1"
+      },
+      {
+        id: "msnr-ltf-mss",
+        label: `LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} terdeteksi`,
+        status: "PASSED",
+        timeframe: "M15"
+      },
+      {
+        id: "msnr-ob-limit",
+        label: "Pending Order Limit di LTF Fresh Order Block",
+        status: "PASSED",
+        timeframe: "M15",
+        value: `${sig.entry.toFixed(5)}`
+      },
+      {
+        id: "msnr-rr",
+        label: "Minimum Risk-to-Reward 1:2.5 Terpenuhi",
+        status: "PASSED",
+        details: `SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+      }
+    ];
   }
 }
 

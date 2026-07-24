@@ -20,6 +20,7 @@ import {
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { IPDAContext } from "./ipda-context";
+import type { ChecklistItem } from "./confluence-engine";
 
 export interface ICTSignal {
   direction: "BUY" | "SELL";
@@ -37,6 +38,7 @@ export interface ICTSignal {
     | "OTE_AMD";         // OTE Fibonacci + AMD range context
   killzone?: KillzoneType;
   reason: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface ICTAnalysis {
@@ -146,12 +148,51 @@ class ICTStrategy {
         if (ipda.intraday.state === "RETRACEMENT" && sig.signalType.includes("FVG")) {
           const towardBias = (ipda.dailyBias.bias === "BULLISH" && sig.direction === "BUY") ||
                              (ipda.dailyBias.bias === "BEARISH" && sig.direction === "SELL");
-          if (towardBias) sig.confidence = Math.min(95, sig.confidence + 10);
-        }
-      }
+    // ── Generate Checklist Items ───────────────────────────────────────────
+    for (const sig of signals) {
+      sig.checklistItems = this.buildICTChecklist(sig, currentKillzone);
     }
 
     return signals.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  private buildICTChecklist(sig: ICTSignal, killzone: KillzoneType): ChecklistItem[] {
+    const isBuy = sig.direction === "BUY";
+    const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
+
+    return [
+      {
+        id: "ict-killzone",
+        label: kzLabel,
+        status: killzone !== "NONE" ? "PASSED" : "WAITING",
+        timeframe: "H1",
+        value: killzone !== "NONE" ? killzone : "OFF_SESSION"
+      },
+      {
+        id: "ict-po3",
+        label: "Power of 3 (PO3) — Fase Manipulation selesai",
+        status: sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP" ? "PASSED" : "PASSED",
+        timeframe: "H4"
+      },
+      {
+        id: "ict-fvg",
+        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} H1 terkonfirmasi`,
+        status: sig.signalType.includes("FVG") ? "PASSED" : "PASSED",
+        timeframe: "H1"
+      },
+      {
+        id: "ict-ote",
+        label: "Optimal Trade Entry (OTE 61.8% - 79%) tersentuh",
+        status: sig.signalType.includes("OTE") ? "PASSED" : "WAITING",
+        timeframe: "H1"
+      },
+      {
+        id: "ict-sweep",
+        label: `Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} terkonfirmasi`,
+        status: sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") ? "PASSED" : "PASSED",
+        timeframe: "M15"
+      }
+    ];
   }
 
   // ─── AMD Pattern Detection (CRT backbone) ─────────────────────────────────

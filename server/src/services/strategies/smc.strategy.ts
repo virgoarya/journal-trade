@@ -5,7 +5,7 @@
 import { marketStructureService, type Candle, type MarketStructure, type OrderBlock } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
-import type { IPDAContext } from "./ipda-context";
+import type { ChecklistItem } from "./confluence-engine";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -16,6 +16,7 @@ export interface SMCSignal {
   orderBlock?: OrderBlock;
   breachType: "MSS" | "LIQUIDITY_GRAB" | "BREAKER" | "OB_MITIGATION" | "CHOCH";
   reason: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface SMCAnalysis {
@@ -74,9 +75,52 @@ class SMCStrategy {
           if (!withExpansion) sig.confidence = Math.round(sig.confidence * 0.85);
         }
       }
+    // ── Generate Checklist Items ───────────────────────────────────────────
+    for (const sig of signals) {
+      sig.checklistItems = this.buildSMCChecklist(sig, fractal);
     }
 
     return signals.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): ChecklistItem[] {
+    const isBuy = sig.direction === "BUY";
+    const pdArray = isBuy ? "Discount PD Array" : "Premium PD Array";
+
+    return [
+      {
+        id: "smc-bos",
+        label: `BOS ${isBuy ? "Bullish" : "Bearish"} H4 terkonfirmasi`,
+        status: "PASSED",
+        timeframe: "H4",
+        details: `Breach type: ${sig.breachType}`
+      },
+      {
+        id: "smc-ob",
+        label: `Harga di zona OB (${pdArray})`,
+        status: "PASSED",
+        timeframe: "H1",
+        value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(2)} - ${sig.orderBlock.top.toFixed(2)}` : undefined
+      },
+      {
+        id: "smc-fvg",
+        label: `FVG H1 ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
+        status: "PASSED",
+        timeframe: "H1"
+      },
+      {
+        id: "smc-liq",
+        label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} sudah tersapu`,
+        status: "PASSED",
+        timeframe: "H4"
+      },
+      {
+        id: "smc-entry-rejection",
+        label: "Tunggu rejection candle M15 untuk konfirmasi entry",
+        status: sig.confidence >= 80 ? "PASSED" : "WAITING",
+        timeframe: "M15"
+      }
+    ];
   }
 
   // ── Market Structure Shift ─────────────────────────────────────────

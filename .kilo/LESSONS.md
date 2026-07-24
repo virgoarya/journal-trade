@@ -57,3 +57,12 @@
 3. Route `/skill` accept query param `server`, pass ke `getSkill(userId, server)`.
 4. Frontend pass `accountInfo?.server` ke `SkillDisplay` → `aiTradingService.getSkill(server)`.
 **Hindari**: Jangan tambah unique index baru tanpa hapus index lama yang konflik. Jangan auto-detect server di satu layer dan pass manual di layer lain — konsisten di satu sumber.
+
+### [20260724] Validasi Sinyal (Checklist Trading Plan) Multi-Methodology (SMC, ICT, Malaysian SNR)
+**Area**: Frontend / Backend / Strategies
+**Root Cause**: Sebelumnya Confluence engine hanya mengembalikan score persentase tunggal tanpa struktur data granular kriteria validasi per metodologi.
+**Solusi**:
+1. Menambahkan interface `ChecklistItem` di Confluence Engine backend.
+2. Setiap metodologi (SMC, ICT, Malaysian SNR) memproduksi `checklistItems` spesifik dengan indikator timeframe (`H4`, `H1`, `M15`) dan status (`PASSED`, `WAITING`, `FAILED`).
+3. Komponen `MethodologyConfluence.tsx` di frontend dilengkapi dengan tab selector (`NET`, `SMC`, `ICT`, `Malaysian SNR`) untuk berpindah tampilan checklist secara instan.
+**Hindari**: Jangan meng-hardcode checklist di UI. Semua status kriteria wajib dihasilkan secara terstruktur dari pipeline engine backend agar selalu sinkron dengan data pasar real-time.

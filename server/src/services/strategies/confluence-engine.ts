@@ -29,6 +29,15 @@ export type MethodologyName = keyof MethodologyWeights;
 
 export type MethodologyDirection = "BUY" | "SELL" | "NEUTRAL";
 
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  status: "PASSED" | "WAITING" | "FAILED";
+  value?: string;
+  timeframe?: string;
+  details?: string;
+}
+
 export interface MethodologySignal {
   methodology: MethodologyName;
   direction: "BUY" | "SELL";
@@ -38,6 +47,7 @@ export interface MethodologySignal {
   tp: number;
   weight: number;
   pattern?: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface MethodologyBreakdown {
@@ -46,6 +56,7 @@ export interface MethodologyBreakdown {
     weight: number;
     contribution: number;
     direction?: string;
+    checklistItems?: ChecklistItem[];
   };
 }
 
@@ -62,11 +73,13 @@ export interface ConfluenceResult {
     methodologyBreakdown: MethodologyBreakdown;
     agreeingSignals: MethodologySignal[];
     totalAgreeing: number;
+    checklistItems?: ChecklistItem[];
   } | null;
   allSignals: MethodologySignal[];
   methodologyBreakdown: MethodologyBreakdown;
   conflictDetected: boolean;
   reason: string;
+  checklistByMethodology?: Record<string, ChecklistItem[]>;
 }
 
 // Each methodology's signal type
@@ -127,6 +140,7 @@ class ConfluenceEngine {
         tp: processed.tp,
         weight: weights[methodology] ?? 1.0,
         pattern,
+        checklistItems: (processed as any).checklistItems || [],
       });
     }
 
@@ -218,6 +232,21 @@ class ConfluenceEngine {
 
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 
+    // Merge checklist items from all winning agreeing signals for the final net confluence checklist
+    const mergedChecklist: ChecklistItem[] = [];
+    for (const sig of winningSignals) {
+      if (sig.checklistItems) {
+        mergedChecklist.push(...sig.checklistItems);
+      }
+    }
+
+    const checklistByMethodology: Record<string, ChecklistItem[]> = {};
+    for (const sig of allMethodologySignals) {
+      if (sig.checklistItems && sig.checklistItems.length > 0) {
+        checklistByMethodology[sig.methodology] = sig.checklistItems;
+      }
+    }
+
     return {
       finalSignal: {
         direction: winningDirection,
@@ -231,9 +260,11 @@ class ConfluenceEngine {
         methodologyBreakdown: breakdown,
         agreeingSignals: winningSignals,
         totalAgreeing: agreeCount,
+        checklistItems: mergedChecklist,
       },
       allSignals: allMethodologySignals,
       methodologyBreakdown: breakdown,
+      checklistByMethodology,
       conflictDetected,
       reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})`,
     };
@@ -256,6 +287,7 @@ class ConfluenceEngine {
           ? Math.round((signal.confidence * signal.weight) / (weights[methodology] || 1))
           : 0,
         direction: signal?.direction,
+        checklistItems: signal?.checklistItems || [],
       };
     }
 
