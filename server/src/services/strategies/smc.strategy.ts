@@ -69,11 +69,6 @@ class SMCStrategy {
         if (ipda.intraday.state === "REVERSAL" && sig.breachType === "CHOCH") {
           sig.confidence = Math.min(95, sig.confidence + 10);
         }
-        // IPDA retracement: signal against expansion trend is lower quality
-        if (ipda.intraday.state === "RETRACEMENT") {
-          const withExpansion = (sig.direction === "BUY" && ipda.intraday.state === "EXPANSION_BULL") ||
-                                (sig.direction === "SELL" && ipda.intraday.state === "EXPANSION_BEAR");
-        }
       }
     }
 

@@ -279,7 +279,7 @@ class IPDAContextService {
       state,
       confidence,
       lastExpansionIndex: expansionIndex,
-      lastFVG: unfilledFVG,
+      lastFVG: unfilledFVG || null,
       closestOB,
       retracementRatio: Math.round(retracement * 100) / 100,
       reason: `${state} (${expansionType} expansion, retrace=${(retracement * 100).toFixed(0)}%, conf=${confidence})`,
