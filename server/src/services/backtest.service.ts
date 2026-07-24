@@ -975,37 +975,50 @@ class BacktestService {
               const simulatedEntry = fs.direction === "BUY"
                 ? fs.entry + spreadValue + slippageValue
                 : fs.entry - spreadValue - slippageValue;
-              // Calculate final SL/TP using the Backtest Settings (ATR Multipliers) to enforce strictly the user's RR
-              const customSlDist = atr * (merged.entrySettings?.atrMultiplierSL || 1.5);
-              const customTpDist = atr * (merged.entrySettings?.atrMultiplierTP || 1.5);
 
-              const finalSl = fs.direction === "BUY"
-                ? simulatedEntry - customSlDist
-                : simulatedEntry + customSlDist;
+              // Use structural SL and TP from Confluence Final Signal (or ATR fallback if unassigned)
+              let finalSl = fs.sl;
+              let finalTp = fs.tp;
 
-              const finalTp = fs.direction === "BUY"
-                ? simulatedEntry + customTpDist
-                : simulatedEntry - customTpDist;
+              if (!finalSl || !finalTp || finalSl === fs.entry || finalTp === fs.entry) {
+                const customSlDist = atr * (merged.entrySettings?.atrMultiplierSL || 1.5);
+                const customTpDist = atr * (merged.entrySettings?.atrMultiplierTP || 1.5);
+                finalSl = fs.direction === "BUY" ? simulatedEntry - customSlDist : simulatedEntry + customSlDist;
+                finalTp = fs.direction === "BUY" ? simulatedEntry + customTpDist : simulatedEntry - customTpDist;
+              }
 
-              const vol = aiTradingEngine.calculatePositionSize({
-                accountBalance: equity, riskPercent: merged.maxRiskPerTrade * currentRiskMultiplier,
-                entryPrice: simulatedEntry, stopLoss: finalSl,
-                atr,
-                contractSize: symState.contractSize, volumeMin: symState.volumeMin,
-                volumeMax: symState.volumeMax, volumeStep: symState.volumeStep,
-              });
-              if (vol > 0) {
-                newTrade = {
-                  symbol: tc.symbol, direction: fs.direction,
-                  entryPrice: simulatedEntry, entryTime: currentCandle.time,
-                  sl: finalSl, tp: finalTp, volume: vol,
-                  rsiAtEntry: rsi, atrAtEntry: atr,
-                  pattern: `MULTI_${fs.primaryMethodology.toUpperCase()}`,
-                  confidence: fs.confidence, barsHeld: 0, trailingHistory: [],
-                  primaryMethodology: fs.primaryMethodology,
-                  methodologyConfidence: fs.confluenceScore,
-                  methodologyCount: fs.totalAgreeing,
-                };
+              // Enforce Minimum Risk-to-Reward ratio 1:2 (2.0)
+              const slDist = Math.abs(simulatedEntry - finalSl);
+              const tpDist = Math.abs(finalTp - simulatedEntry);
+              const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
+
+              if (rrRatio >= 2.0) {
+                const vol = aiTradingEngine.calculatePositionSize({
+                  accountBalance: equity,
+                  riskPercent: merged.maxRiskPerTrade * currentRiskMultiplier,
+                  entryPrice: simulatedEntry,
+                  stopLoss: finalSl,
+                  atr,
+                  contractSize: symState.contractSize,
+                  volumeMin: symState.volumeMin,
+                  volumeMax: symState.volumeMax,
+                  volumeStep: symState.volumeStep,
+                  symbol: tc.symbol,
+                });
+
+                if (vol > 0) {
+                  newTrade = {
+                    symbol: tc.symbol, direction: fs.direction,
+                    entryPrice: simulatedEntry, entryTime: currentCandle.time,
+                    sl: finalSl, tp: finalTp, volume: vol,
+                    rsiAtEntry: rsi, atrAtEntry: atr,
+                    pattern: `MULTI_${fs.primaryMethodology.toUpperCase()}`,
+                    confidence: fs.confidence, barsHeld: 0, trailingHistory: [],
+                    primaryMethodology: fs.primaryMethodology,
+                    methodologyConfidence: fs.confluenceScore,
+                    methodologyCount: fs.totalAgreeing,
+                  };
+                }
               }
             }
           }
