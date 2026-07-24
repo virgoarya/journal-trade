@@ -721,6 +721,12 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         }
 
         result = mt5.order_send(request)
+        if result is None:
+            last_err = mt5.last_error()
+            err_msg = f"order_send returned None (MT5 terminal may be disconnected or request invalid). Last error: {last_err}"
+            print(f"[MT5-ERROR] {err_msg}", file=sys.stderr)
+            print(f"DEBUG: Order request: {request}", file=sys.stderr)
+            return _err(err_msg)
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             # Debug: print full request details
             print(f"DEBUG: Order request: {request}", file=sys.stderr)
@@ -811,6 +817,9 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         }
 
         result = mt5.order_send(request)
+        if result is None:
+            last_err = mt5.last_error()
+            return _err(f"Close order_send returned None (market closed or MT5 disconnected). Last error: {last_err}")
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             return _err(f"Close failed: retcode={result.retcode} filling_mode={filling_mode} comment={result.comment}")
         return _ok({"success": True, "ticket": result.order, "price": result.price})
@@ -845,6 +854,9 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         }
 
         result = mt5.order_send(request)
+        if result is None:
+            last_err = mt5.last_error()
+            return _err(f"Modify order_send returned None (market closed or MT5 disconnected). Last error: {last_err}")
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             return _err(f"Modify failed: retcode={result.retcode} comment={result.comment}")
         return _ok({"success": True, "sl": sl, "tp": tp})
