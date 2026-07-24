@@ -835,25 +835,53 @@ const pipeline = {
         pipeline.lastAnalyzedCandleTimes = new Map<string, number>();
       }
 
-      // Skip Forex/Commodities/Indices on weekends (Saturday & Sunday) to save API tokens and avoid locked market errors
-      const day = new Date().getDay();
-      const isWeekend = day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
-      const isCrypto = /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI)/i.test(symbol);
-      if (isWeekend && !isCrypto) {
-        return; // Skip non-crypto pairs on weekends
+      // ── SMART WEEKEND PAUSE: Skip forex on Saturday & Sunday to save LLM tokens ──
+      const now = new Date();
+      const utcDay = now.getUTCDay();
+      const utcHour = now.getUTCHours();
+      // Forex closes Friday 22:00 UTC, opens Sunday 22:00 UTC
+      const isForexClosed = (utcDay === 6) || // Saturday all day
+                            (utcDay === 0 && utcHour < 22) || // Sunday before 22:00 UTC
+                            (utcDay === 5 && utcHour >= 22);  // Friday after 22:00 UTC
+
+      const isCryptoSymbol = (sym: string) => /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI|BNB|AVAX|MATIC)/i.test(sym);
+
+      let allSymbols = pipeline.config.symbols;
+      if (isForexClosed) {
+        const forexSymbols = allSymbols.filter(s => !isCryptoSymbol(s));
+        const cryptoSymbols = allSymbols.filter(s => isCryptoSymbol(s));
+
+        if (forexSymbols.length > 0) {
+          // Log once per hour to avoid spam
+          const pauseLogKey = `weekend_pause_${utcDay}_${utcHour}`;
+          if (!pipeline.lastAnalyzedCandleTimes.has(pauseLogKey)) {
+            pipeline.lastAnalyzedCandleTimes.set(pauseLogKey, Date.now());
+            const reopenTime = utcDay === 5 ? "Sunday 22:00 UTC (Mon 05:00 WIB)" : "Sunday 22:00 UTC (Mon 05:00 WIB)";
+            this.addLog(userId, "INFO",
+              `⏸️ MARKET CLOSED: Forex paused (${forexSymbols.join(", ")}). Reopens ${reopenTime}.${cryptoSymbols.length > 0 ? ` Crypto still active: ${cryptoSymbols.join(", ")}` : ""}`
+            );
+          }
+        }
+
+        if (cryptoSymbols.length === 0) {
+          return; // All symbols are forex → fully skip cycle
+        }
+        allSymbols = cryptoSymbols; // Only analyze crypto
       }
 
-      try {
-        const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
-        if (rates && rates.length > 0) {
-          const latestCandleTime = rates[rates.length - 1].time;
-          latestCandleTimes.set(symbol, latestCandleTime);
-          symbolsToAnalyze.push(symbol);
-        } else {
+      for (const symbol of allSymbols) {
+        try {
+          const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
+          if (rates && rates.length > 0) {
+            const latestCandleTime = rates[rates.length - 1].time;
+            latestCandleTimes.set(symbol, latestCandleTime);
+            symbolsToAnalyze.push(symbol);
+          } else {
+            symbolsToAnalyze.push(symbol);
+          }
+        } catch (err: any) {
           symbolsToAnalyze.push(symbol);
         }
-      } catch (err: any) {
-        symbolsToAnalyze.push(symbol);
       }
 
       if (symbolsToAnalyze.length === 0) {
