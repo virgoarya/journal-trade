@@ -82,3 +82,16 @@
 5. Terapkan Dynamic Risk Capacity pada `risk-manager.service.ts` berbasis persentase total open risk akun, bukan sekadar jumlah posisi kaku.
 6. Sertakan status Pending Order Limit placed di M15/M5 pada checklist item SMC, ICT, dan Malaysian SNR.
 **Hindari**: Jangan pernah menggunakan M1 untuk entry signal. Jangan hardcode status `PASSED` pada checklist items. Selalu pastikan R:R minimal 1:2 terpenuhi dan lot size dibatasi 1.0 lot max.
+
+### [20260724] Cascading Waterfall Checklist & Pipeline Step Error Swallowing
+**Area**: Backend / Strategies / Pipeline
+**Root Cause**:
+1. **Checklist status tidak logis**: Item checklist strategi (SMC, ICT, MSNR) mengevaluasi setiap kondisi secara independen tanpa memperhatikan urutan ketergantungan. Ini menyebabkan item WAITING (kuning) muncul di antara item PASSED (hijau) — misalnya: BOS=PASSED, OB=PASSED, FVG=WAITING, Liquidity=PASSED. Ini secara visual membingungkan karena jika prerequisite belum terpenuhi, item berikutnya seharusnya tidak bisa PASSED.
+2. **Trade APPROVED tapi no MT5 order**: Setelah LLM CONSENSUS APPROVED di step [4/7], jika step 5-7 (getAccountInfo, getSymbolInfo, openOrder) throw exception, error ditangkap oleh generic catch-all handler yang hanya log `Pipeline error: <message>` tanpa menunjukkan di step mana gagalnya.
+3. **ICT signalType decomposition**: Signal types ICT (`AMD_FVG`, `SWEEP_FVG`, `OTE_AMD`, `JUDAS_SWEEP`) tidak di-decompose per-konsep individual, sehingga item checklist PO3 (cek `includes("AMD")`) bisa PASSED tapi FVG (cek `includes("FVG")`) bisa WAITING padahal signal type mengandung keduanya.
+**Solusi**:
+1. Implementasi **Cascading Waterfall Logic** pada ketiga `buildXXXChecklist()`: setiap item checklist dievaluasi kondisinya, tapi status-nya hanya bisa PASSED jika SEMUA prerequisite sebelumnya juga PASSED. Jika prerequisite WAITING, semua item berikutnya otomatis WAITING.
+2. Wrap setiap step 5/6/7 dalam individual try-catch dengan log error spesifik per step (`[5/7] MT5 DATA FAILED`, `[6/7] VALIDATION ERROR`, `[7/7] MT5 ORDER EXCEPTION`).
+3. Decompose `sig.signalType` ICT ke variabel boolean individual (`hasAMD`, `hasFVG`, `hasOTE`, `hasSweep`) sebelum evaluasi checklist.
+4. Tambahkan numbering ①②③④⑤⑥⑦ pada label checklist agar urutan langkah pembentukan sinyal terlihat jelas di UI.
+**Hindari**: Jangan evaluasi checklist item secara flat/independen tanpa memperhatikan urutan dependensi. Jangan biarkan exception step 5-7 jatuh ke generic catch-all tanpa log granular per-step.

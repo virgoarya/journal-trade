@@ -1184,8 +1184,17 @@ const pipeline = {
         }
 
         // ── STEP 5: SMART RISK & POSITION SIZING ─────────────────────────────
-        const accountInfo = await mt5McpService.getAccountInfo();
-        const symbolInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
+        let volume = 0;
+        let accountInfo: any;
+        let symbolInfo: any;
+
+        try {
+          accountInfo = await mt5McpService.getAccountInfo();
+          symbolInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
+        } catch (e: any) {
+          this.addLog(userId, "ERROR", `[5/7] [${signal.symbol}] MT5 DATA FAILED: Cannot retrieve account/symbol info — ${e.message}`);
+          continue;
+        }
 
         let riskMultiplier = 1;
         if (pipeline.config.smartRisk?.enabled) {
@@ -1209,7 +1218,7 @@ const pipeline = {
         pipeline.currentRiskMultiplier = riskMultiplier;
         const finalRiskPercent = pipeline.config.maxRiskPerTrade * riskMultiplier;
 
-        let volume = finalRiskPercent;
+        volume = finalRiskPercent;
         if (symbolInfo) {
           volume = aiTradingEngine.calculatePositionSize({
             accountBalance: accountInfo.balance,
@@ -1268,16 +1277,22 @@ const pipeline = {
 
         const isPending = finalAction !== signal.direction;
 
-        const validation = await this.validateOrderParams(
-          signal.symbol,
-          signal.direction,
-          volume,
-          signal.sl,
-          signal.tp,
-          2.0,
-          isPending,
-          signal.entry,
-        );
+        let validation: { valid: boolean; error?: string };
+        try {
+          validation = await this.validateOrderParams(
+            signal.symbol,
+            signal.direction,
+            volume,
+            signal.sl,
+            signal.tp,
+            2.0,
+            isPending,
+            signal.entry,
+          );
+        } catch (e: any) {
+          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] VALIDATION ERROR: ${e.message}`);
+          continue;
+        }
 
         if (!validation.valid) {
           this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] REJECTED (VALIDATION): ${validation.error}`);
@@ -1287,15 +1302,21 @@ const pipeline = {
         this.addLog(userId, "INFO", `[6/7] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
 
         // ── STEP 7: ORDER EXECUTION ──────────────────────────────────────────
-        const orderResult = await mt5McpService.openOrder({
-          symbol: signal.symbol,
-          action: finalAction,
-          volume,
-          price: orderPrice,
-          sl: signal.sl,
-          tp: signal.tp,
-          comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
-        });
+        let orderResult: any;
+        try {
+          orderResult = await mt5McpService.openOrder({
+            symbol: signal.symbol,
+            action: finalAction,
+            volume,
+            price: orderPrice,
+            sl: signal.sl,
+            tp: signal.tp,
+            comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
+          });
+        } catch (e: any) {
+          this.addLog(userId, "ERROR", `[7/7] [${signal.symbol}] MT5 ORDER EXCEPTION: ${e.message}`);
+          continue;
+        }
 
         if (orderResult.success) {
           const slDist = Math.abs(signal.entry - signal.sl);

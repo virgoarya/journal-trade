@@ -187,48 +187,75 @@ class ICTStrategy {
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
+    // Decompose signal type into individual concepts
+    const hasAMD = sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
+    const hasFVG = sig.signalType.includes("FVG");
+    const hasOTE = sig.signalType.includes("OTE");
+    const hasSweep = sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
+
+    // Evaluate each condition independently
+    const step1 = killzone !== "NONE";
+    const step2 = hasAMD;
+    const step3 = hasFVG;
+    const step4 = hasOTE;
+    const step5 = hasSweep;
+    const step6 = isRRValid;
+    const step7 = sig.confidence >= 70;
+
+    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
+    // Note: Steps 3 & 4 are alternatives (FVG or OTE), so we allow either to satisfy the chain
+    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
+      if (!priorAllPassed) return "WAITING";
+      if (isFailable && !stepPassed) return "FAILED";
+      return stepPassed ? "PASSED" : "WAITING";
+    };
+
+    const chainUpToStep2 = step1 && step2;
+    const hasPDArray = step3 || step4; // FVG or OTE satisfies the PD Array requirement
+    const chainUpToStep5 = chainUpToStep2 && hasPDArray && step5;
+
     return [
       {
         id: "ict-killzone",
-        label: kzLabel,
-        status: killzone !== "NONE" ? "PASSED" : "WAITING",
+        label: `① ${kzLabel}`,
+        status: s(step1, true),
         timeframe: setupTfLabel,
         value: killzone !== "NONE" ? killzone : "OFF_SESSION"
       },
       {
         id: "ict-po3",
-        label: "Power of 3 (PO3) — Fase Manipulation selesai",
-        status: (sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP") ? "PASSED" : "WAITING",
+        label: "② Power of 3 (PO3) — Fase Manipulation selesai",
+        status: s(step2, step1),
         timeframe: htfTfLabel
       },
       {
         id: "ict-fvg",
-        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel}`,
-        status: sig.signalType.includes("FVG") ? "PASSED" : "WAITING",
+        label: `③ Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel}`,
+        status: s(step3, chainUpToStep2),
         timeframe: setupTfLabel
       },
       {
         id: "ict-ote",
-        label: "Optimal Trade Entry (OTE 61.8% - 79%)",
-        status: sig.signalType.includes("OTE") ? "PASSED" : "WAITING",
+        label: "④ Optimal Trade Entry (OTE 61.8% - 79%)",
+        status: s(step4, chainUpToStep2),
         timeframe: setupTfLabel
       },
       {
         id: "ict-sweep",
-        label: `Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel}`,
-        status: (sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD")) ? "PASSED" : "WAITING",
+        label: `⑤ Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel}`,
+        status: s(step5, chainUpToStep2 && hasPDArray),
         timeframe: entryTfLabel
       },
       {
         id: "ict-rr",
-        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: isRRValid ? "PASSED" : "FAILED",
+        label: "⑥ Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: s(step6, chainUpToStep5, true),
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "ict-pending-placed",
-        label: `Pending Order Limit ${entryTfLabel} Placed`,
-        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
+        label: `⑦ Pending Order Limit ${entryTfLabel} Placed`,
+        status: s(step7, chainUpToStep5 && step6),
         timeframe: entryTfLabel,
         details: `Limit Price: ${sig.entry.toFixed(5)}`
       }

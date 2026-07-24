@@ -216,35 +216,50 @@ class MSNRStrategy {
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
+    // MSNR signal types: "TURTLE_SOUP_OB" or "TURTLE_SOUP_CISD"
+    // Evaluate each condition based on actual signal data
+    const step1 = sig.confidence >= 50; // SNR zone detected (signal exists = zone was found)
+    const step2 = sig.signalType.includes("TURTLE_SOUP"); // Turtle Soup pattern confirmed
+    const step3 = sig.confidence >= 65; // MSS confirmed at LTF (higher confidence = more structure)
+    const step4 = isRRValid;
+    const step5 = sig.confidence >= 70; // High enough confidence for pending order
+
+    // Cascading waterfall
+    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
+      if (!priorAllPassed) return "WAITING";
+      if (isFailable && !stepPassed) return "FAILED";
+      return stepPassed ? "PASSED" : "WAITING";
+    };
+
     return [
       {
         id: "msnr-snr-zone",
-        label: `HTF Malaysian SNR ${snrType} terkonfirmasi`,
-        status: sig.signalType.includes("MSNR") || sig.confidence >= 60 ? "PASSED" : "WAITING",
+        label: `① HTF Malaysian SNR ${snrType} terkonfirmasi`,
+        status: s(step1, true),
         timeframe: htfTfLabel
       },
       {
         id: "msnr-turtle-soup",
-        label: `Turtle Soup Wick Rejection di ${snrType}`,
-        status: sig.signalType.includes("SWEEP") || sig.confidence >= 65 ? "PASSED" : "WAITING",
+        label: `② Turtle Soup Wick Rejection di ${snrType}`,
+        status: s(step2, step1),
         timeframe: setupTfLabel
       },
       {
         id: "msnr-ltf-mss",
-        label: `LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR)`,
-        status: sig.signalType.includes("MSS") || sig.confidence >= 70 ? "PASSED" : "WAITING",
+        label: `③ LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR)`,
+        status: s(step3, step1 && step2),
         timeframe: entryTfLabel
       },
       {
         id: "msnr-rr",
-        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: isRRValid ? "PASSED" : "FAILED",
+        label: "④ Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: s(step4, step1 && step2 && step3, true),
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "msnr-ob-limit",
-        label: `Pending Order Limit ${entryTfLabel} Placed at OB/QML`,
-        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
+        label: `⑤ Pending Order Limit ${entryTfLabel} Placed at OB/QML`,
+        status: s(step5, step1 && step2 && step3 && step4),
         timeframe: entryTfLabel,
         value: `${sig.entry.toFixed(5)}`
       }

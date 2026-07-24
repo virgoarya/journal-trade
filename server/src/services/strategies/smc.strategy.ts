@@ -105,43 +105,58 @@ class SMCStrategy {
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
 
+    // Evaluate each condition independently
+    const step1 = isHtfBosConfirmed;
+    const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;
+    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION");
+    const step4 = (fractal.setupStr.fairValueGaps?.length ?? 0) > 0;
+    const step5 = isRRValid;
+    const step6 = sig.confidence >= 70;
+
+    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
+    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
+      if (!priorAllPassed) return "WAITING";
+      if (isFailable && !stepPassed) return "FAILED";
+      return stepPassed ? "PASSED" : "WAITING";
+    };
+
     return [
       {
         id: "smc-bos",
-        label: `BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} terkonfirmasi`,
-        status: isHtfBosConfirmed ? "PASSED" : "WAITING",
+        label: `① HTF BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} terkonfirmasi`,
+        status: s(step1, true),
         timeframe: htfTfLabel,
         details: `Breach type: ${sig.breachType}`
       },
       {
+        id: "smc-liq",
+        label: `② ${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} tersapu`,
+        status: s(step2, step1),
+        timeframe: htfTfLabel
+      },
+      {
         id: "smc-ob",
-        label: `Harga di zona OB (${pdArray})`,
-        status: sig.orderBlock ? "PASSED" : (sig.breachType === "OB_MITIGATION" ? "PASSED" : "WAITING"),
+        label: `③ Harga di zona OB (${pdArray})`,
+        status: s(step3, step1 && step2),
         timeframe: setupTfLabel,
         value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)}` : undefined
       },
       {
         id: "smc-fvg",
-        label: `FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
-        status: (fractal.setupStr.fairValueGaps?.length ?? 0) > 0 ? "PASSED" : "WAITING",
+        label: `④ FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
+        status: s(step4, step1 && step2 && step3),
         timeframe: setupTfLabel
       },
       {
-        id: "smc-liq",
-        label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} tersapu`,
-        status: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 ? "PASSED" : "WAITING",
-        timeframe: htfTfLabel
-      },
-      {
         id: "smc-rr",
-        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: isRRValid ? "PASSED" : "FAILED",
+        label: "⑤ Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: s(step5, step1 && step2 && step3 && step4, true),
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "smc-entry-rejection",
-        label: `Rejection candle ${entryTfLabel} & Pending Order Placed`,
-        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
+        label: `⑥ Rejection candle ${entryTfLabel} & Pending Order Placed`,
+        status: s(step6, step1 && step2 && step3 && step4 && step5),
         timeframe: entryTfLabel,
         details: `Pending BUY/SELL Limit at ${sig.entry.toFixed(5)}`
       }
