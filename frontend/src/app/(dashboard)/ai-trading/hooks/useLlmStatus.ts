@@ -51,12 +51,15 @@ export function useLlmStatus(opts: { pollIntervalMs?: number } = {}) {
       }));
       const merged = baseProviders.map((def) => {
         const override = incomingMap.get(def.name);
-        return override
-          ? {
-              ...def,
-              status: (override.status as LlmModelStatus) ?? def.status,
-            }
-          : def;
+        if (override && override.status) {
+          const newStatus = override.status as LlmModelStatus;
+          if (newStatus !== def.status) {
+            // Sync back to registry & localStorage
+            providerRegistry.updateProvider(def.name, { status: newStatus });
+          }
+          return { ...def, status: newStatus };
+        }
+        return def;
       });
       setModels(merged);
     } catch (e: any) {

@@ -112,8 +112,8 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const { positions, orders, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
     usePositions(isConnected, 10000);
 
-  // LLM Status
-  const { models: llmModels, loading: llmLoading, activeCount: llmActiveCount, refresh: refreshLlmStatus } = useLlmStatus();
+  // LLM Status (poll every 15s to detect recovery from hibernation)
+  const { models: llmModels, loading: llmLoading, activeCount: llmActiveCount, refresh: refreshLlmStatus } = useLlmStatus({ pollIntervalMs: 15000 });
 
   // Pipeline Status & Data
   const {
