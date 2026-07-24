@@ -66,3 +66,19 @@
 2. Setiap metodologi (SMC, ICT, Malaysian SNR) memproduksi `checklistItems` spesifik dengan indikator timeframe (`H4`, `H1`, `M15`) dan status (`PASSED`, `WAITING`, `FAILED`).
 3. Komponen `MethodologyConfluence.tsx` di frontend dilengkapi dengan tab selector (`NET`, `SMC`, `ICT`, `Malaysian SNR`) untuk berpindah tampilan checklist secara instan.
 **Hindari**: Jangan meng-hardcode checklist di UI. Semua status kriteria wajib dihasilkan secara terstruktur dari pipeline engine backend agar selalu sinkron dengan data pasar real-time.
+
+### [20260724] Dynamic Multi-Timeframe Checklist (D1/H4/H1/M15-M5), HTF TP Max R:R (Min 1:2), Forex/Crypto Lot Cap & Dynamic Risk Capacity
+**Area**: Backend / Strategies / Risk Management / Frontend
+**Root Cause**:
+1. Entry timeframe sebelumnya menggunakan M1 yang sangat tinggi noise-nya di real market.
+2. Checklist item di strategy engine sempat bernilai static `PASSED` hardcoded dan belum mengevaluasi data candle OHLC D1/H4/H1/M15-M5 secara berurutan.
+3. Kalkulasi lot Forex cross (seperti quote JPY) dan BTCUSD mengalami masalah konversi quote currency atau tidak memiliki hard cap 1.0 lot.
+4. Pengecekan jumlah posisi terbuka sebelumnya kaku (fixed open count) sehingga posisi berisiko rendah tidak bisa menambah posisi baru.
+**Solusi**:
+1. Hapus M1 dari `getFractalTimeframes`. Set timeframe konfirmasi entry terkecil ke M15 atau M5.
+2. Unduh rates D1, H4, H1, dan M15/M5 di `ai-trading-engine.service.ts` dan teruskan `daily` context ke strategi.
+3. Tentukan Take Profit (TP) di struktur level HTF (D1/H4) sebelum konfirmasi entry LTF untuk memaksimalkan R:R (selalu >= 1:2). Filter out sinyal dengan R:R < 1:2.
+4. Terapkan konversi Quote Currency pada `calculatePositionSize` dan tetapkan Hard Cap maksimal 1.0 lot per posisi untuk forex & crypto (BTCUSD).
+5. Terapkan Dynamic Risk Capacity pada `risk-manager.service.ts` berbasis persentase total open risk akun, bukan sekadar jumlah posisi kaku.
+6. Sertakan status Pending Order Limit placed di M15/M5 pada checklist item SMC, ICT, dan Malaysian SNR.
+**Hindari**: Jangan pernah menggunakan M1 untuk entry signal. Jangan hardcode status `PASSED` pada checklist items. Selalu pastikan R:R minimal 1:2 terpenuhi dan lot size dibatasi 1.0 lot max.
