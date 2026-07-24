@@ -428,6 +428,11 @@ class AITradingEngine {
     const MAX_LOT_CAP = 1.0;
     return Math.min(finalLot, volumeMax, MAX_LOT_CAP);
   }
+
+  /**
+   * Calculate trailing stop SL in price units.
+   */
+  calculateTrailingStopSL(params: {
     positionType: "BUY" | "SELL";
     currentPrice: number;
     currentSL: number;

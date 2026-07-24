@@ -166,6 +166,8 @@ class MSNRStrategy {
         if (!aligned) sig.confidence = Math.round(sig.confidence * 0.6);
         else sig.confidence = Math.min(95, Math.round(sig.confidence * 1.1));
       }
+    }
+
     // Filter out signals with R:R < 1:2 (RR < 2.0)
     const validSignals = signals.filter(sig => {
       const slDist = Math.abs(sig.entry - sig.sl);
