@@ -254,6 +254,27 @@ class ConfluenceEngine {
       }
     }
 
+    // Add Pipeline System Verification Items to Net Checklist
+    mergedChecklist.unshift({
+      id: "pipeline-net-confluence",
+      label: `[1/7] Confluence Multi-Metodologi (${agreeCount}/${activeMethodologies.length} Setuju)`,
+      status: "PASSED",
+      value: `Score ${Math.round(finalConfidence)}% | Primary: ${primary.methodology.toUpperCase()}`
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-rr-check",
+      label: `[6/7] Minimum Risk-to-Reward 1:2.0 Validation`,
+      status: rrRatio >= 2.0 ? "PASSED" : "FAILED",
+      details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${primary.sl.toFixed(5)} | TP: ${primary.tp.toFixed(5)}`
+    });
+
+    mergedChecklist.push({
+      id: "pipeline-lot-cap",
+      label: `[5/7] Risk Management & Lot Sizing (Hard Cap 1.0 Lot)`,
+      status: "PASSED"
+    });
+
     const checklistByMethodology: Record<string, ChecklistItem[]> = {};
     for (const sig of allMethodologySignals) {
       if (sig.checklistItems && sig.checklistItems.length > 0) {

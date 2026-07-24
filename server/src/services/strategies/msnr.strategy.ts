@@ -220,19 +220,19 @@ class MSNRStrategy {
       {
         id: "msnr-snr-zone",
         label: `HTF Malaysian SNR ${snrType} terkonfirmasi`,
-        status: "PASSED",
+        status: sig.signalType.includes("MSNR") || sig.confidence >= 60 ? "PASSED" : "WAITING",
         timeframe: htfTfLabel
       },
       {
         id: "msnr-turtle-soup",
         label: `Turtle Soup Wick Rejection di ${snrType}`,
-        status: "PASSED",
+        status: sig.signalType.includes("SWEEP") || sig.confidence >= 65 ? "PASSED" : "WAITING",
         timeframe: setupTfLabel
       },
       {
         id: "msnr-ltf-mss",
         label: `LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR)`,
-        status: "PASSED",
+        status: sig.signalType.includes("MSS") || sig.confidence >= 70 ? "PASSED" : "WAITING",
         timeframe: entryTfLabel
       },
       {
@@ -244,7 +244,7 @@ class MSNRStrategy {
       {
         id: "msnr-ob-limit",
         label: `Pending Order Limit ${entryTfLabel} Placed at OB/QML`,
-        status: "PASSED",
+        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
         timeframe: entryTfLabel,
         value: `${sig.entry.toFixed(5)}`
       }

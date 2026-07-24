@@ -198,25 +198,25 @@ class ICTStrategy {
       {
         id: "ict-po3",
         label: "Power of 3 (PO3) — Fase Manipulation selesai",
-        status: sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP" ? "PASSED" : "PASSED",
+        status: (sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP") ? "PASSED" : "WAITING",
         timeframe: htfTfLabel
       },
       {
         id: "ict-fvg",
-        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} & Inducement ${setupTfLabel}`,
-        status: sig.signalType.includes("FVG") ? "PASSED" : "PASSED",
+        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel}`,
+        status: sig.signalType.includes("FVG") ? "PASSED" : "WAITING",
         timeframe: setupTfLabel
       },
       {
         id: "ict-ote",
-        label: "Optimal Trade Entry (OTE 61.8% - 79%) tersentuh",
+        label: "Optimal Trade Entry (OTE 61.8% - 79%)",
         status: sig.signalType.includes("OTE") ? "PASSED" : "WAITING",
         timeframe: setupTfLabel
       },
       {
         id: "ict-sweep",
         label: `Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel}`,
-        status: sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") ? "PASSED" : "PASSED",
+        status: (sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD")) ? "PASSED" : "WAITING",
         timeframe: entryTfLabel
       },
       {

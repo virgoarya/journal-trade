@@ -116,7 +116,7 @@ class SMCStrategy {
       {
         id: "smc-ob",
         label: `Harga di zona OB (${pdArray})`,
-        status: sig.orderBlock || sig.breachType === "OB_MITIGATION" ? "PASSED" : "PASSED",
+        status: sig.orderBlock ? "PASSED" : (sig.breachType === "OB_MITIGATION" ? "PASSED" : "WAITING"),
         timeframe: setupTfLabel,
         value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)}` : undefined
       },
@@ -128,8 +128,8 @@ class SMCStrategy {
       },
       {
         id: "smc-liq",
-        label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} sudah tersapu`,
-        status: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 ? "PASSED" : "PASSED",
+        label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} tersapu`,
+        status: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 ? "PASSED" : "WAITING",
         timeframe: htfTfLabel
       },
       {
