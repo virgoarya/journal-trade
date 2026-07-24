@@ -230,6 +230,20 @@ class ConfluenceEngine {
       (a, b) => (b.confidence * b.weight) - (a.confidence * a.weight),
     )[0];
 
+    // Enforce strict R:R >= 1:2 (2.0)
+    const slDist = Math.abs(primary.entry - primary.sl);
+    const tpDist = Math.abs(primary.tp - primary.entry);
+    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
+    if (rrRatio < 2.0) {
+      return {
+        finalSignal: null,
+        allSignals: allMethodologySignals,
+        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
+        conflictDetected: false,
+        reason: `Risk:Reward ratio 1:${rrRatio.toFixed(2)} is below 1:2 minimum (Trade Skipped)`,
+      };
+    }
+
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 
     // Merge checklist items from all winning agreeing signals for the final net confluence checklist

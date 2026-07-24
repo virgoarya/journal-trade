@@ -266,6 +266,9 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
                         </span>
                       )}
                     </div>
+                    {item.value && (
+                      <span className="text-[9px] text-accent-gold font-mono block mt-0.5 font-bold">{item.value}</span>
+                    )}
                     {item.details && (
                       <p className="text-[9px] text-text-muted mt-0.5 truncate">{item.details}</p>
                     )}

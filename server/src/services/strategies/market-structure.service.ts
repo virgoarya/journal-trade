@@ -14,13 +14,19 @@ export interface Candle {
 }
 
 export interface FractalContext {
+  daily?: Candle[];
   direction: Candle[];
   setup: Candle[];
   entry: Candle[];
+  dailyStr?: MarketStructure;
   directionStr: MarketStructure;
   setupStr: MarketStructure;
   entryStr: MarketStructure;
   isAligned: boolean;
+  dailyTimeframeStr?: string;
+  directionTimeframeStr?: string;
+  setupTimeframeStr?: string;
+  entryTimeframeStr?: string;
 }
 
 export interface SwingHigh {

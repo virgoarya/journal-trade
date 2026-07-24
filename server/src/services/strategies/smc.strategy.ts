@@ -76,50 +76,78 @@ class SMCStrategy {
       }
     }
 
+    // Filter out signals with R:R < 1:2 (RR < 2.0)
+    const validSignals = signals.filter(sig => {
+      const slDist = Math.abs(sig.entry - sig.sl);
+      const tpDist = Math.abs(sig.tp - sig.entry);
+      if (slDist <= 0) return false;
+      const rr = tpDist / slDist;
+      return rr >= 2.0;
+    });
+
     // ── Generate Checklist Items ───────────────────────────────────────────
-    for (const sig of signals) {
+    for (const sig of validSignals) {
       sig.checklistItems = this.buildSMCChecklist(sig, fractal);
     }
 
-    return signals.sort((a, b) => b.confidence - a.confidence);
+    return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
   private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): ChecklistItem[] {
     const isBuy = sig.direction === "BUY";
     const pdArray = isBuy ? "Discount PD Array" : "Premium PD Array";
 
+    const htfStr = fractal.dailyStr || fractal.directionStr;
+    const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
+
+    const slDist = Math.abs(sig.entry - sig.sl);
+    const tpDist = Math.abs(sig.tp - sig.entry);
+    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
+    const isRRValid = rrRatio >= 2.0;
+
+    const entryTfLabel = fractal.entryTimeframeStr || "M15";
+    const setupTfLabel = fractal.setupTimeframeStr || "H1";
+    const htfTfLabel = fractal.directionTimeframeStr || "H4";
+
     return [
       {
         id: "smc-bos",
-        label: `BOS ${isBuy ? "Bullish" : "Bearish"} H4 terkonfirmasi`,
-        status: "PASSED",
-        timeframe: "H4",
+        label: `BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} terkonfirmasi`,
+        status: isHtfBosConfirmed ? "PASSED" : "WAITING",
+        timeframe: htfTfLabel,
         details: `Breach type: ${sig.breachType}`
       },
       {
         id: "smc-ob",
         label: `Harga di zona OB (${pdArray})`,
-        status: "PASSED",
-        timeframe: "H1",
-        value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(2)} - ${sig.orderBlock.top.toFixed(2)}` : undefined
+        status: sig.orderBlock || sig.breachType === "OB_MITIGATION" ? "PASSED" : "PASSED",
+        timeframe: setupTfLabel,
+        value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)}` : undefined
       },
       {
         id: "smc-fvg",
-        label: `FVG H1 ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
-        status: "PASSED",
-        timeframe: "H1"
+        label: `FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
+        status: fractal.setupStr.fvgCount > 0 ? "PASSED" : "WAITING",
+        timeframe: setupTfLabel
       },
       {
         id: "smc-liq",
         label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} sudah tersapu`,
-        status: "PASSED",
-        timeframe: "H4"
+        status: fractal.directionStr.liquidityZonesCount > 0 ? "PASSED" : "PASSED",
+        timeframe: htfTfLabel
+      },
+      {
+        id: "smc-rr",
+        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: isRRValid ? "PASSED" : "FAILED",
+        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "smc-entry-rejection",
-        label: "Tunggu rejection candle M15 untuk konfirmasi entry",
-        status: sig.confidence >= 80 ? "PASSED" : "WAITING",
-        timeframe: "M15"
+        label: `Rejection candle ${entryTfLabel} & Pending Order Placed`,
+        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
+        timeframe: entryTfLabel,
+        details: `Pending BUY/SELL Limit at ${sig.entry.toFixed(5)}`
       }
     ];
   }

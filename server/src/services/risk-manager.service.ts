@@ -57,11 +57,25 @@ class RiskManagerService {
         };
       }
 
-      // ── 3. Check max open positions ──────────────────────────────────
-      if (positions.length >= pipelineConfig.maxOpenPositions) {
+      // ── 3. Check total open risk capacity (Dynamic Risk Capacity) ──────
+      let totalOpenRiskPercent = 0;
+      for (const pos of positions) {
+        if (pos.sl && pos.sl > 0 && pos.priceOpen > 0) {
+          const slPriceDiff = Math.abs(pos.priceOpen - pos.sl);
+          // Estimate risk in currency
+          const posRiskUsd = slPriceDiff * pos.volume * 100000;
+          const posRiskPct = accountInfo.balance > 0 ? (posRiskUsd / accountInfo.balance) * 100 : 0.5;
+          totalOpenRiskPercent += Math.min(posRiskPct, pipelineConfig.maxRiskPerTrade);
+        } else {
+          totalOpenRiskPercent += pipelineConfig.maxRiskPerTrade;
+        }
+      }
+
+      const totalRiskCapacity = Math.max(pipelineConfig.maxDailyRisk, pipelineConfig.maxOpenPositions * pipelineConfig.maxRiskPerTrade);
+      if (totalOpenRiskPercent + pipelineConfig.maxRiskPerTrade > totalRiskCapacity && positions.length >= pipelineConfig.maxOpenPositions) {
         return {
           allowed: false,
-          reason: `Max open positions reached: ${positions.length}/${pipelineConfig.maxOpenPositions}`,
+          reason: `Max risk capacity reached: Total open risk ${totalOpenRiskPercent.toFixed(2)}% + new trade ${pipelineConfig.maxRiskPerTrade}% exceeds limit ${totalRiskCapacity.toFixed(2)}%`,
           warnings,
         };
       }

@@ -153,49 +153,84 @@ class ICTStrategy {
       }
     }
 
+    // Filter out signals with R:R < 1:2 (RR < 2.0)
+    const validSignals = signals.filter(sig => {
+      const slDist = Math.abs(sig.entry - sig.sl);
+      const tpDist = Math.abs(sig.tp - sig.entry);
+      if (slDist <= 0) return false;
+      const rr = tpDist / slDist;
+      return rr >= 2.0;
+    });
+
     // ── Generate Checklist Items ───────────────────────────────────────────
-    for (const sig of signals) {
-      sig.checklistItems = this.buildICTChecklist(sig, currentKillzone);
+    for (const sig of validSignals) {
+      sig.checklistItems = this.buildICTChecklist(sig, currentKillzone, fractal);
     }
 
-    return signals.sort((a, b) => b.confidence - a.confidence);
+    return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
-  private buildICTChecklist(sig: ICTSignal, killzone: KillzoneType): ChecklistItem[] {
+  private buildICTChecklist(
+    sig: ICTSignal,
+    killzone: KillzoneType,
+    fractal?: import("./market-structure.service").FractalContext
+  ): ChecklistItem[] {
     const isBuy = sig.direction === "BUY";
     const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
+
+    const slDist = Math.abs(sig.entry - sig.sl);
+    const tpDist = Math.abs(sig.tp - sig.entry);
+    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
+    const isRRValid = rrRatio >= 2.0;
+
+    const setupTfLabel = fractal?.setupTimeframeStr || "H1";
+    const htfTfLabel = fractal?.directionTimeframeStr || "H4";
+    const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
     return [
       {
         id: "ict-killzone",
         label: kzLabel,
         status: killzone !== "NONE" ? "PASSED" : "WAITING",
-        timeframe: "H1",
+        timeframe: setupTfLabel,
         value: killzone !== "NONE" ? killzone : "OFF_SESSION"
       },
       {
         id: "ict-po3",
         label: "Power of 3 (PO3) — Fase Manipulation selesai",
         status: sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP" ? "PASSED" : "PASSED",
-        timeframe: "H4"
+        timeframe: htfTfLabel
       },
       {
         id: "ict-fvg",
-        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} H1 terkonfirmasi`,
+        label: `Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} & Inducement ${setupTfLabel}`,
         status: sig.signalType.includes("FVG") ? "PASSED" : "PASSED",
-        timeframe: "H1"
+        timeframe: setupTfLabel
       },
       {
         id: "ict-ote",
         label: "Optimal Trade Entry (OTE 61.8% - 79%) tersentuh",
         status: sig.signalType.includes("OTE") ? "PASSED" : "WAITING",
-        timeframe: "H1"
+        timeframe: setupTfLabel
       },
       {
         id: "ict-sweep",
-        label: `Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} terkonfirmasi`,
+        label: `Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel}`,
         status: sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") ? "PASSED" : "PASSED",
-        timeframe: "M15"
+        timeframe: entryTfLabel
+      },
+      {
+        id: "ict-rr",
+        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: isRRValid ? "PASSED" : "FAILED",
+        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+      },
+      {
+        id: "ict-pending-placed",
+        label: `Pending Order Limit ${entryTfLabel} Placed`,
+        status: sig.confidence >= 70 ? "PASSED" : "WAITING",
+        timeframe: entryTfLabel,
+        details: `Limit Price: ${sig.entry.toFixed(5)}`
       }
     ];
   }

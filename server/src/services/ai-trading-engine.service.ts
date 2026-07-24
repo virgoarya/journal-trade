@@ -75,6 +75,83 @@ export interface Candle {
 export interface EngulfingResult {
   type: "BULLISH_ENGULFING" | "BEARISH_ENGULFING" | "NONE";
   candle1: Candle;
+// ─── AI Trading Engine v2 — Multi-Methodology ───────────────────────
+// Combines all 7 trading methodologies via the Confluence Engine.
+
+import { mt5McpService, type MT5Rate, type MT5Symbol } from "./mt5-mcp.service";
+import { silentLogger } from "../utils/silent-logger";
+import {
+  marketStructureService,
+  smcStrategy,
+  ictStrategy,
+  msnrStrategy,
+
+  confluenceEngine,
+  atrService,
+  ipdaContextService,
+  type MarketStructure,
+  type MethodologyWeights,
+  type MethodologyName,
+  type ConfluenceResult,
+  type IPDAContext,
+  DEFAULT_METHODOLOGY_WEIGHTS,
+} from "./strategies/index";
+
+// ─── Incremental Indicator Types ──────────────────────────────────────
+
+export interface RSIState {
+  avgGain: number;
+  avgLoss: number;
+  period: number;
+  count: number;
+  previousClose: number | null;
+}
+
+export interface ATRState {
+  atr: number;
+  period: number;
+  count: number;
+  previousClose: number;
+}
+
+// ─── Legacy Types (kept for backwards compatibility) ─────────────────
+
+export interface SignalAnalysis {
+  rsi: number;
+  atr: number;
+  pattern: "BULLISH_ENGULFING" | "BEARISH_ENGULFING" | "NONE";
+  currentPrice: number;
+  signal: TradingSignal | null;
+}
+
+export interface TradingSignal {
+  symbol: string;
+  direction: "BUY" | "SELL";
+  confidence: number;
+  entry: number;
+  sl: number;
+  tp: number;
+  reason: string;
+  riskPercent: number;
+  timeframe: string;
+  indicators: {
+    rsi: number;
+    atr: number;
+  };
+  pattern: string;
+}
+
+export interface Candle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface EngulfingResult {
+  type: "BULLISH_ENGULFING" | "BEARISH_ENGULFING" | "NONE";
+  candle1: Candle;
   candle2: Candle;
 }
 
@@ -95,7 +172,6 @@ export interface MultiStrategySymbolAnalysis {
     smc: ReturnType<typeof smcStrategy.analyze>;
     ict: ReturnType<typeof ictStrategy.analyze>;
     msnr: ReturnType<typeof msnrStrategy.analyze>;
-
   };
   confluence: ConfluenceResult;
   ipdaContext?: IPDAContext;
@@ -117,8 +193,6 @@ const RSI_PERIOD = 14;
 const ATR_PERIOD = 14;
 const RSI_OVERSOLD = 30;
 const RSI_OVERBOUGHT = 70;
-const ATR_SL_MULTIPLIER = 1.5;
-const ATR_TP_MULTIPLIER = 1.5;
 
 // ─── Service ─────────────────────────────────────────────────────────
 
@@ -127,10 +201,10 @@ class AITradingEngine {
     switch (baseTf) {
       case "H4": return { direction: "H4", setup: "H1", entry: "M15" };
       case "H1": return { direction: "H1", setup: "M15", entry: "M5" };
-      case "M30": return { direction: "M30", setup: "M5", entry: "M1" };
-      case "M15": return { direction: "M15", setup: "M5", entry: "M1" };
-      case "M5": return { direction: "M5", setup: "M1", entry: "M1" };
-      default: return { direction: baseTf, setup: baseTf, entry: baseTf };
+      case "M30": return { direction: "H4", setup: "H1", entry: "M5" };
+      case "M15": return { direction: "H1", setup: "M15", entry: "M5" };
+      case "M5": return { direction: "H1", setup: "M5", entry: "M5" };
+      default: return { direction: "D1", setup: "H4", entry: "M15" };
     }
   }
 
@@ -142,7 +216,8 @@ class AITradingEngine {
     activeMethodologies?: MethodologyName[],
   ): Promise<MultiStrategySymbolAnalysis> {
     const fractals = this.getFractalTimeframes(timeframe);
-    const [directionRates, setupRates, entryRates] = await Promise.all([
+    const [dailyRates, directionRates, setupRates, entryRates] = await Promise.all([
+      mt5McpService.getRates(symbol, "D1", 100),
       mt5McpService.getRates(symbol, fractals.direction, 100),
       mt5McpService.getRates(symbol, fractals.setup, 100),
       mt5McpService.getRates(symbol, fractals.entry, 100)
@@ -158,6 +233,7 @@ class AITradingEngine {
       };
     }
 
+    const dailyCandles: Candle[] = (dailyRates.length > 0 ? dailyRates : directionRates).map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const directionCandles: Candle[] = directionRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const setupCandles: Candle[] = setupRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const entryCandles: Candle[] = entryRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
@@ -169,6 +245,7 @@ class AITradingEngine {
     const currentPrice = entryCandles[entryCandles.length - 1].close; // Use entry TF for most precise current price
 
     // ── 1. Market Structure Analysis & Alignment ───────────────────
+    const dailyStructure = marketStructureService.analyzeMarketStructure(dailyCandles);
     const directionStructure = marketStructureService.analyzeMarketStructure(directionCandles);
     const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
     const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);
@@ -182,13 +259,19 @@ class AITradingEngine {
 
     // Build fractal object to pass into methodologies
     const fractalCtx = { 
+      daily: dailyCandles,
       direction: directionCandles, 
       setup: setupCandles, 
       entry: entryCandles, 
+      dailyStr: dailyStructure,
       directionStr: directionStructure,
       setupStr: setupStructure,
       entryStr: entryStructure,
-      isAligned 
+      isAligned,
+      dailyTimeframeStr: "D1",
+      directionTimeframeStr: fractals.direction,
+      setupTimeframeStr: fractals.setup,
+      entryTimeframeStr: fractals.entry,
     };
 
     // ── IPDA Context for strategies ───────────────────────────────
@@ -239,7 +322,6 @@ class AITradingEngine {
     activeMethodologies?: MethodologyName[],
   ): Promise<MultiStrategySymbolAnalysis[]> {
     const results: MultiStrategySymbolAnalysis[] = [];
-    // Process in batches to avoid overwhelming the MT5 MCP connection
     const concurrency = 2;
     for (let i = 0; i < symbols.length; i += concurrency) {
       const batch = symbols.slice(i, i + concurrency);
@@ -256,8 +338,6 @@ class AITradingEngine {
     }
     return results;
   }
-
-
 
   /**
    * @deprecated Use analyzeSymbol() instead for multi‑strategy.
@@ -277,6 +357,7 @@ class AITradingEngine {
 
   /**
    * Calculate position size based on account risk.
+   * Enforces HARD CAP of 1.0 LOT per position for all forex & crypto (BTCUSD) pairs.
    */
   calculatePositionSize(params: {
     accountBalance: number;
@@ -288,6 +369,7 @@ class AITradingEngine {
     volumeMin: number;
     volumeMax: number;
     volumeStep: number;
+    symbol?: string;
   }): number {
     const {
       accountBalance,
@@ -299,44 +381,53 @@ class AITradingEngine {
       volumeMin,
       volumeMax,
       volumeStep,
+      symbol = "",
     } = params;
 
     const riskAmount = accountBalance * (riskPercent / 100);
     let slDistance = Math.abs(entryPrice - stopLoss);
 
-    // ATR adjustment: ensure minimum SL distance is 1.5× ATR
-    // Prevents stop-out from noise during high volatility
-    // Capped at 2× original SL to prevent extreme lot size reduction
     if (atr && atr > 0) {
       const minSlByAtr = atr * 1.5;
       const maxOverride = slDistance * 2;
       slDistance = Math.max(slDistance, Math.min(minSlByAtr, maxOverride));
     }
 
+    let effectiveContractSize = contractSize > 0 ? contractSize : 100000;
+    const cleanSym = symbol.toUpperCase();
+
+    if (cleanSym.endsWith("JPY")) {
+      const approxJpyRate = entryPrice > 50 ? entryPrice : 155;
+      effectiveContractSize = effectiveContractSize / approxJpyRate;
+    } else if (cleanSym.endsWith("CAD")) {
+      effectiveContractSize = effectiveContractSize / 1.35;
+    } else if (cleanSym.endsWith("GBP")) {
+      effectiveContractSize = effectiveContractSize * 1.27;
+    } else if (cleanSym.endsWith("EUR")) {
+      effectiveContractSize = effectiveContractSize * 1.08;
+    } else if (cleanSym.endsWith("AUD")) {
+      effectiveContractSize = effectiveContractSize * 0.65;
+    } else if (cleanSym.includes("BTC") || cleanSym.includes("CRYPTO")) {
+      effectiveContractSize = contractSize > 0 ? contractSize : 1;
+    }
+
     let lotSize = 0;
-    if (slDistance > 0 && contractSize > 0) {
-      lotSize = riskAmount / (slDistance * contractSize);
+    if (slDistance > 0 && effectiveContractSize > 0) {
+      lotSize = riskAmount / (slDistance * effectiveContractSize);
     }
 
     const rounded = Math.floor(lotSize / volumeStep) * volumeStep;
     const decimals = volumeStep.toString().split('.')[1]?.length || 0;
-    const finalLot = parseFloat(rounded.toFixed(decimals));
+    let finalLot = parseFloat(rounded.toFixed(decimals));
     
-    // Jika lot hasil perhitungan berada di bawah lot terkecil broker,
-    // kembalikan 0 agar pipeline membatalkan eksekusi,
-    // daripada memaksa entry dengan lot minimum yang berakibat
-    // resiko kerugian dolar akan melebihi maxRiskPerTrade.
     if (finalLot < volumeMin) {
       return 0;
     }
     
-    return Math.min(finalLot, volumeMax);
+    // HARD CAP: Max 1.0 lot per position for all forex & crypto pairs (User Rule)
+    const MAX_LOT_CAP = 1.0;
+    return Math.min(finalLot, volumeMax, MAX_LOT_CAP);
   }
-
-  /**
-   * Calculate trailing stop SL in price units.
-   */
-  calculateTrailingStopSL(params: {
     positionType: "BUY" | "SELL";
     currentPrice: number;
     currentSL: number;

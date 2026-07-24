@@ -166,9 +166,20 @@ class MSNRStrategy {
         if (!aligned) sig.confidence = Math.round(sig.confidence * 0.6);
         else sig.confidence = Math.min(95, Math.round(sig.confidence * 1.1));
       }
+    // Filter out signals with R:R < 1:2 (RR < 2.0)
+    const validSignals = signals.filter(sig => {
+      const slDist = Math.abs(sig.entry - sig.sl);
+      const tpDist = Math.abs(sig.tp - sig.entry);
+      if (slDist <= 0) return false;
+      const rr = tpDist / slDist;
+      return rr >= 2.0;
+    });
+
+    for (const sig of validSignals) {
+      sig.checklistItems = this.buildMSNRChecklist(sig, fractal);
     }
 
-    return signals.sort((a, b) => b.confidence - a.confidence);
+    return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
   private buildSignal(direction: "BUY"|"SELL", limitPrice: number, slPrice: number, type: any, reason: string, config: any, confBoost = 0): MSNRSignal {
@@ -186,46 +197,53 @@ class MSNRStrategy {
           confidence: Math.min(95, (config.minConfidence ?? 50) + 15 + confBoost), // high confidence setup
           reason
       };
-
-      sig.checklistItems = this.buildMSNRChecklist(sig);
       return sig;
   }
 
-  private buildMSNRChecklist(sig: MSNRSignal): ChecklistItem[] {
+  private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): ChecklistItem[] {
     const isBuy = sig.direction === "BUY";
     const snrType = isBuy ? "Support (Body-based)" : "Resistance (Body-based)";
+
+    const slDist = Math.abs(sig.entry - sig.sl);
+    const tpDist = Math.abs(sig.tp - sig.entry);
+    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
+    const isRRValid = rrRatio >= 2.0;
+
+    const setupTfLabel = fractal?.setupTimeframeStr || "H1";
+    const htfTfLabel = fractal?.directionTimeframeStr || "H4";
+    const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
     return [
       {
         id: "msnr-snr-zone",
         label: `HTF Malaysian SNR ${snrType} terkonfirmasi`,
         status: "PASSED",
-        timeframe: "H4"
+        timeframe: htfTfLabel
       },
       {
         id: "msnr-turtle-soup",
         label: `Turtle Soup Wick Rejection di ${snrType}`,
         status: "PASSED",
-        timeframe: "H1"
+        timeframe: setupTfLabel
       },
       {
         id: "msnr-ltf-mss",
-        label: `LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} terdeteksi`,
+        label: `LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR)`,
         status: "PASSED",
-        timeframe: "M15"
-      },
-      {
-        id: "msnr-ob-limit",
-        label: "Pending Order Limit di LTF Fresh Order Block",
-        status: "PASSED",
-        timeframe: "M15",
-        value: `${sig.entry.toFixed(5)}`
+        timeframe: entryTfLabel
       },
       {
         id: "msnr-rr",
-        label: "Minimum Risk-to-Reward 1:2.5 Terpenuhi",
+        label: "Minimum Risk-to-Reward 1:2 Terpenuhi",
+        status: isRRValid ? "PASSED" : "FAILED",
+        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+      },
+      {
+        id: "msnr-ob-limit",
+        label: `Pending Order Limit ${entryTfLabel} Placed at OB/QML`,
         status: "PASSED",
-        details: `SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+        timeframe: entryTfLabel,
+        value: `${sig.entry.toFixed(5)}`
       }
     ];
   }
