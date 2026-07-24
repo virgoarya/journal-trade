@@ -63,7 +63,7 @@ export function useMT5Connection() {
           if (res.data?.connected) {
             setIsConnected(true);
             setIsReconnecting(false);
-          } else if (res.data?.reconnecting) {
+          } else if ((res.data as any)?.reconnecting) {
             setIsConnected(true);
             setIsReconnecting(true);
           }
@@ -89,7 +89,7 @@ export function useMT5Connection() {
         const res = await aiTradingService.getStatus();
         if (mounted && res.success) {
           if (!res.data?.connected) {
-            if (res.data?.reconnecting) {
+            if ((res.data as any)?.reconnecting) {
               setIsReconnecting(true);
             } else {
               setIsConnected(false);

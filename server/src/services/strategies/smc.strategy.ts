@@ -72,9 +72,10 @@ class SMCStrategy {
         if (ipda.intraday.state === "RETRACEMENT") {
           const withExpansion = (sig.direction === "BUY" && ipda.intraday.state === "EXPANSION_BULL") ||
                                 (sig.direction === "SELL" && ipda.intraday.state === "EXPANSION_BEAR");
-          if (!withExpansion) sig.confidence = Math.round(sig.confidence * 0.85);
         }
       }
+    }
+
     // ── Generate Checklist Items ───────────────────────────────────────────
     for (const sig of signals) {
       sig.checklistItems = this.buildSMCChecklist(sig, fractal);

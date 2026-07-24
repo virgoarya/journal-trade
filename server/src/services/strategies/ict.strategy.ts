@@ -148,6 +148,11 @@ class ICTStrategy {
         if (ipda.intraday.state === "RETRACEMENT" && sig.signalType.includes("FVG")) {
           const towardBias = (ipda.dailyBias.bias === "BULLISH" && sig.direction === "BUY") ||
                              (ipda.dailyBias.bias === "BEARISH" && sig.direction === "SELL");
+          if (towardBias) sig.confidence = Math.min(95, sig.confidence + 10);
+        }
+      }
+    }
+
     // ── Generate Checklist Items ───────────────────────────────────────────
     for (const sig of signals) {
       sig.checklistItems = this.buildICTChecklist(sig, currentKillzone);
