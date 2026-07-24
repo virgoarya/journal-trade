@@ -285,15 +285,16 @@ const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional den
 Aturan Analisis Sinyal (WAJIB diikuti):
 1. **Struktur Pasar (Market Structure)** — Apakah arah tren mendukung arah sinyal? (BULL/BEAR/SIDEWAYS)
 2. **Pola Teknikal Spesifik (Technical Pattern)** — Jika ada pola teknikal yang dikirim (seperti Orderblock (OB) dari SMC, Fair Value Gap (FVG) dari ICT, atau RBS/SBR/QML dari MSNR), kamu WAJIB menyebutkannya secara eksplisit dalam argumentasi.
-3. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode yang setuju dengan sinyal ini?
+3. **Validasi Checklist Metodologi (Methodology Checklist)** — Sistem telah mengecek urutan checklist secara ketat untuk strategi yang terpilih. Perhatikan item checklist (seperti sweep liquidity, break of structure, dll) ini untuk memastikan setup benar-benar matang.
+4. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode yang setuju dengan sinyal ini?
    - Sistem menggunakan 3 methodology (SMC, ICT, MSNR). Tidak harus semua sepakat.
    - Bobot tertinggi: SMC (1.0) dan ICT (1.0). MSNR (0.8) sedikit lebih rendah.
    - 2 methodology berbobot tinggi setuju (misal SMC + ICT) sudah cukup kuat untuk GOOD.
    - Jika hanya 1 methodology yang setuju, itu lemah → SKIP atau BAD.
-4. **Rasio Risiko/Hasil (Risk/Reward)** — Apakah perbandingan SL/TP masuk akal? (minimal R:R 1:1.5 untuk GOOD, 1:1 untuk SKIP)
-5. **Aksi Harga (Price Action)** — Apakah ada konfirmasi nyata dari struktur harga? (breakout, penolakan/rejection, pola harga)
-6. **Risiko Korelasi (Correlation Risk)** — Apakah sinyal ini berkorelasi tinggi dengan posisi terbuka lainnya?
-7. **Konfirmasi Timeframe Lebih Tinggi (HTF Confirmation)** — Apakah timeframe yang lebih besar mengkonfirmasi arah sinyal?
+5. **Rasio Risiko/Hasil (Risk/Reward)** — Apakah perbandingan SL/TP masuk akal? (minimal R:R 1:1.5 untuk GOOD, 1:1 untuk SKIP)
+6. **Aksi Harga (Price Action)** — Apakah ada konfirmasi nyata dari struktur harga? (breakout, penolakan/rejection, pola harga)
+7. **Risiko Korelasi (Correlation Risk)** — Apakah sinyal ini berkorelasi tinggi dengan posisi terbuka lainnya?
+8. **Konfirmasi Timeframe Lebih Tinggi (HTF Confirmation)** — Apakah timeframe yang lebih besar mengkonfirmasi arah sinyal?
 
 Format Output (Kamu WAJIB membalas dengan JSON block berikut, jangan ada teks lain):
 \`\`\`json
@@ -408,6 +409,7 @@ function buildSignalPrompt(
     methodologyWinRate?: number;
     methodologyPnL?: number;
     pattern?: string;
+    checklist?: Array<{ id: string; label: string; status: string; details?: string; value?: string }>;
   },
   correlationWarnings?: string,
   candleContext?: string
@@ -419,6 +421,13 @@ function buildSignalPrompt(
     extra += `\nHasil Keputusan Backtest Metodologi: ${signal.methodologyVerdict}`;
     extra += `\nWin Rate Metodologi: ${signal.methodologyWinRate}%`;
     extra += `\nPnL Metodologi: ${signal.methodologyPnL}`;
+  }
+  
+  if (signal.checklist && signal.checklist.length > 0) {
+    extra += `\nStatus Checklist Setup Metodologi:\n`;
+    signal.checklist.forEach(c => {
+      extra += `  - ${c.label}: ${c.status} ${c.details ? `(${c.details})` : ""} ${c.value ? `[${c.value}]` : ""}\n`;
+    });
   }
 
   return `Evaluasi sinyal trading berikut secara objektif dan teknikal:
@@ -481,6 +490,7 @@ class LLMConsensusService {
       methodologyWinRate?: number;
       methodologyPnL?: number;
       pattern?: string;
+      checklist?: Array<{ id: string; label: string; status: string; details?: string; value?: string }>;
     },
     config?: Partial<LLMConsensusConfig>,
   ): Promise<LLMConsensusResult> {

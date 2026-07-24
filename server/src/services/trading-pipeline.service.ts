@@ -1144,6 +1144,17 @@ const pipeline = {
           this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] MARKET FILTERS PASSED (HTF: ${htfCheck.htfTrend ?? 'ALIGNED'}, Conf: ${htfCheck.confidence}%)`);
         } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
+        // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
+        const checklist = analysis.confluence.finalSignal?.checklistItems || [];
+        const methChecklist = checklist.filter(c => !c.id.startsWith("pipeline-step-"));
+        const hasFailedItem = methChecklist.some(c => c.status !== "PASSED");
+
+        if (hasFailedItem) {
+          const failedItems = methChecklist.filter(c => c.status !== "PASSED").map(c => c.label).join(", ");
+          this.addLog(userId, "SIGNAL", `[3.5/7] [${signal.symbol}] REJECTED (CHECKLIST): Technical criteria not fully met (${failedItems}). Skipping LLM to save tokens.`);
+          continue;
+        }
+
         // ── STEP 4: LLM CONSENSUS VOTING ─────────────────────────────────────
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
@@ -1190,6 +1201,7 @@ const pipeline = {
                 methodologyWinRate: llmMethWR,
                 methodologyPnL: llmMethPnL,
                 pattern: analysis.confluence.finalSignal?.pattern,
+                checklist: methChecklist,
               },
               pipeline.config.llmConsensus,
             );
