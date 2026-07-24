@@ -6,6 +6,7 @@ import { marketStructureService, type Candle, type MarketStructure, type OrderBl
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
+import type { IPDAContext } from "./ipda-context";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -127,13 +128,13 @@ class SMCStrategy {
       {
         id: "smc-fvg",
         label: `FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
-        status: fractal.setupStr.fvgCount > 0 ? "PASSED" : "WAITING",
+        status: (fractal.setupStr.fairValueGaps?.length ?? 0) > 0 ? "PASSED" : "WAITING",
         timeframe: setupTfLabel
       },
       {
         id: "smc-liq",
         label: `${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} sudah tersapu`,
-        status: fractal.directionStr.liquidityZonesCount > 0 ? "PASSED" : "PASSED",
+        status: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 ? "PASSED" : "PASSED",
         timeframe: htfTfLabel
       },
       {

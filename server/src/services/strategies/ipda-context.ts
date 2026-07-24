@@ -170,16 +170,16 @@ class IPDAContextService {
     // ── If no expansion found, just check what's happening ──────────
     if (expansionIndex === -1) {
       if (isDisplacement) {
-        return { state: last.close > last.open ? "EXPANSION_BULL" : "EXPANSION_BEAR", confidence: 60, lastExpansionIndex: candles.length - 1, lastFVG: unfilledFVG, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "Curent displacement detected" };
+        return { state: last.close > last.open ? "EXPANSION_BULL" : "EXPANSION_BEAR", confidence: 60, lastExpansionIndex: candles.length - 1, lastFVG: unfilledFVG || null, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "Curent displacement detected" };
       }
       // Check contraction (decreasing range)
       const ranges = recent.map(c => c.high - c.low);
       const firstAvg = ranges.slice(0, 5).reduce((s, r) => s + r, 0) / 5;
       const lastAvg = ranges.slice(-5).reduce((s, r) => s + r, 0) / 5;
       if (firstAvg > 0 && lastAvg < firstAvg * 0.6) {
-        return { state: "CONSOLIDATION", confidence: 55, lastExpansionIndex: -1, lastFVG: unfilledFVG, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "Contracting range (consolidation)" };
+        return { state: "CONSOLIDATION", confidence: 55, lastExpansionIndex: -1, lastFVG: unfilledFVG || null, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "Contracting range (consolidation)" };
       }
-      return { state: "UNDETERMINED", confidence: 30, lastExpansionIndex: -1, lastFVG: unfilledFVG, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "No clear IPDA state" };
+      return { state: "UNDETERMINED", confidence: 30, lastExpansionIndex: -1, lastFVG: unfilledFVG || null, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: "No clear IPDA state" };
     }
 
     // ── Calculate retracement after expansion ──────────────────────
@@ -187,7 +187,7 @@ class IPDAContextService {
     const expansionHeight = expansionHigh - expansionLow;
 
     if (postExpansionCandles.length === 0) {
-      return { state: expansionType === "BULL" ? "EXPANSION_BULL" : "EXPANSION_BEAR", confidence: 70, lastExpansionIndex: expansionIndex, lastFVG: unfilledFVG, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: `Recent ${expansionType} expansion` };
+      return { state: expansionType === "BULL" ? "EXPANSION_BULL" : "EXPANSION_BEAR", confidence: 70, lastExpansionIndex: expansionIndex, lastFVG: unfilledFVG || null, closestOB: this.findClosestOB(structure, last.close), retracementRatio: 0, reason: `Recent ${expansionType} expansion` };
     }
 
     // Measure retracement

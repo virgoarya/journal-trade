@@ -57,88 +57,11 @@ export interface TradingSignal {
   reason: string;
   riskPercent: number;
   timeframe: string;
-  indicators: {
+  indicators?: {
     rsi: number;
     atr: number;
   };
-  pattern: string;
-}
-
-export interface Candle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
-
-export interface EngulfingResult {
-  type: "BULLISH_ENGULFING" | "BEARISH_ENGULFING" | "NONE";
-  candle1: Candle;
-// ─── AI Trading Engine v2 — Multi-Methodology ───────────────────────
-// Combines all 7 trading methodologies via the Confluence Engine.
-
-import { mt5McpService, type MT5Rate, type MT5Symbol } from "./mt5-mcp.service";
-import { silentLogger } from "../utils/silent-logger";
-import {
-  marketStructureService,
-  smcStrategy,
-  ictStrategy,
-  msnrStrategy,
-
-  confluenceEngine,
-  atrService,
-  ipdaContextService,
-  type MarketStructure,
-  type MethodologyWeights,
-  type MethodologyName,
-  type ConfluenceResult,
-  type IPDAContext,
-  DEFAULT_METHODOLOGY_WEIGHTS,
-} from "./strategies/index";
-
-// ─── Incremental Indicator Types ──────────────────────────────────────
-
-export interface RSIState {
-  avgGain: number;
-  avgLoss: number;
-  period: number;
-  count: number;
-  previousClose: number | null;
-}
-
-export interface ATRState {
-  atr: number;
-  period: number;
-  count: number;
-  previousClose: number;
-}
-
-// ─── Legacy Types (kept for backwards compatibility) ─────────────────
-
-export interface SignalAnalysis {
-  rsi: number;
-  atr: number;
-  pattern: "BULLISH_ENGULFING" | "BEARISH_ENGULFING" | "NONE";
-  currentPrice: number;
-  signal: TradingSignal | null;
-}
-
-export interface TradingSignal {
-  symbol: string;
-  direction: "BUY" | "SELL";
-  confidence: number;
-  entry: number;
-  sl: number;
-  tp: number;
-  reason: string;
-  riskPercent: number;
-  timeframe: string;
-  indicators: {
-    rsi: number;
-    atr: number;
-  };
-  pattern: string;
+  pattern?: string;
 }
 
 export interface Candle {

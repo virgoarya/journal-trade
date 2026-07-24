@@ -11,6 +11,7 @@ import { type Candle, type MalaysianSNR, type OrderBlock, type SwingHigh, type S
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
+import type { IPDAContext } from "./ipda-context";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";

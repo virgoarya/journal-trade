@@ -884,7 +884,7 @@ const pipeline = {
             }));
             const regimeResult = marketRegimeService.analyze(candles);
             currentRegime = regimeResult.regime;
-            regimeMult = marketRegimeService.getRegimeMultipliers(currentRegime);
+            regimeMult = marketRegimeService.getRegimeMultipliers(currentRegime as any);
             this.setCachedRegime(cacheKey, currentRegime, regimeMult);
             this.addLog(userId, "SIGNAL",
               `[REGIME] ${currentRegime} (ADX: ${regimeResult.adx}, Vol: ${regimeResult.volatility}%, Conf: ${regimeResult.confidence}%)`
