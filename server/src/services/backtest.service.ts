@@ -183,6 +183,8 @@ interface SymbolState {
   volumeMax: number;
   volumeStep: number;
   candleIndex: number; // how many candles of this symbol we've processed
+  spread: number;      // broker spread in points (e.g. 10)
+  point: number;       // tick size (e.g. 0.00001 for forex 5-digit)
 }
 
 export type { SymbolState };
@@ -343,7 +345,7 @@ class BacktestService {
     };
 
     // Fetch all symbols sequentially (so progress is real)
-    const fetchResults: Array<{ sym: string; rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; error: string | null }> = [];
+    const fetchResults: Array<{ sym: string; rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; spread?: number; point?: number; error: string | null }> = [];
     for (let idx = 0; idx < merged.symbols.length; idx++) {
       const sym = merged.symbols[idx];
       emit(idx);
@@ -355,13 +357,13 @@ class BacktestService {
         ]);
       } catch (error: any) {
         const msg = `Failed to fetch data for ${sym}: ${error.message}`;
-        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, error: msg });
+        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, spread: 0, point: 0.00001, error: msg });
         continue;
       }
 
       if (rates.length < 50) {
         const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
-        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, error: msg });
+        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, spread: 0, point: 0.00001, error: msg });
         continue;
       }
 
@@ -370,6 +372,8 @@ class BacktestService {
       let volumeMin = 0.01;
       let volumeMax = 100;
       let volumeStep = 0.01;
+      let symbolSpread = 0;
+      let symbolPoint = 0.00001;
       try {
         const info = await Promise.race([
           mt5McpService.getSymbolInfo(sym),
@@ -380,6 +384,8 @@ class BacktestService {
           volumeMin = info.volumeMin;
           volumeMax = info.volumeMax;
           volumeStep = info.volumeStep;
+          symbolSpread = info.spread || 0;
+          symbolPoint = info.point || 0.00001;
         }
       } catch {
         // fallback
@@ -387,7 +393,8 @@ class BacktestService {
 
       fetchResults.push({
         sym, rates, closes: rates.map((r) => r.close),
-        contractSize, volumeMin, volumeMax, volumeStep, error: null,
+        contractSize, volumeMin, volumeMax, volumeStep,
+        spread: symbolSpread, point: symbolPoint, error: null,
       });
     }
     emit(totalSymbols); // 100% fetching done
@@ -402,6 +409,8 @@ class BacktestService {
         volumeMax: r.volumeMax,
         volumeStep: r.volumeStep,
         candleIndex: 0,
+        spread: r.spread || 0,
+        point: r.point || 0.00001,
       });
     }
 
@@ -639,7 +648,7 @@ class BacktestService {
     // ── Market structure cache per symbol ─────────────────────────
     // Cache the last analysis result and the candle index it was computed at.
     // Only recompute when the candle index advances past the cached one.
-    const msCache = new Map<string, { idx: number; dirMs: any; setupMs: any; entryMs: any; isAligned: boolean }>();
+    const msCache = new Map<string, { idx: number; dirMs: any; setupMs: any; entryMs: any; dailyMs?: any; isAligned: boolean }>();
 
     // Track which candle index each symbol is at
     const symbolCandleIdx = new Map<string, number>();
@@ -874,38 +883,56 @@ class BacktestService {
 
           // Build proper fractal context for multi-timeframe approximation
           // Use cached market structure if available for this symbol at same index
-          let dirMs: any, setupMs: any, entryMs: any, isAligned: boolean;
+          let dirMs: any, setupMs: any, entryMs: any, dailyMs: any, isAligned: boolean;
           const cached = msCache.get(tc.symbol);
           if (cached && cached.idx === idx) {
             dirMs = cached.dirMs;
             setupMs = cached.setupMs;
             entryMs = cached.entryMs;
+            dailyMs = cached.dailyMs;
             isAligned = cached.isAligned;
           } else {
-            const dirCandles = strategyCandles;
-            const setupCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3)));
-            const entryCandles = strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3)));
+            // Simulate 3-layer fractal: 4× candles for direction (HTF), 2× for setup, 1× for entry (LTF)
+            // This approximates H1 → M15 → M5 from a single timeframe dataset
+            const totalCandles = strategyCandles.length;
+            const dirCandles  = strategyCandles; // Full window = "HTF direction"
+            const setupCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles * 3 / 4)));
+            const entryCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles / 4)));
 
-            dirMs = marketStructureService.analyzeMarketStructure(dirCandles);
+            // Daily context: use the first 20% of candles (oldest data = macro context)
+            const dailyCandles = strategyCandles.slice(0, Math.max(10, Math.floor(totalCandles * 0.2)));
+
+            dirMs   = marketStructureService.analyzeMarketStructure(dirCandles);
             setupMs = marketStructureService.analyzeMarketStructure(setupCandles);
             entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
+            dailyMs = marketStructureService.analyzeMarketStructure(dailyCandles);
 
             isAligned = dirMs.trend.direction === setupMs.trend.direction &&
                         setupMs.trend.direction === entryMs.trend.direction;
 
-            msCache.set(tc.symbol, { idx, dirMs, setupMs, entryMs, isAligned });
+            msCache.set(tc.symbol, { idx, dirMs, setupMs, entryMs, dailyMs, isAligned });
             didStrategyEval = true; // flag for forced yield
           }
 
-          const fractalCtx = {
+          const fractalCtx: import("./strategies/market-structure.service").FractalContext = {
+            daily: strategyCandles.slice(0, Math.max(10, Math.floor(strategyCandles.length * 0.2))),
             direction: strategyCandles,
-            setup: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 2 / 3))),
-            entry: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 3))),
+            setup: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length * 3 / 4))),
+            entry: strategyCandles.slice(Math.max(0, strategyCandles.length - Math.floor(strategyCandles.length / 4))),
+            dailyStr: dailyMs,
             directionStr: dirMs,
             setupStr: setupMs,
             entryStr: entryMs,
             isAligned,
+            dailyTimeframeStr: "D1",
+            directionTimeframeStr: merged.timeframe,
+            setupTimeframeStr: merged.timeframe,
+            entryTimeframeStr: merged.timeframe,
+            // Pass broker spread/point for spread-aware invalidation filter
+            spread: symState.spread,
+            point: symState.point,
           };
+
           const [smcSignals, ictSignals, msnrSignals] = [
             smcStrategy.analyze(fractalCtx),
             ictStrategy.analyze(fractalCtx),

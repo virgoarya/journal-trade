@@ -636,7 +636,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.direction.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction.toUpperCase()}</span>
                        <span className="text-gray-200 font-bold">{t.symbol}</span>
                        <span className="text-text-muted text-[10px]">
-                         {t.volume} lot {t.primaryMethodology ? <span className="text-gray-600">[{t.primaryMethodology.toUpperCase()}]</span> : ""}
+                         {t.primaryMethodology ? <span className="text-gray-600">[{t.primaryMethodology.toUpperCase()}]</span> : ""}
                        </span>
                     </div>
                     <div className="flex items-center gap-4">

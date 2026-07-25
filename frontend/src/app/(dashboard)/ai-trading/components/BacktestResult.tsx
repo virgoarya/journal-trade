@@ -301,7 +301,6 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                 <th className="text-left px-3 py-2">Entry</th>
                 <th className="text-left px-3 py-2">Exit</th>
                 <th className="text-center px-3 py-2">Dir</th>
-                <th className="text-right px-3 py-2">Lot</th>
                 <th className="text-right px-3 py-2">Entry</th>
                 <th className="text-right px-3 py-2">Exit</th>
                 <th className="text-right px-3 py-2">PnL</th>
@@ -317,7 +316,6 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                     <td className="px-3 py-2 text-text-secondary">{new Date(t.entryTime * 1000).toLocaleDateString()}</td>
                     <td className="px-3 py-2 text-text-secondary">{new Date(t.exitTime * 1000).toLocaleDateString()}</td>
                     <td className="px-3 py-2 text-center"><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${t.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{t.direction}</span></td>
-                    <td className="px-3 py-2 text-right text-text-muted">{(t as any).volume != null ? Number((t as any).volume.toFixed(5)) : "0.00"}</td>
                     <td className="px-3 py-2 text-right text-text-secondary">{t.entryPrice.toFixed(5)}</td>
                     <td className="px-3 py-2 text-right text-text-secondary">{t.exitPrice.toFixed(5)}</td>
                     <td className={`px-3 py-2 text-right font-medium ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>${t.pnl.toFixed(2)}</td>

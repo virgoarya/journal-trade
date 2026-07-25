@@ -755,7 +755,18 @@ router.get("/performance", async (req, res, next) => {
       closed: true,
       pnl: { $exists: true },
     };
-    if (accountId) query.accountId = accountId;
+    
+    // If MT5 disconnected, try to get the most recent account used by this user
+    if (!accountId) {
+      const lastTrade = await AITradeLog.findOne(query).sort({ createdAt: -1 }).lean();
+      if (lastTrade && lastTrade.accountId) {
+        accountId = lastTrade.accountId;
+      }
+    }
+
+    if (accountId) {
+      query.accountId = accountId;
+    }
 
     const trades = await AITradeLog.find(query).sort({ createdAt: -1 }).lean();
 
@@ -767,6 +778,7 @@ router.get("/performance", async (req, res, next) => {
         methodologyStats: [],
         symbolStats: [],
         equityCurve: [],
+        recentTrades: [],
       });
     }
 
@@ -845,6 +857,7 @@ router.get("/performance", async (req, res, next) => {
       methodologyStats,
       symbolStats,
       equityCurve,
+      recentTrades: trades.slice(0, 50),
     });
   } catch (error) {
     next(error);

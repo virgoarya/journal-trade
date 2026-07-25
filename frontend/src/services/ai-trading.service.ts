@@ -650,6 +650,7 @@ export interface PipelinePerformance {
     winRate: number;
   }>;
   equityCurve: Array<{ time: string; equity: number }>;
+  recentTrades?: any[];
 }
 
 export const aiTradingService = new AITradingService();
