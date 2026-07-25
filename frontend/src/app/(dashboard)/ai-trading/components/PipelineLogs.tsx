@@ -245,9 +245,17 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
         if (direction) track.direction = direction;
 
         if (log.type === "INFO") {
-          track.stages.INFO = { status: "active", message: log.message, time };
+          if (log.message.includes("MARKET CLOSED")) {
+            track.stages.INFO = { status: "active", message: log.message, time };
+          } else {
+            track.stages.INFO = { status: "success", message: log.message, time };
+          }
         } else if (log.type === "SIGNAL") {
-          track.stages.SIGNAL = { status: "active", message: log.message, time };
+          if (log.message.includes("NO SIGNAL")) {
+            track.stages.SIGNAL = { status: "active", message: log.message, time };
+          } else {
+            track.stages.SIGNAL = { status: "success", message: log.message, time };
+          }
           // Siklus baru: reset tahapan berikutnya
           track.stages.CONFLUENCE = { status: "pending" };
           track.stages.EXECUTION = { status: "pending" };
@@ -300,30 +308,32 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
     const { stages } = track;
     
     if (stepKey === "INFO") {
-      if (stages.INFO.status !== "pending") return { ...stages.INFO, status: "passed" };
-      if (stages.SIGNAL.status !== "pending" || stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
-        return { status: "passed", message: "Pipeline initialized." };
-      }
+      if (stages.INFO.status === "active") return { ...stages.INFO, status: "active" };
+      if (stages.INFO.status === "success") return { ...stages.INFO, status: "success" };
       return { status: "pending" };
     }
     
     if (stepKey === "SIGNAL") {
       if (stages.SIGNAL.status === "error") return { ...stages.SIGNAL, status: "error" };
       if (stages.SIGNAL.status === "success") return { ...stages.SIGNAL, status: "success" };
-      if (stages.SIGNAL.status !== "pending") return { ...stages.SIGNAL, status: "passed" };
-      if (stages.CONFLUENCE.status !== "pending" || stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
-        return { status: "passed", message: "Signal detected." };
+      
+      if (stages.INFO.status === "success" && stages.SIGNAL.status === "pending") {
+         return { status: "active", message: "Scanning for signals..." }; 
       }
+      if (stages.SIGNAL.status === "active") return { ...stages.SIGNAL, status: "active" };
+      
       return { status: "pending" };
     }
     
     if (stepKey === "CONFLUENCE") {
       if (stages.CONFLUENCE.status === "error") return { ...stages.CONFLUENCE, status: "error" };
       if (stages.CONFLUENCE.status === "success") return { ...stages.CONFLUENCE, status: "success" };
-      if (stages.CONFLUENCE.status !== "pending") return { ...stages.CONFLUENCE, status: "passed" };
-      if (stages.EXECUTION.status !== "pending" || stages.TRAILING.status !== "pending") {
-        return { status: "passed", message: "Confluence checks completed." };
+      
+      if (stages.SIGNAL.status === "success" && stages.CONFLUENCE.status === "pending") {
+         return { status: "active", message: "Voting & Validation..." };
       }
+      if (stages.CONFLUENCE.status === "active") return { ...stages.CONFLUENCE, status: "active" };
+      
       return { status: "pending" };
     }
     
@@ -331,17 +341,21 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
       if (stages.EXECUTION.status === "error") return { ...stages.EXECUTION, status: "error" };
       if (stages.EXECUTION.status === "success") return { ...stages.EXECUTION, status: "success" };
       
-      // Jika status aktif tapi belum sukses, tandai sebagai 'active' (kuning) untuk pending order
-      if (stages.EXECUTION.status === "active") return { ...stages.EXECUTION, status: "active" };
-
-      if (stages.TRAILING.status !== "pending") {
-        return { status: "success", message: "Trade executed." };
+      if (stages.CONFLUENCE.status === "success" && stages.EXECUTION.status === "pending") {
+         return { status: "active", message: "Waiting for execution..." };
       }
+      if (stages.EXECUTION.status === "active") return { ...stages.EXECUTION, status: "active" };
+      
       return { status: "pending" };
     }
     
     if (stepKey === "TRAILING") {
-      if (stages.TRAILING.status !== "pending") return { ...stages.TRAILING, status: "active" };
+      if (stages.TRAILING.status === "success") return { ...stages.TRAILING, status: "success" };
+      
+      if (stages.EXECUTION.status === "success" && stages.TRAILING.status === "pending") {
+         return { status: "active", message: "Trailing stop active..." };
+      }
+      
       return { status: "pending" };
     }
 

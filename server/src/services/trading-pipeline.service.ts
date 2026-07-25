@@ -275,14 +275,18 @@ const pipeline = {
       pipeline.startOfDayEquity = accountInfo?.equity || 0;
       pipeline.peakEquity = accountInfo?.equity || 0;
 
-      this.addLog(userId, "INFO",
-        `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | Balance: $${accountInfo?.balance?.toFixed(2) || 0} | Positions: ${symbolPositions.length}/${merged.maxOpenPositions}`
-      );
-    } catch (e: any) {
-      this.addLog(userId, "INFO",
-        `Pipeline started: ${merged.symbols.join(", ")} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | MT5 Info unavailable`
-      );
-    }
+      for (const symbol of merged.symbols) {
+        this.addLog(userId, "INFO",
+          `Pipeline started: ${symbol} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | Balance: $${accountInfo?.balance?.toFixed(2) || 0} | Positions: ${symbolPositions.length}/${merged.maxOpenPositions}`
+        );
+      }
+      } catch (e: any) {
+        for (const symbol of merged.symbols) {
+          this.addLog(userId, "INFO",
+            `Pipeline started: ${symbol} on ${merged.timeframe} [${merged.activeMethodologies!.length} methodologies] | Risk: ${merged.maxRiskPerTrade}% | MT5 Info unavailable`
+          );
+        }
+      }
 
     // Trigger the first execution immediately instead of waiting for the first interval tick
     merged.symbols.forEach((symbol, index) => {
@@ -981,7 +985,7 @@ const pipeline = {
             const alignInfo = analysis.methodologySignals
               ? ` | SMC:${analysis.methodologySignals.smc.length} ICT:${analysis.methodologySignals.ict.length} MSNR:${analysis.methodologySignals.msnr.length} raw`
               : "";
-            this.addLog(userId, "CONFLUENCE",
+            this.addLog(userId, "SIGNAL",
               `[1/7] [${analysis.symbol}] NO SIGNAL. Votes: ${votes || "none"}${alignInfo}`,
               breakdown,
             );
