@@ -21,6 +21,7 @@ import {
 } from "./strategies/index";
 
 import { type Candle } from "./strategies/market-structure.service";
+export { type Candle };
 
 export type Timeframe = "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1";
 

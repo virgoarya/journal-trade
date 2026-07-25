@@ -162,9 +162,9 @@ interface OpenSimTrade {
   sl: number;
   tp: number;
   volume: number;
-  rsiAtEntry: number;
-  atrAtEntry: number;
-  pattern: string;
+  rsiAtEntry?: number;
+  atrAtEntry?: number;
+  pattern?: string;
   confidence: number;
   barsHeld: number;
   trailingHistory: Array<{ time: number; oldSL: number; newSL: number }>;
@@ -212,9 +212,9 @@ export type BacktestStreamEvent =
         high: number;
         low: number;
         close: number;
-        rsi: number;
-        atr: number;
-        pattern: string;
+        rsi?: number;
+        atr?: number;
+        pattern?: string;
         equity: number;
         floatingPnL: number;
         marginLevel: number;
@@ -231,8 +231,8 @@ export type BacktestStreamEvent =
         tp: number;
         volume: number;
         confidence: number;
-        rsi: number;
-        pattern: string;
+        rsi?: number;
+        pattern?: string;
         primaryMethodology?: string;
       };
     }
@@ -827,6 +827,7 @@ class BacktestService {
             primaryMethodology: trade.primaryMethodology,
             methodologyConfidence: trade.methodologyConfidence,
             methodologyCount: trade.methodologyCount,
+            confidence: trade.confidence,
             rr: trade.direction === "BUY" 
               ? (trade.entryPrice - trade.sl > 0 ? (exitPrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
               : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - exitPrice) / (trade.sl - trade.entryPrice) : 0),
@@ -845,7 +846,7 @@ class BacktestService {
               entryTime: trade.entryTime, exitTime: currentCandle.time,
               symbol: trade.symbol, direction: trade.direction,
               entryPrice: trade.entryPrice, exitPrice,
-              pnl, pnlPercent, reason,
+              pnl, pnlPercent, reason, confidence: trade.confidence,
               primaryMethodology: trade.primaryMethodology,
               rr: trade.direction === "BUY" 
                 ? (trade.entryPrice - trade.sl > 0 ? (exitPrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)

@@ -8,6 +8,7 @@
 // 5. Place PENDING_LIMIT entry at the OB.
 
 import { type Candle, type MalaysianSNR, type OrderBlock, type SwingHigh, type SwingLow, type MarketStructure, type FractalContext } from "./market-structure.service";
+import { marketStructureService } from "./market-structure.service";
 import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
