@@ -210,7 +210,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
         <div className="flex items-center justify-between border-b border-accent-gold/10 pb-1.5">
           <h4 className="text-[10px] font-bold text-accent-gold uppercase tracking-wider font-mono flex items-center gap-1.5">
             <ListChecks className="w-3.5 h-3.5 text-accent-gold" />
-            Validasi Sinyal (Checklist) — {activeTab === "NET" ? "Net Confluence" : METHODOLOGY_LABELS[activeTab as MethodologyName]}
+            Validasi Sinyal (Checklist) — {activeTab === "NET" ? `Net Confluence${finalSignal?.primaryMethodology ? ` (Primary: ${METHODOLOGY_LABELS[finalSignal.primaryMethodology as MethodologyName] || finalSignal.primaryMethodology.toUpperCase()})` : ''}` : METHODOLOGY_LABELS[activeTab as MethodologyName]}
           </h4>
           <span className="text-[9px] text-text-muted font-mono">
             {currentChecklist.filter(c => c.status === "PASSED").length}/{currentChecklist.length} Valid

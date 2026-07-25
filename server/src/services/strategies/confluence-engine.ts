@@ -112,6 +112,7 @@ class ConfluenceEngine {
     weights: MethodologyWeights = DEFAULT_METHODOLOGY_WEIGHTS,
     activeMethodologies: MethodologyName[] = Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
     minConfidence: number = MIN_CONFIDENCE,
+    marketStructure?: { direction: "BULL" | "BEAR" | "SIDEWAYS", strength: number }
   ): ConfluenceResult {
     // ── 1. Collect & filter signals ─────────────────────────────────
     const allMethodologySignals: MethodologySignal[] = [];
@@ -209,7 +210,7 @@ class ConfluenceEngine {
         conflictDetected: true,
         reason: `Methodology conflict: HTF alignment is broken (${buySignals.length} BUY vs ${sellSignals.length} SELL)`,
         checklistByMethodology,
-        checklistItems: mergedChecklist,
+        checklistItems: [], // No checklist on conflict
       };
     }
 
@@ -226,6 +227,18 @@ class ConfluenceEngine {
     else if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
     else if (agreeCount >= 2) boost = confluenceConfig.agree2Boost;  // 2 agree → +5
 
+    // Daily Direction Context Boost
+    if (marketStructure && marketStructure.direction !== "SIDEWAYS") {
+      const isAligned = 
+        (winningDirection === "BUY" && marketStructure.direction === "BULL") ||
+        (winningDirection === "SELL" && marketStructure.direction === "BEAR");
+      
+      if (isAligned) {
+        // Boost +5 for normal alignment, +10 for strong trend (>70%)
+        boost += (marketStructure.strength > 70) ? 10 : 5;
+      }
+    }
+
     const finalConfidence = Math.min(100, baseScore + boost);
 
     // Primary methodology = highest confidence × weight
@@ -241,14 +254,10 @@ class ConfluenceEngine {
 
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 
-    // Append technical setup items from agreeing strategy signals (excluding duplicate RR items)
-    if (winningSignals.length > 0) {
+    // Use ONLY the primary methodology's checklist for the final pipeline execution
+    if (primary && primary.checklistItems) {
       mergedChecklist.length = 0; // Clear the array
-      for (const sig of winningSignals) {
-        if (sig.checklistItems) {
-          mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
-        }
-      }
+      mergedChecklist.push(...primary.checklistItems.filter(item => !item.id.endsWith("-rr")));
     }
 
     return {

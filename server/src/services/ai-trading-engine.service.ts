@@ -150,6 +150,8 @@ class AITradingEngine {
       { smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null, msnr: msnrSignals[0] ?? null },
       methodologyWeights,
       activeMethodologies,
+      undefined, // minConfidence (use default)
+      directionStructure
     );
 
     return {
