@@ -20,7 +20,7 @@ export function useLlmStatus(opts: { pollIntervalMs?: number } = {}) {
   const [models, setModels] = useState<LlmModelNode[]>(() => {
     // Initialize from provider registry
     providerRegistry.initialize();
-    return providerRegistry.getActiveProviders().map(p => ({
+    return providerRegistry.getProviders().map(p => ({
       name: p.name,
       label: p.label,
       model: p.model,
@@ -43,7 +43,7 @@ export function useLlmStatus(opts: { pollIntervalMs?: number } = {}) {
       const incoming = (res.data ?? []) as LlmModelNode[];
       const incomingMap = new Map(incoming.map((m) => [m.name, m]));
       // merge: registry providers + backend overrides (only matching providers)
-      const baseProviders = providerRegistry.getActiveProviders().map(p => ({
+      const baseProviders = providerRegistry.getProviders().map(p => ({
         name: p.name,
         label: p.label,
         model: p.model,
