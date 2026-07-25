@@ -442,24 +442,6 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           </div>
         </div>
 
-        {/* SL/TP Multipliers */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">SL (ATR ×)</label>
-            <input
-              type="text" inputMode="decimal" value={slMultiplier} onChange={(e) => setSlMultiplier(parseFloat(e.target.value) || 0)}
-              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">TP (ATR ×)</label>
-            <input
-              type="text" inputMode="decimal" value={tpMultiplier} onChange={(e) => setTpMultiplier(parseFloat(e.target.value) || 0)}
-              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
-            />
-          </div>
-        </div>
-
         {/* Risk Settings */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
