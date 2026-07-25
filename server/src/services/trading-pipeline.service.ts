@@ -926,13 +926,6 @@ const pipeline = {
             pipeline.config.activeMethodologies || ["smc", "ict", "msnr"],
           );
 
-          if (analyses.length > 0 && analyses[0].ipdaContext) {
-            const ipda = analyses[0].ipdaContext;
-            this.addLog(userId, "IPDA",
-              `[${analyses[0].symbol}] Bias: ${ipda.dailyBias.bias} (${ipda.dailyBias.confidence}%) | State: ${ipda.intraday.state} (${ipda.intraday.confidence}%) | KZ: ${ipda.currentKillzone} | Retrace: ${(ipda.intraday.retracementRatio * 100).toFixed(0)}%`,
-              { ipdaContext: ipda },
-            );
-          }
       } catch (err: any) {
         silentLogger.error(`[PIPELINE] Error analyzing symbols: ${err.message}`);
         if (err.message.includes("MT5") || err.message.includes("connect") || err.message.includes("timeout") || err.message.includes("32001")) {
@@ -1022,7 +1015,7 @@ const pipeline = {
           reason: analysis.confluence.reason,
           riskPercent: pipeline.config.maxRiskPerTrade,
           timeframe: pipeline.config.timeframe,
-          indicators: { rsi: analysis.signal.rsi, atr: analysis.signal.atr },
+          indicators: { rsi: 50, atr: 0 },
           pattern: `MULTI_${finalSig.primaryMethodology.toUpperCase()}`,
         };
 

@@ -89,9 +89,9 @@ export interface SimulatedTrade {
   closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT";
   exitMethodology?: string;
   rr?: number;
-  rsiAtEntry: number;
-  atrAtEntry: number;
-  pattern: string;
+  rsiAtEntry?: number;
+  atrAtEntry?: number;
+  pattern?: string;
   confidence: number;
   trailingHistory: Array<{
     time: number;
@@ -713,7 +713,6 @@ class BacktestService {
       const perSymbol: Map<string, {
         candle: MT5Rate;
         open: number; high: number; low: number; close: number;
-        rsi: number; atr: number; pattern: { type: string; candle1: any; candle2: any };
         idx: number;
       }> = new Map();
 
@@ -789,7 +788,7 @@ class BacktestService {
               positionType: trade.direction, 
               currentPrice, // trail updates based on Close
               currentSL: trade.sl, 
-              atrValue: atr,
+              atrValue: 0,
               trailATR: merged.trailingStop.trailATR,
               activationATR: merged.trailingStop.activationATR,
               entryPrice: trade.entryPrice,
@@ -810,16 +809,6 @@ class BacktestService {
               continue;
             }
           }
-
-          // 3. Reverse signal
-          if (trade.direction === "BUY" && pattern.type === "BEARISH_ENGULFING") {
-            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE", exitMethodology: "PA Reverse" });
-            continue;
-          }
-          if (trade.direction === "SELL" && pattern.type === "BULLISH_ENGULFING") {
-            toClose.push({ key, exitPrice: currentPrice, reason: "SIGNAL_REVERSE", exitMethodology: "PA Reverse" });
-            continue;
-          }
         }
 
         for (const item of toClose) {
@@ -834,8 +823,6 @@ class BacktestService {
             entryPrice: trade.entryPrice, exitPrice,
             sl: trade.sl, tp: trade.tp, volume: trade.volume,
             pnl, pnlPercent, closeReason: reason, exitMethodology,
-            rsiAtEntry: trade.rsiAtEntry, atrAtEntry: trade.atrAtEntry,
-            pattern: trade.pattern, confidence: trade.confidence,
             trailingHistory: trade.trailingHistory,
             primaryMethodology: trade.primaryMethodology,
             methodologyConfidence: trade.methodologyConfidence,
@@ -858,7 +845,7 @@ class BacktestService {
               entryTime: trade.entryTime, exitTime: currentCandle.time,
               symbol: trade.symbol, direction: trade.direction,
               entryPrice: trade.entryPrice, exitPrice,
-              pnl, pnlPercent, reason, confidence: trade.confidence,
+              pnl, pnlPercent, reason,
               primaryMethodology: trade.primaryMethodology,
               rr: trade.direction === "BUY" 
                 ? (trade.entryPrice - trade.sl > 0 ? (exitPrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
@@ -953,8 +940,8 @@ class BacktestService {
               let finalTp = fs.tp;
 
               if (!finalSl || !finalTp || finalSl === fs.entry || finalTp === fs.entry) {
-                const customSlDist = atr * (merged.entrySettings?.atrMultiplierSL || 1.5);
-                const customTpDist = atr * (merged.entrySettings?.atrMultiplierTP || 1.5);
+                const customSlDist = 0;
+                const customTpDist = 0;
                 finalSl = fs.direction === "BUY" ? simulatedEntry - customSlDist : simulatedEntry + customSlDist;
                 finalTp = fs.direction === "BUY" ? simulatedEntry + customTpDist : simulatedEntry - customTpDist;
               }
@@ -970,7 +957,7 @@ class BacktestService {
                   riskPercent: merged.maxRiskPerTrade * currentRiskMultiplier,
                   entryPrice: simulatedEntry,
                   stopLoss: finalSl,
-                  atr,
+                  atr: 0,
                   contractSize: symState.contractSize,
                   volumeMin: symState.volumeMin,
                   volumeMax: symState.volumeMax,
@@ -983,7 +970,6 @@ class BacktestService {
                     symbol: tc.symbol, direction: fs.direction,
                     entryPrice: simulatedEntry, entryTime: currentCandle.time,
                     sl: finalSl, tp: finalTp, volume: vol,
-                    rsiAtEntry: rsi, atrAtEntry: atr,
                     pattern: `MULTI_${fs.primaryMethodology.toUpperCase()}`,
                     confidence: fs.confidence, barsHeld: 0, trailingHistory: [],
                     primaryMethodology: fs.primaryMethodology,
@@ -1006,7 +992,7 @@ class BacktestService {
                 time: newTrade.entryTime, symbol: newTrade.symbol,
                 direction: newTrade.direction, entryPrice: newTrade.entryPrice,
                 sl: newTrade.sl, tp: newTrade.tp, volume: newTrade.volume,
-                confidence: newTrade.confidence, rsi: newTrade.rsiAtEntry,
+                confidence: newTrade.confidence,
                 pattern: newTrade.pattern, primaryMethodology: newTrade.primaryMethodology,
               },
             });
@@ -1126,9 +1112,6 @@ class BacktestService {
               high: snap.high,
               low: snap.low,
               close: snap.close,
-              rsi: Math.round(snap.rsi * 100) / 100,
-              atr: Math.round(snap.atr * 100000) / 100000,
-              pattern: snap.pattern.type,
               equity: Math.round(currentEquity * 100) / 100,
               floatingPnL: Math.round(floatingPnL * 100) / 100,
               marginLevel: globalMarginLevel,
