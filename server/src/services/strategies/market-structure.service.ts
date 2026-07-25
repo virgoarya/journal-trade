@@ -72,6 +72,8 @@ export interface FVG {
   bottom: number;
   mitigated: boolean;
   time: number;
+  inverted?: boolean;
+  invertedTime?: number;
 }
 
 export interface KeyLevel {
@@ -913,31 +915,45 @@ class MarketStructureService {
 
   /**
    * Mark FVGs as mitigated if price has since filled the gap.
+   * Also mark them as inverted (IFVG) if price closes decisively through them.
    */
   updateMitigations(candles: Candle[], fvgs: FVG[]): FVG[] {
     return fvgs.map((fvg) => {
-      if (fvg.mitigated) return fvg;
+      // If already mitigated and inverted, no need to check further
+      if (fvg.mitigated && fvg.inverted) return fvg;
 
       const subsequentCandles = candles.slice(fvg.index + 2);
-      let mitigated = false;
+      let mitigated = fvg.mitigated;
+      let inverted = fvg.inverted || false;
+      let invertedTime = fvg.invertedTime;
 
       for (const c of subsequentCandles) {
         if (fvg.type === "BULLISH") {
-          // Price dipped into the gap
-          if (c.low <= fvg.top && c.high >= fvg.bottom) {
+          // Price dipped into the gap (mitigation)
+          if (!mitigated && c.low <= fvg.top) {
             mitigated = true;
-            break;
+          }
+          // Price closed decisively below the gap (inversion)
+          if (!inverted && c.close < fvg.bottom) {
+            inverted = true;
+            invertedTime = c.time;
+            mitigated = true; // Inversion inherently means it was fully mitigated
           }
         } else {
-          // Price rose into the gap
-          if (c.high >= fvg.bottom && c.low <= fvg.top) {
+          // Price rose into the gap (mitigation)
+          if (!mitigated && c.high >= fvg.bottom) {
             mitigated = true;
-            break;
+          }
+          // Price closed decisively above the gap (inversion)
+          if (!inverted && c.close > fvg.top) {
+            inverted = true;
+            invertedTime = c.time;
+            mitigated = true;
           }
         }
       }
 
-      return { ...fvg, mitigated };
+      return { ...fvg, mitigated, inverted, invertedTime };
     });
   }
 

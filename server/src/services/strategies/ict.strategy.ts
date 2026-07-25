@@ -35,7 +35,8 @@ export interface ICTSignal {
     | "AMD_OTE"          // 3-Candle AMD pattern + OTE confluence
     | "SWEEP_FVG"        // Liquidity Sweep + FVG fill
     | "JUDAS_SWEEP"      // Judas Swing + Sweep context
-    | "OTE_AMD";         // OTE Fibonacci + AMD range context
+    | "OTE_AMD"          // OTE Fibonacci + AMD range context
+    | "IFVG_RETEST";     // Retest of inverted FVG (IFVG)
   killzone?: KillzoneType;
   reason: string;
   checklistItems?: ChecklistItem[];
@@ -135,6 +136,17 @@ class ICTStrategy {
       fractal,
     );
     if (oteAmdSignal) signals.push(oteAmdSignal);
+
+    // ─── PATH E: IFVG (Inversion FVG) Retest ────────────────────────────────────
+
+    const ifvgSignal = this.detectIFVGEntry(
+      entryCandles,
+      entryStr,
+      htfTrend,
+      avgRange,
+      config
+    );
+    if (ifvgSignal) signals.push(ifvgSignal);
 
     // ── IPDA Context: adjust confidence ──
     if (ipda && signals.length > 0) {
@@ -754,6 +766,65 @@ class ICTStrategy {
             signalType: "OTE_AMD",
             confidence: Math.min(88, config.minConfidence + 13),
             reason: `ICT OTE SELL: Fib zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // ─── IFVG (Inversion FVG) Retest ───────────────────────────────────────────
+
+  private detectIFVGEntry(
+    candles: Candle[],
+    ms: MarketStructure,
+    htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
+    avgRange: number,
+    config: ReturnType<typeof strategyConfigService.getICTConfig>
+  ): ICTSignal | null {
+    if (htfTrend === "SIDEWAYS") return null;
+
+    const last = candles[candles.length - 1];
+    
+    // Look for IFVGs (Inverted FVGs) that were recently inverted
+    for (const fvg of ms.fairValueGaps) {
+      if (!fvg.inverted) continue;
+
+      // Bullish IFVG (Former Bearish FVG inverted to support)
+      if (htfTrend === "BULL" && fvg.type === "BEARISH") {
+        // Price must retrace down into the IFVG (or very close)
+        if (Math.abs(last.close - fvg.top) <= avgRange * config.fvgProximityAtrMult || 
+            (last.close >= fvg.bottom && last.close <= fvg.top)) {
+          
+          return {
+            direction: "BUY",
+            entry: last.close,
+            sl: fvg.bottom - avgRange * 0.5,
+            tp: last.close + avgRange * 2.5,
+            orderType: "MARKET",
+            signalType: "IFVG_RETEST",
+            confidence: config.minConfidence + 18,
+            reason: `ICT IFVG BUY: Retest of inverted Bearish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}] acting as support`,
+          };
+        }
+      }
+
+      // Bearish IFVG (Former Bullish FVG inverted to resistance)
+      if (htfTrend === "BEAR" && fvg.type === "BULLISH") {
+        // Price must retrace up into the IFVG (or very close)
+        if (Math.abs(last.close - fvg.bottom) <= avgRange * config.fvgProximityAtrMult || 
+            (last.close >= fvg.bottom && last.close <= fvg.top)) {
+          
+          return {
+            direction: "SELL",
+            entry: last.close,
+            sl: fvg.top + avgRange * 0.5,
+            tp: last.close - avgRange * 2.5,
+            orderType: "MARKET",
+            signalType: "IFVG_RETEST",
+            confidence: config.minConfidence + 18,
+            reason: `ICT IFVG SELL: Retest of inverted Bullish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}] acting as resistance`,
           };
         }
       }
