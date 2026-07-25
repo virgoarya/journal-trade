@@ -315,6 +315,19 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
                 isRunning={isStreaming} 
               />
             </div>
+
+            {/* Mobile Footer (Close Button Backup) */}
+            {isBacktestDrawerOpen && (
+              <div className="flex-none p-4 pb-8 bg-black border-t border-accent-gold/20 xl:hidden z-[60]">
+                <button 
+                  onClick={() => setIsBacktestDrawerOpen(false)}
+                  className="w-full py-3 bg-red-900/40 hover:bg-red-800/60 text-red-100 rounded-xl border border-red-500/30 flex items-center justify-center gap-2 font-bold tracking-wider uppercase shadow-[0_0_15px_rgba(255,0,0,0.2)]"
+                >
+                  <X className="w-5 h-5" />
+                  Tutup Konfigurasi
+                </button>
+              </div>
+            )}
           </div>
         )}
 
