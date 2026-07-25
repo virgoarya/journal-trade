@@ -13,41 +13,7 @@ import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
 
-// ─── Circuit Breaker for LLM Consensus ────────────────────────────────────
-class LLMCircuitBreaker {
-  private circuits: Map<string, CircuitBreaker> = new Map();
-  
-  getCircuit(providerName: string): CircuitBreaker {
-    if (!this.circuits.has(providerName)) {
-      this.circuits.set(providerName, new CircuitBreaker(3, 2, 60000)); // Lower threshold for LLM
-    }
-    return this.circuits.get(providerName)!;
-  }
-  
-  canExecute(providerName: string): boolean {
-    return this.getCircuit(providerName).canExecute();
-  }
-  
-  recordSuccess(providerName: string): void {
-    this.getCircuit(providerName).recordSuccess();
-  }
-  
-  recordFailure(providerName: string): void {
-    this.getCircuit(providerName).recordFailure();
-  }
-  
-  getAllStates(): Record<string, string> {
-    const states: Record<string, string> = {};
-    for (const [name, circuit] of this.circuits) {
-      states[name] = circuit.getState();
-    }
-    return states;
-  }
-  
-  getAvailableProviders(allProviders: string[]): string[] {
-    return allProviders.filter(p => this.getCircuit(p).canExecute());
-  }
-}
+
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -200,7 +166,6 @@ class TradingPipelineService {
     }
   > = new Map();
 
-  private llmCircuitBreaker = new LLMCircuitBreaker();
 
   // ─── Cache ────────────────────────────────────────────────────────────
   private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
@@ -645,7 +610,7 @@ const pipeline = {
       lastAnalysis: pipeline.lastAnalysis,
       lastError: pipeline.lastError,
       mt5CircuitState: mt5McpService.circuitBreakerState,
-      llmCircuitStates: this.llmCircuitBreaker.getAllStates(),
+      llmCircuitStates: llmConsensusService.getCircuitStates(),
     };
   }
 
@@ -721,12 +686,9 @@ const pipeline = {
               return { valid: false, error: `Risk:Reward ratio terlalu rendah (${rrRatio.toFixed(2)}:1, minimal ${minRRRatio}:1)` };
             }
           } else {
-            // Market execution: warn if below min, block only if extreme
-            if (rrRatio < 0.3) {
-              return { valid: false, error: `Risk:Reward ratio sangat rendah (${rrRatio.toFixed(2)}:1). Trade ditolak karena risiko berlebihan.` };
-            }
+            // Market execution: strict minimum from config (default 1:2)
             if (rrRatio < minRRRatio) {
-              silentLogger.warn(`[PIPELINE] Market order RR ${rrRatio.toFixed(2)}:1 (below min ${minRRRatio}:1) — executing anyway`);
+              return { valid: false, error: `Risk:Reward ratio terlalu rendah (${rrRatio.toFixed(2)}:1, minimal ${minRRRatio}:1). Eksekusi ditolak.` };
             }
           }
         }
@@ -930,8 +892,9 @@ const pipeline = {
             (adjustedWeights as any)[key] = ((adjustedWeights as any)[key] || 1.0) * mult;
           }
         }
+        const activeMeth = pipeline.config.activeMethodologies || ["smc", "ict", "msnr"];
         const filteredWeightsStr = Object.entries(adjustedWeights)
-          .filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
+          .filter(([k]) => activeMeth.includes(k as any))
           .map(([k, v]) => `${k}=${(v as number).toFixed(2)}`)
           .join(", ");
         if (filteredWeightsStr) {
@@ -952,7 +915,7 @@ const pipeline = {
             pipeline.config.timeframe,
             pipeline.config.maxRiskPerTrade,
             adjustedWeights,
-            pipeline.config.activeMethodologies,
+            pipeline.config.activeMethodologies || ["smc", "ict", "msnr"],
           );
 
           if (analyses.length > 0 && analyses[0].ipdaContext) {
@@ -1159,12 +1122,9 @@ const pipeline = {
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
 
-        if (pipeline.config.llmConsensus?.enabled && !pipeline.llmCircuitOpen) {
-          const availableLLMProviders = this.llmCircuitBreaker.getAvailableProviders(
-            ["deepseek", "gpt", "gemini", "mistral", "nemotron", "claude-opus"]
-          );
-          if (availableLLMProviders.length === 0) {
-            this.addLog(userId, "ERROR", `[4/7] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting.`);
+        if (pipeline.config.llmConsensus?.enabled) {
+          if (pipeline.llmCircuitOpen) {
+            this.addLog(userId, "ERROR", `[4/7] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting, relying on technicals.`);
           } else {
             this.addLog(userId, "CONFLUENCE",
               `[4/7] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
@@ -1179,6 +1139,8 @@ const pipeline = {
             let llmMethPnL: number | undefined;
             try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
 
+            const activeMeth = pipeline.config.activeMethodologies || ["smc", "ict", "msnr"];
+            
             const llmResult = await llmConsensusService.evaluate(
               {
                 symbol: signal.symbol,
@@ -1190,10 +1152,10 @@ const pipeline = {
                 reason: signal.reason,
                 marketTrend: analysis.marketStructure.trend.direction,
                 methodologyBreakdown: Object.fromEntries(
-                  Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => pipeline.config.activeMethodologies?.includes(k as any))
+                  Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => activeMeth.includes(k as any))
                 ),
                 agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
-                totalMethodologies: pipeline.config.activeMethodologies?.length ?? 1,
+                totalMethodologies: activeMeth.length,
                 htfTrend: llmHtfTrend,
                 htfConfidence: llmHtfConf,
                 symbolScore: llmSymScore,
@@ -1205,8 +1167,6 @@ const pipeline = {
               },
               pipeline.config.llmConsensus,
             );
-
-            this.llmCircuitBreaker.getAllStates();
 
             const isTrade = llmResult.verdict === "GOOD";
             this.addLog(userId, "CONFLUENCE",

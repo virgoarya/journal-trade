@@ -234,15 +234,7 @@ class ConfluenceEngine {
     const slDist = Math.abs(primary.entry - primary.sl);
     const tpDist = Math.abs(primary.tp - primary.entry);
     const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-    if (rrRatio < 2.0) {
-      return {
-        finalSignal: null,
-        allSignals: allMethodologySignals,
-        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
-        conflictDetected: false,
-        reason: `Risk:Reward ratio 1:${rrRatio.toFixed(2)} is below 1:2 minimum (Trade Skipped)`,
-      };
-    }
+
 
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 

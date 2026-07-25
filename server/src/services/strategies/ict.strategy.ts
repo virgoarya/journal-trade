@@ -214,50 +214,58 @@ class ICTStrategy {
     const hasPDArray = step3 || step4; // FVG or OTE satisfies the PD Array requirement
     const chainUpToStep5 = chainUpToStep2 && hasPDArray && step5;
 
+    const stat1 = s(step1, true);
+    const stat2 = s(step2, step1);
+    const stat3 = s(step3, chainUpToStep2);
+    const stat4 = s(step4, chainUpToStep2);
+    const stat5 = s(step5, chainUpToStep2 && hasPDArray);
+    const stat6 = s(step6, chainUpToStep5, true);
+    const stat7 = s(step7, chainUpToStep5 && step6);
+
     return [
       {
         id: "ict-killzone",
-        label: `① ${kzLabel}`,
-        status: s(step1, true),
+        label: `① ${kzLabel} ${stat1 === "PASSED" ? "Aktif" : "Menunggu sesion"}`,
+        status: stat1,
         timeframe: setupTfLabel,
         value: killzone !== "NONE" ? killzone : "OFF_SESSION"
       },
       {
         id: "ict-po3",
-        label: "② Power of 3 (PO3) — Fase Manipulation selesai",
-        status: s(step2, step1),
+        label: `② Power of 3 (PO3) — Fase Manipulation ${stat2 === "PASSED" ? "selesai" : "belum selesai"}`,
+        status: stat2,
         timeframe: htfTfLabel
       },
       {
         id: "ict-fvg",
-        label: `③ Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel}`,
-        status: s(step3, chainUpToStep2),
+        label: `③ Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel} ${stat3 === "PASSED" ? "terdeteksi" : "tidak ditemukan"}`,
+        status: stat3,
         timeframe: setupTfLabel
       },
       {
         id: "ict-ote",
-        label: "④ Optimal Trade Entry (OTE 61.8% - 79%)",
-        status: s(step4, chainUpToStep2),
+        label: `④ Optimal Trade Entry (OTE 61.8% - 79%) ${stat4 === "PASSED" ? "tercapai" : "belum tercapai"}`,
+        status: stat4,
         timeframe: setupTfLabel
       },
       {
         id: "ict-sweep",
-        label: `⑤ Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel}`,
-        status: s(step5, chainUpToStep2 && hasPDArray),
+        label: `⑤ Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel} ${stat5 === "PASSED" ? "terjadi" : "menunggu sweep"}`,
+        status: stat5,
         timeframe: entryTfLabel
       },
       {
         id: "ict-rr",
-        label: "⑥ Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: s(step6, chainUpToStep5, true),
+        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        status: stat6,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "ict-pending-placed",
-        label: `⑦ Pending Order Limit ${entryTfLabel} Placed`,
-        status: s(step7, chainUpToStep5 && step6),
+        label: `⑦ Pending Order Limit ${entryTfLabel} ${stat7 === "PASSED" ? "terpasang" : "belum terpasang"}`,
+        status: stat7,
         timeframe: entryTfLabel,
-        details: `Limit Price: ${sig.entry.toFixed(5)}`
+        details: stat7 === "PASSED" ? `Limit Price: ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi pola."
       }
     ];
   }

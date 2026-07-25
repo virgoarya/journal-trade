@@ -114,51 +114,59 @@ class SMCStrategy {
     const step6 = sig.confidence >= 70;
 
     // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
+    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
       return stepPassed ? "PASSED" : "WAITING";
     };
 
+    const stat1 = s(step1, true);
+    const stat2 = s(step2, step1);
+    const stat3 = s(step3, step1 && step2);
+    const stat4 = s(step4, step1 && step2 && step3);
+    const stat5 = s(step5, step1 && step2 && step3 && step4, true);
+    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
+
     return [
       {
         id: "smc-bos",
-        label: `① HTF BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} terkonfirmasi`,
-        status: s(step1, true),
+        label: `① HTF BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} ${stat1 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
+        status: stat1,
         timeframe: htfTfLabel,
         details: `Breach type: ${sig.breachType}`
       },
       {
         id: "smc-liq",
-        label: `② ${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} tersapu`,
-        status: s(step2, step1),
+        label: `② ${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} ${stat2 === "PASSED" ? "tersapu" : "belum tersapu"}`,
+        status: stat2,
         timeframe: htfTfLabel
       },
       {
         id: "smc-ob",
-        label: `③ Harga di zona OB (${pdArray})`,
-        status: s(step3, step1 && step2),
+        label: `③ Harga ${stat3 === "PASSED" ? "berada di" : "belum mencapai"} zona OB (${pdArray})`,
+        status: stat3,
         timeframe: setupTfLabel,
         value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)}` : undefined
       },
       {
         id: "smc-fvg",
-        label: `④ FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} terkonfirmasi`,
-        status: s(step4, step1 && step2 && step3),
+        label: `④ FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} ${stat4 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
+        status: stat4,
         timeframe: setupTfLabel
       },
       {
         id: "smc-rr",
-        label: "⑤ Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: s(step5, step1 && step2 && step3 && step4, true),
+        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        status: stat5,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "smc-entry-rejection",
-        label: `⑥ Rejection candle ${entryTfLabel} & Pending Order Placed`,
-        status: s(step6, step1 && step2 && step3 && step4 && step5),
+        label: `⑥ Rejection candle ${entryTfLabel} & Pending Order ${stat6 === "PASSED" ? "terpasang" : "belum terpasang"}`,
+        status: stat6,
         timeframe: entryTfLabel,
-        details: `Pending BUY/SELL Limit at ${sig.entry.toFixed(5)}`
+        details: stat6 === "PASSED" ? `Pending BUY/SELL Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
   }

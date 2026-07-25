@@ -231,37 +231,43 @@ class MSNRStrategy {
       return stepPassed ? "PASSED" : "WAITING";
     };
 
+    const stat1 = s(step1, true);
+    const stat2 = s(step2, step1);
+    const stat3 = s(step3, step1 && step2);
+    const stat4 = s(step4, step1 && step2 && step3, true);
+    const stat5 = s(step5, step1 && step2 && step3 && step4);
+
     return [
       {
         id: "msnr-snr-zone",
-        label: `① HTF Malaysian SNR ${snrType} terkonfirmasi`,
-        status: s(step1, true),
+        label: `① HTF Malaysian SNR ${snrType} ${stat1 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
+        status: stat1,
         timeframe: htfTfLabel
       },
       {
         id: "msnr-turtle-soup",
-        label: `② Turtle Soup Wick Rejection di ${snrType}`,
-        status: s(step2, step1),
+        label: `② Turtle Soup Wick Rejection di ${snrType} ${stat2 === "PASSED" ? "terjadi" : "menunggu rejection"}`,
+        status: stat2,
         timeframe: setupTfLabel
       },
       {
         id: "msnr-ltf-mss",
-        label: `③ LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR)`,
-        status: s(step3, step1 && step2),
+        label: `③ LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR) ${stat3 === "PASSED" ? "terkonfirmasi" : "belum terbentuk"}`,
+        status: stat3,
         timeframe: entryTfLabel
       },
       {
         id: "msnr-rr",
-        label: "④ Minimum Risk-to-Reward 1:2 Terpenuhi",
-        status: s(step4, step1 && step2 && step3, true),
+        label: `④ Minimum Risk-to-Reward 1:2 ${stat4 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        status: stat4,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "msnr-ob-limit",
-        label: `⑤ Pending Order Limit ${entryTfLabel} Placed at OB/QML`,
-        status: s(step5, step1 && step2 && step3 && step4),
+        label: `⑤ Pending Order Limit ${entryTfLabel} Placed at OB/QML ${stat5 === "PASSED" ? "terpasang" : "belum terpasang"}`,
+        status: stat5,
         timeframe: entryTfLabel,
-        value: `${sig.entry.toFixed(5)}`
+        value: stat5 === "PASSED" ? `${sig.entry.toFixed(5)}` : undefined
       }
     ];
   }

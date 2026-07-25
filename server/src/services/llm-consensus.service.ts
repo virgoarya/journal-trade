@@ -661,6 +661,14 @@ class LLMConsensusService {
     return status;
   }
 
+  public getCircuitStates(): Record<string, string> {
+    const states: Record<string, string> = {};
+    for (const [name, circuit] of this.providerCircuitBreakers) {
+      states[name] = circuit.getState();
+    }
+    return states;
+  }
+
   /**
    * Get list of available providers with their status.
    */
