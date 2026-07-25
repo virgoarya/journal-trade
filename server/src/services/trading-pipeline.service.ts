@@ -1122,7 +1122,7 @@ const pipeline = {
 
         if (hasFailedItem) {
           const failedItems = methChecklist.filter(c => c.status !== "PASSED").map(c => c.label).join(", ");
-          this.addLog(userId, "SIGNAL", `[3.5/7] [${signal.symbol}] REJECTED (CHECKLIST): Technical criteria not fully met (${failedItems}). Skipping LLM to save tokens.`);
+          this.addLog(userId, "SIGNAL", `[3.5/7] [${signal.symbol}] Scanning checklist: Technical criteria not fully met (${failedItems}). Waiting for conditions...`);
           continue;
         }
 

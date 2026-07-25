@@ -95,18 +95,6 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${trendColor(marketStructure.trend.direction)}`}>
             {marketStructure.trend.direction === "BULL" ? "Bull" : marketStructure.trend.direction === "BEAR" ? "Bear" : "Sideways"} ({marketStructure.trend.strength}%)
           </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
-            {priceActionLabel(marketStructure.recentPriceAction)}
-          </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
-            {marketStructure.orderBlocksCount} OB
-          </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
-            {marketStructure.fvgCount} FVG
-          </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent-gold/20 bg-black/30 text-text-muted font-mono">
-            {marketStructure.liquidityZonesCount} Liq
-          </span>
         </div>
       )}
 
