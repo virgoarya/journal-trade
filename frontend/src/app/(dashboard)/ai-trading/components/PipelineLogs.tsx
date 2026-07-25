@@ -217,8 +217,13 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
       }
       
       let direction: "BUY" | "SELL" | undefined;
-      if (/\bBUY\b/i.test(log.message)) direction = "BUY";
-      else if (/\bSELL\b/i.test(log.message)) direction = "SELL";
+      if (log.data?.direction) {
+        direction = log.data.direction;
+      } else {
+        const cleanMsg = log.message.replace(/buy-side|sell-side/gi, "");
+        if (/\bbuy\b/i.test(cleanMsg)) direction = "BUY";
+        else if (/\bsell\b/i.test(cleanMsg)) direction = "SELL";
+      }
 
       const time = new Date(log.time).getTime();
 
