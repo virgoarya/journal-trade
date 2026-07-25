@@ -1124,7 +1124,7 @@ const pipeline = {
           const failedItems = methChecklist.filter(c => c.status !== "PASSED").map(c => c.label).join(", ");
           this.addLog(
             userId, 
-            "SIGNAL", 
+            "CONFLUENCE", 
             `[3.5/7] [${signal.symbol}] Scanning checklist: Technical criteria not fully met (${failedItems}). Waiting for conditions...`,
             { checklist: methChecklist }
           );

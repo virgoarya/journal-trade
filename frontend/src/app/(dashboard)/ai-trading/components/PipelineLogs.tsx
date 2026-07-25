@@ -271,11 +271,13 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
           let status: "active" | "error" | "success" | "pending" = "active";
           if (log.message.includes("NO TRADE") || log.message.includes("SKIP") || log.message.includes("tidak valid") || log.message.includes("dibatalkan")) {
             status = "error";
-          } else if (log.message.includes("TRADE") || log.message.includes("GOOD")) {
+          } else if (log.message.includes("TRADE") || log.message.includes("GOOD") || log.message.includes("CONFLUENCE SIGNAL:")) {
             status = "success";
+          } else if (log.message.includes("Waiting for conditions") || log.message.includes("Scanning checklist")) {
+            status = "active";
           }
           
-          track.stages.CONFLUENCE = { status, message: log.message, time };
+          track.stages.CONFLUENCE = { status, message: log.message, time, data: log.data };
           track.stages.EXECUTION = { status: "pending" }; // Reset execution
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "TRADE") {
