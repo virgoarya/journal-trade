@@ -6,11 +6,12 @@ import { SkeletonLoader } from "./SkeletonLoader";
 import { Terminal, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 
-export function AITradeHistories() {
+export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }) {
   const [data, setData] = useState<PipelinePerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
+    if (!data) setLoading(true);
     try {
       const res = await aiTradingService.getPerformance();
       if (res.success && res.data) setData(res.data);
@@ -19,13 +20,11 @@ export function AITradeHistories() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     fetch();
-    const interval = setInterval(fetch, 30000);
-    return () => clearInterval(interval);
-  }, [fetch]);
+  }, [triggerRefresh]);
 
   if (loading) {
     return <SkeletonLoader type="card" />;

@@ -58,14 +58,14 @@ function MetricCard({
   );
 }
 
-export function PipelinePerformance() {
+export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: number }) {
   const [data, setData] = useState<PipelinePerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMeth, setShowMeth] = useState(true);
   const [showSym, setShowSym] = useState(true);
 
   const fetch = useCallback(async () => {
-    setLoading(true);
+    if (!data) setLoading(true);
     try {
       const res = await aiTradingService.getPerformance();
       if (res.success && res.data) setData(res.data);
@@ -74,13 +74,11 @@ export function PipelinePerformance() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     fetch();
-    const interval = setInterval(fetch, 30000);
-    return () => clearInterval(interval);
-  }, [fetch]);
+  }, [triggerRefresh]); // Remove interval, only rely on trigger or mount
 
   if (loading) {
     return <SkeletonLoader type="card" />;
