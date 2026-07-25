@@ -27,15 +27,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
     return <SkeletonLoader type="card" />;
   }
 
-  if (!confluence.finalSignal) {
-    return (
-      <EmptyState
-        type="data"
-        title="No Methodology Data"
-        description="No methodology confluence data available yet."
-      />
-    );
-  }
+
 
   const finalSignal = confluence.finalSignal;
 
@@ -59,7 +51,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
   // Get active checklist based on selected tab
   const getActiveChecklist = (): ChecklistItem[] => {
     if (activeTab === "NET") {
-      return finalSignal.checklistItems || [];
+      return confluence.checklistItems || finalSignal?.checklistItems || [];
     }
     const breakdownData = confluence.methodologyBreakdown?.[activeTab];
     if (breakdownData?.checklistItems && breakdownData.checklistItems.length > 0) {

@@ -80,6 +80,7 @@ export interface ConfluenceResult {
   conflictDetected: boolean;
   reason: string;
   checklistByMethodology?: Record<string, ChecklistItem[]>;
+  checklistItems?: ChecklistItem[];
 }
 
 // Each methodology's signal type
@@ -169,6 +170,13 @@ class ConfluenceEngine {
       }
     }
 
+    const mergedChecklist: ChecklistItem[] = [];
+    for (const sig of allMethodologySignals) {
+      if (sig.checklistItems) {
+        mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
+      }
+    }
+
     let winningDirection: "BUY" | "SELL" | null = null;
     let winningSignals: MethodologySignal[] = [];
 
@@ -181,6 +189,7 @@ class ConfluenceEngine {
         conflictDetected: false,
         reason: "No methodology generated a valid signal above minimum confidence",
         checklistByMethodology,
+        checklistItems: mergedChecklist,
       };
     }
 
@@ -200,6 +209,7 @@ class ConfluenceEngine {
         conflictDetected: true,
         reason: `Methodology conflict: HTF alignment is broken (${buySignals.length} BUY vs ${sellSignals.length} SELL)`,
         checklistByMethodology,
+        checklistItems: mergedChecklist,
       };
     }
 
@@ -231,14 +241,13 @@ class ConfluenceEngine {
 
     const breakdown = this.buildBreakdown(allMethodologySignals, weights);
 
-    // Build Net Confluence Checklist from actual strategy checklists
-    const mergedChecklist: ChecklistItem[] = [];
-
     // Append technical setup items from agreeing strategy signals (excluding duplicate RR items)
-    const signalsToMerge = winningSignals.length > 0 ? winningSignals : allMethodologySignals;
-    for (const sig of signalsToMerge) {
-      if (sig.checklistItems) {
-        mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
+    if (winningSignals.length > 0) {
+      mergedChecklist.length = 0; // Clear the array
+      for (const sig of winningSignals) {
+        if (sig.checklistItems) {
+          mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
+        }
       }
     }
 
@@ -260,6 +269,7 @@ class ConfluenceEngine {
       allSignals: allMethodologySignals,
       methodologyBreakdown: breakdown,
       checklistByMethodology,
+      checklistItems: mergedChecklist,
       conflictDetected,
       reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})`,
     };
