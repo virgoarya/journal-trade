@@ -1623,9 +1623,9 @@ const pipeline = {
             `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) terdeteksi tutup. Hasil: ${closeReason} | PnL: $${log.pnl.toFixed(2)} (${log.pnlPercent}%)`
           );
         } else {
-          // Fallback: jangan tutup paksa — biarkan retry di siklus berikutnya
-          this.addLog(userId, "INFO",
-            `[SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) menunggu konfirmasi deal. Akan retry siklus berikutnya.`
+          // Fallback: jangan tutup paksa — biarkan retry di siklus berikutnya tanpa spamming UI
+          silentLogger.debug(
+            `[PIPELINE] [SYNC] Posisi #${log.mt5Ticket} (${log.signal.symbol}) menunggu konfirmasi deal di MT5. Akan retry siklus berikutnya.`
           );
         }
       }
