@@ -285,15 +285,15 @@ function AITradingPageContent() {
 
           {/* Right: Trading panel (Mobile Drawer + Desktop Sidebar) */}
           <div className={`
-            space-y-4 transition-all duration-300
+            transition-all duration-300
             ${isTradingDrawerOpen 
-              ? 'fixed inset-0 z-50 bg-black/90 p-4 pt-0 overflow-y-auto block' 
+              ? 'fixed inset-0 z-50 flex flex-col bg-black/95 xl:static xl:z-auto xl:bg-transparent xl:block' 
               : 'hidden xl:block'
             }
           `}>
             {/* Mobile Header (Close Button) */}
             {isTradingDrawerOpen && (
-              <div className="sticky top-0 -mx-4 px-4 py-4 mb-4 bg-black/95 border-b border-accent-gold/20 flex justify-between items-center z-[60] backdrop-blur-md">
+              <div className="flex-none p-4 border-b border-accent-gold/20 flex justify-between items-center bg-black/95 xl:hidden z-[60]">
                 <span className="text-accent-gold font-bold tracking-widest uppercase text-sm font-mono">Settings & Config</span>
                 <button 
                   onClick={() => setIsTradingDrawerOpen(false)}
@@ -305,7 +305,9 @@ function AITradingPageContent() {
               </div>
             )}
 
-            <div className={`space-y-4`}>
+            <div className={`
+              ${isTradingDrawerOpen ? 'flex-1 overflow-y-auto p-4 space-y-4 xl:p-0 xl:overflow-visible' : 'space-y-4'}
+            `}>
               <TradingPanel
                 pipelineRunning={pipelineStatus?.running ?? false}
               pipelinePaused={pipelineStatus?.paused ?? false}

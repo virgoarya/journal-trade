@@ -284,15 +284,15 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
         {/* Right: Sidebar Form (Mobile Drawer + Desktop Sidebar) */}
         {!isStreaming && (
           <div className={`
-            space-y-4 transition-all duration-300
+            transition-all duration-300
             ${isBacktestDrawerOpen 
-              ? 'fixed inset-0 z-50 bg-black/90 p-4 pt-0 overflow-y-auto block' 
+              ? 'fixed inset-0 z-50 flex flex-col bg-black/95 xl:static xl:z-auto xl:bg-transparent xl:block' 
               : 'hidden xl:block'
             }
           `}>
             {/* Mobile Header (Close Button) */}
             {isBacktestDrawerOpen && (
-              <div className="sticky top-0 -mx-4 px-4 py-4 mb-4 bg-black/95 border-b border-accent-gold/20 flex justify-between items-center z-[60] backdrop-blur-md">
+              <div className="flex-none p-4 border-b border-accent-gold/20 flex justify-between items-center bg-black/95 xl:hidden z-[60]">
                 <span className="text-accent-gold font-bold tracking-widest uppercase text-sm font-mono">Backtest Config</span>
                 <button 
                   onClick={() => setIsBacktestDrawerOpen(false)}
@@ -304,7 +304,9 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
               </div>
             )}
 
-            <div className={``}>
+            <div className={`
+              ${isBacktestDrawerOpen ? 'flex-1 overflow-y-auto p-4 xl:p-0 xl:overflow-visible' : ''}
+            `}>
               <BacktestForm 
                 onRun={(config) => {
                   handleRun(config);
