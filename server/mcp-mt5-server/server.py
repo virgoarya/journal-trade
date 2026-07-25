@@ -874,7 +874,7 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
                 "ticket": d.ticket,
                 "order": d.order or 0,
                 "symbol": d.symbol,
-                "type": "BUY" if d.type == 0 else "SELL",
+                "type": "BUY" if d.type == 0 else ("SELL" if d.type == 1 else ("BALANCE" if d.type == 2 else "OTHER")),
                 "volume": d.volume,
                 "price": d.price,
                 "profit": d.profit,

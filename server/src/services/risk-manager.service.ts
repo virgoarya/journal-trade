@@ -265,10 +265,16 @@ class RiskManagerService {
       let monthlyPnL = 0;
 
       for (const d of deals) {
-        const profit = d.profit || 0;
-        if (d.time >= todayTs) dailyPnL += profit;
-        if (d.time >= weekTs) weeklyPnL += profit;
-        if (d.time >= monthTs) monthlyPnL += profit;
+        // Skip balance operations (deposits, withdrawals, etc)
+        // Usually they have type 'BALANCE' or no valid order/position ID, but checking type is safest.
+        if (d.type !== "BUY" && d.type !== "SELL") continue;
+
+        // Also add swap and commission to profit to get accurate net PnL for the deal
+        const netProfit = (d.profit || 0) + (d.swap || 0) + (d.commission || 0);
+
+        if (d.time >= todayTs) dailyPnL += netProfit;
+        if (d.time >= weekTs) weeklyPnL += netProfit;
+        if (d.time >= monthTs) monthlyPnL += netProfit;
       }
 
       // Add current floating PnL so daily/weekly/monthly includes open positions

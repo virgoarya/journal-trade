@@ -226,7 +226,7 @@ export interface MT5Deal {
   ticket: number;
   order: number;
   symbol: string;
-  type: "BUY" | "SELL";
+  type: "BUY" | "SELL" | "BALANCE" | "OTHER";
   volume: number;
   price: number;
   profit: number;
