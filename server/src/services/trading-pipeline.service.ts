@@ -812,46 +812,31 @@ const pipeline = {
 
       const isCryptoSymbol = (sym: string) => /^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BCH|DOT|LINK|UNI|BNB|AVAX|MATIC)/i.test(sym);
 
-      let allSymbols = pipeline.config.symbols;
-      if (isForexClosed) {
-        const forexSymbols = allSymbols.filter(s => !isCryptoSymbol(s));
-        const cryptoSymbols = allSymbols.filter(s => isCryptoSymbol(s));
-
-        if (forexSymbols.length > 0) {
-          // Log once per hour to avoid spam
-          const pauseLogKey = `weekend_pause_${utcDay}_${utcHour}`;
-          if (!pipeline.lastAnalyzedCandleTimes.has(pauseLogKey)) {
-            pipeline.lastAnalyzedCandleTimes.set(pauseLogKey, Date.now());
-            const reopenTime = utcDay === 5 ? "Sunday 22:00 UTC (Mon 05:00 WIB)" : "Sunday 22:00 UTC (Mon 05:00 WIB)";
-            const cryptoStatus = cryptoSymbols.length > 0 ? ` Crypto active: ${cryptoSymbols.join(", ")}` : "";
-            
-            for (const sym of forexSymbols) {
-              this.addLog(userId, "INFO",
-                `⏸️ MARKET CLOSED: Forex paused (${sym}). Reopens ${reopenTime}.${cryptoStatus}`
-              );
-            }
-          }
+      if (isForexClosed && !isCryptoSymbol(symbol)) {
+        // Log once per hour to avoid spam
+        const pauseLogKey = `weekend_pause_${symbol}_${utcDay}_${utcHour}`;
+        if (!pipeline.lastAnalyzedCandleTimes.has(pauseLogKey)) {
+          pipeline.lastAnalyzedCandleTimes.set(pauseLogKey, Date.now());
+          const reopenTime = utcDay === 5 ? "Sunday 22:00 UTC (Mon 05:00 WIB)" : "Sunday 22:00 UTC (Mon 05:00 WIB)";
+          
+          this.addLog(userId, "INFO",
+            `⏸️ MARKET CLOSED: Forex paused (${symbol}). Reopens ${reopenTime}.`
+          );
         }
-
-        if (cryptoSymbols.length === 0) {
-          return; // All symbols are forex → fully skip cycle
-        }
-        allSymbols = cryptoSymbols; // Only analyze crypto
+        return; // Fully skip this symbol
       }
 
-      for (const symbol of allSymbols) {
-        try {
-          const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
-          if (rates && rates.length > 0) {
-            const latestCandleTime = rates[rates.length - 1].time;
-            latestCandleTimes.set(symbol, latestCandleTime);
-            symbolsToAnalyze.push(symbol);
-          } else {
-            symbolsToAnalyze.push(symbol);
-          }
-        } catch (err: any) {
+      try {
+        const rates = await mt5McpService.getRates(symbol, pipeline.config.timeframe, 2);
+        if (rates && rates.length > 0) {
+          const latestCandleTime = rates[rates.length - 1].time;
+          latestCandleTimes.set(symbol, latestCandleTime);
+          symbolsToAnalyze.push(symbol);
+        } else {
           symbolsToAnalyze.push(symbol);
         }
+      } catch (err: any) {
+        symbolsToAnalyze.push(symbol);
       }
 
       if (symbolsToAnalyze.length === 0) {
