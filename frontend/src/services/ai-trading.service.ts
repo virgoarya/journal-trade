@@ -266,6 +266,7 @@ export interface ConfluenceResult {
   checklistByMethodology?: Record<string, ChecklistItem[]>;
   conflictDetected: boolean;
   reason: string;
+  checklistItems?: ChecklistItem[];
 }
 
 export interface MarketStructureSummary {

@@ -170,7 +170,19 @@ class MSNRStrategy {
       }
     }
 
-    const validSignals = signals.filter(sig => {
+    // ── Invalidation: remove setups where TP was hit before entry ────
+    const nonInvalidatedSignals = signals.filter(sig => {
+      const setupIdx = ltfCandles.length - 1;
+      return !marketStructureService.isTargetTakenBeforeEntry(
+        ltfCandles,
+        setupIdx,
+        sig.direction,
+        sig.tp,
+        fractal,
+      );
+    });
+
+    const validSignals = nonInvalidatedSignals.filter(sig => {
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
       if (slDist <= 0) return false;

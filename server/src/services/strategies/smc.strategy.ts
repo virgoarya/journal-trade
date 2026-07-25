@@ -231,14 +231,18 @@ class SMCStrategy {
       if (last.close > swing.price && last.high > swing.price) {
         const bodyBottom = Math.min(last.open, last.close);
         if (bodyBottom > swing.price && hasHTFContext("BUY")) {
+          const sl = swing.price - buffer;
+          const tp = swing.price + buffer * 3.0;
+          if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "BUY", tp, fractal)) continue;
+
           return {
             direction: "BUY",
             entry: swing.price, // Pending BUY Limit on retest
-            sl: swing.price - buffer, // SL 1× ATR below broken structure
-            tp: swing.price + buffer * 3.0, // RR 1:3 (Temporary, dynamic TP is calculated later)
+            sl, // SL 1× ATR below broken structure
+            tp, // RR 1:3 (Temporary, dynamic TP is calculated later)
             breachType: "MSS",
             confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY") + 15, // Boost for HTF context
-            reason: `HTF Context + Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price - buffer).toFixed(5)})`,
+            reason: `HTF Context + Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)})`,
           };
         }
       }
@@ -250,14 +254,18 @@ class SMCStrategy {
       if (last.close < swing.price && last.low < swing.price) {
         const bodyTop = Math.max(last.open, last.close);
         if (bodyTop < swing.price && hasHTFContext("SELL")) {
+          const sl = swing.price + buffer;
+          const tp = swing.price - buffer * 3.0;
+          if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "SELL", tp, fractal)) continue;
+
           return {
             direction: "SELL",
             entry: swing.price, // Pending SELL Limit on retest
-            sl: swing.price + buffer, // SL 1× ATR above broken structure
-            tp: swing.price - buffer * 3.0, // RR 1:3 (Temporary, dynamic TP is calculated later)
+            sl, // SL 1× ATR above broken structure
+            tp, // RR 1:3 (Temporary, dynamic TP is calculated later)
             breachType: "MSS",
             confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL") + 15,
-            reason: `HTF Context + Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price + buffer).toFixed(5)})`,
+            reason: `HTF Context + Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)})`,
           };
         }
       }
@@ -287,30 +295,38 @@ class SMCStrategy {
       // BULLISH OB: pending BUY LIMIT order at OB Top
       if (ob.type === "BULLISH") {
         const obHeight = ob.top - ob.bottom;
+        const tp = ob.top + obHeight * 3;
+        const sl = ob.bottom - buffer;
+        if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "BUY", tp, fractal)) continue;
+
         return {
           direction: "BUY",
           entry: ob.top,            // Pending order price (Limit)
-          sl: ob.bottom - buffer,   // SL below OB bottom + ATR buffer
-          tp: ob.top + obHeight * 3, // RR 1:3 based on OB height
+          sl,   // SL below OB bottom + ATR buffer
+          tp, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${(ob.bottom - buffer).toFixed(5)})`,
+          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${sl.toFixed(5)})`,
         };
       }
 
       // BEARISH OB: pending SELL LIMIT order at OB Bottom
       if (ob.type === "BEARISH") {
         const obHeight = ob.top - ob.bottom;
+        const tp = ob.bottom - obHeight * 3;
+        const sl = ob.top + buffer;
+        if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "SELL", tp, fractal)) continue;
+
         return {
           direction: "SELL",
           entry: ob.bottom,         // Pending order price (Limit)
-          sl: ob.top + buffer,      // SL above OB top + ATR buffer
-          tp: ob.bottom - obHeight * 3, // RR 1:3 based on OB height
+          sl,      // SL above OB top + ATR buffer
+          tp, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${(ob.top + buffer).toFixed(5)})`,
+          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${sl.toFixed(5)})`,
         };
       }
     }
@@ -341,11 +357,15 @@ class SMCStrategy {
         // Gunakan ATR-based proximity alih-alih % hardcoded
         if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
           const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped, bottom: flipped - avgRange, type: "BULLISH", mitigated: false } as any, ms));
+          const sl = flipped - avgRange * 1.5;
+          const tp = last.close + avgRange * 2.5;
+          if (marketStructureService.isTargetTakenBeforeEntry(candles, breaker.orderBlock.index, "BUY", tp, fractal)) continue;
+
           return {
             direction: "BUY",
             entry: last.close,
-            sl: flipped - avgRange * 1.5,
-            tp: last.close + avgRange * 2.5,
+            sl,
+            tp,
             breachType: "BREAKER",
             confidence,
             reason: `Breaker BUY: Former OB flipped to support at ${flipped.toFixed(5)} (within ${proximityAtr}× ATR)`,
@@ -357,11 +377,15 @@ class SMCStrategy {
       if (breaker.brokenDirection === "BEAR") {
         if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
           const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped + avgRange, bottom: flipped, type: "BEARISH", mitigated: false } as any, ms));
+          const sl = flipped + avgRange * 1.5;
+          const tp = last.close - avgRange * 2.5;
+          if (marketStructureService.isTargetTakenBeforeEntry(candles, breaker.orderBlock.index, "SELL", tp, fractal)) continue;
+
           return {
             direction: "SELL",
             entry: last.close,
-            sl: flipped + avgRange * 1.5,
-            tp: last.close - avgRange * 2.5,
+            sl,
+            tp,
             breachType: "BREAKER",
             confidence,
             reason: `Breaker SELL: Former OB flipped to resistance at ${flipped.toFixed(5)} (within ${proximityAtr}× ATR)`,
@@ -395,11 +419,15 @@ class SMCStrategy {
     for (const swing of recentHighs) {
       const grabbable = prev.high > swing.price && last.close < swing.price;
       if (grabbable) {
+        const sl = prev.high + avgRange * 0.5;
+        const tp = last.close - avgRange * 2.0;
+        if (marketStructureService.isTargetTakenBeforeEntry(candles, swing.index, "SELL", tp, fractal)) continue;
+
         return {
           direction: "SELL",
           entry: last.close,
-          sl: prev.high + avgRange * 0.5,
-          tp: last.close - avgRange * 2.0,
+          sl,
+          tp,
           breachType: "LIQUIDITY_GRAB",
           confidence: 70,
           reason: `Liquidity Grab SELL: False breakout above ${swing.price.toFixed(5)}, trapped buyers`,
@@ -412,11 +440,15 @@ class SMCStrategy {
     for (const swing of recentLows) {
       const grabbable = prev.low < swing.price && last.close > swing.price;
       if (grabbable) {
+        const sl = prev.low - avgRange * 0.5;
+        const tp = last.close + avgRange * 2.0;
+        if (marketStructureService.isTargetTakenBeforeEntry(candles, swing.index, "BUY", tp, fractal)) continue;
+
         return {
           direction: "BUY",
           entry: last.close,
-          sl: prev.low - avgRange * 0.5,
-          tp: last.close + avgRange * 2.0,
+          sl,
+          tp,
           breachType: "LIQUIDITY_GRAB",
           confidence: 70,
           reason: `Liquidity Grab BUY: False breakout below ${swing.price.toFixed(5)}, trapped sellers`,

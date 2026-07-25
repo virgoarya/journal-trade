@@ -110,8 +110,10 @@ class AITradingEngine {
     const alignedCount = (dirTrend !== "SIDEWAYS" ? 1 : 0) + (setupAligned ? 1 : 0) + (entryAligned ? 1 : 0);
     const isAligned = alignedCount >= 2;
 
+    const symbolInfo = await mt5McpService.getSymbolInfo(symbol);
+
     // Build fractal object to pass into methodologies
-    const fractalCtx = { 
+    const fractalCtx: import("./strategies/market-structure.service").FractalContext = { 
       daily: dailyCandles,
       direction: directionCandles, 
       setup: setupCandles, 
@@ -125,6 +127,8 @@ class AITradingEngine {
       directionTimeframeStr: fractals.direction,
       setupTimeframeStr: fractals.setup,
       entryTimeframeStr: fractals.entry,
+      spread: symbolInfo?.spread || 0,
+      point: symbolInfo?.point || 0.00001,
     };
 
     // ── IPDA Context for strategies ───────────────────────────────

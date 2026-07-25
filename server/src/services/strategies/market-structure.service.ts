@@ -27,6 +27,8 @@ export interface FractalContext {
   directionTimeframeStr?: string;
   setupTimeframeStr?: string;
   entryTimeframeStr?: string;
+  spread?: number;
+  point?: number;
 }
 
 export interface SwingHigh {
@@ -232,6 +234,44 @@ class MarketStructureService {
 
       recentPriceAction,
     };
+  }
+
+  // ── Invalidation: Target Taken Before Entry ────────────────────────
+
+  /**
+   * Returns `true` if the target price (TP) was touched after the setup
+   * candle (at `setupIndex`) but BEFORE price returned to the entry POI.
+   * Uses the broker's spread (in points) as a tolerance buffer so that
+   * a wick that is technically inside the spread is still counted as "taken".
+   *
+   * @param candles     Candles to scan (entry or setup timeframe)
+   * @param setupIndex  Index of the candle where the setup was formed
+   * @param direction   Trade direction — BUY or SELL
+   * @param tp          Take-profit price
+   * @param fractal     Optional FractalContext to read spread/point
+   */
+  public isTargetTakenBeforeEntry(
+    candles: Candle[],
+    setupIndex: number,
+    direction: "BUY" | "SELL",
+    tp: number,
+    fractal?: { spread?: number; point?: number }
+  ): boolean {
+    if (setupIndex < 0 || setupIndex >= candles.length) return false;
+
+    // Convert spread (in points) to a price distance.
+    // spread is an integer (e.g. 10), point is the tick size (e.g. 0.00001).
+    const spreadValue = (fractal?.spread || 0) * (fractal?.point || 0);
+
+    for (let i = setupIndex + 1; i < candles.length; i++) {
+      const c = candles[i];
+      // For a BUY setup, target is above — touched if wick hit TP - spread
+      if (direction === "BUY" && c.high >= tp - spreadValue) return true;
+      // For a SELL setup, target is below — touched if wick hit TP + spread
+      if (direction === "SELL" && c.low <= tp + spreadValue) return true;
+    }
+
+    return false;
   }
 
   // ── Swing Detection ────────────────────────────────────────────────

@@ -157,7 +157,21 @@ class ICTStrategy {
     // Filter out signals with R:R < 1:2 (RR < 2.0)
     // Recalculate dynamic TP based on HTF structure to maximize R:R
     const htfStr = fractal.dailyStr || fractal.directionStr;
-    const validSignals = signals.filter(sig => {
+
+    // ── Invalidation: remove setups where TP was hit before entry ────
+    const nonInvalidatedSignals = signals.filter(sig => {
+      const setupIdx = entryCandles.length - 1; // Approximate: setup is the latest candle
+      return !marketStructureService.isTargetTakenBeforeEntry(
+        entryCandles,
+        setupIdx,
+        sig.direction,
+        sig.tp,
+        fractal,
+      );
+    });
+
+    const validSignals = nonInvalidatedSignals.filter(sig => {
+
       // Find dynamic target
       sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, htfStr, 2.0);
       
