@@ -823,9 +823,13 @@ const pipeline = {
           if (!pipeline.lastAnalyzedCandleTimes.has(pauseLogKey)) {
             pipeline.lastAnalyzedCandleTimes.set(pauseLogKey, Date.now());
             const reopenTime = utcDay === 5 ? "Sunday 22:00 UTC (Mon 05:00 WIB)" : "Sunday 22:00 UTC (Mon 05:00 WIB)";
-            this.addLog(userId, "INFO",
-              `⏸️ MARKET CLOSED: Forex paused (${forexSymbols.join(", ")}). Reopens ${reopenTime}.${cryptoSymbols.length > 0 ? ` Crypto still active: ${cryptoSymbols.join(", ")}` : ""}`
-            );
+            const cryptoStatus = cryptoSymbols.length > 0 ? ` Crypto active: ${cryptoSymbols.join(", ")}` : "";
+            
+            for (const sym of forexSymbols) {
+              this.addLog(userId, "INFO",
+                `⏸️ MARKET CLOSED: Forex paused (${sym}). Reopens ${reopenTime}.${cryptoStatus}`
+              );
+            }
           }
         }
 
