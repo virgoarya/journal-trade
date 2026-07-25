@@ -291,18 +291,23 @@ function AITradingPageContent() {
               : 'hidden xl:block'
             }
           `}>
-            {/* Mobile Close Button */}
+            {/* Mobile Header (Close Button) */}
             {isTradingDrawerOpen && (
-              <button 
-                onClick={() => setIsTradingDrawerOpen(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-900 rounded-full p-2 touch-target"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="fixed top-0 left-0 right-0 p-4 bg-black/95 border-b border-accent-gold/20 flex justify-between items-center z-[60] backdrop-blur-md">
+                <span className="text-accent-gold font-bold tracking-widest uppercase text-sm font-mono">Settings & Config</span>
+                <button 
+                  onClick={() => setIsTradingDrawerOpen(false)}
+                  className="text-gray-400 hover:text-white bg-gray-800 rounded-full p-2 flex items-center justify-center active:scale-95 transition-all"
+                  aria-label="Close settings"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             )}
 
-            <TradingPanel
-              pipelineRunning={pipelineStatus?.running ?? false}
+            <div className={`${isTradingDrawerOpen ? 'mt-4' : ''} space-y-4`}>
+              <TradingPanel
+                pipelineRunning={pipelineStatus?.running ?? false}
               pipelinePaused={pipelineStatus?.paused ?? false}
               isStarting={isPipelineStarting}
               isStopping={isPipelineStopping}
@@ -321,6 +326,7 @@ function AITradingPageContent() {
               setSkillConfig(skill);
               if (isTradingDrawerOpen) setIsTradingDrawerOpen(false);
             }} />
+            </div>
           </div>
         </div>
       )}

@@ -290,23 +290,29 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
               : 'hidden xl:block'
             }
           `}>
-            {/* Mobile Close Button */}
+            {/* Mobile Header (Close Button) */}
             {isBacktestDrawerOpen && (
-              <button 
-                onClick={() => setIsBacktestDrawerOpen(false)}
-                className="absolute top-4 right-4 text-text-muted hover:text-text-primary bg-bg-input rounded-full p-2 touch-target"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="fixed top-0 left-0 right-0 p-4 bg-black/95 border-b border-accent-gold/20 flex justify-between items-center z-[60] backdrop-blur-md">
+                <span className="text-accent-gold font-bold tracking-widest uppercase text-sm font-mono">Backtest Config</span>
+                <button 
+                  onClick={() => setIsBacktestDrawerOpen(false)}
+                  className="text-gray-400 hover:text-white bg-gray-800 rounded-full p-2 flex items-center justify-center active:scale-95 transition-all"
+                  aria-label="Close settings"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             )}
 
-            <BacktestForm 
-              onRun={(config) => {
-                handleRun(config);
-                if (isBacktestDrawerOpen) setIsBacktestDrawerOpen(false);
-              }} 
-              isRunning={isStreaming} 
-            />
+            <div className={`${isBacktestDrawerOpen ? 'mt-4' : ''}`}>
+              <BacktestForm 
+                onRun={(config) => {
+                  handleRun(config);
+                  if (isBacktestDrawerOpen) setIsBacktestDrawerOpen(false);
+                }} 
+                isRunning={isStreaming} 
+              />
+            </div>
           </div>
         )}
 
