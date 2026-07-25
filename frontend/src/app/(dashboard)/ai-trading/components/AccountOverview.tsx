@@ -115,7 +115,7 @@ export function AccountOverview({
           </div>
 
           {/* Daily % & Weekly % */}
-          <div className="flex items-center gap-5 px-5 py-3 rounded-lg border border-neon-green/10 bg-black/40 flex-shrink-0">
+          <div className="flex items-center gap-4 sm:gap-5 px-4 sm:px-5 py-3 rounded-lg border border-neon-green/10 bg-black/40 flex-shrink-0 w-full sm:w-auto justify-between sm:justify-start">
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Daily</span>
               <span className={`text-sm font-mono font-bold ${dailyColor} drop-shadow-[0_0_4px_currentColor]`}>

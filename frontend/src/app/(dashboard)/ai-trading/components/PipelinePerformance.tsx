@@ -121,7 +121,7 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
       </div>
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <MetricCard icon={TrendingUp} label="Total PnL" value={`${data.totalPnL >= 0 ? "+" : ""}$${data.totalPnL.toFixed(2)}`} color={pnlColor} />
         <MetricCard icon={BarChart3} label="Win Rate" value={`${data.winRate}%`} color={data.winRate >= 50 ? "text-neon-green" : "text-neon-red"} sub={`${data.winningTrades}/${data.totalTrades}`} />
         <MetricCard icon={Percent} label="Total Trades" value={`${data.totalTrades}`} color="text-text-primary" />

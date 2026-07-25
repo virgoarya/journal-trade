@@ -184,8 +184,8 @@ function AITradingPageContent() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between mb-6 glass p-3">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 glass p-3">
+        <div className="flex items-center justify-between w-full sm:w-auto gap-3">
           <button
             onClick={() => router.push("/dashboard")}
             className="flex items-center gap-2 text-accent-gold-dim hover:text-accent-gold transition text-sm"
@@ -199,8 +199,8 @@ function AITradingPageContent() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex bg-black/40 rounded-lg p-0.5 border border-accent-gold/20 backdrop-blur-md">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="flex w-full sm:w-auto justify-center bg-black/40 rounded-lg p-0.5 border border-accent-gold/20 backdrop-blur-md">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
