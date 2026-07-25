@@ -1298,6 +1298,7 @@ class BacktestService {
           direction: trade.direction,
           entryPrice: trade.entryPrice,
           exitPrice: lastCandle.close,
+          volume: trade.volume,
           pnl,
           pnlPercent: trade.volume > 0 ? (pnl / (trade.entryPrice * trade.volume)) * 100 : 0,
           reason: "TIMEOUT",

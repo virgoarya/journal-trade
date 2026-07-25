@@ -151,7 +151,7 @@ class AITradingEngine {
       methodologyWeights,
       activeMethodologies,
       undefined, // minConfidence (use default)
-      directionStructure
+      directionStructure.trend
     );
 
     return {

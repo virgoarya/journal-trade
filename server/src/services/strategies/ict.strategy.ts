@@ -72,7 +72,7 @@ class ICTStrategy {
 
     // ─── PATH A: CRT 3-Candle AMD → ICT FVG/OTE inside zone ───────────────────
 
-    const amdResult = this.detectAMDPattern(setupCandles, htfTrend, avgRange);
+    const amdResult = this.detectAMDPattern(setupCandles, fractal.setupStr, htfTrend, avgRange);
 
     if (amdResult) {
       // Look for ICT FVG inside the AMD zone (around the sweep)
@@ -316,10 +316,12 @@ class ICTStrategy {
    */
   private detectAMDPattern(
     candles: Candle[],
+    ms: MarketStructure,
     htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
     avgRange: number,
   ): { direction: "BUY" | "SELL"; zoneHigh: number; zoneLow: number; sweepLevel: number } | null {
     if (candles.length < 2) return null;
+    if (htfTrend === "SIDEWAYS") return null; // STRICT: Do not trade sideways
 
     const c1 = candles[candles.length - 2]; // Accumulation
     const c2 = candles[candles.length - 1]; // Manipulation
@@ -327,33 +329,45 @@ class ICTStrategy {
     const c1BodyTop = Math.max(c1.open, c1.close);
     const c1BodyBot = Math.min(c1.open, c1.close);
 
-    // Bullish AMD: C2 sweeps below C1's low then closes bullish above C1's body
-    if (htfTrend !== "BEAR") {
+    // Bullish AMD: C2 sweeps below C1's low AND sweeps a recent structural swing low, then closes bullish above C1's body
+    if (htfTrend === "BULL") {
       const c2SweepLow = c2.low < c1.low;
       const c2CloseBullish = c2.close > c1BodyBot && c2.close > c2.open;
 
       if (c2SweepLow && c2CloseBullish) {
-        return {
-          direction: "BUY",
-          zoneHigh: c1BodyTop,
-          zoneLow: c2.low,
-          sweepLevel: c1.low,
-        };
+        // Enforce structural sweep inducement (must sweep a Swing Low)
+        const recentLows = ms.swingLows.filter(s => s.index >= candles.length - 15 && s.index < candles.length - 1);
+        const sweptStructural = recentLows.some(s => c2.low < s.price);
+        
+        if (sweptStructural) {
+          return {
+            direction: "BUY",
+            zoneHigh: c1BodyTop,
+            zoneLow: c2.low,
+            sweepLevel: c1.low,
+          };
+        }
       }
     }
 
-    // Bearish AMD: C2 sweeps above C1's high then closes bearish below C1's body
-    if (htfTrend !== "BULL") {
+    // Bearish AMD: C2 sweeps above C1's high AND sweeps a recent structural swing high, then closes bearish below C1's body
+    if (htfTrend === "BEAR") {
       const c2SweepHigh = c2.high > c1.high;
       const c2CloseBearish = c2.close < c1BodyTop && c2.close < c2.open;
 
       if (c2SweepHigh && c2CloseBearish) {
-        return {
-          direction: "SELL",
-          zoneHigh: c2.high,
-          zoneLow: c1BodyTop,
-          sweepLevel: c1.high,
-        };
+        // Enforce structural sweep inducement (must sweep a Swing High)
+        const recentHighs = ms.swingHighs.filter(s => s.index >= candles.length - 15 && s.index < candles.length - 1);
+        const sweptStructural = recentHighs.some(s => c2.high > s.price);
+
+        if (sweptStructural) {
+          return {
+            direction: "SELL",
+            zoneHigh: c2.high,
+            zoneLow: c1BodyTop,
+            sweepLevel: c1.high,
+          };
+        }
       }
     }
 
@@ -507,14 +521,14 @@ class ICTStrategy {
     const last = candles[candles.length - 1];
 
     // Bullish sweep: prev wick went below rangeLow, last closed back above
-    if (htfTrend !== "BEAR") {
+    if (htfTrend === "BULL") {
       if (prev.low < rangeLow && last.close > rangeLow) {
         return { direction: "BUY", sweepLevel: rangeLow };
       }
     }
 
     // Bearish sweep: prev wick went above rangeHigh, last closed back below
-    if (htfTrend !== "BULL") {
+    if (htfTrend === "BEAR") {
       if (prev.high > rangeHigh && last.close < rangeHigh) {
         return { direction: "SELL", sweepLevel: rangeHigh };
       }
@@ -607,7 +621,7 @@ class ICTStrategy {
     const rangeLow  = Math.min(...lookback.map(c => c.low));
 
     // Bullish Judas: prev dipped below recent swing low (sweep), now reversed
-    if (htfTrend !== "BEAR") {
+    if (htfTrend === "BULL") {
       const recentLows = ms.swingLows.filter(s => s.index >= candles.length - 6);
       for (const swing of recentLows) {
         if (prev.low < swing.price && last.close > swing.price) {
@@ -630,7 +644,7 @@ class ICTStrategy {
     }
 
     // Bearish Judas: prev broke above recent swing high (sweep), now reversed
-    if (htfTrend !== "BULL") {
+    if (htfTrend === "BEAR") {
       const recentHighs = ms.swingHighs.filter(s => s.index >= candles.length - 6);
       for (const swing of recentHighs) {
         if (prev.high > swing.price && last.close < swing.price) {
