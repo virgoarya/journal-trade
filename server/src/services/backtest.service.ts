@@ -793,29 +793,44 @@ class BacktestService {
 
           // 2. Trailing stop (cheap — O(1))
           if (merged.trailingStop.enabled) {
-            const trailResult = aiTradingEngine.calculateTrailingStopSL({
-              positionType: trade.direction, 
-              currentPrice, // trail updates based on Close
-              currentSL: trade.sl, 
-              atrValue: 0,
-              trailATR: merged.trailingStop.trailATR,
-              activationATR: merged.trailingStop.activationATR,
-              entryPrice: trade.entryPrice,
-            });
-            if (trailResult.shouldUpdate) {
-              const oldSL = trade.sl;
-              trade.sl = trailResult.newSL;
-              trade.trailingHistory.push({ time: currentCandle.time, oldSL, newSL: trailResult.newSL });
+            let atrValue = trade.atrAtEntry || 0;
+            if (idx >= 15) {
+              let sumTr = 0;
+              for (let i = idx - 14; i < idx; i++) {
+                const h = symState.rates[i].high;
+                const l = symState.rates[i].low;
+                const pc = symState.rates[i - 1].close;
+                const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+                sumTr += tr;
+              }
+              atrValue = sumTr / 14;
             }
 
-            // Check if trailing SL is hit using candle High/Low
-            if (trade.direction === "BUY" && currentCandle.low <= trade.sl) {
-              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
-              continue;
-            }
-            if (trade.direction === "SELL" && currentCandle.high >= trade.sl) {
-              toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
-              continue;
+            if (atrValue > 0) {
+              const trailResult = aiTradingEngine.calculateTrailingStopSL({
+                positionType: trade.direction, 
+                currentPrice, // trail updates based on Close
+                currentSL: trade.sl, 
+                atrValue: atrValue,
+                trailATR: merged.trailingStop.trailATR,
+                activationATR: merged.trailingStop.activationATR,
+                entryPrice: trade.entryPrice,
+              });
+              if (trailResult.shouldUpdate) {
+                const oldSL = trade.sl;
+                trade.sl = trailResult.newSL;
+                trade.trailingHistory.push({ time: currentCandle.time, oldSL, newSL: trailResult.newSL });
+              }
+
+              // Check if trailing SL is hit using candle High/Low
+              if (trade.direction === "BUY" && currentCandle.low <= trade.sl) {
+                toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
+                continue;
+              }
+              if (trade.direction === "SELL" && currentCandle.high >= trade.sl) {
+                toClose.push({ key, exitPrice: trade.sl, reason: "SL_HIT", exitMethodology: "Trailing Stop" });
+                continue;
+              }
             }
           }
         }

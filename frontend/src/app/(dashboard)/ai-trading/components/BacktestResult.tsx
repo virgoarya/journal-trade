@@ -301,9 +301,11 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                 <th className="text-left px-3 py-2">Entry</th>
                 <th className="text-left px-3 py-2">Exit</th>
                 <th className="text-center px-3 py-2">Dir</th>
+                <th className="text-right px-3 py-2">Lot</th>
                 <th className="text-right px-3 py-2">Entry</th>
                 <th className="text-right px-3 py-2">Exit</th>
                 <th className="text-right px-3 py-2">PnL</th>
+                <th className="text-right px-3 py-2">RR</th>
                 <th className="text-center px-3 py-2">Method</th>
                 <th className="text-center px-3 py-2">Reason</th>
                 <th className="text-center px-3 py-2">Conf</th>
@@ -313,20 +315,23 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                 {result.trades.map((t, i) => (
                   <tr key={i} className="hover:bg-bg-input/30">
                     <td className="px-3 py-2 text-text-muted font-mono">{(t as any).symbol || "-"}</td>
-                    <td className="px-3 py-2 text-text-secondary">{new Date(t.entryTime * 1000).toLocaleDateString()}</td>
-                    <td className="px-3 py-2 text-text-secondary">{new Date(t.exitTime * 1000).toLocaleDateString()}</td>
+                    <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.entryTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
+                    <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.exitTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
                     <td className="px-3 py-2 text-center"><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${t.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{t.direction}</span></td>
-                    <td className="px-3 py-2 text-right text-text-secondary">{t.entryPrice.toFixed(5)}</td>
-                    <td className="px-3 py-2 text-right text-text-secondary">{t.exitPrice.toFixed(5)}</td>
-                    <td className={`px-3 py-2 text-right font-medium ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>${t.pnl.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).volume ? (t as any).volume.toFixed(2) : "—"}</td>
+                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.entryPrice.toFixed(5)}</td>
+                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.exitPrice.toFixed(5)}</td>
+                    <td className={`px-3 py-2 text-right font-medium font-mono ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>${t.pnl.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).rr ? (t as any).rr.toFixed(2) + "R" : "—"}</td>
                     <td className="px-3 py-2 text-center">{(t as any).primaryMethodology && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-400">{(t as any).primaryMethodology}</span>}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${t.closeReason === "TP_HIT" ? "bg-green-500/10 text-green-400" : t.closeReason === "SL_HIT" ? "bg-red-500/10 text-red-400" : "bg-gray-500/10 text-text-muted"}`}>
-                        {(t as any).exitMethodology && (t as any).exitMethodology !== "Risk Management" ? `${(t as any).exitMethodology.toUpperCase()} ` : ""}{t.closeReason}
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${t.closeReason === "TP_HIT" ? "bg-green-500/10 text-green-400" : t.closeReason === "SL_HIT" ? "bg-red-500/10 text-red-400" : t.closeReason === "TRAILING_STOP" ? "bg-yellow-500/10 text-yellow-400" : "bg-gray-500/10 text-text-muted"}`}>
+                        {(t as any).exitMethodology && (t as any).exitMethodology !== "Risk Management" ? `${(t as any).exitMethodology.toUpperCase()} ` : ""}{t.closeReason === "SL_HIT" && (t as any).trailingHistory?.length > 0 ? "TRAILING_STOP" : t.closeReason}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-center text-text-secondary">{t.confidence}%</td>
+                    <td className="px-3 py-2 text-center text-text-secondary font-mono">{t.confidence}%</td>
                     <td className="px-3 py-2 text-left text-text-muted text-[10px] max-w-[100px] truncate" title={(t as any).comment || ""}>{(t as any).comment || "—"}</td>
+
                   </tr>
                 ))}
               </tbody>
