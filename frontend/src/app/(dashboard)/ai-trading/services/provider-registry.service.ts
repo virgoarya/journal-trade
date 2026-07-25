@@ -37,17 +37,25 @@ class ProviderRegistryService {
 
     // Try to load from localStorage
     try {
+      // Always load defaults first so new providers are automatically added
+      DEFAULT_PROVIDERS.forEach((p) => this.providers.set(p.name, { ...p }));
+
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (stored) {
         const parsed: LlmProviderConfig[] = JSON.parse(stored);
-        parsed.forEach((p) => this.providers.set(p.name, p));
-      } else {
-        // Load defaults
-        DEFAULT_PROVIDERS.forEach((p) => this.providers.set(p.name, p));
+        // Override defaults with saved settings
+        parsed.forEach((p) => {
+          if (this.providers.has(p.name)) {
+            this.providers.set(p.name, { ...this.providers.get(p.name)!, ...p });
+          } else {
+            this.providers.set(p.name, p);
+          }
+        });
       }
     } catch {
       // Fallback to defaults on error
-      DEFAULT_PROVIDERS.forEach((p) => this.providers.set(p.name, p));
+      this.providers.clear();
+      DEFAULT_PROVIDERS.forEach((p) => this.providers.set(p.name, { ...p }));
     }
 
     this.initialized = true;
