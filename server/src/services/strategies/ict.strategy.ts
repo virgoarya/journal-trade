@@ -132,6 +132,7 @@ class ICTStrategy {
       htfTrend,
       avgRange,
       config,
+      fractal,
     );
     if (oteAmdSignal) signals.push(oteAmdSignal);
 
@@ -154,7 +155,12 @@ class ICTStrategy {
     }
 
     // Filter out signals with R:R < 1:2 (RR < 2.0)
+    // Recalculate dynamic TP based on HTF structure to maximize R:R
+    const htfStr = fractal.dailyStr || fractal.directionStr;
     const validSignals = signals.filter(sig => {
+      // Find dynamic target
+      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, htfStr, 2.0);
+      
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
       if (slDist <= 0) return false;
@@ -628,6 +634,7 @@ class ICTStrategy {
     htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
     avgRange: number,
     config: ReturnType<typeof strategyConfigService.getICTConfig>,
+    fractal: import("./market-structure.service").FractalContext,
   ): ICTSignal | null {
     if (ms.swingHighs.length < 1 || ms.swingLows.length < 1) return null;
     if (setupCandles.length < 3) return null;
@@ -653,6 +660,12 @@ class ICTStrategy {
       const ote79  = latestHigh.price - range * 0.79;
 
       if (last.close >= ote79 && last.close <= ote618) {
+        // Enforce OTE must be inside HTF POI (OB or FVG)
+        const htf = fractal.dailyStr || fractal.directionStr;
+        const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BULLISH" && Math.max(ote79, ob.bottom) <= Math.min(ote618, ob.top)) ||
+                             htf.fairValueGaps.some(fvg => fvg.type === "BULLISH" && Math.max(ote79, fvg.bottom) <= Math.min(ote618, fvg.top));
+        
+        if (insideHTFPOI) {
         const prevHigh = ms.swingHighs.length > 1 ? ms.swingHighs[ms.swingHighs.length - 2] : null;
         const tp = prevHigh ? prevHigh.price : latestHigh.price + avgRange * 2;
 
@@ -668,6 +681,7 @@ class ICTStrategy {
           reason: `ICT OTE BUY: Fib zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
         };
       }
+      }
     }
 
     // Bearish OTE
@@ -678,20 +692,27 @@ class ICTStrategy {
       const ote79  = latestLow.price + range * 0.79;
 
       if (last.close >= ote618 && last.close <= ote79) {
-        const prevLow = ms.swingLows.length > 1 ? ms.swingLows[ms.swingLows.length - 2] : null;
-        const tp = prevLow ? prevLow.price : latestLow.price - avgRange * 2;
+        // Enforce OTE must be inside HTF POI (OB or FVG)
+        const htf = fractal.dailyStr || fractal.directionStr;
+        const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BEARISH" && Math.max(ote618, ob.bottom) <= Math.min(ote79, ob.top)) ||
+                             htf.fairValueGaps.some(fvg => fvg.type === "BEARISH" && Math.max(ote618, fvg.bottom) <= Math.min(ote79, fvg.top));
+        
+        if (insideHTFPOI) {
+          const prevLow = ms.swingLows.length > 1 ? ms.swingLows[ms.swingLows.length - 2] : null;
+          const tp = prevLow ? prevLow.price : latestLow.price - avgRange * 2;
 
-        return {
-          direction: "SELL",
-          entry: ote79,
-          sl: ote79 + avgRange * 1.2,
-          tp,
-          orderType: "PENDING_LIMIT",
-          limitPrice: ote79,
-          signalType: "OTE_AMD",
-          confidence: Math.min(88, config.minConfidence + 13),
-          reason: `ICT OTE SELL: Fib zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
-        };
+          return {
+            direction: "SELL",
+            entry: ote79,
+            sl: ote79 + avgRange * 1.2,
+            tp,
+            orderType: "PENDING_LIMIT",
+            limitPrice: ote79,
+            signalType: "OTE_AMD",
+            confidence: Math.min(88, config.minConfidence + 13),
+            reason: `ICT OTE SELL: Fib zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
+          };
+        }
       }
     }
 

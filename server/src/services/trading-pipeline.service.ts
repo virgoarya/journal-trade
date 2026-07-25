@@ -1077,29 +1077,32 @@ const pipeline = {
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] Correlation check error: ${e.message}`); }
 
+        let pipelineNewsWarnings: any[] = [];
         try {
-          const newsWindow = await newsCalendarService.isHighImpactWindow(signal.symbol, 30);
-          if (newsWindow) {
-            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (NEWS): High-impact event within 30 min window`);
-            continue;
+          // Fetch active news warnings for the day (up to 4 hours ahead instead of just 30 min)
+          pipelineNewsWarnings = await newsCalendarService.getActiveWarnings([signal.symbol]);
+          const impendingNews = pipelineNewsWarnings.filter(w => Math.abs(w.minutesUntil) <= 30);
+          if (impendingNews.length > 0) {
+            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] WARNING (NEWS): High-impact event within 30 min window. Passing to LLM for final risk assessment.`);
+            // Removed hard reject. LLM will now evaluate the risk.
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] News check error: ${e.message}`); }
 
+        let pipelineFundScore: any = undefined;
         try {
           const cachedFundamental = this.getCachedFundamental(signal.symbol);
-          let fundScore;
           if (cachedFundamental) {
-            fundScore = cachedFundamental;
+            pipelineFundScore = cachedFundamental;
           } else {
-            fundScore = await fundamentalResearchService.scorePair(signal.symbol);
-            this.setCachedFundamental(signal.symbol, fundScore);
+            pipelineFundScore = await fundamentalResearchService.scorePair(signal.symbol);
+            this.setCachedFundamental(signal.symbol, pipelineFundScore);
           }
           const aligned = !(
-            (signal.direction === "BUY" && fundScore.trendAlignment === "BEARISH") ||
-            (signal.direction === "SELL" && fundScore.trendAlignment === "BULLISH")
+            (signal.direction === "BUY" && pipelineFundScore.trendAlignment === "BEARISH") ||
+            (signal.direction === "SELL" && pipelineFundScore.trendAlignment === "BULLISH")
           );
-          if (!aligned && Math.abs(fundScore.compositeScore) >= 30) {
-            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (FUNDAMENTAL): Against fundamental trend (${fundScore.trendAlignment}, score: ${fundScore.compositeScore})`);
+          if (!aligned && Math.abs(pipelineFundScore.compositeScore) >= 30) {
+            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (FUNDAMENTAL): Against fundamental trend (${pipelineFundScore.trendAlignment}, score: ${pipelineFundScore.compositeScore})`);
             continue;
           }
         } catch (e: any) { silentLogger.warn(`[PIPELINE] Fundamental check error: ${e.message}`); }
@@ -1172,6 +1175,9 @@ const pipeline = {
                 methodologyPnL: llmMethPnL,
                 pattern: analysis.confluence.finalSignal?.pattern,
                 checklist: methChecklist,
+                fundamentalAlignment: pipelineFundScore?.trendAlignment,
+                fundamentalScore: pipelineFundScore?.compositeScore,
+                newsWarnings: pipelineNewsWarnings.length > 0 ? pipelineNewsWarnings : undefined,
               },
               pipeline.config.llmConsensus,
             );

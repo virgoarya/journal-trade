@@ -199,12 +199,16 @@ class MarketStructureService {
     const swingHighs = this.findSwingHighs(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
     const swingLows = this.findSwingLows(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
     const trend = this.analyzeTrend(swingHighs, swingLows);
-    const orderBlocks = this.detectOrderBlocks(candles, swingHighs, swingLows);
-    const fairValueGaps = this.detectFVG(candles);
+    let orderBlocks = this.detectOrderBlocks(candles, swingHighs, swingLows);
+    let fairValueGaps = this.detectFVG(candles);
     const breakerBlocks = this.detectBreakerBlocks(orderBlocks, candles, swingHighs, swingLows);
     const keyLevels = this.identifyKeyLevels(candles, swingHighs, swingLows);
-    const liquidityZones = this.detectLiquidityZones(swingHighs, swingLows);
+    let liquidityZones = this.detectLiquidityZones(swingHighs, swingLows);
     const candleRanges = this.analyzeCandleRanges(candles);
+
+    fairValueGaps = this.updateMitigations(candles, fairValueGaps);
+    orderBlocks = this.updateOBMitigations(candles, orderBlocks);
+    liquidityZones = this.updateLiquiditySweeps(candles, liquidityZones);
 
     const recentPriceAction = this.classifyRecentPriceAction(candles, candleRanges);
 
@@ -832,6 +836,41 @@ class MarketStructureService {
     return clusters;
   }
 
+  updateOBMitigations(candles: Candle[], obs: OrderBlock[]): OrderBlock[] {
+    return obs.map((ob) => {
+        if (ob.mitigated) return ob;
+        const subsequentCandles = candles.slice(ob.index + 1);
+        let mitigated = false;
+        let touchCount = 0;
+        
+        for (const c of subsequentCandles) {
+            if (ob.type === "BULLISH") {
+                if (c.low <= ob.top) touchCount++;
+                if (c.close < ob.bottom) { mitigated = true; break; }
+            } else {
+                if (c.high >= ob.bottom) touchCount++;
+                if (c.close > ob.top) { mitigated = true; break; }
+            }
+        }
+        return { ...ob, mitigated, touchCount };
+    });
+  }
+
+  updateLiquiditySweeps(candles: Candle[], zones: LiquidityZone[]): LiquidityZone[] {
+    return zones.map(lz => {
+        if (lz.swept) return lz;
+        const lastSwingIndex = Math.max(...lz.swingIndices);
+        const subsequentCandles = candles.slice(lastSwingIndex + 1);
+        let swept = false;
+        
+        for (const c of subsequentCandles) {
+            if (lz.type === "BUY_SIDE" && c.high > lz.price) { swept = true; break; }
+            if (lz.type === "SELL_SIDE" && c.low < lz.price) { swept = true; break; }
+        }
+        return { ...lz, swept };
+    });
+  }
+
   /**
    * Mark FVGs as mitigated if price has since filled the gap.
    */
@@ -1091,6 +1130,84 @@ class MarketStructureService {
     return trendlines;
   }
 
+  /**
+   * Determine a structural Take Profit (TP) based on HTF structure.
+   * Finds the nearest major liquidity zone, unmitigated OB, unfilled FVG, or swing point.
+   */
+  findDynamicTarget(
+    direction: "BUY" | "SELL",
+    entryPrice: number,
+    slPrice: number,
+    htfStr: MarketStructure,
+    minRR: number = 2.0
+  ): number {
+    const risk = Math.abs(entryPrice - slPrice);
+    const minTargetDist = risk * minRR;
+    const minTargetPrice = direction === "BUY" ? entryPrice + minTargetDist : entryPrice - minTargetDist;
+
+    let structuralTarget: number | null = null;
+    let closestDist = Infinity;
+
+    // Helper to evaluate a potential target level
+    const evaluateLevel = (price: number) => {
+        if (direction === "BUY") {
+            if (price > entryPrice && price >= minTargetPrice) {
+                const dist = price - entryPrice;
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    structuralTarget = price;
+                }
+            }
+        } else {
+            if (price < entryPrice && price <= minTargetPrice) {
+                const dist = entryPrice - price;
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    structuralTarget = price;
+                }
+            }
+        }
+    };
+
+    // 1. Check Swing Points (Liquidity Pools)
+    if (direction === "BUY") {
+        htfStr.swingHighs.forEach(sh => evaluateLevel(sh.price));
+    } else {
+        htfStr.swingLows.forEach(sl => evaluateLevel(sl.price));
+    }
+
+    // 2. Check Order Blocks (opposite direction of our trade)
+    htfStr.orderBlocks.forEach(ob => {
+        if (!ob.mitigated) {
+            if (direction === "BUY" && ob.type === "BEARISH") evaluateLevel(ob.bottom);
+            if (direction === "SELL" && ob.type === "BULLISH") evaluateLevel(ob.top);
+        }
+    });
+
+    // 3. Check FVGs (opposite direction)
+    htfStr.fairValueGaps.forEach(fvg => {
+        if (!fvg.mitigated) {
+            if (direction === "BUY" && fvg.type === "BEARISH") evaluateLevel(fvg.bottom);
+            if (direction === "SELL" && fvg.type === "BULLISH") evaluateLevel(fvg.top);
+        }
+    });
+
+    // 4. Check Liquidity Zones
+    htfStr.liquidityZones.forEach(lz => {
+        if (!lz.swept) {
+            if (direction === "BUY" && lz.type === "BUY_SIDE") evaluateLevel(lz.price);
+            if (direction === "SELL" && lz.type === "SELL_SIDE") evaluateLevel(lz.price);
+        }
+    });
+
+    // Fallback: If no structural target found that satisfies Min RR, just use Min RR target.
+    // Also, if the structural target is TOO far (e.g. > 5 RR), we might want to cap it, but for now we let it ride.
+    if (structuralTarget !== null) {
+        return structuralTarget;
+    }
+
+    return minTargetPrice; // Fallback to 1:minRR mathematically
+  }
 }
 
 export const marketStructureService = new MarketStructureService();

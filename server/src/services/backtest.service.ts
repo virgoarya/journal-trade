@@ -1,6 +1,6 @@
 import { mt5McpService, type MT5Rate } from "./mt5-mcp.service";
 import { backtestSessionManager, type BacktestSession } from './backtest-session.manager';
-import { aiTradingEngine, type Timeframe, type RSIState, type ATRState } from "./ai-trading-engine.service";
+import { aiTradingEngine, type Timeframe } from "./ai-trading-engine.service";
 import { marketStructureService } from "./strategies/market-structure.service";
 import { smcStrategy } from "./strategies/smc.strategy";
 import { ictStrategy } from "./strategies/ict.strategy";
@@ -648,19 +648,8 @@ class BacktestService {
     }
 
     // Incremental indicator state per symbol (pre-initialized with warmup data)
-    const symbolRSIState = new Map<string, RSIState>();
-    const symbolATRState = new Map<string, ATRState>();
     for (const [sym, state] of symbolStates) {
-      const rsiSt = aiTradingEngine.createRSIState();
-      rsiSt.period = RSI_PERIOD;
-      const warmupCloses = state.closes.slice(0, warmupCandles);
-      for (const c of warmupCloses) aiTradingEngine.feedRSI(rsiSt, c);
-      symbolRSIState.set(sym, rsiSt);
-
-      const atrSt = aiTradingEngine.createATRState(ATR_PERIOD);
-      const warmupRates = state.rates.slice(0, warmupCandles);
-      for (const r of warmupRates) aiTradingEngine.feedATR(atrSt, r.high, r.low, r.close);
-      symbolATRState.set(sym, atrSt);
+      // Warmup logic...
     }
 
     // Signal interval counter per symbol
@@ -736,28 +725,11 @@ class BacktestService {
         const currentCandle = symState.rates[idx];
         const currentPrice = currentCandle.close;
 
-        // ── Incremental RSI (O(1)) ────────────────────────────────
-        const rsiState = symbolRSIState.get(tc.symbol)!;
-        aiTradingEngine.feedRSI(rsiState, currentPrice);
-        const rsi = aiTradingEngine.getRSIValue(rsiState);
-
-        // ── Incremental ATR (O(1)) ────────────────────────────────
-        const atrState = symbolATRState.get(tc.symbol)!;
-        aiTradingEngine.feedATR(atrState, currentCandle.high, currentCandle.low, currentPrice);
-        const atr = aiTradingEngine.getATRValue(atrState);
-
-        // ── Engulfing (always O(1), just last 2 candles) ─────────
-        const prevCandle = idx > 0 ? symState.rates[idx - 1] : currentCandle;
-        const pattern = aiTradingEngine.detectEngulfing([
-          { time: prevCandle.time, open: prevCandle.open, high: prevCandle.high, low: prevCandle.low, close: prevCandle.close },
-          { time: currentCandle.time, open: currentCandle.open, high: currentCandle.high, low: currentCandle.low, close: currentCandle.close },
-        ]);
-
         // Store snapshot
         perSymbol.set(tc.symbol, {
           candle: currentCandle, open: currentCandle.open, high: currentCandle.high,
           low: currentCandle.low, close: currentCandle.close,
-          rsi, atr, pattern, idx,
+          idx,
         });
 
         // ── Manage open trades for THIS symbol ───────────────────

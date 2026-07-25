@@ -156,7 +156,7 @@ class MSNRStrategy {
 
         const reason = `MSNR Hybrid ${setup.direction}: HTF Sweep (${setup.sweepLevel.toFixed(5)}) at SNR (${setup.snr.price.toFixed(5)}) -> LTF MSS (${mssPrice.toFixed(5)}) -> OB Limit`;
         
-        signals.push(this.buildSignal(setup.direction, entryPrice, slPrice, "TURTLE_SOUP_OB", reason, msnrConfig, 15));
+        signals.push(this.buildSignal(setup.direction, entryPrice, slPrice, "TURTLE_SOUP_OB", reason, msnrConfig, fractal, 15));
     }
 
     // ── IPDA Context: daily bias filter for Turtle Soup ──
@@ -185,9 +185,9 @@ class MSNRStrategy {
     return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
-  private buildSignal(direction: "BUY"|"SELL", limitPrice: number, slPrice: number, type: any, reason: string, config: any, confBoost = 0): MSNRSignal {
-      const risk = Math.abs(limitPrice - slPrice);
-      const tp = direction === "BUY" ? limitPrice + (risk * 2.5) : limitPrice - (risk * 2.5); // Minimum 1:2.5 RR
+  private buildSignal(direction: "BUY"|"SELL", limitPrice: number, slPrice: number, type: any, reason: string, config: any, fractal: import("./market-structure.service").FractalContext, confBoost = 0): MSNRSignal {
+      const htfStr = fractal.dailyStr || fractal.directionStr;
+      const tp = marketStructureService.findDynamicTarget(direction, limitPrice, slPrice, htfStr, 2.5); // Minimum 1:2.5 RR
 
       const sig: MSNRSignal = {
           direction,

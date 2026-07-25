@@ -183,31 +183,15 @@ class ConfluenceEngine {
       winningDirection = "SELL";
       winningSignals = sellSignals;
     } else {
-      // Both sides have signals — resolve conflict
-      // If both sides have ≥ 2 signals each, it's a real conflict → no trade
-      if (buySignals.length >= 2 && sellSignals.length >= 2) {
-        // Check if one side clearly dominates (score ratio ≥ 1.5:1)
-        const ratio = buyScore > sellScore
-          ? buyScore / sellScore
-          : sellScore / buyScore;
-
-        if (ratio >= 1.5) {
-          winningDirection = buyScore > sellScore ? "BUY" : "SELL";
-          winningSignals = buyScore > sellScore ? buySignals : sellSignals;
-        } else {
-          return {
-            finalSignal: null,
-            allSignals: allMethodologySignals,
-            methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
-            conflictDetected: true,
-            reason: `Methodology conflict: ${buySignals.length} BUY vs ${sellSignals.length} SELL (scores: ${buyScore.toFixed(0)} vs ${sellScore.toFixed(0)})`,
-          };
-        }
-      } else {
-        // One side has more methodologies agreeing → pick that side
-        winningDirection = buySignals.length > sellSignals.length ? "BUY" : "SELL";
-        winningSignals = buySignals.length > sellSignals.length ? buySignals : sellSignals;
-      }
+      // Both sides have signals — this indicates a fundamental breakdown in HTF alignment.
+      // We immediately reject this as a conflict to avoid false positives.
+      return {
+        finalSignal: null,
+        allSignals: allMethodologySignals,
+        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
+        conflictDetected: true,
+        reason: `Methodology conflict: HTF alignment is broken (${buySignals.length} BUY vs ${sellSignals.length} SELL)`,
+      };
     }
 
     // ── 5. Calculate final signal ──────────────────────────────────

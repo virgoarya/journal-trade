@@ -410,6 +410,9 @@ function buildSignalPrompt(
     methodologyPnL?: number;
     pattern?: string;
     checklist?: Array<{ id: string; label: string; status: string; details?: string; value?: string }>;
+    fundamentalAlignment?: string;
+    fundamentalScore?: number;
+    newsWarnings?: Array<{ event: string; impact: string; minutesUntil: number }>;
   },
   correlationWarnings?: string,
   candleContext?: string
@@ -428,6 +431,19 @@ function buildSignalPrompt(
     signal.checklist.forEach(c => {
       extra += `  - ${c.label}: ${c.status} ${c.details ? `(${c.details})` : ""} ${c.value ? `[${c.value}]` : ""}\n`;
     });
+  }
+  
+  if (signal.fundamentalAlignment) {
+    extra += `\nKondisi Fundamental & Makroekonomi:\n`;
+    extra += `  - Tren Fundamental: ${signal.fundamentalAlignment}\n`;
+    extra += `  - Skor Kekuatan Fundamental: ${signal.fundamentalScore}\n`;
+    if (signal.newsWarnings && signal.newsWarnings.length > 0) {
+      extra += `  - ⚠️ PERINGATAN NEWS HIGH IMPACT HARI INI:\n`;
+      signal.newsWarnings.forEach(nw => {
+        extra += `    > ${nw.event} (${nw.impact}) dalam ${nw.minutesUntil} menit!\n`;
+      });
+      extra += `  PERHATIAN: Evaluasi apakah sinyal ini sejalan dengan berita fundamental yang akan rilis, atau justru berisiko tinggi terkena volatilitas news!\n`;
+    }
   }
 
   return `Evaluasi sinyal trading berikut secara objektif dan teknikal:
@@ -491,6 +507,9 @@ class LLMConsensusService {
       methodologyPnL?: number;
       pattern?: string;
       checklist?: Array<{ id: string; label: string; status: string; details?: string; value?: string }>;
+      fundamentalAlignment?: string;
+      fundamentalScore?: number;
+      newsWarnings?: Array<{ event: string; impact: string; minutesUntil: number }>;
     },
     config?: Partial<LLMConsensusConfig>,
   ): Promise<LLMConsensusResult> {

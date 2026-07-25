@@ -73,7 +73,12 @@ class SMCStrategy {
     }
 
     // Filter out signals with R:R < 1:2 (RR < 2.0)
+    // Recalculate dynamic TP based on HTF structure to maximize R:R
+    const htfStr = fractal.dailyStr || fractal.directionStr;
     const validSignals = signals.filter(sig => {
+      // Find dynamic target
+      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, htfStr, 2.0);
+      
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
       if (slDist <= 0) return false;
@@ -194,20 +199,32 @@ class SMCStrategy {
     const avgRangeEntry = atrEntry > 0 ? atrEntry : this.avgCandleRange(entryCandles, 5);
     const buffer = avgRangeEntry * 1.0; // was 0.5 — diperlebar agar SL tidak terlalu sempit
 
+    // Helper to check HTF context (Liquidity Sweep or OB Mitigation)
+    const hasHTFContext = (dir: "BUY" | "SELL"): boolean => {
+      const htf = fractal.dailyStr || fractal.directionStr;
+      const lzType = dir === "BUY" ? "SELL_SIDE" : "BUY_SIDE";
+      const obType = dir === "BUY" ? "BULLISH" : "BEARISH";
+      
+      const hasSweep = htf.liquidityZones.some(lz => lz.type === lzType && lz.swept);
+      const hasOBMitigation = htf.orderBlocks.some(ob => ob.type === obType && ob.touchCount > 0);
+      
+      return hasSweep || hasOBMitigation;
+    };
+
     // Look for a swing high that was just broken upward
     const recentHighs = ms.swingHighs.filter((s) => s.index >= candles.length - 10);
     for (const swing of recentHighs) {
       if (last.close > swing.price && last.high > swing.price) {
         const bodyBottom = Math.min(last.open, last.close);
-        if (bodyBottom > swing.price) {
+        if (bodyBottom > swing.price && hasHTFContext("BUY")) {
           return {
             direction: "BUY",
             entry: swing.price, // Pending BUY Limit on retest
             sl: swing.price - buffer, // SL 1× ATR below broken structure
-            tp: swing.price + buffer * 3.0, // RR 1:3
+            tp: swing.price + buffer * 3.0, // RR 1:3 (Temporary, dynamic TP is calculated later)
             breachType: "MSS",
-            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY"),
-            reason: `Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price - buffer).toFixed(5)})`,
+            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY") + 15, // Boost for HTF context
+            reason: `HTF Context + Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price - buffer).toFixed(5)})`,
           };
         }
       }
@@ -218,15 +235,15 @@ class SMCStrategy {
     for (const swing of recentLows) {
       if (last.close < swing.price && last.low < swing.price) {
         const bodyTop = Math.max(last.open, last.close);
-        if (bodyTop < swing.price) {
+        if (bodyTop < swing.price && hasHTFContext("SELL")) {
           return {
             direction: "SELL",
             entry: swing.price, // Pending SELL Limit on retest
             sl: swing.price + buffer, // SL 1× ATR above broken structure
-            tp: swing.price - buffer * 3.0, // RR 1:3
+            tp: swing.price - buffer * 3.0, // RR 1:3 (Temporary, dynamic TP is calculated later)
             breachType: "MSS",
-            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL"),
-            reason: `Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price + buffer).toFixed(5)})`,
+            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL") + 15,
+            reason: `HTF Context + Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${(swing.price + buffer).toFixed(5)})`,
           };
         }
       }
