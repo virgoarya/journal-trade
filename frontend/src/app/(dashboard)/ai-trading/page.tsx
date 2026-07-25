@@ -167,7 +167,7 @@ function AITradingPageContent() {
   ];
 
   return (
-    <div className="min-h-screen p-4 pb-24 relative z-10 font-mono">
+    <div className="min-h-screen p-4 pb-24 font-mono">
       {/* Reconnecting Overlay */}
       {isReconnecting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
