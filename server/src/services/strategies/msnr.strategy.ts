@@ -170,7 +170,6 @@ class MSNRStrategy {
       }
     }
 
-    // Filter out signals with R:R < 1:2 (RR < 2.0)
     const validSignals = signals.filter(sig => {
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
@@ -178,6 +177,22 @@ class MSNRStrategy {
       const rr = tpDist / slDist;
       return rr >= 2.0;
     });
+
+    if (validSignals.length === 0) {
+      const htfStr = fractal.dailyStr || fractal.directionStr;
+      const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
+      validSignals.push({
+        direction: dummyDir,
+        confidence: 0,
+        entry: 0,
+        sl: 0,
+        tp: 0,
+        orderType: "PENDING_LIMIT",
+        signalType: "TURTLE_SOUP_OB",
+        reason: "Scanning for setups...",
+        checklistItems: []
+      });
+    }
 
     for (const sig of validSignals) {
       sig.checklistItems = this.buildMSNRChecklist(sig, fractal);

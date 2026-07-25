@@ -253,8 +253,10 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
         } else if (log.type === "SIGNAL") {
           if (log.message.includes("NO SIGNAL")) {
             track.stages.SIGNAL = { status: "active", message: log.message, time };
+          } else if (log.message.includes("Waiting for conditions")) {
+            track.stages.SIGNAL = { status: "active", message: log.message, time, data: log.data };
           } else {
-            track.stages.SIGNAL = { status: "success", message: log.message, time };
+            track.stages.SIGNAL = { status: "success", message: log.message, time, data: log.data };
           }
           // Siklus baru: reset tahapan berikutnya
           track.stages.CONFLUENCE = { status: "pending" };
@@ -568,6 +570,31 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                       )}
                     </div>
                     <div className="whitespace-pre-wrap">{renderLogMessage(currentStepDetail.message || "")}</div>
+                    
+                    {/* Render inline checklist if provided in log data */}
+                    {currentStepDetail.data?.checklist && (
+                      <div className="mt-3 space-y-1.5 border-t border-current/10 pt-2">
+                        {currentStepDetail.data.checklist.map((item: any, idx: number) => {
+                          let iconColor = "text-neon-green";
+                          let textColor = "text-gray-200";
+                          if (item.status === "WAITING") {
+                            iconColor = "text-yellow-400 animate-pulse";
+                            textColor = "text-yellow-300";
+                          } else if (item.status === "FAILED") {
+                            iconColor = "text-neon-red";
+                            textColor = "text-gray-400 line-through opacity-70";
+                          }
+                          return (
+                            <div key={idx} className="flex items-start gap-2 bg-black/20 p-1.5 rounded border border-white/5">
+                              <div className={`mt-0.5 ${iconColor}`}>
+                                {item.status === "PASSED" ? "✓" : item.status === "WAITING" ? "◷" : "✗"}
+                              </div>
+                              <div className={textColor}>{item.label}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

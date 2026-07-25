@@ -162,6 +162,13 @@ class ConfluenceEngine {
     // ── 4. Check for conflict ──────────────────────────────────────
     const conflictDetected = buySignals.length > 0 && sellSignals.length > 0;
 
+    const checklistByMethodology: Record<string, ChecklistItem[]> = {};
+    for (const sig of allMethodologySignals) {
+      if (sig.checklistItems && sig.checklistItems.length > 0) {
+        checklistByMethodology[sig.methodology] = sig.checklistItems;
+      }
+    }
+
     let winningDirection: "BUY" | "SELL" | null = null;
     let winningSignals: MethodologySignal[] = [];
 
@@ -173,6 +180,7 @@ class ConfluenceEngine {
         methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
         conflictDetected: false,
         reason: "No methodology generated a valid signal above minimum confidence",
+        checklistByMethodology,
       };
     }
 
@@ -191,6 +199,7 @@ class ConfluenceEngine {
         methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
         conflictDetected: true,
         reason: `Methodology conflict: HTF alignment is broken (${buySignals.length} BUY vs ${sellSignals.length} SELL)`,
+        checklistByMethodology,
       };
     }
 
@@ -226,16 +235,10 @@ class ConfluenceEngine {
     const mergedChecklist: ChecklistItem[] = [];
 
     // Append technical setup items from agreeing strategy signals (excluding duplicate RR items)
-    for (const sig of winningSignals) {
+    const signalsToMerge = winningSignals.length > 0 ? winningSignals : allMethodologySignals;
+    for (const sig of signalsToMerge) {
       if (sig.checklistItems) {
         mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
-      }
-    }
-
-    const checklistByMethodology: Record<string, ChecklistItem[]> = {};
-    for (const sig of allMethodologySignals) {
-      if (sig.checklistItems && sig.checklistItems.length > 0) {
-        checklistByMethodology[sig.methodology] = sig.checklistItems;
       }
     }
 

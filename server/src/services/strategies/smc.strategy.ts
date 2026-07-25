@@ -86,6 +86,20 @@ class SMCStrategy {
       return rr >= 2.0;
     });
 
+    if (validSignals.length === 0) {
+      const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
+      validSignals.push({
+        direction: dummyDir,
+        confidence: 0,
+        entry: 0,
+        sl: 0,
+        tp: 0,
+        breachType: "MSS",
+        reason: "Scanning for setups...",
+        checklistItems: []
+      });
+    }
+
     // ── Generate Checklist Items ───────────────────────────────────────────
     for (const sig of validSignals) {
       sig.checklistItems = this.buildSMCChecklist(sig, fractal);

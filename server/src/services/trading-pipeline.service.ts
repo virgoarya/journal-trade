@@ -934,11 +934,15 @@ const pipeline = {
         return;
       }
 
-      for (const analysis of analyses) {
-        if (analysis.confluence.finalSignal) {
-          pipeline.lastAnalysis = analysis;
-        }
+      let bestAnalysisForUI = analyses.find(a => a.confluence.finalSignal) 
+                           || analyses.find(a => a.confluence.conflictDetected)
+                           || analyses[0];
 
+      if (bestAnalysisForUI) {
+        pipeline.lastAnalysis = bestAnalysisForUI;
+      }
+
+      for (const analysis of analyses) {
         const latestTime = latestCandleTimes.get(analysis.symbol);
         if (latestTime !== undefined) {
           pipeline.lastAnalyzedCandleTimes.set(analysis.symbol, latestTime);
@@ -1118,7 +1122,12 @@ const pipeline = {
 
         if (hasFailedItem) {
           const failedItems = methChecklist.filter(c => c.status !== "PASSED").map(c => c.label).join(", ");
-          this.addLog(userId, "SIGNAL", `[3.5/7] [${signal.symbol}] Scanning checklist: Technical criteria not fully met (${failedItems}). Waiting for conditions...`);
+          this.addLog(
+            userId, 
+            "SIGNAL", 
+            `[3.5/7] [${signal.symbol}] Scanning checklist: Technical criteria not fully met (${failedItems}). Waiting for conditions...`,
+            { checklist: methChecklist }
+          );
           continue;
         }
 
