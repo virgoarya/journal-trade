@@ -390,8 +390,8 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: fvg.bottom,
-          sl: fvg.bottom - avgRange * 1.5,
-          tp: fvg.top + avgRange * 2.0,
+          sl: zoneLow - avgRange * 0.2, // SL strictly below AMD sweep low (zoneLow)
+          tp: Math.max(fvg.top + avgRange * 1.5, zoneHigh), // TP targeting AMD high
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.bottom,
           signalType: "AMD_FVG",
@@ -412,8 +412,8 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: fvg.top,
-          sl: fvg.top + avgRange * 1.5,
-          tp: fvg.bottom - avgRange * 2.0,
+          sl: zoneHigh + avgRange * 0.2, // SL strictly above AMD sweep high (zoneHigh)
+          tp: Math.min(fvg.bottom - avgRange * 1.5, zoneLow), // TP targeting AMD low
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.top,
           signalType: "AMD_FVG",
@@ -455,8 +455,8 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: ote79,
-          sl: ote79 - avgRange * 1.2,
-          tp: latestHigh.price + avgRange,
+          sl: latestLow.price - avgRange * 0.2, // SL below the origin of the impulse leg
+          tp: latestHigh.price, // TP at the high of the impulse leg
           orderType: "PENDING_LIMIT",
           limitPrice: ote79,
           signalType: "AMD_OTE",
@@ -476,8 +476,8 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: ote79,
-          sl: ote79 + avgRange * 1.2,
-          tp: latestLow.price - avgRange,
+          sl: latestHigh.price + avgRange * 0.2, // SL above the origin of the impulse leg
+          tp: latestLow.price, // TP at the low of the impulse leg
           orderType: "PENDING_LIMIT",
           limitPrice: ote79,
           signalType: "AMD_OTE",

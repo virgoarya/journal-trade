@@ -54,6 +54,7 @@ export interface StreamTradeClose {
   direction: string;
   entryPrice: number;
   exitPrice: number;
+  volume?: number;
   pnl: number;
   pnlPercent: number;
   reason: string;

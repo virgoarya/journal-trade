@@ -247,6 +247,7 @@ export type BacktestStreamEvent =
         direction: string;
         entryPrice: number;
         exitPrice: number;
+        volume: number;
         pnl: number;
         pnlPercent: number;
         reason: string;
@@ -870,6 +871,7 @@ class BacktestService {
               entryTime: trade.entryTime, exitTime: currentCandle.time,
               symbol: trade.symbol, direction: trade.direction,
               entryPrice: trade.entryPrice, exitPrice,
+              volume: trade.volume,
               pnl, pnlPercent, reason, confidence: trade.confidence,
               primaryMethodology: trade.primaryMethodology,
               rr: trade.direction === "BUY" 
