@@ -473,7 +473,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                     <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#D4AF37" strokeWidth="1" opacity="0.15" />
                     <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#D4AF37" strokeWidth="1" strokeDasharray="2 4" opacity="0.25" />
                     
-                    {/* Active Data Flow Packets */}
+                    {/* Active Data Flow Packets (Dinonaktifkan karena animasi SVG + drop-shadow sangat berat di GPU mobile)
                     <line 
                       x1="0" y1="50%" x2="100%" y2="50%" 
                       stroke="#39FF88" strokeWidth="2" 
@@ -482,6 +482,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                       style={{ filter: "drop-shadow(0 0 6px rgba(57,255,136,0.8))" }}
                       opacity="0.9"
                     />
+                    */}
                   </svg>
 
                   {STAGES.map((stage, index) => {
