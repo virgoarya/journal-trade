@@ -131,7 +131,7 @@ export interface BacktestTrade {
   volume: number;
   pnl: number;
   pnlPercent: number;
-  closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT";
+  closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT" | "TRAILING_STOP";
   rsiAtEntry: number;
   atrAtEntry: number;
   pattern: string;

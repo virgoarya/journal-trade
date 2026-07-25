@@ -63,7 +63,7 @@ export interface LlmProviderConfig {
   model: string;
   color: string;
   logoPath?: string;
-  status?: "active" | "inactive" | "hibernasi";
+  status?: LlmModelStatus | "inactive";
 }
 
 /**
