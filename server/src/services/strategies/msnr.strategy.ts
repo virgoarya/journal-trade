@@ -22,7 +22,7 @@ export interface MSNRSignal {
   tp: number;
   orderType: "MARKET" | "PENDING_LIMIT";
   limitPrice?: number;
-  signalType: "TURTLE_SOUP_OB" | "TURTLE_SOUP_CISD";
+  signalType: "TURTLE_SOUP_OB" | "TURTLE_SOUP_CISD" | "QML_BULLISH" | "QML_BEARISH" | "RBS" | "SBR";
   reason: string;
   checklistItems?: ChecklistItem[];
 }
@@ -47,41 +47,57 @@ class MSNRStrategy {
 
     const ltfAtr = atrService.calculate(ltfCandles) || (Math.abs(ltfCandles[ltfCandles.length - 1].high - ltfCandles[ltfCandles.length - 1].low));
 
-    // ─── STEP 1 & 2: HTF SNR + Turtle Soup (Liquidity Sweep + Rejection) ──────
-    
-    // Find active HTF Zones where a Turtle Soup just occurred
-    const activeHtfSetups: { direction: "BUY" | "SELL", snr: MalaysianSNR, sweepLevel: number }[] = [];
-
-    // Look at the last 2 HTF candles for a sweep & rejection
+    // ─── STEP 1 & 2: MSNR Dealing Range & Inducement ──────────────
     const recentHtfCandles = htfCandles.slice(-2);
-    
-    for (const c of recentHtfCandles) {
-        // For BUY: We need price to sweep a recent Swing Low, tap into a Support SNR, and close above both.
-        const sweptLows = htfStr.swingLows.filter(sl => c.low < sl.price && c.close > sl.price);
-        if (sweptLows.length > 0) {
-            for (const snr of htfStr.malaysianSNRs.filter(s => s.type === "SUPPORT")) {
-                // Must wick below or exactly tap, and body must close above
-                if (c.low <= snr.price && Math.min(c.open, c.close) > snr.price) {
-                    activeHtfSetups.push({ direction: "BUY", snr, sweepLevel: sweptLows[0].price });
-                    break;
-                }
-            }
-        }
+    const activeHtfSetups: { direction: "BUY" | "SELL", type: "QML_BULLISH" | "QML_BEARISH" | "RBS" | "SBR", keyLevel: number, sweepLevel: number }[] = [];
 
-        // For SELL: Sweep Swing High, tap Resistance SNR, close below
-        const sweptHighs = htfStr.swingHighs.filter(sh => c.high > sh.price && c.close < sh.price);
-        if (sweptHighs.length > 0) {
-            for (const snr of htfStr.malaysianSNRs.filter(s => s.type === "RESISTANCE")) {
-                if (c.high >= snr.price && Math.max(c.open, c.close) < snr.price) {
-                    activeHtfSetups.push({ direction: "SELL", snr, sweepLevel: sweptHighs[0].price });
-                    break;
-                }
+    const bullishSetup = this.detectMSNRSetup(htfStr, "BULL");
+    if (bullishSetup) {
+      const { qmlLevel, rbsLevel, inducement, fibo50 } = bullishSetup;
+      
+      // Check if recent candles swept inducement and tapped key level
+      // For Bullish: Inducement < Fibo50 ? use QML : use RBS
+      const targetType = inducement.price < fibo50 ? "QML_BULLISH" : "RBS";
+      const targetLevel = targetType === "QML_BULLISH" ? qmlLevel : rbsLevel;
+      
+      if (targetLevel !== null && targetLevel !== undefined) {
+        const tLevel = targetLevel as number;
+        // Did price recently sweep inducement and tap targetLevel?
+        for (const c of recentHtfCandles) {
+          if (c.low < inducement.price && c.low <= tLevel) {
+            // Must reject the key level (close above it)
+            if (c.close > tLevel) {
+              activeHtfSetups.push({ direction: "BUY", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
+              break;
             }
+          }
         }
+      }
+    }
+
+    const bearishSetup = this.detectMSNRSetup(htfStr, "BEAR");
+    if (bearishSetup) {
+      const { qmlLevel, sbrLevel, inducement, fibo50 } = bearishSetup;
+      
+      const targetType = inducement.price > fibo50 ? "QML_BEARISH" : "SBR";
+      const targetLevel = targetType === "QML_BEARISH" ? qmlLevel : sbrLevel;
+      
+      if (targetLevel !== null && targetLevel !== undefined) {
+        const tLevel = targetLevel as number;
+        for (const c of recentHtfCandles) {
+          if (c.high > inducement.price && c.high >= tLevel) {
+            // Must reject the key level (close below it)
+            if (c.close < tLevel) {
+              activeHtfSetups.push({ direction: "SELL", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
+              break;
+            }
+          }
+        }
+      }
     }
 
     // Deduplicate setups
-    const uniqueSetups = activeHtfSetups.filter((v, i, a) => a.findIndex(t => (t.direction === v.direction && t.snr.price === v.snr.price)) === i);
+    const uniqueSetups = activeHtfSetups.filter((v, i, a) => a.findIndex(t => (t.direction === v.direction && t.type === v.type && t.keyLevel === v.keyLevel)) === i);
 
     // ─── STEP 3 & 4: LTF MSS + OB ─────────────────────────────────────────────
 
@@ -155,9 +171,9 @@ class MSNRStrategy {
         if (isBuy && lastLtf.close < slPrice) continue;
         if (!isBuy && lastLtf.close > slPrice) continue;
 
-        const reason = `MSNR Hybrid ${setup.direction}: HTF Sweep (${setup.sweepLevel.toFixed(5)}) at SNR (${setup.snr.price.toFixed(5)}) -> LTF MSS (${mssPrice.toFixed(5)}) -> OB Limit`;
+        const reason = `MSNR Hybrid ${setup.direction}: HTF Sweep (${setup.sweepLevel.toFixed(5)}) at ${setup.type} (${setup.keyLevel.toFixed(5)}) -> LTF MSS (${mssPrice.toFixed(5)}) -> OB Limit`;
         
-        signals.push(this.buildSignal(setup.direction, entryPrice, slPrice, "TURTLE_SOUP_OB", reason, msnrConfig, fractal, 15));
+        signals.push(this.buildSignal(setup.direction, entryPrice, slPrice, setup.type, reason, msnrConfig, fractal, 15));
     }
 
     // ── IPDA Context: daily bias filter for Turtle Soup ──
@@ -239,9 +255,92 @@ class MSNRStrategy {
       return sig;
   }
 
+  private detectMSNRSetup(htfStr: MarketStructure, direction: "BULL" | "BEAR") {
+    const { swingHighs, swingLows } = htfStr;
+    if (swingHighs.length < 3 || swingLows.length < 3) return null;
+
+    if (direction === "BULL") {
+      // Find DR_High (Recent Highest Swing High)
+      const drHigh = swingHighs[swingHighs.length - 1];
+      
+      // Find BOS_High (The previous Swing High that was broken by DR_High)
+      let bosHigh: import("./market-structure.service").SwingHigh | null = null;
+      for (let i = swingHighs.length - 2; i >= 0; i--) {
+        if (swingHighs[i].price < drHigh.price) {
+          bosHigh = swingHighs[i];
+          break;
+        }
+      }
+      if (!bosHigh) return null;
+
+      // Find DR_Low (Lowest Swing Low between BOS_High and DR_High)
+      const lowsBetween = swingLows.filter(sl => sl.index > bosHigh!.index && sl.index < drHigh.index);
+      if (lowsBetween.length === 0) return null;
+      const drLow = lowsBetween.sort((a, b) => a.price - b.price)[0]; // The Head
+
+      // Find Inducement (The first Swing Low to the left of DR_High, after DR_Low)
+      const pullbacks = swingLows.filter(sl => sl.index > drLow.index && sl.index < drHigh.index);
+      if (pullbacks.length === 0) return null;
+      const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_High
+
+      // QML Level (Left Shoulder): The Swing Low just BEFORE BOS_High
+      const lowsBeforeBOS = swingLows.filter(sl => sl.index < bosHigh!.index);
+      const leftShoulder = lowsBeforeBOS.length > 0 ? lowsBeforeBOS[lowsBeforeBOS.length - 1] : null;
+
+      const fibo50 = (drHigh.price + drLow.price) / 2;
+
+      return {
+        drHigh,
+        drLow,
+        bosHigh,
+        inducement,
+        fibo50,
+        qmlLevel: leftShoulder ? leftShoulder.price : null,
+        rbsLevel: bosHigh.price,
+      };
+
+    } else {
+      // BEARISH
+      const drLow = swingLows[swingLows.length - 1];
+      
+      let bosLow: import("./market-structure.service").SwingLow | null = null;
+      for (let i = swingLows.length - 2; i >= 0; i--) {
+        if (swingLows[i].price > drLow.price) {
+          bosLow = swingLows[i];
+          break;
+        }
+      }
+      if (!bosLow) return null;
+
+      const highsBetween = swingHighs.filter(sh => sh.index > bosLow!.index && sh.index < drLow.index);
+      if (highsBetween.length === 0) return null;
+      const drHigh = highsBetween.sort((a, b) => b.price - a.price)[0]; // The Head
+
+      const pullbacks = swingHighs.filter(sh => sh.index > drHigh.index && sh.index < drLow.index);
+      if (pullbacks.length === 0) return null;
+      const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_Low
+
+      // QML Level (Left Shoulder): The Swing High just BEFORE BOS_Low
+      const highsBeforeBOS = swingHighs.filter(sh => sh.index < bosLow!.index);
+      const leftShoulder = highsBeforeBOS.length > 0 ? highsBeforeBOS[highsBeforeBOS.length - 1] : null;
+
+      const fibo50 = (drHigh.price + drLow.price) / 2;
+
+      return {
+        drHigh,
+        drLow,
+        bosLow,
+        inducement,
+        fibo50,
+        qmlLevel: leftShoulder ? leftShoulder.price : null,
+        sbrLevel: bosLow.price,
+      };
+    }
+  }
+
   private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
-    const snrType = isBuy ? "Support (Body-based)" : "Resistance (Body-based)";
+    const snrType = sig.signalType.includes("QML") ? "QML Level" : (sig.signalType === "RBS" ? "RBS Level" : (sig.signalType === "SBR" ? "SBR Level" : "Support/Resistance"));
 
     const slDist = Math.abs(sig.entry - sig.sl);
     const tpDist = Math.abs(sig.tp - sig.entry);
