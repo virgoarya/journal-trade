@@ -62,9 +62,9 @@ class MSNRStrategy {
       
       if (targetLevel !== null && targetLevel !== undefined) {
         const tLevel = targetLevel as number;
-        // Did price recently sweep inducement and tap targetLevel?
+        // Did recent price tap targetLevel and reject it?
         for (const c of recentHtfCandles) {
-          if (c.low < inducement.price && c.low <= tLevel) {
+          if (c.low <= tLevel) {
             // Must reject the key level (close above it)
             if (c.close > tLevel) {
               activeHtfSetups.push({ direction: "BUY", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
@@ -85,7 +85,7 @@ class MSNRStrategy {
       if (targetLevel !== null && targetLevel !== undefined) {
         const tLevel = targetLevel as number;
         for (const c of recentHtfCandles) {
-          if (c.high > inducement.price && c.high >= tLevel) {
+          if (c.high >= tLevel) {
             // Must reject the key level (close below it)
             if (c.close < tLevel) {
               activeHtfSetups.push({ direction: "SELL", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
@@ -110,7 +110,7 @@ class MSNRStrategy {
 
         if (isBuy) {
             // Find a recent LTF Swing High broken by a bullish candle body
-            const recentLtfHighs = ltfStr.swingHighs.slice(-4); 
+            const recentLtfHighs = ltfStr.swingHighs.slice(-8); 
             for (const high of recentLtfHighs) {
                 const breakoutCandles = ltfCandles.slice(high.index + 1);
                 for (let i = 0; i < breakoutCandles.length; i++) {
@@ -126,7 +126,7 @@ class MSNRStrategy {
             }
         } else {
             // Find a recent LTF Swing Low broken by a bearish candle body
-            const recentLtfLows = ltfStr.swingLows.slice(-4);
+            const recentLtfLows = ltfStr.swingLows.slice(-8);
             for (const low of recentLtfLows) {
                 const breakoutCandles = ltfCandles.slice(low.index + 1);
                 for (let i = 0; i < breakoutCandles.length; i++) {
@@ -149,7 +149,7 @@ class MSNRStrategy {
             if (isBuy && ob.type !== "BULLISH") return false;
             if (!isBuy && ob.type !== "BEARISH") return false;
             if (ob.index > mssIndex) return false;
-            if (mssIndex - ob.index > 30) return false; // OB shouldn't be too old
+            if (mssIndex - ob.index > 60) return false; // OB shouldn't be too old
             return true;
         });
 
@@ -360,11 +360,11 @@ class MSNRStrategy {
     const htfStr = fractal?.dailyStr || fractal?.directionStr;
     const isHtfBosConfirmed = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
 
-    // MSNR signal types: "TURTLE_SOUP_OB" or "TURTLE_SOUP_CISD"
+    // MSNR signal types: "QML_BULLISH", "QML_BEARISH", "RBS", "SBR"
     const step1 = isHtfBosConfirmed;
-    const step2 = sig.confidence >= 50; // SNR zone detected
-    const step3 = sig.signalType.includes("TURTLE_SOUP"); // Turtle Soup pattern confirmed
-    const step4 = sig.signalType.includes("OB") || sig.signalType.includes("CISD"); // LTF MSS + OB/CISD
+    const step2 = sig.confidence >= 50; // Key level found
+    const step3 = sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR"); // Sweep confirmed
+    const step4 = step3; // Since step 4 (LTF MSS + OB) is checked in analyze() and we only push valid ones
     const step5 = isRRValid;
 
     // Cascading waterfall
