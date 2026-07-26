@@ -523,33 +523,7 @@ class MarketStructureService {
         }
       }
     }
-        const lookback = candles.slice(-20);
-        const avgRange = lookback.reduce((sum, c) => sum + (c.high - c.low), 0) / lookback.length;
 
-        for (const c of recentCandles) {
-          const body = Math.abs(c.close - c.open);
-          // If the candle body is larger than the average total range
-          if (body > avgRange * 1.2) {
-            if (c.close < c.open) strongBearishMomentum++;
-            else strongBullishMomentum++;
-          }
-        }
-
-        // If there's a strong momentum shift, override the trend for intraday responsiveness
-        if (strongBearishMomentum > 0 && strongBullishMomentum === 0) {
-           // Require price to have retraced > 50% of the previous swing range
-           if (lastHigh.price - currentPrice > (currentPrice - lastLow.price)) {
-               direction = "BEAR";
-               strength = 75; // Momentum-driven Bearish shift
-           }
-        } else if (strongBullishMomentum > 0 && strongBearishMomentum === 0) {
-           if (currentPrice - lastLow.price > (lastHigh.price - currentPrice)) {
-               direction = "BULL";
-               strength = 75; // Momentum-driven Bullish shift
-           }
-        }
-      }
-    }
 
     return { direction, strength };
   }
