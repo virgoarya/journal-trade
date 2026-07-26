@@ -283,7 +283,7 @@ export async function periodicHealthCheck(): Promise<void> {
 const SYSTEM_PROMPT = `Kamu adalah seorang ahli strategi trading profesional dengan pengalaman 15+ tahun. Tugasmu adalah menganalisis sinyal trading yang diberikan dan menghasilkan keputusan dalam format JSON dengan kunci "verdict" dan "reasoning".
 
 Aturan Analisis Sinyal (WAJIB diikuti):
-1. **Struktur Pasar (Market Structure)** — Apakah arah tren mendukung arah sinyal? (BULL/BEAR/SIDEWAYS)
+1. **Struktur & Momentum Pasar** — Perhatikan Tren HTF (Struktur Pasar) dan Momentum Jangka Pendek (Market Regime). Setup *counter-trend* (melawan tren mayor) **SANGAT VALID** jika didukung oleh *pattern* metodologi yang kuat (seperti Liquidity Sweep, Judas Swing, atau mitigasi Orderblock/FVG). Jangan tolak sinyal hanya karena melawan arus tren HTF.
 2. **Pola Teknikal Spesifik (Technical Pattern)** — Jika ada pola teknikal yang dikirim (seperti Orderblock (OB) dari SMC, Fair Value Gap (FVG) dari ICT, atau RBS/SBR/QML dari MSNR), kamu WAJIB menyebutkannya secara eksplisit dalam argumentasi.
 3. **Validasi Checklist Metodologi (Methodology Checklist)** — Sistem telah mengecek urutan checklist secara ketat untuk strategi yang terpilih. Perhatikan item checklist (seperti sweep liquidity, break of structure, dll) ini untuk memastikan setup benar-benar matang.
 4. **Konfluensi Metodologi (Methodology Confluence)** — Seberapa banyak metode yang setuju dengan sinyal ini?
@@ -399,6 +399,7 @@ function buildSignalPrompt(
     tp: number;
     reason: string;
     marketTrend: string;
+    marketRegime?: string;
     methodologyBreakdown: Record<string, { confidence: number; weight: number; contribution: number }>;
     agreeingCount: number;
     totalMethodologies: number;
@@ -418,6 +419,7 @@ function buildSignalPrompt(
   candleContext?: string
 ): string {
   let extra = "";
+  if (signal.marketRegime) extra += `\nMarket Regime (Momentum): ${signal.marketRegime}`;
   if (signal.htfTrend) extra += `\nTren HTF (Timeframe Tinggi): ${signal.htfTrend} (keyakinan: ${signal.htfConfidence}%)`;
   if (signal.symbolScore !== undefined) extra += `\nSkor Historis Simbol: ${signal.symbolScore}/100`;
   if (signal.methodologyVerdict) {
@@ -496,6 +498,7 @@ class LLMConsensusService {
       tp: number;
       reason: string;
       marketTrend: string;
+      marketRegime?: string;
       methodologyBreakdown: Record<string, any>;
       agreeingCount: number;
       totalMethodologies: number;

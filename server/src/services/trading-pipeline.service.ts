@@ -1149,6 +1149,7 @@ const pipeline = {
                 tp: signal.tp,
                 reason: signal.reason,
                 marketTrend: analysis.marketStructure.trend.direction,
+                marketRegime: currentRegime,
                 methodologyBreakdown: Object.fromEntries(
                   Object.entries(analysis.confluence.methodologyBreakdown).filter(([k]) => activeMeth.includes(k as any))
                 ),
