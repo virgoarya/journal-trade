@@ -85,7 +85,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol }: P
       {marketStructure && (
         <div className="flex flex-wrap gap-1.5">
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${trendColor(marketStructure.trend.direction)}`}>
-            {marketStructure.trend.direction === "BULL" ? "Bull" : marketStructure.trend.direction === "BEAR" ? "Bear" : "Sideways"} ({marketStructure.trend.strength}%)
+            Daily Direction: {marketStructure.trend.direction === "BULL" ? "Bullish" : marketStructure.trend.direction === "BEAR" ? "Bearish" : "Ranging"} ({marketStructure.trend.strength}%)
           </span>
         </div>
       )}

@@ -201,22 +201,24 @@ class ConfluenceEngine {
       winningDirection = "SELL";
       winningSignals = sellSignals;
     } else {
-      // Both sides have signals — this indicates a fundamental breakdown in HTF alignment.
-      // We immediately reject this as a conflict to avoid false positives.
-      return {
-        finalSignal: null,
-        allSignals: allMethodologySignals,
-        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
-        conflictDetected: true,
-        reason: `Methodology conflict: HTF alignment is broken (${buySignals.length} BUY vs ${sellSignals.length} SELL)`,
-        checklistByMethodology,
-        checklistItems: [], // No checklist on conflict
-      };
+      // Conflict Resolution: Evaluate which direction has higher total weighted confidence
+      const buyTotalConf = buySignals.reduce((s, sig) => s + sig.confidence * sig.weight, 0);
+      const sellTotalConf = sellSignals.reduce((s, sig) => s + sig.confidence * sig.weight, 0);
+      
+      const isBuyDominant = buyTotalConf > sellTotalConf;
+      winningDirection = isBuyDominant ? "BUY" : "SELL";
+      winningSignals = isBuyDominant ? buySignals : sellSignals;
+      
+      // We don't return immediately. We let the dominant side proceed,
+      // but it will be flagged as a conflict and can be penalized.
     }
-
     // ── 5. Calculate final signal ──────────────────────────────────
-    const baseScore = winningSignals.reduce((s, sig) => s + sig.confidence * sig.weight, 0)
+    let baseScore = winningSignals.reduce((s, sig) => s + sig.confidence * sig.weight, 0)
       / winningSignals.reduce((s, sig) => s + sig.weight, 0);
+      
+    if (conflictDetected) {
+      baseScore -= 10; // Apply penalty for conflicting signals
+    }
 
     // Boost based on number of agreeing methodologies
     // Disesuaikan: max 4 methodology, threshold ≥6 dihapus
@@ -280,7 +282,7 @@ class ConfluenceEngine {
       checklistByMethodology,
       checklistItems: mergedChecklist,
       conflictDetected,
-      reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})`,
+      reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})${conflictDetected ? " [CONFLICT PENALTY APPLIED]" : ""}`,
     };
   }
 
