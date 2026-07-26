@@ -423,69 +423,106 @@ class MarketStructureService {
     const activeHighs = majorHighs.length >= 2 ? majorHighs : swingHighs;
     const activeLows = majorLows.length >= 2 ? majorLows : swingLows;
 
-    const lastHigh = activeHighs[activeHighs.length - 1];
-    const prevHigh = activeHighs[activeHighs.length - 2];
-    
-    const lastLow = activeLows[activeLows.length - 1];
-    const prevLow = activeLows[activeLows.length - 2];
-
     const currentPrice = candles && candles.length > 0 ? candles[candles.length - 1].close : 0;
     
+    // --- TRUE SMC EXTERNAL STRUCTURE TRACKING ---
+    // Combine all swings chronologically to trace the dealing range
+    const allSwings = [
+      ...activeHighs.map(h => ({ ...h, type: "high" })),
+      ...activeLows.map(l => ({ ...l, type: "low" }))
+    ].sort((a, b) => a.index - b.index);
+
     let direction: "BULL" | "BEAR" | "SIDEWAYS" = "SIDEWAYS";
-    let strength = 60;
+    let strongHigh = activeHighs[0];
+    let strongLow = activeLows[0];
 
-    const isHigherHigh = lastHigh.price > prevHigh.price;
-    const isLowerHigh = lastHigh.price < prevHigh.price;
-    const isHigherLow = lastLow.price > prevLow.price;
-    const isLowerLow = lastLow.price < prevLow.price;
-
-    // Classic Dow Theory on the last 2 confirmed swings
-    if (isHigherHigh && isHigherLow) {
-      direction = "BULL";
-      strength = 70;
-    } else if (isLowerHigh && isLowerLow) {
-      direction = "BEAR";
-      strength = 70;
-    } else {
-      // Conflicting swings (Expanding or Contracting)
-      // Determine which swing happened LAST to find the most recent momentum shift
-      if (lastLow.index > lastHigh.index) {
-        // Low was formed more recently. If it's a lower low, bears took control.
-        if (isLowerLow) {
-           direction = "BEAR";
-           strength = 65;
-        } else {
-           direction = "BULL"; // Higher low formed recently, bulls defending
-           strength = 60;
+    for (let i = 0; i < allSwings.length; i++) {
+      const swing = allSwings[i];
+      if (direction === "SIDEWAYS") {
+        if (swing.type === "high") strongHigh = swing;
+        if (swing.type === "low") strongLow = swing;
+        if (strongHigh && strongLow) {
+          direction = strongHigh.index > strongLow.index ? "BULL" : "BEAR";
         }
-      } else {
-        // High was formed more recently.
-        if (isHigherHigh) {
-           direction = "BULL";
-           strength = 65;
-        } else {
-           direction = "BEAR"; // Lower high formed recently, bears defending
-           strength = 60;
+      } else if (direction === "BULL") {
+        if (swing.type === "high" && swing.price > strongHigh.price) {
+          // Bullish BOS (Continuation)
+          const lowsBetween = activeLows.filter(l => l.index >= strongHigh.index && l.index <= swing.index);
+          if (lowsBetween.length > 0) {
+            strongLow = lowsBetween.reduce((min, l) => l.price < min.price ? l : min, lowsBetween[0]);
+          }
+          strongHigh = swing;
+        } else if (swing.type === "low" && swing.price < strongLow.price) {
+          // Bearish CHoCH (Trend Reversal)
+          direction = "BEAR";
+          const highsBetween = activeHighs.filter(h => h.index >= strongLow.index && h.index <= swing.index);
+          if (highsBetween.length > 0) {
+            strongHigh = highsBetween.reduce((max, h) => h.price > max.price ? h : max, highsBetween[0]);
+          }
+          strongLow = swing;
+        }
+      } else if (direction === "BEAR") {
+        if (swing.type === "low" && swing.price < strongLow.price) {
+          // Bearish BOS (Continuation)
+          const highsBetween = activeHighs.filter(h => h.index >= strongLow.index && h.index <= swing.index);
+          if (highsBetween.length > 0) {
+            strongHigh = highsBetween.reduce((max, h) => h.price > max.price ? h : max, highsBetween[0]);
+          }
+          strongLow = swing;
+        } else if (swing.type === "high" && swing.price > strongHigh.price) {
+          // Bullish CHoCH (Trend Reversal)
+          direction = "BULL";
+          const lowsBetween = activeLows.filter(l => l.index >= strongHigh.index && l.index <= swing.index);
+          if (lowsBetween.length > 0) {
+            strongLow = lowsBetween.reduce((min, l) => l.price < min.price ? l : min, lowsBetween[0]);
+          }
+          strongHigh = swing;
         }
       }
     }
 
+    let strength = 75; // Default strength for intact SMC structure
+
     // --- REAL-TIME PRICE ACTION OVERRIDE (Active BOS & Momentum) ---
     if (currentPrice > 0) {
-      // 1. Structural Break (Active BOS)
-      if (currentPrice > lastHigh.price) {
+      // 1. Structural Break (Active BOS of the TRUE Strong High/Low)
+      if (currentPrice > strongHigh.price) {
         direction = "BULL";
         strength = 85;
-      } else if (currentPrice < lastLow.price) {
+      } else if (currentPrice < strongLow.price) {
         direction = "BEAR";
         strength = 85;
       } else if (candles && candles.length > 20) {
-        // 2. Momentum Shift (Impulsive Moves against macro trend)
+        // 2. Momentum Shift (Impulsive Moves inside the dealing range)
         const recentCandles = candles.slice(-4);
         let strongBearishMomentum = 0;
         let strongBullishMomentum = 0;
         
-        // Use average range of last 20 candles as baseline
+        const lookback = candles.slice(-20);
+        const avgRange = lookback.reduce((sum, c) => sum + (c.high - c.low), 0) / lookback.length;
+
+        for (const c of recentCandles) {
+          const body = Math.abs(c.close - c.open);
+          if (body > avgRange * 1.5) { // Increased threshold for stronger impulsive moves
+            if (c.close < c.open) strongBearishMomentum++;
+            else strongBullishMomentum++;
+          }
+        }
+
+        if (strongBearishMomentum > 0 && strongBullishMomentum === 0) {
+           // Only override if it retraced significantly from the internal high
+           if (strongHigh.price - currentPrice > (currentPrice - strongLow.price)) {
+               direction = "BEAR";
+               strength = 70; // Momentum-driven internal shift
+           }
+        } else if (strongBullishMomentum > 0 && strongBearishMomentum === 0) {
+           if (currentPrice - strongLow.price > (strongHigh.price - currentPrice)) {
+               direction = "BULL";
+               strength = 70;
+           }
+        }
+      }
+    }
         const lookback = candles.slice(-20);
         const avgRange = lookback.reduce((sum, c) => sum + (c.high - c.low), 0) / lookback.length;
 
