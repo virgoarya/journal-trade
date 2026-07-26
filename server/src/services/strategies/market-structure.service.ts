@@ -382,64 +382,72 @@ class MarketStructureService {
   // ── Trend Analysis ─────────────────────────────────────────────────
 
   analyzeTrend(swingHighs: SwingHigh[], swingLows: SwingLow[], candles?: Candle[]): Trend {
-    if (swingHighs.length < 2 && swingLows.length < 2) {
+    if (swingHighs.length < 2 || swingLows.length < 2) {
       return { direction: "SIDEWAYS", strength: 0 };
     }
 
-    // --- PRICE ACTION OVERRIDE (Intraday responsiveness) ---
-    if (candles && candles.length > 0 && swingHighs.length > 0 && swingLows.length > 0) {
-      const currentPrice = candles[candles.length - 1].close;
-      const lastHigh = swingHighs[swingHighs.length - 1].price;
-      const lastLow = swingLows[swingLows.length - 1].price;
+    const lastHigh = swingHighs[swingHighs.length - 1];
+    const prevHigh = swingHighs[swingHighs.length - 2];
+    
+    const lastLow = swingLows[swingLows.length - 1];
+    const prevLow = swingLows[swingLows.length - 2];
 
-      // If current price breaks the last swing low aggressively, it's a bearish structure shift
-      if (currentPrice < lastLow) {
-        return { direction: "BEAR", strength: 85 };
+    const currentPrice = candles && candles.length > 0 ? candles[candles.length - 1].close : 0;
+    
+    let direction: "BULL" | "BEAR" | "SIDEWAYS" = "SIDEWAYS";
+    let strength = 60;
+
+    const isHigherHigh = lastHigh.price > prevHigh.price;
+    const isLowerHigh = lastHigh.price < prevHigh.price;
+    const isHigherLow = lastLow.price > prevLow.price;
+    const isLowerLow = lastLow.price < prevLow.price;
+
+    // Classic Dow Theory on the last 2 confirmed swings
+    if (isHigherHigh && isHigherLow) {
+      direction = "BULL";
+      strength = 70;
+    } else if (isLowerHigh && isLowerLow) {
+      direction = "BEAR";
+      strength = 70;
+    } else {
+      // Conflicting swings (Expanding or Contracting)
+      // Determine which swing happened LAST to find the most recent momentum shift
+      if (lastLow.index > lastHigh.index) {
+        // Low was formed more recently. If it's a lower low, bears took control.
+        if (isLowerLow) {
+           direction = "BEAR";
+           strength = 65;
+        } else {
+           direction = "BULL"; // Higher low formed recently, bulls defending
+           strength = 60;
+        }
+      } else {
+        // High was formed more recently.
+        if (isHigherHigh) {
+           direction = "BULL";
+           strength = 65;
+        } else {
+           direction = "BEAR"; // Lower high formed recently, bears defending
+           strength = 60;
+        }
       }
-      // If current price breaks the last swing high aggressively, it's a bullish structure shift
-      if (currentPrice > lastHigh) {
-        return { direction: "BULL", strength: 85 };
+    }
+
+    // --- REAL-TIME PRICE ACTION OVERRIDE (Active BOS) ---
+    if (currentPrice > 0) {
+      // If active price is currently breaking the confirmed last high -> Bullish BOS
+      if (currentPrice > lastHigh.price) {
+        direction = "BULL";
+        strength = 85;
+      }
+      // If active price is currently breaking the confirmed last low -> Bearish BOS/CHOCH
+      else if (currentPrice < lastLow.price) {
+        direction = "BEAR";
+        strength = 85;
       }
     }
 
-    // --- MACRO STRUCTURE FALLBACK ---
-    // Count higher-highs / lower-highs in the last 4 swing highs
-    const recentHighs = swingHighs.slice(-4);
-    let higherHighs = 0;
-    let lowerHighs = 0;
-    for (let i = 1; i < recentHighs.length; i++) {
-      if (recentHighs[i].price > recentHighs[i - 1].price) higherHighs++;
-      else if (recentHighs[i].price < recentHighs[i - 1].price) lowerHighs++;
-    }
-
-    // Count higher-lows / lower-lows in the last 4 swing lows
-    const recentLows = swingLows.slice(-4);
-    let higherLows = 0;
-    let lowerLows = 0;
-    for (let i = 1; i < recentLows.length; i++) {
-      if (recentLows[i].price > recentLows[i - 1].price) higherLows++;
-      else if (recentLows[i].price < recentLows[i - 1].price) lowerLows++;
-    }
-
-    // BULL: higher highs + higher lows
-    // BEAR: lower highs + lower lows
-    const bullScore = higherHighs + higherLows;
-    const bearScore = lowerHighs + lowerLows;
-
-    if (bullScore >= 3 && bullScore > bearScore) {
-      return {
-        direction: "BULL",
-        strength: Math.min(100, 50 + (bullScore - bearScore) * 12),
-      };
-    }
-    if (bearScore >= 3 && bearScore > bullScore) {
-      return {
-        direction: "BEAR",
-        strength: Math.min(100, 50 + (bearScore - bullScore) * 12),
-      };
-    }
-
-    return { direction: "SIDEWAYS", strength: 30 };
+    return { direction, strength };
   }
 
   // ── Order Block Detection ──────────────────────────────────────────
