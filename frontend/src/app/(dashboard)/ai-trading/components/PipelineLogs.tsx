@@ -97,10 +97,10 @@ const CircuitTrace = ({ dx, dy, color, delay = "0s", className = "" }: { dx: num
      return (
        <svg width={w} height={4} className={`absolute pointer-events-none overflow-visible ${className}`} style={{ left: dx > 0 ? 0 : -w, top: -2, zIndex: -5 }}>
          <path d={`M ${dx > 0 ? 0 : w},2 L ${dx > 0 ? w : 0},2`} stroke={color} strokeWidth="2" opacity="0.4" />
-         {/* Animated striped line and drop-shadow disabled for performance
+         {/* Animated striped line disabled for performance
          <path d={`M ${dx > 0 ? 0 : w},2 L ${dx > 0 ? w : 0},2`} stroke={color} strokeWidth="2" opacity="1" strokeDasharray="6 40" className={animationClass} style={{ filter: `drop-shadow(0 0 6px ${color})`, animationDelay: delay }} />
-         <circle cx={dx > 0 ? w : 0} cy="2" r="4" fill={color} style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} className="animate-pulse" />
          */}
+         <circle cx={dx > 0 ? w : 0} cy="2" r="4" fill={color} style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} className="animate-pulse" />
        </svg>
      );
   }
@@ -135,10 +135,10 @@ const CircuitTrace = ({ dx, dy, color, delay = "0s", className = "" }: { dx: num
   return (
     <svg width={w} height={h} className={`absolute pointer-events-none overflow-visible ${className}`} style={{ left: dx > 0 ? 0 : -w, top: dy > 0 ? 0 : -h, zIndex: -5 }}>
       <path d={p} fill="none" stroke={color} strokeWidth="2" opacity="0.3" />
-      {/* Animated striped line and drop-shadow disabled for performance
+      {/* Animated striped line disabled for performance
       <path d={p} fill="none" stroke={color} strokeWidth="2" opacity="1" strokeDasharray="6 40" className={animationClass} style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} />
-      <circle cx={eX} cy={eY} r="3" fill={color} className="animate-pulse" style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} />
       */}
+      <circle cx={eX} cy={eY} r="3" fill={color} className="animate-pulse" style={{ filter: `drop-shadow(0 0 8px ${color})`, animationDelay: delay }} />
     </svg>
   );
 };
