@@ -415,11 +415,19 @@ class MarketStructureService {
       return { direction: "SIDEWAYS", strength: 0 };
     }
 
-    const lastHigh = swingHighs[swingHighs.length - 1];
-    const prevHigh = swingHighs[swingHighs.length - 2];
+    // Filter to only strong swings to avoid micro-structure fakeouts
+    const majorHighs = swingHighs.filter(h => h.strength >= 3);
+    const majorLows = swingLows.filter(l => l.strength >= 3);
+
+    // If we don't have enough major swings, fall back to the raw swings
+    const activeHighs = majorHighs.length >= 2 ? majorHighs : swingHighs;
+    const activeLows = majorLows.length >= 2 ? majorLows : swingLows;
+
+    const lastHigh = activeHighs[activeHighs.length - 1];
+    const prevHigh = activeHighs[activeHighs.length - 2];
     
-    const lastLow = swingLows[swingLows.length - 1];
-    const prevLow = swingLows[swingLows.length - 2];
+    const lastLow = activeLows[activeLows.length - 1];
+    const prevLow = activeLows[activeLows.length - 2];
 
     const currentPrice = candles && candles.length > 0 ? candles[candles.length - 1].close : 0;
     
