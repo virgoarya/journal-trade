@@ -966,7 +966,7 @@ class BacktestService {
             {
               smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null,
               msnr: msnrSignals[0] ?? null,
-            }, mw, am,
+            }, mw, am, undefined, dirMs?.trend
           );
 
           if (confluence.finalSignal) {
