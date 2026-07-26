@@ -448,6 +448,21 @@ function buildSignalPrompt(
     }
   }
 
+  let counterTrendWarning = "";
+  if (signal.marketTrend) {
+    const isBearish = signal.marketTrend.toUpperCase().includes("BEAR");
+    const isBullish = signal.marketTrend.toUpperCase().includes("BULL");
+    if ((signal.direction === "BUY" && isBearish) || (signal.direction === "SELL" && isBullish)) {
+      counterTrendWarning = `\n\n🚨 PERINGATAN KRITIS: Sinyal ini MELAWAN TREN UTAMA (Counter-Trend)! 🚨
+Tren utama adalah ${signal.marketTrend}, tetapi sinyal menyarankan ${signal.direction}.
+Sistem True SMC (ICT) MELARANG KERAS eksekusi counter-trend!
+Anda DIWAJIBKAN memilih "BAD" atau "SKIP", KECUALI jika Anda melihat secara jelas dari data:
+1. Sweep pada Previous Daily High/Low atau Major Liquidity Zone.
+2. Terjadi Opposite Market Structure Shift (CHOCH/MSS) di H1/M15 dengan Impulsive Candle (menandakan kekuatan control direction baru).
+Jika syarat reversal (Sweep + CHOCH) tersebut TIDAK TERPENUHI, tolak sinyal ini!`;
+    }
+  }
+
   return `Evaluasi sinyal trading berikut secara objektif dan teknikal:
 
 Simbol/Aset: ${signal.symbol}
@@ -461,7 +476,7 @@ Rasio Risk/Reward: ${Math.abs(signal.tp - signal.entry) > 0 ? (Math.abs(signal.t
 Alasan Dasar: ${signal.reason}
 
 Struktur Tren Market: ${signal.marketTrend}
-Jumlah Metode yang Menyetujui: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}${candleContext ? `\n${candleContext}` : ""}
+Jumlah Metode yang Menyetujui: ${signal.agreeingCount}/${signal.totalMethodologies}${extra}${correlationWarnings ? `\n${correlationWarnings}` : ""}${candleContext ? `\n${candleContext}` : ""}${counterTrendWarning}
 
 Rincian Detail Metode:
 ${JSON.stringify(signal.methodologyBreakdown, null, 2)}

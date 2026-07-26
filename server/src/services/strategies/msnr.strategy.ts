@@ -206,8 +206,16 @@ class MSNRStrategy {
       });
     }
 
-    for (const sig of validSignals) {
-      sig.checklistItems = this.buildMSNRChecklist(sig, fractal);
+    for (let i = validSignals.length - 1; i >= 0; i--) {
+      const sig = validSignals[i];
+      if (sig.confidence > 0) {
+        const validation = this.buildMSNRChecklist(sig, fractal);
+        sig.checklistItems = validation.items;
+        
+        if (!validation.passed) {
+          validSignals.splice(i, 1);
+        }
+      }
     }
 
     return validSignals.sort((a, b) => b.confidence - a.confidence);
@@ -231,7 +239,7 @@ class MSNRStrategy {
       return sig;
   }
 
-  private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): ChecklistItem[] {
+  private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
     const snrType = isBuy ? "Support (Body-based)" : "Resistance (Body-based)";
 
@@ -243,14 +251,22 @@ class MSNRStrategy {
     const setupTfLabel = fractal?.setupTimeframeStr || "H1";
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
+    
+    const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
+
+    // Extract dynamic prices
+    const relHigh = fractal && fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
+    const relLow = fractal && fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
+
+    const htfStr = fractal?.dailyStr || fractal?.directionStr;
+    const isHtfBosConfirmed = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
 
     // MSNR signal types: "TURTLE_SOUP_OB" or "TURTLE_SOUP_CISD"
-    // Evaluate each condition based on actual signal data
-    const step1 = sig.confidence >= 50; // SNR zone detected (signal exists = zone was found)
-    const step2 = sig.signalType.includes("TURTLE_SOUP"); // Turtle Soup pattern confirmed
-    const step3 = sig.confidence >= 65; // MSS confirmed at LTF (higher confidence = more structure)
-    const step4 = isRRValid;
-    const step5 = sig.confidence >= 70; // High enough confidence for pending order
+    const step1 = isHtfBosConfirmed;
+    const step2 = sig.confidence >= 50; // SNR zone detected
+    const step3 = sig.signalType.includes("TURTLE_SOUP"); // Turtle Soup pattern confirmed
+    const step4 = sig.signalType.includes("OB") || sig.signalType.includes("CISD"); // LTF MSS + OB/CISD
+    const step5 = isRRValid;
 
     // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
@@ -259,45 +275,61 @@ class MSNRStrategy {
       return stepPassed ? "PASSED" : "WAITING";
     };
 
-    const stat1 = s(step1, true);
+    const stat1 = s(step1, true, true);
     const stat2 = s(step2, step1);
     const stat3 = s(step3, step1 && step2);
-    const stat4 = s(step4, step1 && step2 && step3, true);
-    const stat5 = s(step5, step1 && step2 && step3 && step4);
+    const stat4 = s(step4, step1 && step2 && step3);
+    const stat5 = s(step5, step1 && step2 && step3 && step4, true);
 
-    return [
+    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
+
+    const items: ChecklistItem[] = [
       {
-        id: "msnr-snr-zone",
-        label: `① HTF Malaysian SNR ${snrType} ${stat1 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
+        id: "msnr-daily",
+        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        status: dailyDirection !== "SIDEWAYS" ? "PASSED" : "WAITING",
+        timeframe: "D1",
+      },
+      {
+        id: "msnr-bos",
+        label: `${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
         status: stat1,
+        timeframe: htfTfLabel,
+      },
+      {
+        id: "msnr-snr",
+        label: `② ${htfTfLabel} Malaysian SNR Zone (${snrType})`,
+        status: stat2,
         timeframe: htfTfLabel
       },
       {
-        id: "msnr-turtle-soup",
-        label: `② Turtle Soup Wick Rejection di ${snrType} ${stat2 === "PASSED" ? "terjadi" : "menunggu rejection"}`,
-        status: stat2,
-        timeframe: setupTfLabel
+        id: "msnr-turtle",
+        label: `③ ${htfTfLabel} Liquidity Sweep & Rejection (Turtle Soup)`,
+        status: stat3,
+        timeframe: htfTfLabel
       },
       {
-        id: "msnr-ltf-mss",
-        label: `③ LTF Market Structure Shift (MSS) ${isBuy ? "Bullish" : "Bearish"} (QML/RBS/SBR) ${stat3 === "PASSED" ? "terkonfirmasi" : "belum terbentuk"}`,
-        status: stat3,
+        id: "msnr-mss-ob",
+        label: `④ ${entryTfLabel} Market Structure Shift + OB/CISD (${sig.entry.toFixed(5)})`,
+        status: stat4,
         timeframe: entryTfLabel
       },
       {
         id: "msnr-rr",
-        label: `④ Minimum Risk-to-Reward 1:2 ${stat4 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        status: stat4,
+        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        status: stat5,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
-        id: "msnr-ob-limit",
-        label: `⑤ Pending Order Limit ${entryTfLabel} Placed at OB/QML ${stat5 === "PASSED" ? "terpasang" : "belum terpasang"}`,
-        status: stat5,
+        id: "msnr-entry",
+        label: `⑥ ${entryTfLabel} entry retest level OB/CISD (pending order)`,
+        status: stat4,
         timeframe: entryTfLabel,
-        value: stat5 === "PASSED" ? `${sig.entry.toFixed(5)}` : undefined
+        details: stat4 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    return { items, passed };
   }
 }
 

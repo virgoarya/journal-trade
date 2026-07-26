@@ -238,6 +238,10 @@ class ConfluenceEngine {
       if (isAligned) {
         // Boost +5 for normal alignment, +10 for strong trend (>70%)
         boost += (marketStructure.strength > 70) ? 10 : 5;
+      } else {
+        // STRICT PENALTY: If signal goes against Daily HTF structure, we must severely penalize it
+        // This stops counter-trend setups from being executed unless they are incredibly strong reversals
+        baseScore *= 0.5; // Cut score in half!
       }
     }
 

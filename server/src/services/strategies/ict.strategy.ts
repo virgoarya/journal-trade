@@ -194,6 +194,20 @@ class ICTStrategy {
       return rr >= 2.0;
     });
 
+    // ── Generate Checklist Items ───────────────────────────────────────────
+    for (let i = validSignals.length - 1; i >= 0; i--) {
+      const sig = validSignals[i];
+      if (sig.confidence > 0) {
+        const validation = this.buildICTChecklist(sig, currentKillzone, fractal);
+        sig.checklistItems = validation.items;
+        
+        // Strict Validation: Drop signal if core steps failed
+        if (!validation.passed) {
+          validSignals.splice(i, 1);
+        }
+      }
+    }
+
     if (validSignals.length === 0) {
       const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
       validSignals.push({
@@ -209,11 +223,6 @@ class ICTStrategy {
       });
     }
 
-    // ── Generate Checklist Items ───────────────────────────────────────────
-    for (const sig of validSignals) {
-      sig.checklistItems = this.buildICTChecklist(sig, currentKillzone, fractal);
-    }
-
     return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
@@ -221,7 +230,7 @@ class ICTStrategy {
     sig: ICTSignal,
     killzone: KillzoneType,
     fractal?: import("./market-structure.service").FractalContext
-  ): ChecklistItem[] {
+  ): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
     const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
 
@@ -234,6 +243,15 @@ class ICTStrategy {
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
+    const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
+    
+    // Extract dynamic prices
+    const relHigh = fractal && fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
+    const relLow = fractal && fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
+
+    const htfStr = fractal?.dailyStr || fractal?.directionStr;
+    const isHtfBosConfirmed = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
+
     // Decompose signal type into individual concepts
     const hasAMD = sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
     const hasFVG = sig.signalType.includes("FVG");
@@ -241,80 +259,77 @@ class ICTStrategy {
     const hasSweep = sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
 
     // Evaluate each condition independently
-    const step1 = killzone !== "NONE";
-    const step2 = hasAMD;
-    const step3 = hasFVG;
-    const step4 = hasOTE;
-    const step5 = hasSweep;
-    const step6 = isRRValid;
-    const step7 = sig.confidence >= 70;
+    const step1 = isHtfBosConfirmed;
+    const step2 = killzone !== "NONE";
+    const step3 = hasSweep || hasAMD;
+    const step4 = hasFVG;
+    const step5 = isRRValid;
+    const step6 = sig.confidence >= 70;
 
-    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
-    // Note: Steps 3 & 4 are alternatives (FVG or OTE), so we allow either to satisfy the chain
+    // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
       return stepPassed ? "PASSED" : "WAITING";
     };
 
-    const chainUpToStep2 = step1 && step2;
-    const hasPDArray = step3 || step4; // FVG or OTE satisfies the PD Array requirement
-    const chainUpToStep5 = chainUpToStep2 && hasPDArray && step5;
+    const stat1 = s(step1, true, true); // HTF Alignment is critical
+    const stat2 = s(step2, step1); // Killzone is preferred but maybe not critical for dropping
+    const stat3 = s(step3, step1);
+    const stat4 = s(step4, step1 && step3);
+    const stat5 = s(step5, step1 && step3 && step4, true); // RR is critical
+    const stat6 = s(step6, step1 && step3 && step4 && step5);
 
-    const stat1 = s(step1, true);
-    const stat2 = s(step2, step1);
-    const stat3 = s(step3, chainUpToStep2);
-    const stat4 = s(step4, chainUpToStep2);
-    const stat5 = s(step5, chainUpToStep2 && hasPDArray);
-    const stat6 = s(step6, chainUpToStep5, true);
-    const stat7 = s(step7, chainUpToStep5 && step6);
+    // Strict dropping
+    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
 
-    return [
+    const items: ChecklistItem[] = [
       {
-        id: "ict-killzone",
-        label: `① ${kzLabel} ${stat1 === "PASSED" ? "Aktif" : "Menunggu sesion"}`,
-        status: stat1,
-        timeframe: setupTfLabel,
-        value: killzone !== "NONE" ? killzone : "OFF_SESSION"
+        id: "ict-daily",
+        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        status: dailyDirection !== "SIDEWAYS" ? "PASSED" : "WAITING",
+        timeframe: "D1",
       },
       {
-        id: "ict-po3",
-        label: `② Power of 3 (PO3) — Fase Manipulation ${stat2 === "PASSED" ? "selesai" : "belum selesai"}`,
+        id: "ict-bos",
+        label: `${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        status: stat1,
+        timeframe: htfTfLabel,
+      },
+      {
+        id: "ict-kz",
+        label: `② ${kzLabel} (Waktu & Volatilitas)`,
         status: stat2,
+        timeframe: entryTfLabel
+      },
+      {
+        id: "ict-sweep",
+        label: `③ ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Judas Swing / AMD Sweep`,
+        status: stat3,
         timeframe: htfTfLabel
       },
       {
         id: "ict-fvg",
-        label: `③ Fair Value Gap (FVG) ${isBuy ? "Bullish" : "Bearish"} ${setupTfLabel} ${stat3 === "PASSED" ? "terdeteksi" : "tidak ditemukan"}`,
-        status: stat3,
-        timeframe: setupTfLabel
-      },
-      {
-        id: "ict-ote",
-        label: `④ Optimal Trade Entry (OTE 61.8% - 79%) ${stat4 === "PASSED" ? "tercapai" : "belum tercapai"}`,
+        label: `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation (${sig.entry.toFixed(5)})`,
         status: stat4,
-        timeframe: setupTfLabel
-      },
-      {
-        id: "ict-sweep",
-        label: `⑤ Liquidity Sweep (Turtle Soup) ${isBuy ? "Sell-Side" : "Buy-Side"} ${entryTfLabel} ${stat5 === "PASSED" ? "terjadi" : "menunggu sweep"}`,
-        status: stat5,
         timeframe: entryTfLabel
       },
       {
         id: "ict-rr",
-        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        status: stat6,
+        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        status: stat5,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
-        id: "ict-pending-placed",
-        label: `⑦ Pending Order Limit ${entryTfLabel} ${stat7 === "PASSED" ? "terpasang" : "belum terpasang"}`,
-        status: stat7,
+        id: "ict-entry",
+        label: `⑥ ${entryTfLabel} entry retest level FVG/OTE (pending order atau market execution)`,
+        status: stat6,
         timeframe: entryTfLabel,
-        details: stat7 === "PASSED" ? `Limit Price: ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi pola."
+        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    return { items, passed };
   }
 
   // ─── AMD Pattern Detection (CRT backbone) ─────────────────────────────────

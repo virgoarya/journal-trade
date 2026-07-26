@@ -101,19 +101,30 @@ class SMCStrategy {
     }
 
     // ── Generate Checklist Items ───────────────────────────────────────────
-    for (const sig of validSignals) {
-      sig.checklistItems = this.buildSMCChecklist(sig, fractal);
+    for (let i = validSignals.length - 1; i >= 0; i--) {
+      const sig = validSignals[i];
+      // Only run validation if the signal has confidence (not the dummy scanning signal)
+      if (sig.confidence > 0) {
+        const validation = this.buildSMCChecklist(sig, fractal);
+        sig.checklistItems = validation.items;
+        
+        // Strict Validation: Drop signal if any core step failed
+        if (!validation.passed) {
+          validSignals.splice(i, 1);
+        }
+      }
     }
 
     return validSignals.sort((a, b) => b.confidence - a.confidence);
   }
 
-  private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): ChecklistItem[] {
+  private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
     const pdArray = isBuy ? "Discount PD Array" : "Premium PD Array";
 
     const htfStr = fractal.dailyStr || fractal.directionStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
+    const dailyDirection = fractal.dailyStr?.trend.direction || "SIDEWAYS";
 
     const slDist = Math.abs(sig.entry - sig.sl);
     const tpDist = Math.abs(sig.tp - sig.entry);
@@ -124,6 +135,10 @@ class SMCStrategy {
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
 
+    // Extract dynamic prices
+    const relHigh = fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
+    const relLow = fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
+    
     // Evaluate each condition independently
     const step1 = isHtfBosConfirmed;
     const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;
@@ -133,62 +148,75 @@ class SMCStrategy {
     const step6 = sig.confidence >= 70;
 
     // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
-    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
       return stepPassed ? "PASSED" : "WAITING";
     };
 
-    const stat1 = s(step1, true);
+    const stat1 = s(step1, true, true); // HTF Alignment is critical
     const stat2 = s(step2, step1);
     const stat3 = s(step3, step1 && step2);
     const stat4 = s(step4, step1 && step2 && step3);
-    const stat5 = s(step5, step1 && step2 && step3 && step4, true);
+    const stat5 = s(step5, step1 && step2 && step3 && step4, true); // RR is critical
     const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
 
-    return [
+    // If step1 (HTF) or step5 (RR) failed, the whole signal is dropped.
+    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
+
+    const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
+    const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
+
+    const items: ChecklistItem[] = [
       {
-        id: "smc-bos",
-        label: `① HTF BOS ${isBuy ? "Bullish" : "Bearish"} ${htfTfLabel} ${stat1 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
-        status: stat1,
-        timeframe: htfTfLabel,
-        details: `Breach type: ${sig.breachType}`
+        id: "smc-daily",
+        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        status: dailyDirection !== "SIDEWAYS" ? "PASSED" : "WAITING",
+        timeframe: "D1",
       },
       {
-        id: "smc-liq",
-        label: `② ${isBuy ? "SSL (Sell-Side Liquidity)" : "BSL (Buy-Side Liquidity)"} ${stat2 === "PASSED" ? "tersapu" : "belum tersapu"}`,
-        status: stat2,
-        timeframe: htfTfLabel
+        id: "smc-bos",
+        label: `${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        status: stat1,
+        timeframe: htfTfLabel,
       },
       {
         id: "smc-ob",
-        label: `③ Harga ${stat3 === "PASSED" ? "berada di" : "belum mencapai"} zona OB (${pdArray})`,
+        label: `${htfTfLabel}/${setupTfLabel} PD Array detection zone contoh (${obTop} - ${obBottom})`,
         status: stat3,
         timeframe: setupTfLabel,
-        value: sig.orderBlock ? `${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)}` : undefined
+        value: sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
       },
       {
-        id: "smc-fvg",
-        label: `④ FVG ${setupTfLabel} ${isBuy ? "Bullish" : "Bearish"} ${stat4 === "PASSED" ? "terkonfirmasi" : "belum terkonfirmasi"}`,
-        status: stat4,
+        id: "smc-liq",
+        label: `${htfTfLabel}/${setupTfLabel} retest OB close candle Rejection + Liquidity Inducement swept`,
+        status: stat2,
         timeframe: setupTfLabel
       },
       {
+        id: "smc-fvg",
+        label: `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})`,
+        status: stat4,
+        timeframe: entryTfLabel
+      },
+      {
         id: "smc-rr",
-        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        label: `Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
         details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
       },
       {
         id: "smc-entry-rejection",
-        label: `⑥ Rejection candle ${entryTfLabel} & Pending Order ${stat6 === "PASSED" ? "terpasang" : "belum terpasang"}`,
+        label: `${entryTfLabel} entry retest level CISD/FVG (pending order atau market execution)`,
         status: stat6,
         timeframe: entryTfLabel,
-        details: stat6 === "PASSED" ? `Pending BUY/SELL Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    return { items, passed };
   }
+
 
   // ── Market Structure Shift ─────────────────────────────────────────
 
