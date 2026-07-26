@@ -202,7 +202,7 @@ class MarketStructureService {
   analyzeMarketStructure(candles: Candle[]): MarketStructure {
     const swingHighs = this.findSwingHighs(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
     const swingLows = this.findSwingLows(candles, SWING_LEFT_BARS, SWING_RIGHT_BARS);
-    const trend = this.analyzeTrend(swingHighs, swingLows);
+    const trend = this.analyzeTrend(swingHighs, swingLows, candles);
     let orderBlocks = this.detectOrderBlocks(candles, swingHighs, swingLows);
     let fairValueGaps = this.detectFVG(candles);
     const breakerBlocks = this.detectBreakerBlocks(orderBlocks, candles, swingHighs, swingLows);
@@ -381,11 +381,28 @@ class MarketStructureService {
 
   // ── Trend Analysis ─────────────────────────────────────────────────
 
-  analyzeTrend(swingHighs: SwingHigh[], swingLows: SwingLow[]): Trend {
+  analyzeTrend(swingHighs: SwingHigh[], swingLows: SwingLow[], candles?: Candle[]): Trend {
     if (swingHighs.length < 2 && swingLows.length < 2) {
       return { direction: "SIDEWAYS", strength: 0 };
     }
 
+    // --- PRICE ACTION OVERRIDE (Intraday responsiveness) ---
+    if (candles && candles.length > 0 && swingHighs.length > 0 && swingLows.length > 0) {
+      const currentPrice = candles[candles.length - 1].close;
+      const lastHigh = swingHighs[swingHighs.length - 1].price;
+      const lastLow = swingLows[swingLows.length - 1].price;
+
+      // If current price breaks the last swing low aggressively, it's a bearish structure shift
+      if (currentPrice < lastLow) {
+        return { direction: "BEAR", strength: 85 };
+      }
+      // If current price breaks the last swing high aggressively, it's a bullish structure shift
+      if (currentPrice > lastHigh) {
+        return { direction: "BULL", strength: 85 };
+      }
+    }
+
+    // --- MACRO STRUCTURE FALLBACK ---
     // Count higher-highs / lower-highs in the last 4 swing highs
     const recentHighs = swingHighs.slice(-4);
     let higherHighs = 0;
