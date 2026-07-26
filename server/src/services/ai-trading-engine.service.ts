@@ -99,6 +99,8 @@ class AITradingEngine {
 
     // ── 1. Market Structure Analysis & Alignment ───────────────────
     const dailyStructure = marketStructureService.analyzeMarketStructure(dailyCandles);
+    // Use Pure Price Action for Daily Trend (Intraday Bias) instead of Macro Swing Structure
+    dailyStructure.trend = marketStructureService.analyzeDailyPriceAction(dailyCandles);
     const directionStructure = marketStructureService.analyzeMarketStructure(directionCandles);
     const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
     const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);

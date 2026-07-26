@@ -379,6 +379,35 @@ class MarketStructureService {
     return swings;
   }
 
+  // ── Daily Price Action (Intraday Bias) ─────────────────────────────
+  
+  analyzeDailyPriceAction(candles: Candle[]): Trend {
+    if (candles.length < 3) return { direction: "SIDEWAYS", strength: 0 };
+    
+    const current = candles[candles.length - 1];
+    const prev = candles[candles.length - 2];
+    
+    // Pure Price Action:
+    // If today's close is above yesterday's high -> Strong Bullish
+    if (current.close > prev.high) {
+      return { direction: "BULL", strength: 80 };
+    } 
+    // If today's close is below yesterday's low -> Strong Bearish
+    else if (current.close < prev.low) {
+      return { direction: "BEAR", strength: 80 };
+    } 
+    // If today's close is just above yesterday's close -> Weak Bullish
+    else if (current.close > prev.close) {
+      return { direction: "BULL", strength: 60 };
+    } 
+    // If today's close is just below yesterday's close -> Weak Bearish
+    else if (current.close < prev.close) {
+      return { direction: "BEAR", strength: 60 };
+    }
+    
+    return { direction: "SIDEWAYS", strength: 50 };
+  }
+
   // ── Trend Analysis ─────────────────────────────────────────────────
 
   analyzeTrend(swingHighs: SwingHigh[], swingLows: SwingLow[], candles?: Candle[]): Trend {
@@ -433,17 +462,47 @@ class MarketStructureService {
       }
     }
 
-    // --- REAL-TIME PRICE ACTION OVERRIDE (Active BOS) ---
+    // --- REAL-TIME PRICE ACTION OVERRIDE (Active BOS & Momentum) ---
     if (currentPrice > 0) {
-      // If active price is currently breaking the confirmed last high -> Bullish BOS
+      // 1. Structural Break (Active BOS)
       if (currentPrice > lastHigh.price) {
         direction = "BULL";
         strength = 85;
-      }
-      // If active price is currently breaking the confirmed last low -> Bearish BOS/CHOCH
-      else if (currentPrice < lastLow.price) {
+      } else if (currentPrice < lastLow.price) {
         direction = "BEAR";
         strength = 85;
+      } else if (candles && candles.length > 20) {
+        // 2. Momentum Shift (Impulsive Moves against macro trend)
+        const recentCandles = candles.slice(-4);
+        let strongBearishMomentum = 0;
+        let strongBullishMomentum = 0;
+        
+        // Use average range of last 20 candles as baseline
+        const lookback = candles.slice(-20);
+        const avgRange = lookback.reduce((sum, c) => sum + (c.high - c.low), 0) / lookback.length;
+
+        for (const c of recentCandles) {
+          const body = Math.abs(c.close - c.open);
+          // If the candle body is larger than the average total range
+          if (body > avgRange * 1.2) {
+            if (c.close < c.open) strongBearishMomentum++;
+            else strongBullishMomentum++;
+          }
+        }
+
+        // If there's a strong momentum shift, override the trend for intraday responsiveness
+        if (strongBearishMomentum > 0 && strongBullishMomentum === 0) {
+           // Require price to have retraced > 50% of the previous swing range
+           if (lastHigh.price - currentPrice > (currentPrice - lastLow.price)) {
+               direction = "BEAR";
+               strength = 75; // Momentum-driven Bearish shift
+           }
+        } else if (strongBullishMomentum > 0 && strongBearishMomentum === 0) {
+           if (currentPrice - lastLow.price > (lastHigh.price - currentPrice)) {
+               direction = "BULL";
+               strength = 75; // Momentum-driven Bullish shift
+           }
+        }
       }
     }
 
