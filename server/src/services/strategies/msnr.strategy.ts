@@ -391,7 +391,7 @@ class MSNRStrategy {
       },
       {
         id: "msnr-bos",
-        label: `${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        label: `① ${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
         status: stat1,
         timeframe: htfTfLabel,
       },
@@ -417,7 +417,7 @@ class MSNRStrategy {
         id: "msnr-rr",
         label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
-        details: stat4 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
+        details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       },
       {
         id: "msnr-entry",

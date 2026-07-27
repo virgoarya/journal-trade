@@ -176,38 +176,38 @@ class SMCStrategy {
       },
       {
         id: "smc-bos",
-        label: `${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        label: `① ${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
         status: stat1,
         timeframe: htfTfLabel,
       },
       {
-        id: "smc-ob",
-        label: sig.orderBlock ? `${htfTfLabel}/${setupTfLabel} PD Array detection zone (${obBottom} - ${obTop})` : `${htfTfLabel}/${setupTfLabel} PD Array detection zone`,
-        status: stat3,
-        timeframe: setupTfLabel,
-        value: sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
-      },
-      {
         id: "smc-liq",
-        label: `${htfTfLabel}/${setupTfLabel} retest OB close candle Rejection + Liquidity Inducement swept`,
+        label: `② ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Zone Swept`,
         status: stat2,
         timeframe: setupTfLabel
       },
       {
+        id: "smc-ob",
+        label: stat3 === "PASSED" && sig.orderBlock ? `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block (${obBottom} - ${obTop})` : `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block detection zone`,
+        status: stat3,
+        timeframe: setupTfLabel,
+        value: stat3 === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
+      },
+      {
         id: "smc-fvg",
-        label: stat4 === "PASSED" ? `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})` : `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG`,
+        label: stat4 === "PASSED" ? `④ ${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG`,
         status: stat4,
         timeframe: entryTfLabel
       },
       {
         id: "smc-rr",
-        label: `Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
-        details: stat4 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
+        details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       },
       {
         id: "smc-entry-rejection",
-        label: `${entryTfLabel} entry retest level CISD/FVG (pending order atau market execution)`,
+        label: `⑥ ${entryTfLabel} entry retest level CISD/FVG (pending order atau market execution)`,
         status: stat6,
         timeframe: entryTfLabel,
         details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
