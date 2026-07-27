@@ -161,6 +161,9 @@ class ConfluenceEngine {
     const buyScore = calculateWeightedScore(buySignals);
     const sellScore = calculateWeightedScore(sellSignals);
 
+    // ── 4. Check for conflict ──────────────────────────────────────
+    const conflictDetected = buySignals.length > 0 && sellSignals.length > 0;
+
     // ── Extract checklistByMethodology from all raw methodology signals ──
     const checklistByMethodology: Record<string, ChecklistItem[]> = {};
     for (const mKey of activeMethodologies) {
