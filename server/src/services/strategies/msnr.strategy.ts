@@ -386,7 +386,7 @@ class MSNRStrategy {
       {
         id: "msnr-daily",
         label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
-        status: dailyDirection !== "SIDEWAYS" ? "PASSED" : "WAITING",
+        status: "PASSED",
         timeframe: "D1",
       },
       {

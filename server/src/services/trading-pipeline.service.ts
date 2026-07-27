@@ -1025,15 +1025,16 @@ const pipeline = {
         // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
         const checklist = analysis.confluence.finalSignal?.checklistItems || [];
         const methChecklist = checklist.filter(c => !c.id.startsWith("pipeline-step-"));
-        const hasFailedItem = methChecklist.some(c => c.status === "FAILED");
+        
+        const unpassedItems = methChecklist.filter(c => c.status !== "PASSED");
 
-        if (hasFailedItem) {
-          const failedItems = methChecklist.filter(c => c.status === "FAILED").map(c => c.label).join(", ");
+        if (unpassedItems.length > 0) {
+          const unpassedLabels = unpassedItems.map(c => `${c.label} [${c.status}]`).join(", ");
           this.addLog(
             userId, 
             "CONFLUENCE", 
-            `[3.5/7] [${signal.symbol}] Scanning checklist: Technical criteria not fully met (${failedItems}). Waiting for conditions...`,
-            { checklist: methChecklist }
+            `[3.5/7] [${signal.symbol}] Checklist validation incomplete (${unpassedItems.length} criteria pending/waiting). Skipping LLM voting until ALL criteria are PASSED.`,
+            { checklist: methChecklist, pendingCriteria: unpassedLabels }
           );
           continue;
         }
