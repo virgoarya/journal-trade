@@ -137,10 +137,10 @@ const CircuitTrace = ({ dx, dy, color, delay = "0s", className = "" }: { dx: num
 };
 
 const DECORATIVE_TRACES = [
-  [{ dx: 85, dy: -16, delay: '0s' }, { dx: 70, dy: 16, delay: '0.2s' }, { dx: 95, dy: -8, delay: '0.4s' }],
-  [{ dx: 80, dy: -24, delay: '0.1s' }, { dx: 90, dy: 12, delay: '0.8s' }, { dx: -75, dy: 20, delay: '0.3s' }, { dx: -65, dy: -12, delay: '0.5s' }],
-  [{ dx: 85, dy: 20, delay: '0.6s' }, { dx: -80, dy: -16, delay: '0.9s' }, { dx: 95, dy: -12, delay: '0.4s' }, { dx: -70, dy: 8, delay: '0.7s' }],
-  [{ dx: -80, dy: 16, delay: '1s' }, { dx: 85, dy: -20, delay: '0.1s' }, { dx: -90, dy: -12, delay: '0.5s' }, { dx: 75, dy: 8, delay: '0.2s' }],
+  [{ dx: 50, dy: -12, delay: '0s' }, { dx: 55, dy: 12, delay: '0.2s' }],
+  [{ dx: -50, dy: 12, delay: '0.3s' }, { dx: -55, dy: -8, delay: '0.5s' }, { dx: 50, dy: -12, delay: '0.1s' }, { dx: 55, dy: 8, delay: '0.8s' }],
+  [{ dx: -50, dy: -12, delay: '0.6s' }, { dx: -55, dy: 12, delay: '0.9s' }, { dx: 50, dy: -8, delay: '0.4s' }, { dx: 55, dy: 12, delay: '0.7s' }],
+  [{ dx: -50, dy: 12, delay: '1s' }, { dx: -55, dy: -12, delay: '0.1s' }],
 ];
 
 export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {

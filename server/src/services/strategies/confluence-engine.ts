@@ -121,12 +121,12 @@ class ConfluenceEngine {
     for (const methodology of activeMethodologies) {
       const signal = signals[methodology as keyof AllMethodologySignals];
       if (!signal) continue;
-      if (signal.confidence < minConfidence) continue;
-
       // For methodologies that can have multiple signals (like SMC, ICT, etc.),
       // just take the first/best one from the strategy output
       const processed = Array.isArray(signal) ? signal[0] : signal;
       if (!processed) continue;
+      
+      if (processed.confidence < minConfidence) continue;
 
       let pattern = undefined;
       if ("breachType" in processed) pattern = (processed as any).breachType;
