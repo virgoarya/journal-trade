@@ -2,10 +2,7 @@ import { mt5McpService, CircuitBreaker } from "./mt5-mcp.service";
 import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis, type Candle } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
-import { newsCalendarService } from "./news-calendar.service";
-import { fundamentalResearchService } from "./fundamental-research.service";
-import { marketRegimeService } from "./market-regime.service";
-import { multiTimeframeService } from "./multi-timeframe.service";
+
 import { tradeExitStrategyService } from "./trade-exit-strategy.service";
 import { AITradingSession } from "../models/AITradingSession";
 import { AITradeLog } from "../models/AITradeLog";
@@ -167,37 +164,7 @@ class TradingPipelineService {
   > = new Map();
 
 
-  // ─── Cache ────────────────────────────────────────────────────────────
-  private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
-  private fundamentalCache = new Map<string, { score: any; timestamp: number }>();
-  private readonly REGIME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
-  private readonly FUNDAMENTAL_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
-  private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
-    const cached = this.regimeCache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.REGIME_CACHE_TTL_MS) {
-      return { regime: cached.regime, multipliers: cached.multipliers };
-    }
-    if (cached) this.regimeCache.delete(key);
-    return null;
-  }
-
-  private setCachedRegime(key: string, regime: string, multipliers: Record<string, number>): void {
-    this.regimeCache.set(key, { regime, multipliers, timestamp: Date.now() });
-  }
-
-  private getCachedFundamental(symbol: string): any | null {
-    const cached = this.fundamentalCache.get(symbol);
-    if (cached && Date.now() - cached.timestamp < this.FUNDAMENTAL_CACHE_TTL_MS) {
-      return cached.score;
-    }
-    if (cached) this.fundamentalCache.delete(symbol);
-    return null;
-  }
-
-  private setCachedFundamental(symbol: string, score: any): void {
-    this.fundamentalCache.set(symbol, { score, timestamp: Date.now() });
-  }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────
 
@@ -1038,76 +1005,6 @@ const pipeline = {
 
         this.addLog(userId, "INFO", `[2/7] [${signal.symbol}] RISK CHECK: Passed (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`);
 
-        // ── STEP 3: MARKET FILTERS (Correlation, News, Fundamental, HTF) ─────
-        try {
-          const symbolsCount = pipeline.config.symbols.length;
-          const maxBase = symbolsCount <= 1 
-            ? pipeline.config.maxOpenPositions 
-            : Math.max(2, Math.ceil(pipeline.config.maxOpenPositions * 0.7));
-          const maxQuote = symbolsCount <= 1
-            ? pipeline.config.maxOpenPositions
-            : Math.max(3, Math.ceil(pipeline.config.maxOpenPositions * 0.8));
-
-          const corrCheck = await riskManagerService.checkCorrelationRisk(
-            signal.symbol,
-            maxBase,
-            maxQuote
-          );
-          if (!corrCheck.allowed) {
-            this.addLog(userId, "ERROR", `[3/7] [${signal.symbol}] REJECTED (CORRELATION): ${corrCheck.reason}`);
-            continue;
-          }
-        } catch (e: any) { silentLogger.warn(`[PIPELINE] Correlation check error: ${e.message}`); }
-
-        let pipelineNewsWarnings: any[] = [];
-        try {
-          // Fetch active news warnings for the day (up to 4 hours ahead instead of just 30 min)
-          pipelineNewsWarnings = await newsCalendarService.getActiveWarnings([signal.symbol]);
-          const impendingNews = pipelineNewsWarnings.filter(w => Math.abs(w.minutesUntil) <= 30);
-          if (impendingNews.length > 0) {
-            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] WARNING (NEWS): High-impact event within 30 min window. Passing to LLM for final risk assessment.`);
-            // Removed hard reject. LLM will now evaluate the risk.
-          }
-        } catch (e: any) { silentLogger.warn(`[PIPELINE] News check error: ${e.message}`); }
-
-        let pipelineFundScore: any = undefined;
-        try {
-          const cachedFundamental = this.getCachedFundamental(signal.symbol);
-          if (cachedFundamental) {
-            pipelineFundScore = cachedFundamental;
-          } else {
-            pipelineFundScore = await fundamentalResearchService.scorePair(signal.symbol);
-            this.setCachedFundamental(signal.symbol, pipelineFundScore);
-          }
-          const aligned = !(
-            (signal.direction === "BUY" && pipelineFundScore.trendAlignment === "BEARISH") ||
-            (signal.direction === "SELL" && pipelineFundScore.trendAlignment === "BULLISH")
-          );
-          if (!aligned && Math.abs(pipelineFundScore.compositeScore) >= 30) {
-            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] REJECTED (FUNDAMENTAL): Against fundamental trend (${pipelineFundScore.trendAlignment}, score: ${pipelineFundScore.compositeScore})`);
-            continue;
-          }
-        } catch (e: any) { silentLogger.warn(`[PIPELINE] Fundamental check error: ${e.message}`); }
-
-        try {
-          const htfCheck = await multiTimeframeService.checkConfluence(
-            signal.symbol, pipeline.config.timeframe, signal.direction,
-          );
-          
-          const primaryMeth = analysis.confluence.finalSignal?.primaryMethodology || "";
-          const isPriceActionStrategy = ["smc", "ict", "msnr"].includes(primaryMeth.toLowerCase());
-
-          if (!htfCheck.isAligned && htfCheck.confidence < 50) {
-            if (isPriceActionStrategy) {
-              this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] HTF EMA Conflict (${htfCheck.details}), but BYPASSED because ${primaryMeth.toUpperCase()} uses structural HTF alignment.`);
-            } else {
-              this.addLog(userId, "SIGNAL", `[3/7] [${signal.symbol}] REJECTED (HTF): Conflict with higher timeframe (${htfCheck.details})`);
-              continue;
-            }
-          } else {
-            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] MARKET FILTERS PASSED (HTF: ${htfCheck.htfTrend ?? 'ALIGNED'}, Conf: ${htfCheck.confidence}%)`);
-          }
-        } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
         // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
         const checklist = analysis.confluence.finalSignal?.checklistItems || [];
@@ -1137,9 +1034,7 @@ const pipeline = {
               `[4/7] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
             );
 
-            let llmHtfTrend: string | undefined;
-            let llmHtfConf: number | undefined;
-            try { const h = await multiTimeframeService.checkConfluence(signal.symbol, pipeline.config.timeframe, signal.direction); llmHtfTrend = h.htfTrend; llmHtfConf = h.confidence; } catch {}
+
             let llmSymScore: number | undefined;
             let llmMethV: string | undefined;
             let llmMethWR: number | undefined;
@@ -1164,17 +1059,14 @@ const pipeline = {
                 ),
                 agreeingCount: analysis.confluence.finalSignal?.totalAgreeing ?? 0,
                 totalMethodologies: activeMeth.length,
-                htfTrend: llmHtfTrend,
-                htfConfidence: llmHtfConf,
+
                 symbolScore: llmSymScore,
                 methodologyVerdict: llmMethV,
                 methodologyWinRate: llmMethWR,
                 methodologyPnL: llmMethPnL,
                 pattern: analysis.confluence.finalSignal?.pattern,
                 checklist: methChecklist,
-                fundamentalAlignment: pipelineFundScore?.trendAlignment,
-                fundamentalScore: pipelineFundScore?.compositeScore,
-                newsWarnings: pipelineNewsWarnings.length > 0 ? pipelineNewsWarnings : undefined,
+
               },
               pipeline.config.llmConsensus,
             );
