@@ -1093,11 +1093,20 @@ const pipeline = {
           const htfCheck = await multiTimeframeService.checkConfluence(
             signal.symbol, pipeline.config.timeframe, signal.direction,
           );
+          
+          const primaryMeth = analysis.confluence.finalSignal?.primaryMethodology || "";
+          const isPriceActionStrategy = ["smc", "ict", "msnr"].includes(primaryMeth.toLowerCase());
+
           if (!htfCheck.isAligned && htfCheck.confidence < 50) {
-            this.addLog(userId, "SIGNAL", `[3/7] [${signal.symbol}] REJECTED (HTF): Conflict with higher timeframe (${htfCheck.details})`);
-            continue;
+            if (isPriceActionStrategy) {
+              this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] HTF EMA Conflict (${htfCheck.details}), but BYPASSED because ${primaryMeth.toUpperCase()} uses structural HTF alignment.`);
+            } else {
+              this.addLog(userId, "SIGNAL", `[3/7] [${signal.symbol}] REJECTED (HTF): Conflict with higher timeframe (${htfCheck.details})`);
+              continue;
+            }
+          } else {
+            this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] MARKET FILTERS PASSED (HTF: ${htfCheck.htfTrend ?? 'ALIGNED'}, Conf: ${htfCheck.confidence}%)`);
           }
-          this.addLog(userId, "INFO", `[3/7] [${signal.symbol}] MARKET FILTERS PASSED (HTF: ${htfCheck.htfTrend ?? 'ALIGNED'}, Conf: ${htfCheck.confidence}%)`);
         } catch (e: any) { silentLogger.warn(`[PIPELINE] HTF check error: ${e.message}`); }
 
         // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
