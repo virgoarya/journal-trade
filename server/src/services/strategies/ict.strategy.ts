@@ -332,10 +332,12 @@ class ICTStrategy {
       }
     ];
 
-    const passed = items.every(item => item.status === "PASSED");
+    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
 
     return { items, passed };
   }
+
+
 
   // ─── AMD Pattern Detection (CRT backbone) ─────────────────────────────────
 
