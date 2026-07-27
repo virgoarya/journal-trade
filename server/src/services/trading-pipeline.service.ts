@@ -942,7 +942,7 @@ const pipeline = {
         if (!analysis.confluence.finalSignal) {
           if (analysis.confluence.conflictDetected) {
             this.addLog(userId, "CONFLUENCE",
-              `[1/7] [${analysis.symbol}] NO TRADE: ${analysis.confluence.reason}`,
+              `[2/4] [${analysis.symbol}] NO TRADE: ${analysis.confluence.reason}`,
               analysis.confluence.methodologyBreakdown,
             );
           } else {
@@ -955,7 +955,7 @@ const pipeline = {
               ? ` | SMC:${analysis.methodologySignals.smc.length} ICT:${analysis.methodologySignals.ict.length} MSNR:${analysis.methodologySignals.msnr.length} raw`
               : "";
             this.addLog(userId, "SIGNAL",
-              `[1/7] [${analysis.symbol}] NO SIGNAL. Votes: ${votes || "none"}${alignInfo}`,
+              `[1/4] [${analysis.symbol}] NO SIGNAL. Votes: ${votes || "none"}${alignInfo}`,
               breakdown,
             );
           }
@@ -967,9 +967,9 @@ const pipeline = {
         const tpDistInitial = Math.abs(finalSig.tp - finalSig.entry);
         const rrInitial = slDistInitial > 0 ? (tpDistInitial / slDistInitial) : 0;
 
-        // ── STEP 1: CONFLUENCE ANALYSIS ACCEPTED ─────────────────────────────
-        this.addLog(userId, "CONFLUENCE",
-          `[1/7] [${analysis.symbol}] CONFLUENCE SIGNAL: ${finalSig.direction} | ` +
+        // ── STAGE 1: SIGNAL FORMED (100% CHECKLIST PASSED) ─────────────────────
+        this.addLog(userId, "SIGNAL",
+          `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
           `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
           `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
           `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
@@ -993,64 +993,17 @@ const pipeline = {
 
         pipeline.lastSignal = signal;
 
-        // ── STEP 2: PRE-TRADE RISK CHECK ─────────────────────────────────────
-        let currentPosCount = 0;
-        let symbolPosCount = 0;
-        try {
-          const positions = await mt5McpService.getPositions();
-          currentPosCount = positions.length;
-          symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
-        } catch {}
-
-        const riskCheck = await riskManagerService.checkTradeAllowed(
-          userId,
-          signal,
-          {
-            maxOpenPositions: pipeline.config.maxOpenPositions,
-            maxDailyRisk: pipeline.config.maxDailyRisk,
-            maxRiskPerTrade: pipeline.config.maxRiskPerTrade,
-          },
-        );
-
-        if (!riskCheck.allowed) {
-          this.addLog(userId, "ERROR",
-            `[2/7] [${signal.symbol}] REJECTED (RISK): ${riskCheck.reason} (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`,
-          );
-          continue;
-        }
-
-        this.addLog(userId, "INFO", `[2/7] [${signal.symbol}] RISK CHECK: Passed (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`);
-
-
-        // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
-        const checklist = analysis.confluence.finalSignal?.checklistItems || [];
-        const methChecklist = checklist.filter(c => !c.id.startsWith("pipeline-step-"));
-        
-        const unpassedItems = methChecklist.filter(c => c.status !== "PASSED");
-
-        if (unpassedItems.length > 0) {
-          const unpassedLabels = unpassedItems.map(c => `${c.label} [${c.status}]`).join(", ");
-          this.addLog(
-            userId, 
-            "CONFLUENCE", 
-            `[3.5/7] [${signal.symbol}] Checklist validation incomplete (${unpassedItems.length} criteria pending/waiting). Skipping LLM voting until ALL criteria are PASSED.`,
-            { checklist: methChecklist, pendingCriteria: unpassedLabels }
-          );
-          continue;
-        }
-
-        // ── STEP 4: LLM CONSENSUS VOTING ─────────────────────────────────────
+        // ── STAGE 2: CONFLUENCE & LLM CONSENSUS VOTING ─────────────────────
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
 
         if (pipeline.config.llmConsensus?.enabled) {
           if (pipeline.llmCircuitOpen) {
-            this.addLog(userId, "ERROR", `[4/7] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting, relying on technicals.`);
+            this.addLog(userId, "ERROR", `[2/4] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting, relying on technicals.`);
           } else {
             this.addLog(userId, "CONFLUENCE",
-              `[4/7] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
+              `[2/4] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
             );
-
 
             let llmSymScore: number | undefined;
             let llmMethV: string | undefined;
@@ -1059,6 +1012,8 @@ const pipeline = {
             try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
 
             const activeMeth = pipeline.config.activeMethodologies || ["smc", "ict", "msnr"];
+            const checklist = analysis.confluence.finalSignal?.checklistItems || [];
+            const methChecklist = checklist.filter(c => !c.id.startsWith("pipeline-step-"));
             
             const llmResult = await llmConsensusService.evaluate(
               {
@@ -1090,7 +1045,7 @@ const pipeline = {
 
             const isTrade = llmResult.verdict === "GOOD";
             this.addLog(userId, "CONFLUENCE",
-              `[4/7] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"} | Reasoning: ${llmResult.details}`,
+              `[2/4] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"} | Reasoning: ${llmResult.details}`,
               { llmConsensus: llmResult },
             );
 
@@ -1103,7 +1058,34 @@ const pipeline = {
           }
         }
 
-        // ── STEP 5: SMART RISK & POSITION SIZING ─────────────────────────────
+        // ── STAGE 3: PRE-TRADE RISK CHECK & POSITION SIZING ─────────────────────
+        let currentPosCount = 0;
+        let symbolPosCount = 0;
+        try {
+          const positions = await mt5McpService.getPositions();
+          currentPosCount = positions.length;
+          symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
+        } catch {}
+
+        const riskCheck = await riskManagerService.checkTradeAllowed(
+          userId,
+          signal,
+          {
+            maxOpenPositions: pipeline.config.maxOpenPositions,
+            maxDailyRisk: pipeline.config.maxDailyRisk,
+            maxRiskPerTrade: pipeline.config.maxRiskPerTrade,
+          },
+        );
+
+        if (!riskCheck.allowed) {
+          this.addLog(userId, "ERROR",
+            `[3/4] [${signal.symbol}] REJECTED (RISK): ${riskCheck.reason} (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`,
+          );
+          continue;
+        }
+
+        this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] RISK CHECK: Passed (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`);
+
         let volume = 0;
         let accountInfo: any;
         let symbolInfo: any;
@@ -1112,7 +1094,7 @@ const pipeline = {
           accountInfo = await mt5McpService.getAccountInfo();
           symbolInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
         } catch (e: any) {
-          this.addLog(userId, "ERROR", `[5/7] [${signal.symbol}] MT5 DATA FAILED: Cannot retrieve account/symbol info — ${e.message}`);
+          this.addLog(userId, "ERROR", `[3/4] [${signal.symbol}] MT5 DATA FAILED: Cannot retrieve account/symbol info — ${e.message}`);
           continue;
         }
 
@@ -1123,14 +1105,14 @@ const pipeline = {
           if (smart.drawdownRecovery?.enabled && pipeline.currentDrawdownPct !== undefined) {
              if (pipeline.currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
                riskMultiplier = smart.drawdownRecovery.riskReductionMultiplier;
-               this.addLog(userId, "INFO", `[5/7] [SMART-RISK] Drawdown Recovery Active (DD: ${pipeline.currentDrawdownPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x.`);
+               this.addLog(userId, "INFO", `[3/4] [SMART-RISK] Drawdown Recovery Active (DD: ${pipeline.currentDrawdownPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x.`);
              }
           }
           
           if (riskMultiplier === 1 && smart.capitalPreservation?.enabled && pipeline.currentGrowthPct !== undefined) {
              if (pipeline.currentGrowthPct >= smart.capitalPreservation.activationGrowthPct) {
                riskMultiplier = smart.capitalPreservation.riskReductionMultiplier;
-               this.addLog(userId, "INFO", `[5/7] [SMART-RISK] Capital Preservation Active (Growth: ${pipeline.currentGrowthPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x to protect profit.`);
+               this.addLog(userId, "INFO", `[3/4] [SMART-RISK] Capital Preservation Active (Growth: ${pipeline.currentGrowthPct.toFixed(2)}%). Risk reduced to ${riskMultiplier}x to protect profit.`);
              }
           }
         }
@@ -1154,19 +1136,18 @@ const pipeline = {
 
           if (volume === 0) {
             this.addLog(userId, "ERROR",
-              `[5/7] [${signal.symbol}] REJECTED (POSITION SIZE): SL distance (${Math.abs(signal.entry - signal.sl).toFixed(5)}) too wide for minimum volume (${symbolInfo.volumeMin}) within ${finalRiskPercent}% risk limit.`
+              `[3/4] [${signal.symbol}] REJECTED (POSITION SIZE): SL distance (${Math.abs(signal.entry - signal.sl).toFixed(5)}) too wide for minimum volume (${symbolInfo.volumeMin}) within ${finalRiskPercent}% risk limit.`
             );
             continue;
           }
         }
 
         this.addLog(userId, "INFO",
-          `[5/7] [${signal.symbol}] POSITION SIZE: ${volume} Lot (Risk: ${finalRiskPercent}%, Balance: $${accountInfo.balance.toFixed(2)}, Cap: 1.0 Lot)`
+          `[3/4] [${signal.symbol}] POSITION SIZE: ${volume} Lot (Risk: ${finalRiskPercent}%, Balance: $${accountInfo.balance.toFixed(2)}, Cap: 1.0 Lot)`
         );
 
-        // ── STEP 6: ORDER PARAMETER VALIDATION ───────────────────────────────
         if (pipeline.mt5CircuitOpen || !mt5McpService.isConnected) {
-          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] MT5 circuit breaker OPEN or disconnected. Skipping execution.`);
+          this.addLog(userId, "ERROR", `[3/4] [${signal.symbol}] MT5 circuit breaker OPEN or disconnected. Skipping execution.`);
           continue;
         }
 
@@ -1210,18 +1191,18 @@ const pipeline = {
             signal.entry,
           );
         } catch (e: any) {
-          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] VALIDATION ERROR: ${e.message}`);
+          this.addLog(userId, "ERROR", `[3/4] [${signal.symbol}] VALIDATION ERROR: ${e.message}`);
           continue;
         }
 
         if (!validation.valid) {
-          this.addLog(userId, "ERROR", `[6/7] [${signal.symbol}] REJECTED (VALIDATION): ${validation.error}`);
+          this.addLog(userId, "ERROR", `[3/4] [${signal.symbol}] REJECTED (VALIDATION): ${validation.error}`);
           continue;
         }
 
-        this.addLog(userId, "INFO", `[6/7] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
+        this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
 
-        // ── STEP 7: ORDER EXECUTION ──────────────────────────────────────────
+        // ── STAGE 3 EXECUTION: ORDER EXECUTION ───────────────────────────────
         let orderResult: any;
         try {
           orderResult = await mt5McpService.openOrder({
@@ -1234,7 +1215,7 @@ const pipeline = {
             comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
           });
         } catch (e: any) {
-          this.addLog(userId, "ERROR", `[7/7] [${signal.symbol}] MT5 ORDER EXCEPTION: ${e.message}`);
+          this.addLog(userId, "ERROR", `[3/4] [${signal.symbol}] MT5 ORDER EXCEPTION: ${e.message}`);
           continue;
         }
 
@@ -1246,7 +1227,7 @@ const pipeline = {
           const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
 
           this.addLog(userId, "TRADE",
-            `[7/7] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${orderResult.ticket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
+            `[3/4] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${orderResult.ticket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
             { signal, orderResult, confluence: analysis.confluence },
           );
 

@@ -261,34 +261,31 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
         } else if (log.type === "SIGNAL") {
           if (log.message.includes("NO SIGNAL")) {
             track.stages.SIGNAL = { status: "active", message: log.message, time };
-          } else if (log.message.includes("Waiting for conditions")) {
-            track.stages.SIGNAL = { status: "active", message: log.message, time, data: log.data };
           } else {
             track.stages.SIGNAL = { status: "success", message: log.message, time, data: log.data };
           }
-          // Siklus baru: reset tahapan berikutnya
+          // Reset subsequent stages on new signal evaluation
           track.stages.CONFLUENCE = { status: "pending" };
           track.stages.EXECUTION = { status: "pending" };
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "CONFLUENCE") {
           let status: "active" | "error" | "success" | "pending" = "active";
-          if (log.message.includes("NO TRADE") || log.message.includes("SKIP") || log.message.includes("tidak valid") || log.message.includes("dibatalkan")) {
+          if (log.message.includes("REJECTED") || log.message.includes("NO TRADE") || log.message.includes("SKIP")) {
             status = "error";
-          } else if (log.message.includes("TRADE") || log.message.includes("GOOD") || log.message.includes("CONFLUENCE SIGNAL:")) {
+          } else if (log.message.includes("APPROVED") || log.message.includes("TRADE APPROVED") || log.message.includes("GOOD")) {
             status = "success";
-          } else if (log.message.includes("Waiting for conditions") || log.message.includes("Scanning checklist")) {
+          } else if (log.message.includes("Initiating")) {
             status = "active";
           }
           
           track.stages.CONFLUENCE = { status, message: log.message, time, data: log.data };
-          track.stages.EXECUTION = { status: "pending" }; // Reset execution
+          track.stages.EXECUTION = { status: "pending" };
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "TRADE") {
-          // Check if this is a pending order placement or a filled market order
           if (log.message.toLowerCase().includes("pending") || log.message.toLowerCase().includes("limit") || log.message.toLowerCase().includes("stop")) {
-            track.stages.EXECUTION = { status: "active", message: log.message, time }; // Yellow: pending order waiting
+            track.stages.EXECUTION = { status: "active", message: log.message, time };
           } else {
-            track.stages.EXECUTION = { status: "success", message: log.message, time }; // Green: filled/executed
+            track.stages.EXECUTION = { status: "success", message: log.message, time };
           }
           track.stages.TRAILING = { status: "pending" };
         } else if (log.type === "ERROR") {
