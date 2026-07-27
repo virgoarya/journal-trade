@@ -161,8 +161,7 @@ class SMCStrategy {
     const stat5 = s(step5, step1 && step2 && step3 && step4, true); // RR is critical
     const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
 
-    // If step1 (HTF) or step5 (RR) failed, the whole signal is dropped.
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
+
 
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
@@ -213,6 +212,8 @@ class SMCStrategy {
         details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    const passed = items.every(item => item.status === "PASSED");
 
     return { items, passed };
   }

@@ -281,9 +281,6 @@ class ICTStrategy {
     const stat5 = s(step5, step1 && step3 && step4, true); // RR is critical
     const stat6 = s(step6, step1 && step3 && step4 && step5);
 
-    // Strict dropping
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
-
     const items: ChecklistItem[] = [
       {
         id: "ict-daily",
@@ -329,6 +326,8 @@ class ICTStrategy {
         details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    const passed = items.every(item => item.status === "PASSED");
 
     return { items, passed };
   }

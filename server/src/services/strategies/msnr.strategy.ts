@@ -382,8 +382,6 @@ class MSNRStrategy {
     const stat4 = s(step4, step1 && step2 && step3);
     const stat5 = s(step5, step1 && step2 && step3 && step4, true);
 
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
-
     const items: ChecklistItem[] = [
       {
         id: "msnr-daily",
@@ -429,6 +427,8 @@ class MSNRStrategy {
         details: stat4 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
+
+    const passed = items.every(item => item.status === "PASSED");
 
     return { items, passed };
   }
