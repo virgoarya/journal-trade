@@ -159,83 +159,82 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
         })}
       </div>
 
-      {/* Final Signal Banner */}
-      {finalSignal ? (
-        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {finalSignal.direction === "BUY" ? (
-                <TrendingUp className="w-4 h-4 text-neon-green" />
-              ) : (
-                <TrendingDown className="w-4 h-4 text-neon-red" />
-              )}
-              <span className={`text-sm font-bold font-mono ${
-                finalSignal.direction === "BUY" ? "text-neon-green" : "text-neon-red"
-              }`}>
-                {finalSignal.direction}
+      {/* Final Signal Banner — Terminal Noir Approved Signal Box */}
+      {activeTab === "NET" && (
+        finalSignal ? (
+          <div className="bg-black/80 border border-accent-gold/30 rounded-xl p-3.5 space-y-2 font-mono shadow-[0_0_15px_rgba(212,175,55,0.15)] relative overflow-hidden">
+            {/* Glowing side accent line */}
+            <div className={`absolute top-0 left-0 bottom-0 w-1 ${finalSignal.direction === "BUY" ? "bg-neon-green shadow-[0_0_8px_#00ff66]" : "bg-neon-red shadow-[0_0_8px_#ff0033]"}`} />
+
+            <div className="flex items-center justify-between border-b border-accent-gold/15 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-accent-gold/10 text-accent-gold px-2 py-0.5 rounded border border-accent-gold/30 font-bold uppercase tracking-wider">
+                  APPROVED SIGNAL
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${
+                  finalSignal.direction === "BUY" ? "bg-neon-green/20 text-neon-green border border-neon-green/40" : "bg-neon-red/20 text-neon-red border border-neon-red/40"
+                }`}>
+                  {finalSignal.direction}
+                </span>
+              </div>
+              <span className="text-[10px] text-accent-gold/80 font-bold">
+                SCORE: {finalSignal.confluenceScore}%
               </span>
-              <span className="text-lg font-bold text-white">
-                {finalSignal.confidence}%
+            </div>
+
+            {/* Formatted Signal Summary */}
+            <div className="grid grid-cols-2 gap-y-1.5 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">PAIR</span>
+                <span className="text-white font-bold tracking-wider">: {symbol || "XAUUSD"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">METHOD</span>
+                <span className="text-accent-gold font-bold">: {METHODOLOGY_LABELS[finalSignal.primaryMethodology as MethodologyName] || finalSignal.primaryMethodology.toUpperCase()}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">ENTRY</span>
+                <span className="text-white font-bold">: {finalSignal.entry.toFixed(5)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">SL</span>
+                <span className="text-neon-red font-bold">: {finalSignal.sl.toFixed(5)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">TP</span>
+                <span className="text-neon-green font-bold">: {finalSignal.tp.toFixed(5)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted text-[11px] w-14">RR</span>
+                <span className="text-accent-gold font-bold">
+                  : 1:{(Math.abs(finalSignal.entry - finalSignal.sl) > 0 ? (Math.abs(finalSignal.tp - finalSignal.entry) / Math.abs(finalSignal.entry - finalSignal.sl)).toFixed(2) : "0.00")}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 col-span-2 pt-1.5 border-t border-accent-gold/10">
+                <span className="text-text-muted text-[11px] w-14">CONF</span>
+                <span className="text-neon-green font-bold text-sm">: {finalSignal.confidence}%</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-black/60 border border-accent-gold/15 rounded-xl p-3.5 space-y-2 font-mono text-xs">
+            <div className="flex items-center justify-between border-b border-accent-gold/15 pb-2">
+              <span className="text-[10px] bg-black/40 text-text-muted px-2 py-0.5 rounded border border-accent-gold/10 uppercase">
+                SIGNAL STATUS
               </span>
+              <span className="text-[10px] text-accent-gold/70">SCANNING / PENDING LLM APPROVAL</span>
             </div>
-            <span className="text-[10px] text-text-muted font-mono">
-              Score: {finalSignal.confluenceScore}%
-            </span>
-          </div>
-
-          {/* Agree count */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex -space-x-1">
-              {finalSignal.agreeingSignals.slice(0, 5).map((sig, i) => (
-                <div
-                  key={i}
-                  className="w-4 h-4 rounded-full border border-gray-900"
-                  style={{
-                    backgroundColor: METHODOLOGY_COLORS[sig.methodology as MethodologyName] || "#6B7280",
-                  }}
-                  title={`${METHODOLOGY_LABELS[sig.methodology as MethodologyName] || sig.methodology}: ${sig.confidence}%`}
-                />
-              ))}
-            </div>
-            <span className="text-[10px] text-text-muted font-mono">
-              {finalSignal.totalAgreeing}/{Object.keys(METHODOLOGY_LABELS).length} methodologies agreeing
-            </span>
-          </div>
-
-          {/* Primary methodology */}
-          <div className="text-[10px] text-text-muted">
-            Primary:{" "}
-            <span
-              className="font-medium font-mono"
-              style={{ color: METHODOLOGY_COLORS[finalSignal.primaryMethodology] || "#6B7280" }}
-            >
-              {METHODOLOGY_LABELS[finalSignal.primaryMethodology] || finalSignal.primaryMethodology}
-            </span>
-          </div>
-
-          {/* Entry/SL/TP */}
-          <div className="grid grid-cols-3 gap-1 text-[10px]">
-            <div>
-              <span className="text-accent-gold-dim">Entry</span>
-              <p className="text-text-primary font-mono">{finalSignal.entry.toFixed(5)}</p>
-            </div>
-            <div>
-              <span className="text-accent-gold-dim">SL</span>
-              <p className="text-neon-red font-mono">{finalSignal.sl.toFixed(5)}</p>
-            </div>
-            <div>
-              <span className="text-accent-gold-dim">TP</span>
-              <p className="text-neon-green font-mono">{finalSignal.tp.toFixed(5)}</p>
+            <div className="grid grid-cols-2 gap-y-1.5 text-xs opacity-70">
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">PAIR</span><span className="text-white">: {symbol || "XAUUSD"}</span></div>
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">METHOD</span><span className="text-text-muted">: N/A</span></div>
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">ENTRY</span><span className="text-text-muted">: N/A</span></div>
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">SL</span><span className="text-text-muted">: N/A</span></div>
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">TP</span><span className="text-text-muted">: N/A</span></div>
+              <div className="flex items-center gap-2"><span className="text-text-muted text-[11px] w-14">RR</span><span className="text-text-muted">: N/A</span></div>
+              <div className="flex items-center gap-2 col-span-2 pt-1 border-t border-accent-gold/10"><span className="text-text-muted text-[11px] w-14">CONF</span><span className="text-text-muted">: N/A</span></div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-text-muted">
-            <AlertTriangle className="w-4 h-4 text-yellow-500" />
-            <span className="text-xs font-mono">{confluence.reason}</span>
-          </div>
-        </div>
+        )
       )}
 
       {/* ── Trading Plan Checklist Section ──────────────────────────────── */}
