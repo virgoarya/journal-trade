@@ -310,7 +310,7 @@ class ICTStrategy {
       },
       {
         id: "ict-fvg",
-        label: `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation (${sig.entry.toFixed(5)})`,
+        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation`,
         status: stat4,
         timeframe: entryTfLabel
       },
@@ -318,7 +318,7 @@ class ICTStrategy {
         id: "ict-rr",
         label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
-        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+        details: stat4 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       },
       {
         id: "ict-entry",

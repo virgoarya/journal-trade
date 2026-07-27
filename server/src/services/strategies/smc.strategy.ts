@@ -182,7 +182,7 @@ class SMCStrategy {
       },
       {
         id: "smc-ob",
-        label: `${htfTfLabel}/${setupTfLabel} PD Array detection zone contoh (${obTop} - ${obBottom})`,
+        label: sig.orderBlock ? `${htfTfLabel}/${setupTfLabel} PD Array detection zone (${obBottom} - ${obTop})` : `${htfTfLabel}/${setupTfLabel} PD Array detection zone`,
         status: stat3,
         timeframe: setupTfLabel,
         value: sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
@@ -195,7 +195,7 @@ class SMCStrategy {
       },
       {
         id: "smc-fvg",
-        label: `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})`,
+        label: stat4 === "PASSED" ? `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})` : `${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG`,
         status: stat4,
         timeframe: entryTfLabel
       },
@@ -203,7 +203,7 @@ class SMCStrategy {
         id: "smc-rr",
         label: `Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
-        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+        details: stat4 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       },
       {
         id: "smc-entry-rejection",

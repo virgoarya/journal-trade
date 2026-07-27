@@ -409,7 +409,7 @@ class MSNRStrategy {
       },
       {
         id: "msnr-mss-ob",
-        label: `④ ${entryTfLabel} Market Structure Shift + OB/CISD (${sig.entry.toFixed(5)})`,
+        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Market Structure Shift + OB/CISD (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Market Structure Shift + OB/CISD`,
         status: stat4,
         timeframe: entryTfLabel
       },
@@ -417,7 +417,7 @@ class MSNRStrategy {
         id: "msnr-rr",
         label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
-        details: `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}`
+        details: stat4 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       },
       {
         id: "msnr-entry",
