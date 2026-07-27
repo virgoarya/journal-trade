@@ -13,18 +13,51 @@ import { EmptyState } from "./EmptyState";
 import { METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types";
 
 interface Props {
-  confluence: ConfluenceResult;
+  confluence?: ConfluenceResult;
   marketStructure?: MarketStructureSummary;
   symbol?: string;
+  isRunning?: boolean;
 }
 
 type TabType = "NET" | "smc" | "ict" | "msnr";
 
-export function MethodologyConfluence({ confluence, marketStructure, symbol }: Props) {
+export function MethodologyConfluence({ confluence, marketStructure, symbol, isRunning }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>("NET");
 
   if (!confluence) {
-    return <SkeletonLoader type="card" />;
+    return (
+      <div className="glass p-4 space-y-3 font-mono">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-[11px] font-bold text-accent-gold flex items-center gap-2 uppercase tracking-widest drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+            <Brain className="w-4 h-4" />
+            Methodology Confluence {symbol ? <span className="text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30">{symbol}</span> : ""}
+          </h3>
+          <span className="text-[10px] text-text-muted flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded border border-accent-gold/10">
+            <Clock className={`w-3 h-3 ${isRunning ? "text-accent-gold animate-spin" : "text-gray-500"}`} />
+            {isRunning ? "Scanning..." : "Idle"}
+          </span>
+        </div>
+
+        {/* Methodology Tabs (Static Placeholder) */}
+        <div className="flex items-center gap-1 border-b border-accent-gold/10 pb-2 opacity-60">
+          <button className="text-[10px] font-mono px-2.5 py-1 rounded bg-accent-gold/20 text-accent-gold border border-accent-gold/40 font-bold">
+            NET (Confluence)
+          </button>
+          <button className="text-[10px] font-mono px-2.5 py-1 rounded text-text-muted bg-black/30">SMC</button>
+          <button className="text-[10px] font-mono px-2.5 py-1 rounded text-text-muted bg-black/30">ICT</button>
+          <button className="text-[10px] font-mono px-2.5 py-1 rounded text-text-muted bg-black/30">MSNR</button>
+        </div>
+
+        {/* Body Placeholder */}
+        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-4 text-center space-y-2">
+          <Brain className={`w-6 h-6 mx-auto ${isRunning ? "text-accent-gold/60 animate-pulse" : "text-gray-600"}`} />
+          <p className="text-xs text-text-muted">
+            {isRunning ? "Memindai struktur pasar D1/H4/H1/M5 & konfluensi metodologi..." : "Pipeline AI belum berjalan. Jalankan pipeline untuk menampilkan analisis konfluensi real-time."}
+          </p>
+        </div>
+      </div>
+    );
   }
 
 

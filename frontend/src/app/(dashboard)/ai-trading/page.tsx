@@ -316,13 +316,12 @@ function AITradingPageContent() {
               skillConfig={skillConfig}
             />
 
-            {lastAnalysis?.confluence && (
-              <MethodologyConfluence
-                confluence={lastAnalysis.confluence}
-                marketStructure={lastAnalysis.marketStructure}
-                symbol={lastAnalysis.symbol}
-              />
-            )}
+            <MethodologyConfluence
+              confluence={lastAnalysis?.confluence}
+              marketStructure={lastAnalysis?.marketStructure}
+              symbol={lastAnalysis?.symbol}
+              isRunning={pipelineStatus?.running ?? false}
+            />
 
             <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
               setSkillConfig(skill);
