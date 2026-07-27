@@ -1025,10 +1025,10 @@ const pipeline = {
         // ── STEP 3.5: STRICT METHODOLOGY CHECKLIST VALIDATION ──────────────────
         const checklist = analysis.confluence.finalSignal?.checklistItems || [];
         const methChecklist = checklist.filter(c => !c.id.startsWith("pipeline-step-"));
-        const hasFailedItem = methChecklist.some(c => c.status !== "PASSED");
+        const hasFailedItem = methChecklist.some(c => c.status === "FAILED");
 
         if (hasFailedItem) {
-          const failedItems = methChecklist.filter(c => c.status !== "PASSED").map(c => c.label).join(", ");
+          const failedItems = methChecklist.filter(c => c.status === "FAILED").map(c => c.label).join(", ");
           this.addLog(
             userId, 
             "CONFLUENCE", 
