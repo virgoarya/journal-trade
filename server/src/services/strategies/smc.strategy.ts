@@ -145,7 +145,12 @@ class SMCStrategy {
     const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION" || sig.breachType === "MSS" || sig.breachType === "LIQUIDITY_GRAB");
     const step4 = true; // SMC setup does not strictly require an FVG on the setup timeframe if OB or MSS is valid
     const step5 = isRRValid;
-    const step6 = sig.confidence >= 70;
+    const lastCandle = fractal.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
+      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
+    );
+    const step6 = isEntryRetested;
 
     // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {

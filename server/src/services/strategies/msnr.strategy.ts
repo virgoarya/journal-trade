@@ -368,6 +368,12 @@ class MSNRStrategy {
     const step3 = sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR"); // Sweep confirmed
     const step4 = step3; // Since step 4 (LTF MSS + OB) is checked in analyze() and we only push valid ones
     const step5 = isRRValid;
+    const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
+      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
+    );
+    const step6 = isEntryRetested;
 
     // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
@@ -381,6 +387,7 @@ class MSNRStrategy {
     const stat3 = s(step3, step1 && step2);
     const stat4 = s(step4, step1 && step2 && step3);
     const stat5 = s(step5, step1 && step2 && step3 && step4, true);
+    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
 
     const items: ChecklistItem[] = [
       {
@@ -422,9 +429,9 @@ class MSNRStrategy {
       {
         id: "msnr-entry",
         label: `⑥ ${entryTfLabel} entry retest level OB/CISD (pending order)`,
-        status: stat4,
+        status: stat6,
         timeframe: entryTfLabel,
-        details: stat4 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
 

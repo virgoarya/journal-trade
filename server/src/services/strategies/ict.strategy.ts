@@ -265,7 +265,12 @@ class ICTStrategy {
     const step3 = hasSweep || hasAMD;
     const step4 = hasFVG;
     const step5 = isRRValid;
-    const step6 = sig.confidence >= 70;
+    const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
+      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
+    );
+    const step6 = isEntryRetested;
 
     // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {

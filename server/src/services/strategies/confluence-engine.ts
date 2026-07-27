@@ -169,9 +169,12 @@ class ConfluenceEngine {
     for (const mKey of activeMethodologies) {
       const rawSig = signals[mKey as keyof AllMethodologySignals];
       if (!rawSig) continue;
-      const processed = Array.isArray(rawSig) ? rawSig[0] : rawSig;
-      if (processed && (processed as any).checklistItems && (processed as any).checklistItems.length > 0) {
-        checklistByMethodology[mKey] = (processed as any).checklistItems;
+      const list = Array.isArray(rawSig) ? rawSig : [rawSig];
+      for (const item of list) {
+        if (item && (item as any).checklistItems && (item as any).checklistItems.length > 0) {
+          checklistByMethodology[mKey] = (item as any).checklistItems;
+          break;
+        }
       }
     }
 
