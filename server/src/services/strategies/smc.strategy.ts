@@ -142,8 +142,8 @@ class SMCStrategy {
     // Evaluate each condition independently
     const step1 = isHtfBosConfirmed;
     const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;
-    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION");
-    const step4 = (fractal.setupStr.fairValueGaps?.length ?? 0) > 0;
+    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION" || sig.breachType === "MSS" || sig.breachType === "LIQUIDITY_GRAB");
+    const step4 = true; // SMC setup does not strictly require an FVG on the setup timeframe if OB or MSS is valid
     const step5 = isRRValid;
     const step6 = sig.confidence >= 70;
 
@@ -227,6 +227,18 @@ class SMCStrategy {
    * BUY MSS: price breaks above recent swing high with momentum
    * SELL MSS: price breaks below recent swing low with momentum
    */
+  // Helper to check HTF context (Liquidity Sweep or OB Mitigation)
+  private hasHTFContext(fractal: import("./market-structure.service").FractalContext, dir: "BUY" | "SELL"): boolean {
+    const htf = fractal.dailyStr || fractal.directionStr;
+    const lzType = dir === "BUY" ? "SELL_SIDE" : "BUY_SIDE";
+    const obType = dir === "BUY" ? "BULLISH" : "BEARISH";
+    
+    const hasSweep = htf.liquidityZones.some(lz => lz.type === lzType && lz.swept);
+    const hasOBMitigation = htf.orderBlocks.some(ob => ob.type === obType && ob.touchCount > 0);
+    
+    return hasSweep || hasOBMitigation;
+  }
+
   private detectMSS(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
     const candles = fractal.setup;
     const ms = fractal.setupStr;
@@ -241,24 +253,14 @@ class SMCStrategy {
     const avgRangeEntry = atrEntry > 0 ? atrEntry : this.avgCandleRange(entryCandles, 5);
     const buffer = avgRangeEntry * 1.0; // was 0.5 — diperlebar agar SL tidak terlalu sempit
 
-    // Helper to check HTF context (Liquidity Sweep or OB Mitigation)
-    const hasHTFContext = (dir: "BUY" | "SELL"): boolean => {
-      const htf = fractal.dailyStr || fractal.directionStr;
-      const lzType = dir === "BUY" ? "SELL_SIDE" : "BUY_SIDE";
-      const obType = dir === "BUY" ? "BULLISH" : "BEARISH";
-      
-      const hasSweep = htf.liquidityZones.some(lz => lz.type === lzType && lz.swept);
-      const hasOBMitigation = htf.orderBlocks.some(ob => ob.type === obType && ob.touchCount > 0);
-      
-      return hasSweep || hasOBMitigation;
-    };
+
 
     // Look for a swing high that was just broken upward
     const recentHighs = ms.swingHighs.filter((s) => s.index >= candles.length - 10);
     for (const swing of recentHighs) {
       if (last.close > swing.price && last.high > swing.price) {
         const bodyBottom = Math.min(last.open, last.close);
-        if (bodyBottom > swing.price && hasHTFContext("BUY")) {
+        if (bodyBottom > swing.price && this.hasHTFContext(fractal, "BUY")) {
           const sl = swing.price - buffer;
           const tp = swing.price + buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "BUY", tp, fractal)) continue;
@@ -281,7 +283,7 @@ class SMCStrategy {
     for (const swing of recentLows) {
       if (last.close < swing.price && last.low < swing.price) {
         const bodyTop = Math.max(last.open, last.close);
-        if (bodyTop < swing.price && hasHTFContext("SELL")) {
+        if (bodyTop < swing.price && this.hasHTFContext(fractal, "SELL")) {
           const sl = swing.price + buffer;
           const tp = swing.price - buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "SELL", tp, fractal)) continue;
@@ -322,6 +324,8 @@ class SMCStrategy {
 
       // BULLISH OB: pending BUY LIMIT order at OB Top
       if (ob.type === "BULLISH") {
+        if (!this.hasHTFContext(fractal, "BUY")) continue;
+
         const obHeight = ob.top - ob.bottom;
         const tp = ob.top + obHeight * 3;
         const sl = ob.bottom - buffer;
@@ -341,6 +345,8 @@ class SMCStrategy {
 
       // BEARISH OB: pending SELL LIMIT order at OB Bottom
       if (ob.type === "BEARISH") {
+        if (!this.hasHTFContext(fractal, "SELL")) continue;
+
         const obHeight = ob.top - ob.bottom;
         const tp = ob.bottom - obHeight * 3;
         const sl = ob.top + buffer;
@@ -382,6 +388,8 @@ class SMCStrategy {
 
       // BULL breaker: price broke above bearish OB → now support
       if (breaker.brokenDirection === "BULL") {
+        if (!this.hasHTFContext(fractal, "BUY")) continue;
+
         // Gunakan ATR-based proximity alih-alih % hardcoded
         if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
           const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped, bottom: flipped - avgRange, type: "BULLISH", mitigated: false } as any, ms));
@@ -403,6 +411,8 @@ class SMCStrategy {
 
       // BEAR breaker: price broke below bullish OB → now resistance
       if (breaker.brokenDirection === "BEAR") {
+        if (!this.hasHTFContext(fractal, "SELL")) continue;
+
         if (Math.abs(last.close - flipped) < avgRange * proximityAtr) {
           const confidence = Math.min(85, 60 + this.scoreOB({ top: flipped + avgRange, bottom: flipped, type: "BEARISH", mitigated: false } as any, ms));
           const sl = flipped + avgRange * 1.5;
