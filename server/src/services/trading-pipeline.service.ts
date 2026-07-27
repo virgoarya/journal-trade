@@ -2,6 +2,7 @@ import { mt5McpService, CircuitBreaker } from "./mt5-mcp.service";
 import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis, type Candle } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
+import { marketRegimeService } from "./market-regime.service";
 
 import { tradeExitStrategyService } from "./trade-exit-strategy.service";
 import { AITradingSession } from "../models/AITradingSession";
@@ -164,7 +165,22 @@ class TradingPipelineService {
   > = new Map();
 
 
+  // ─── Cache ────────────────────────────────────────────────────────────
+  private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
+  private readonly REGIME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
+  private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
+    const cached = this.regimeCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.REGIME_CACHE_TTL_MS) {
+      return { regime: cached.regime, multipliers: cached.multipliers };
+    }
+    if (cached) this.regimeCache.delete(key);
+    return null;
+  }
+
+  private setCachedRegime(key: string, regime: string, multipliers: Record<string, number>): void {
+    this.regimeCache.set(key, { regime, multipliers, timestamp: Date.now() });
+  }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────
 
