@@ -197,20 +197,18 @@ class ICTStrategy {
     // ── Generate Checklist Items ───────────────────────────────────────────
     for (let i = validSignals.length - 1; i >= 0; i--) {
       const sig = validSignals[i];
-      if (sig.confidence > 0) {
-        const validation = this.buildICTChecklist(sig, currentKillzone, fractal);
-        sig.checklistItems = validation.items;
-        
-        // Strict Validation: Drop signal if core steps failed
-        if (!validation.passed) {
-          validSignals.splice(i, 1);
-        }
+      const validation = this.buildICTChecklist(sig, currentKillzone, fractal);
+      sig.checklistItems = validation.items;
+      
+      // Strict Validation: Drop signal if core steps failed
+      if (sig.confidence > 0 && !validation.passed) {
+        validSignals.splice(i, 1);
       }
     }
 
     if (validSignals.length === 0) {
       const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
-      validSignals.push({
+      const dummySig: ICTSignal = {
         direction: dummyDir,
         confidence: 0,
         entry: 0,
@@ -220,7 +218,10 @@ class ICTStrategy {
         signalType: "AMD_FVG",
         reason: "Scanning for setups...",
         checklistItems: []
-      });
+      };
+      const validation = this.buildICTChecklist(dummySig, currentKillzone, fractal);
+      dummySig.checklistItems = validation.items;
+      validSignals.push(dummySig);
     }
 
     return validSignals.sort((a, b) => b.confidence - a.confidence);

@@ -161,20 +161,22 @@ class ConfluenceEngine {
     const buyScore = calculateWeightedScore(buySignals);
     const sellScore = calculateWeightedScore(sellSignals);
 
-    // ── 4. Check for conflict ──────────────────────────────────────
-    const conflictDetected = buySignals.length > 0 && sellSignals.length > 0;
-
+    // ── Extract checklistByMethodology from all raw methodology signals ──
     const checklistByMethodology: Record<string, ChecklistItem[]> = {};
-    for (const sig of allMethodologySignals) {
-      if (sig.checklistItems && sig.checklistItems.length > 0) {
-        checklistByMethodology[sig.methodology] = sig.checklistItems;
+    for (const mKey of activeMethodologies) {
+      const rawSig = signals[mKey as keyof AllMethodologySignals];
+      if (!rawSig) continue;
+      const processed = Array.isArray(rawSig) ? rawSig[0] : rawSig;
+      if (processed && (processed as any).checklistItems && (processed as any).checklistItems.length > 0) {
+        checklistByMethodology[mKey] = (processed as any).checklistItems;
       }
     }
 
     const mergedChecklist: ChecklistItem[] = [];
-    for (const sig of allMethodologySignals) {
-      if (sig.checklistItems) {
-        mergedChecklist.push(...sig.checklistItems.filter(item => !item.id.endsWith("-rr")));
+    for (const mKey of activeMethodologies) {
+      const items = checklistByMethodology[mKey];
+      if (items) {
+        mergedChecklist.push(...items.filter(item => !item.id.endsWith("-rr")));
       }
     }
 
@@ -186,7 +188,7 @@ class ConfluenceEngine {
       return {
         finalSignal: null,
         allSignals: allMethodologySignals,
-        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights),
+        methodologyBreakdown: this.buildBreakdown(allMethodologySignals, weights, checklistByMethodology),
         conflictDetected: false,
         reason: "No methodology generated a valid signal above minimum confidence",
         checklistByMethodology,
@@ -258,7 +260,7 @@ class ConfluenceEngine {
     const rrRatio = slDist > 0 ? tpDist / slDist : 0;
 
 
-    const breakdown = this.buildBreakdown(allMethodologySignals, weights);
+    const breakdown = this.buildBreakdown(allMethodologySignals, weights, checklistByMethodology);
 
     // Use ONLY the primary methodology's checklist for the final pipeline execution
     if (primary && primary.checklistItems) {
@@ -295,11 +297,13 @@ class ConfluenceEngine {
   private buildBreakdown(
     signals: MethodologySignal[],
     weights: MethodologyWeights,
+    checklistByMethodology?: Record<string, ChecklistItem[]>,
   ): MethodologyBreakdown {
     const breakdown: MethodologyBreakdown = {};
 
     for (const methodology of Object.keys(weights) as MethodologyName[]) {
       const signal = signals.find((s) => s.methodology === methodology);
+      const fallbackChecklist = checklistByMethodology?.[methodology] || [];
       breakdown[methodology] = {
         confidence: signal?.confidence ?? 0,
         weight: weights[methodology],
@@ -307,7 +311,7 @@ class ConfluenceEngine {
           ? Math.round((signal.confidence * signal.weight) / (weights[methodology] || 1))
           : 0,
         direction: signal?.direction,
-        checklistItems: signal?.checklistItems || [],
+        checklistItems: signal?.checklistItems?.length ? signal.checklistItems : fallbackChecklist,
       };
     }
 

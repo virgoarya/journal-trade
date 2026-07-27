@@ -86,9 +86,21 @@ class SMCStrategy {
       return rr >= 2.0;
     });
 
+    // ── Generate Checklist Items ───────────────────────────────────────────
+    for (let i = validSignals.length - 1; i >= 0; i--) {
+      const sig = validSignals[i];
+      const validation = this.buildSMCChecklist(sig, fractal);
+      sig.checklistItems = validation.items;
+      
+      // Strict Validation: Drop signal if any core step failed
+      if (sig.confidence > 0 && !validation.passed) {
+        validSignals.splice(i, 1);
+      }
+    }
+
     if (validSignals.length === 0) {
       const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
-      validSignals.push({
+      const dummySig: SMCSignal = {
         direction: dummyDir,
         confidence: 0,
         entry: 0,
@@ -97,22 +109,10 @@ class SMCStrategy {
         breachType: "MSS",
         reason: "Scanning for setups...",
         checklistItems: []
-      });
-    }
-
-    // ── Generate Checklist Items ───────────────────────────────────────────
-    for (let i = validSignals.length - 1; i >= 0; i--) {
-      const sig = validSignals[i];
-      // Only run validation if the signal has confidence (not the dummy scanning signal)
-      if (sig.confidence > 0) {
-        const validation = this.buildSMCChecklist(sig, fractal);
-        sig.checklistItems = validation.items;
-        
-        // Strict Validation: Drop signal if any core step failed
-        if (!validation.passed) {
-          validSignals.splice(i, 1);
-        }
-      }
+      };
+      const validation = this.buildSMCChecklist(dummySig, fractal);
+      dummySig.checklistItems = validation.items;
+      validSignals.push(dummySig);
     }
 
     return validSignals.sort((a, b) => b.confidence - a.confidence);

@@ -206,10 +206,21 @@ class MSNRStrategy {
       return rr >= 2.0;
     });
 
+    // ── Generate Checklist Items ───────────────────────────────────────────
+    for (let i = validSignals.length - 1; i >= 0; i--) {
+      const sig = validSignals[i];
+      const validation = this.buildMSNRChecklist(sig, fractal);
+      sig.checklistItems = validation.items;
+      
+      if (sig.confidence > 0 && !validation.passed) {
+        validSignals.splice(i, 1);
+      }
+    }
+
     if (validSignals.length === 0) {
       const htfStr = fractal.dailyStr || fractal.directionStr;
       const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
-      validSignals.push({
+      const dummySig: MSNRSignal = {
         direction: dummyDir,
         confidence: 0,
         entry: 0,
@@ -219,19 +230,10 @@ class MSNRStrategy {
         signalType: "TURTLE_SOUP_OB",
         reason: "Scanning for setups...",
         checklistItems: []
-      });
-    }
-
-    for (let i = validSignals.length - 1; i >= 0; i--) {
-      const sig = validSignals[i];
-      if (sig.confidence > 0) {
-        const validation = this.buildMSNRChecklist(sig, fractal);
-        sig.checklistItems = validation.items;
-        
-        if (!validation.passed) {
-          validSignals.splice(i, 1);
-        }
-      }
+      };
+      const validation = this.buildMSNRChecklist(dummySig, fractal);
+      dummySig.checklistItems = validation.items;
+      validSignals.push(dummySig);
     }
 
     return validSignals.sort((a, b) => b.confidence - a.confidence);
