@@ -97,6 +97,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
   };
 
   const currentChecklist = getActiveChecklist();
+  const allChecklistPassed = currentChecklist.length > 0 && currentChecklist.every(c => c.status === "PASSED");
 
   return (
     <div className="glass p-4 space-y-3">
@@ -159,17 +160,25 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
         })}
       </div>
 
-      {/* Final Signal Banner — Terminal Noir Approved Signal Box */}
+      {/* Final Signal Banner — Terminal Noir Approved / Candidate Signal Box */}
       {activeTab === "NET" && (
         finalSignal ? (
           <div className="bg-black/80 border border-accent-gold/30 rounded-xl p-3.5 space-y-2 font-mono shadow-[0_0_15px_rgba(212,175,55,0.15)] relative overflow-hidden">
             {/* Glowing side accent line */}
-            <div className={`absolute top-0 left-0 bottom-0 w-1 ${finalSignal.direction === "BUY" ? "bg-neon-green shadow-[0_0_8px_#00ff66]" : "bg-neon-red shadow-[0_0_8px_#ff0033]"}`} />
+            <div className={`absolute top-0 left-0 bottom-0 w-1 ${
+              allChecklistPassed
+                ? (finalSignal.direction === "BUY" ? "bg-neon-green shadow-[0_0_8px_#00ff66]" : "bg-neon-red shadow-[0_0_8px_#ff0033]")
+                : "bg-yellow-500 shadow-[0_0_8px_#eab308]"
+            }`} />
 
             <div className="flex items-center justify-between border-b border-accent-gold/15 pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] bg-accent-gold/10 text-accent-gold px-2 py-0.5 rounded border border-accent-gold/30 font-bold uppercase tracking-wider">
-                  APPROVED SIGNAL
+                <span className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${
+                  allChecklistPassed
+                    ? "bg-accent-gold/10 text-accent-gold border-accent-gold/30"
+                    : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                }`}>
+                  {allChecklistPassed ? "APPROVED SIGNAL" : "CANDIDATE SETUP (CHECKLIST INCOMPLETE)"}
                 </span>
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${
                   finalSignal.direction === "BUY" ? "bg-neon-green/20 text-neon-green border border-neon-green/40" : "bg-neon-red/20 text-neon-red border border-neon-red/40"
