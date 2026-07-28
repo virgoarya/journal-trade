@@ -26,7 +26,7 @@ export const backtestRunSchema = z.object({
     .optional(),
 
   maxRiskPerTrade: z.number().min(0.1).max(10).default(1.0),
-  maxOpenPositions: z.number().int().min(1).max(10).default(3),
+  maxOpenPositions: z.number().int().min(1).default(3),
 });
 
 export const backtestApplySchema = z.object({

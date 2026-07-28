@@ -84,7 +84,7 @@ export const pipelineConfigSchema = z.object({
   strategy: z
     .enum(["RSI_ENGULFING_SCALPING", "RSI_ENGULFING_INTRADAY", "MULTI_METHODOLOGY"])
     .default("MULTI_METHODOLOGY").optional(),
-  maxOpenPositions: z.number().int().min(1).max(10).default(3).optional(),
+  maxOpenPositions: z.number().int().min(1).default(3).optional(),
   maxRiskPerTrade: z.number().min(0.1).max(5).default(1.0).optional(),
   maxDailyRisk: z.number().min(1).max(10).default(3.0).optional(),
   tradingHours: tradingHoursSchema.optional(),
