@@ -54,6 +54,13 @@ export interface OrderBlock {
   mitigated: boolean;
   /** How many times price has returned to this block */
   touchCount: number;
+  hasCHOCH?: boolean;
+  hasBOS?: boolean;
+  hasSweep?: boolean;
+  isImpulsive?: boolean;
+  chochPrice?: number;
+  sweepPrice?: number;
+  displacementFVG?: boolean;
 }
 
 export interface BreakerBlock {
@@ -558,10 +565,23 @@ class MarketStructureService {
       const isBullishMove = next.close > next.open && next.close > current.close;
       const isBearishMove = next.close < next.open && next.close < current.close;
 
-      // Bullish OB: current candle is the "pause" before the impulse
+      // Check displacement FVG (gap between current and candle i+2)
+      const hasDisplacementFVG = i + 2 < candles.length && (
+        isBullishMove ? candles[i + 2].low > current.high : candles[i + 2].high < current.low
+      );
+
+      // Bullish OB: current candle is the last sell-to-buy candle before displacement
       if (isBullishMove) {
+        const priorHighs = swingHighs.filter((h) => h.index < i);
+        const recentHigh = priorHighs.length > 0 ? priorHighs[priorHighs.length - 1] : null;
+        const hasCHOCH = recentHigh ? (next.close > recentHigh.price || next.high > recentHigh.price) : false;
+
+        const priorLows = swingLows.filter((l) => l.index < i);
+        const recentLow = priorLows.length > 0 ? priorLows[priorLows.length - 1] : null;
+        const hasSweep = recentLow ? (current.low < recentLow.price || (i > 0 && candles[i - 1].low < recentLow.price)) : false;
+
         const obTop = Math.max(current.open, current.close);
-        const obBottom = Math.min(current.open, current.close);
+        const obBottom = current.low; // Includes full SSL sweep wick
 
         blocks.push({
           index: i,
@@ -571,12 +591,26 @@ class MarketStructureService {
           time: current.time,
           mitigated: false,
           touchCount: 0,
+          hasCHOCH,
+          hasSweep,
+          isImpulsive: true,
+          chochPrice: recentHigh?.price,
+          sweepPrice: recentLow?.price,
+          displacementFVG: hasDisplacementFVG,
         });
       }
 
-      // Bearish OB
+      // Bearish OB: current candle is the last buy-to-sell candle before displacement
       if (isBearishMove) {
-        const obTop = Math.max(current.open, current.close);
+        const priorLows = swingLows.filter((l) => l.index < i);
+        const recentLow = priorLows.length > 0 ? priorLows[priorLows.length - 1] : null;
+        const hasCHOCH = recentLow ? (next.close < recentLow.price || next.low < recentLow.price) : false;
+
+        const priorHighs = swingHighs.filter((h) => h.index < i);
+        const recentHigh = priorHighs.length > 0 ? priorHighs[priorHighs.length - 1] : null;
+        const hasSweep = recentHigh ? (current.high > recentHigh.price || (i > 0 && candles[i - 1].high > recentHigh.price)) : false;
+
+        const obTop = current.high; // Includes full BSL sweep wick
         const obBottom = Math.min(current.open, current.close);
 
         blocks.push({
@@ -587,6 +621,12 @@ class MarketStructureService {
           time: current.time,
           mitigated: false,
           touchCount: 0,
+          hasCHOCH,
+          hasSweep,
+          isImpulsive: true,
+          chochPrice: recentLow?.price,
+          sweepPrice: recentHigh?.price,
+          displacementFVG: hasDisplacementFVG,
         });
       }
     }

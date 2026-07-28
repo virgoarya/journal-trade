@@ -148,5 +148,18 @@
 3. Item 0 checklist di seluruh strategi kini menampilkan label dan detail target PDH/PDL secara dinamis.
 **Hindari**: Jangan mengabaikan pergerakan 3 candle Daily saat menentukan bias harian. Selalu perhitungkan level 50% Equilibrium dan Sweep PDL/PDH.
 
+### [20260728] Pure SMC Dogma Terminology & H1 Bullish OB Detection
+**Area**: Backend / Strategies / SMC Methodology
+**Root Cause**: Penggunaan istilah teknis SMC pada checklist sebelumnya kurang sesuai dengan doktrin/akidah asli SMC (seperti menyatukan BOS/CHOCH tanpa pembeda PD Array Discount/Premium dan SSL/BSL Sweep).
+**Solusi**:
+1. Mengubah struktur deteksi `detectOrderBlocks` pada [market-structure.service.ts](file:///d:/Journal%20Trade/server/src/services/strategies/market-structure.service.ts) untuk mengidentifikasi candle basis sebelum pergerakan impulsif yang menghasilkan **CHoCH** (penembusan Swing High) dan **SSL Sweep** (wick bawah di bawah Swing Low).
+2. Memperbarui penamaan item checklist [smc.strategy.ts](file:///d:/Journal%20Trade/server/src/services/strategies/smc.strategy.ts) sesuai akidah murni SMC:
+   - `Sell-Side Liquidity (SSL) Swept`
+   - `H1 Bullish Order Block (Discount PD Array : XXXXX - XXXXX) [Displacement + CHoCH]`
+   - `H1 CHoCH Confirmation (Breakout above Swing Level XXXXX)`
+   - `Retest Discount PD Array Zone (Pending BUY Limit)`
+**Hindari**: Jangan menggunakan terminologi generik jika ada terminologi baku baku SMC/ICT (seperti Discount PD Array & SSL/BSL Sweep).
+
+
 
 

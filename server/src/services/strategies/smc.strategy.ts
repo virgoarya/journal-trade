@@ -141,6 +141,10 @@ class SMCStrategy {
 
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
+    const obSweepPrice = sig.orderBlock?.sweepPrice ? sig.orderBlock.sweepPrice.toFixed(5) : relLow;
+    const obChochPrice = sig.orderBlock?.chochPrice ? sig.orderBlock.chochPrice.toFixed(5) : relHigh;
+    const pdArrayType = isBuy ? "Discount PD Array" : "Premium PD Array";
+
     return evaluateWaterfall([
       {
         id: "smc-daily",
@@ -152,36 +156,42 @@ class SMCStrategy {
       },
       {
         id: "smc-bos",
-        label: () => `① ${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        label: () => `① ${htfTfLabel} Market Structure : ${isHtfBosConfirmed ? (isBuy ? "Bullish CHoCH/BOS" : "Bearish CHoCH/BOS") : "Unconfirmed"} (High ${relHigh}, Low ${relLow})`,
         timeframe: htfTfLabel,
         condition: isHtfBosConfirmed,
         isFailable: true,
       },
       {
         id: "smc-liq",
-        label: () => `② ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Zone Swept`,
+        label: () => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
         timeframe: setupTfLabel,
-        condition: (fractal.directionStr.liquidityZones?.length ?? 0) > 0,
+        condition: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 || (sig.orderBlock?.hasSweep ?? false),
+        details: () => `Liquidity sweep confirmed at ${obSweepPrice}`,
       },
       {
         id: "smc-ob",
-        label: (status) => status === "PASSED" && sig.orderBlock ? `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block (${obBottom} - ${obTop})` : `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block detection zone`,
+        label: (status) => status === "PASSED" && sig.orderBlock
+          ? `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} : ${obBottom} - ${obTop}) [Displacement + CHoCH]`
+          : `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} detection zone)`,
         timeframe: setupTfLabel,
         condition: !!(sig.orderBlock || sig.breachType === "OB_MITIGATION"),
         value: (status) => status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined,
+        details: (status) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
       },
       {
         id: "smc-mss",
-        label: (status) => status === "PASSED" ? `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array`,
+        label: (status) => status === "PASSED"
+          ? `④ ${entryTfLabel} CHoCH Confirmation (Breakout above Swing Level ${obChochPrice})`
+          : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`,
         timeframe: entryTfLabel,
-        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH",
+        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || (sig.orderBlock?.hasCHOCH ?? false),
       },
       {
         id: "smc-entry-rejection",
-        label: () => `⑤ ${entryTfLabel} Entry retest PD Array (pending order ${sig.direction} Limit)`,
+        label: () => `⑤ Retest ${pdArrayType} Zone (Pending ${sig.direction} Limit Order @ ${sig.entry.toFixed(5)})`,
         timeframe: entryTfLabel,
         condition: isEntryRetested,
-        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
+        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga retest zone.",
       },
       {
         id: "smc-rr",
@@ -502,15 +512,15 @@ class SMCStrategy {
   private scoreOB(ob: OrderBlock, ms: MarketStructure): number {
     let score = 60;
 
-    // Older OBs (found earlier) are often more significant
-    // OB that formed at a swing point is stronger
-    score += 5;
+    if (ob.hasCHOCH) score += 15; // Pure SMC Reversal CHoCH created by displacement
+    if (ob.hasSweep) score += 15; // SSL/BSL Liquidity Sweep
+    if (ob.displacementFVG) score += 10; // Displacement Fair Value Gap
 
     // Trend alignment
     if (ob.type === "BULLISH" && ms.trend.direction === "BULL") score += 10;
     if (ob.type === "BEARISH" && ms.trend.direction === "BEAR") score += 10;
 
-    return Math.min(90, Math.max(MIN_CONFIDENCE, score));
+    return Math.min(95, Math.max(MIN_CONFIDENCE, score));
   }
 
   private avgCandleRange(candles: Candle[], period: number): number {
