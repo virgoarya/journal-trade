@@ -14,7 +14,7 @@ import {
 } from "@/services/backtest.service";
 import {
   Terminal, XCircle, Cpu, TrendingUp, TrendingDown,
-  Activity, Loader2, BarChart3, Layers,
+  Activity, Loader2, BarChart3, Layers, Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -59,6 +59,17 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const symbolStatsRef = useRef<Map<string, LiveSymbolStat>>(new Map());
   const [liveMethStats, setLiveMethStats] = useState<Array<{ methodology: string; count: number; pnl: number }>>([]);
   const methStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
+  const [liveSessionStats, setLiveSessionStats] = useState<Array<{ session: string; count: number; pnl: number; color: string }>>([]);
+  const sessionStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
+
+  const getSessionInfo = (timestamp?: number) => {
+    if (!timestamp) return { name: "Off-Hours", color: "text-gray-400" };
+    const h = new Date(timestamp * 1000).getUTCHours();
+    if (h >= 0 && h < 6) return { name: "Asian", color: "text-yellow-400" };
+    if (h >= 6 && h < 12) return { name: "London", color: "text-blue-400" };
+    if (h >= 12 && h < 21) return { name: "New York", color: "text-red-400" };
+    return { name: "Off-Hours", color: "text-gray-400" };
+  };
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dataReadyInfo, setDataReadyInfo] = useState<StreamDataReady | null>(null);
   const [startingSimulation, setStartingSimulation] = useState(false);
@@ -111,8 +122,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       setEquityHistory([]);
       symbolStatsRef.current.clear();
       methStatsRef.current.clear();
+      sessionStatsRef.current.clear();
       setLiveSymbolStats([]);
       setLiveMethStats([]);
+      setLiveSessionStats([]);
       setCandle(null);
       setProgress(null);
       setSessionId(null);
@@ -342,6 +355,27 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
 
+            // Market Session Stats tracking
+            const sess = getSessionInfo(data.exitTime || data.entryTime);
+            if (!sessionStatsRef.current.has(sess.name)) {
+              sessionStatsRef.current.set(sess.name, { count: 0, pnl: 0 });
+            }
+            const sData = sessionStatsRef.current.get(sess.name)!;
+            sData.count++;
+            sData.pnl += data.pnl;
+
+            const SESS_ORDER = ["Asian", "London", "New York", "Off-Hours"];
+            setLiveSessionStats(
+              Array.from(sessionStatsRef.current.entries())
+                .map(([session, s]) => ({
+                  session,
+                  count: s.count,
+                  pnl: Math.round(s.pnl * 100) / 100,
+                  color: session === "Asian" ? "text-yellow-400" : session === "London" ? "text-blue-400" : session === "New York" ? "text-red-400" : "text-gray-400",
+                }))
+                .sort((a, b) => SESS_ORDER.indexOf(a.session) - SESS_ORDER.indexOf(b.session))
+            );
+
             // Remove from active trades
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
             const currActive = Array.from(activeTradesRef.current.values());
@@ -468,7 +502,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const sessionPnLPct = config.initialBalance > 0 ? (sessionPnL / config.initialBalance) * 100 : 0;
 
   return (
-    <div className="h-full min-h-[560px] flex flex-col glass overflow-hidden relative">
+    <div className="h-full min-h-[660px] flex flex-col glass overflow-hidden relative">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: "linear-gradient(#d4af37 1px, transparent 1px), linear-gradient(90deg, #d4af37 1px, transparent 1px)",
@@ -557,6 +591,25 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </div>
               </div>
             )}
+
+            {liveSessionStats.length > 0 && (
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+                <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Sessions PnL</p>
+                <div className="space-y-1.5">
+                  {liveSessionStats.map((s) => (
+                    <div key={s.session} className="text-xs font-mono">
+                      <div className="flex justify-between items-center font-bold">
+                        <span className={s.color}>{s.session}</span>
+                        <span className={s.pnl >= 0 ? "text-green-400" : "text-red-400"}>
+                          {s.pnl >= 0 ? "+" : ""}${s.pnl.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-text-muted">{s.count} trades</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -565,15 +618,15 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 shrink-0">
               <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-1">Equity Curve</p>
-              <div style={{ height: "180px", width: "100%" }}>
+              <div style={{ height: "280px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
-                    <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
+                    <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.2} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                     <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={35} />
                     <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "10px" }} />
-                    <Area type="monotone" dataKey="e" stroke="#D4AF37" strokeWidth={1.5} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
+                    <Area type="monotone" dataKey="e" stroke="#D4AF37" strokeWidth={2} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
