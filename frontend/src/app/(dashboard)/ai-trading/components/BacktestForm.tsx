@@ -77,6 +77,13 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [leverage, setLeverage] = useStickyState(100, "bt_leverage");
   const [signalInterval, setSignalInterval] = useStickyState(3, "bt_signalInterval");
   const [speedMs, setSpeedMs] = useStickyState(0, "bt_speedMs");
+
+  // Migration: old speed values (10, 50) → new values (30, 80)
+  useEffect(() => {
+    if (speedMs === 10) setSpeedMs(30);
+    else if (speedMs === 50) setSpeedMs(80);
+  }, []);
+
   const [activeMethodologies, setActiveMethodologies] = useStickyState<string[]>(METHODOLOGY_NAMES, "bt_activeMethodologies");
 
   // Smart Risk Management
@@ -576,10 +583,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary outline-none"
             >
               <option value={0}>⚡ Max Speed</option>
-              <option value={10}>🏎️ Visual (Smooth)</option>
-              <option value={50}>👁️ Observable</option>
+              <option value={30}>🏎️ Visual (Smooth)</option>
+              <option value={80}>👁️ Observable</option>
+              <option value={150}>🔍 Detailed</option>
             </select>
-            <p className="text-[9px] text-gray-600">Max = fastest result. Visual = smooth like MT5.</p>
+            <p className="text-[9px] text-gray-600">Max = fastest. Smooth = balanced. Detailed = slow & precise.</p>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1">

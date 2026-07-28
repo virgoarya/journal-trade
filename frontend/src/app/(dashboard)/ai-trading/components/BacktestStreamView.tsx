@@ -139,6 +139,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   }, [newKey]);
 
   const journalRef = useRef<HTMLDivElement>(null);
+  const liveTradesTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
@@ -260,16 +261,19 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
 
-            // Single source of truth for live trades & position count
-            if (data.activeTrades && data.activeTrades.length > 0) {
-              setLiveTrades(data.activeTrades);
-              setActiveTradeCount(data.activeTrades.length);
-            } else {
-              setLiveTrades([]);
-              setActiveTradeCount(0);
+            // Buffer live trades — flush via throttled timer for smooth visuals
+            if (data.activeTrades) {
+              liveTradesBufferRef.current = data.activeTrades;
             }
           } catch {}
         });
+
+        // Throttled flush for live trades (every 500ms) — prevents rapid re-renders
+        const liveTradesTimer = setInterval(() => {
+          if (!mounted) return;
+          setLiveTrades(liveTradesBufferRef.current);
+          setActiveTradeCount(liveTradesBufferRef.current.length);
+        }, 500);
 
         es.addEventListener("candle", (e: any) => {
           if (!mounted) return;
@@ -308,6 +312,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             }
             methStatsRef.current.get(meth)!.count++;
             setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
+            
+            // Track open position
+            activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
+            setActiveTradeCount(activeTradesRef.current.size);
+            setLiveTrades(Array.from(activeTradesRef.current.values()));
           } catch {}
         });
 
@@ -337,6 +346,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
 
+            // Remove from active trades
+            activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
+            setActiveTradeCount(activeTradesRef.current.size);
+            setLiveTrades(Array.from(activeTradesRef.current.values()));
+            
             // Update Global Win Rate
             if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
             else { globalLossesRef.current++; setGlobalLosses(globalLossesRef.current); }
@@ -406,6 +420,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
     return () => {
       mounted = false;
+      clearInterval(liveTradesTimer);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -456,9 +471,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const killzone = getKillzone(candle?.time);
   const winRate = globalWins + globalLosses > 0 ? (globalWins / (globalWins + globalLosses)) * 100 : 0;
   const liveTradesTotal = liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+  const sessionPnL = (candle?.equity || 0) - (config.initialBalance || 0);
+  const sessionPnLPct = config.initialBalance > 0 ? (sessionPnL / config.initialBalance) * 100 : 0;
 
   return (
-    <div className="h-full min-h-[500px] flex flex-col glass overflow-hidden relative">
+    <div className="h-full min-h-[560px] flex flex-col glass overflow-hidden relative">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: "linear-gradient(#d4af37 1px, transparent 1px), linear-gradient(90deg, #d4af37 1px, transparent 1px)",
@@ -467,83 +484,67 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-black/40 border-b border-accent-gold/15">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-accent-gold" />
-          <h3 className="text-xs font-bold text-text-primary tracking-wider uppercase">AI Strategy Tester</h3>
-          <span className="text-[10px] font-mono text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/20">{config.symbols?.join(",") || ""} · {config.timeframe}</span>
+      <div className="flex items-center justify-between px-5 py-3 bg-black/40 border-b border-accent-gold/15">
+        <div className="flex items-center gap-2.5">
+          <Cpu className="w-5 h-5 text-accent-gold" />
+          <h3 className="text-sm font-bold text-text-primary tracking-wider uppercase">AI Strategy Tester</h3>
+          <span className="text-xs font-mono text-accent-gold bg-accent-gold/10 px-2.5 py-1 rounded border border-accent-gold/20">{config.symbols?.join(",") || ""} · {config.timeframe}</span>
         </div>
-        <button onClick={handleCancelPreparation} className="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-red-400 transition bg-black/40 px-2 py-1 rounded border border-accent-gold/15 hover:border-red-500/30">
-          <XCircle className="w-3 h-3" /> Stop
+        <button onClick={handleCancelPreparation} className="flex items-center gap-1.5 text-xs text-text-muted hover:text-red-400 transition bg-black/40 px-3 py-1.5 rounded border border-accent-gold/15 hover:border-red-500/30">
+          <XCircle className="w-3.5 h-3.5" /> Stop
         </button>
       </div>
 
       {/* Main View */}
       {(phase === "preparing" || phase === "running" || phase === "complete") && (
-        <div className="flex-1 flex flex-col lg:flex-row p-2 gap-2 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-hidden min-h-0">
         {/* Left Panel - Stats */}
-        <div className="w-full lg:w-72 shrink-0 flex flex-col gap-2 overflow-y-auto min-h-0">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Equity</p>
-              <p className="text-2xl font-bold font-mono text-text-primary">
+        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-2.5 overflow-y-auto min-h-0">
+          <div className="bg-black/40 border border-accent-gold/15 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-text-muted uppercase tracking-wider font-mono">Equity</p>
+                <p className="text-xs text-text-muted uppercase tracking-wider font-mono">{killzone.name}</p>
+              </div>
+              <p className="text-2xl font-bold font-mono text-text-primary mt-1.5">
                 ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
               </p>
-              <div className={`flex items-center gap-1 font-mono mt-1 ${liveTradesTotal >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {liveTradesTotal >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                <span className="text-sm font-bold">{liveTradesTotal >= 0 ? "+" : ""}{liveTradesTotal.toFixed(2)}</span>
-                <span className="text-[9px] opacity-70">Float ({liveTrades.length} pos)</span>
-              </div>
-              {candle && candle.marginLevel > 0 && (
-                <p className="text-[10px] text-text-muted mt-0.5 font-mono">Margin: {candle.marginLevel.toFixed(1)}%</p>
-              )}
-            </div>
-
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Price</p>
-              <div className="space-y-0.5 font-mono text-[11px]">
-                <div className="flex justify-between"><span className="text-text-muted">C</span><span className="text-accent-gold font-bold">{candle ? (candle.close || 0).toFixed(5) : "0.00000"}</span></div>
-                <div className="flex justify-between"><span className="text-text-muted">H</span><span className="text-text-secondary">{candle ? (candle.high || 0).toFixed(5) : "0.00000"}</span></div>
-                <div className="flex justify-between"><span className="text-text-muted">L</span><span className="text-text-secondary">{candle ? (candle.low || 0).toFixed(5) : "0.00000"}</span></div>
+              <div className={`flex items-center gap-2 font-mono mt-2 p-2 rounded-lg ${sessionPnL >= 0 ? "text-green-400 bg-green-500/5" : "text-red-400 bg-red-500/5"}`}>
+                {sessionPnL >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <span className="text-lg font-bold">{sessionPnL >= 0 ? "+" : ""}${sessionPnL.toFixed(2)}</span>
+                <span className="text-sm opacity-80">({sessionPnLPct >= 0 ? "+" : ""}{sessionPnLPct.toFixed(2)}%)</span>
               </div>
             </div>
 
-            <div className={`border border-accent-gold/10 rounded-lg p-3 ${killzone.bg}`}>
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Session</p>
-              <div className={`font-mono font-bold text-sm ${killzone.color}`}>{killzone.name}</div>
-            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2.5">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider font-mono">Win Rate</p>
+                <div className={`font-mono font-bold text-lg ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>{winRate.toFixed(1)}%</div>
+                <p className="text-[10px] text-text-muted font-mono">{globalWins}W / {globalLosses}L</p>
+              </div>
 
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Win Rate</p>
-              <div className={`font-mono font-bold text-sm ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>{winRate.toFixed(1)}%</div>
-              <p className="text-[9px] text-text-muted font-mono">{globalWins}W / {globalLosses}L</p>
-            </div>
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2.5">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider font-mono">Max DD</p>
+                <div className="font-mono font-bold text-lg text-red-400">-{maxDrawdownPct.toFixed(2)}%</div>
+              </div>
 
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Max DD</p>
-              <div className="font-mono font-bold text-sm text-red-400">-{maxDrawdownPct.toFixed(2)}%</div>
-            </div>
-
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Open Positions</p>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-sm text-blue-400">{activeTradeCount}</span>
-                <span className={`font-mono text-xs ${liveTradesTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {liveTradesTotal >= 0 ? '+' : ''}${liveTradesTotal.toFixed(2)}
-                </span>
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2.5">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider font-mono">Float</p>
+                <div className={`font-mono font-bold text-lg ${liveTradesTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {liveTradesTotal >= 0 ? "+" : ""}{liveTradesTotal.toFixed(0)}
+                </div>
+                <p className="text-[10px] text-text-muted font-mono">{activeTradeCount} pos</p>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {liveSymbolStats.length > 0 && (
               <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-                <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
+                <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Symbols</p>
                 <div className="space-y-1.5">
                   {liveSymbolStats.map((s) => (
-                    <div key={s.symbol} className="text-[10px] font-mono">
+                    <div key={s.symbol} className="text-xs font-mono">
                       <div className="flex justify-between"><span className="text-text-secondary">{s.symbol}</span><span className={s.totalPnL >= 0 ? "text-green-400" : "text-red-400"}>{s.totalPnL >= 0 ? "+" : ""}${s.totalPnL.toFixed(2)}</span></div>
-                      <div className="text-[8px] text-text-muted">{s.totalTrades}t · {s.wins}W/{s.losses}L</div>
+                      <div className="text-[10px] text-text-muted">{s.totalTrades}t · {s.wins}W/{s.losses}L</div>
                     </div>
                   ))}
                 </div>
@@ -552,12 +553,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
             {liveMethStats.length > 0 && (
               <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-                <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1"><Layers className="w-3 h-3" /> Methods</p>
+                <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5"><Layers className="w-3.5 h-3.5" /> Methods</p>
                 <div className="space-y-1.5">
                   {liveMethStats.map((m) => (
-                    <div key={m.methodology} className="text-[10px] font-mono">
+                    <div key={m.methodology} className="text-xs font-mono">
                       <div className="flex justify-between"><span className="text-text-secondary capitalize">{m.methodology}</span><span className={m.pnl >= 0 ? "text-green-400" : "text-red-400"}>{m.pnl >= 0 ? "+" : ""}${m.pnl.toFixed(2)}</span></div>
-                      <div className="text-[8px] text-text-muted">{m.count} trades</div>
+                      <div className="text-[10px] text-text-muted">{m.count} trades</div>
                     </div>
                   ))}
                 </div>
@@ -567,18 +568,18 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         </div>
 
         {/* Right Panel: Equity Curve */}
-        <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
+        <div className="flex-1 flex flex-col gap-2.5 min-w-0 min-h-0">
           {equityHistory.length > 1 && (
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
-              <div style={{ height: "140px", width: "100%" }}>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 shrink-0">
+              <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-1">Equity Curve</p>
+              <div style={{ height: "180px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                    <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 6 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 6 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={25} />
-                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "8px" }} />
+                    <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={35} />
+                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "10px" }} />
                     <Area type="monotone" dataKey="e" stroke="#D4AF37" strokeWidth={1.5} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -587,57 +588,57 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           )}
 
           {/* Combined Live Positions + Journal */}
-          <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-            <div className="flex items-center justify-between text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1">
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3 shrink-0">
+            <div className="flex items-center justify-between text-[10px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5">
               <span>Live Positions {liveTrades.length > 0 ? `(${liveTrades.length})` : ""}</span>
               {liveTrades.length > 0 && (
-                <span className="text-[8px] text-text-muted normal-case font-normal">
+                <span className="text-[10px] text-text-muted normal-case font-normal">
                   Float: <span className={`font-bold ${liveTradesTotal >= 0 ? "text-green-400" : "text-red-400"}`}>{liveTradesTotal >= 0 ? "+" : ""}${liveTradesTotal.toFixed(2)}</span>
                 </span>
               )}
             </div>
             {liveTrades.length > 0 ? (
-            <div className="space-y-0.5 max-h-[80px] overflow-y-auto">
+            <div className="space-y-1 max-h-[90px] overflow-y-auto">
               {liveTrades.map((t, idx) => (
-                <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
-                  <div className="flex items-center gap-1">
-                    <span className={`px-1 py-0.5 rounded text-[7px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
+                <div key={idx} className="flex justify-between items-center text-[11px] font-mono bg-black/30 p-1.5 rounded">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
                     <span className="text-text-primary font-bold">{t.symbol}</span>
-                    {t.primaryMethodology && <span className="text-text-muted text-[7px]">[{t.primaryMethodology.toUpperCase()}]</span>}
+                    {t.primaryMethodology && <span className="text-text-muted text-[9px]">[{t.primaryMethodology.toUpperCase()}]</span>}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-text-muted text-[8px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
-                    <span className={`font-bold w-12 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-text-muted text-[10px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
+                    <span className={`font-bold w-14 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
                   </div>
                 </div>
               ))}
             </div>
             ) : (
-              <p className="text-[9px] text-text-muted font-mono">No open trades</p>
+              <p className="text-[10px] text-text-muted font-mono">No open trades</p>
             )}
           </div>
 
-          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative flex-1 min-h-0">
-            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Run Log <span className="text-text-muted/60">({logs.length})</span></div>
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-xs relative flex-1 min-h-0">
+            <div className="px-3 py-2 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5"><Terminal className="w-3.5 h-3.5" /> Run Log <span className="text-text-muted/60">({logs.length})</span></div>
               {!autoScroll && (
                 <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
-                  className="text-accent-gold hover:text-yellow-400 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
+                  className="text-accent-gold hover:text-yellow-400 text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
                   ↓ Scroll to Bottom
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[120px]">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-2 space-y-0.5 max-h-[140px]">
               {logs.map((log) => (
-                <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
+                <div key={log.id} className={`flex gap-2 py-0.5 px-2 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
                   : log.type === "trade_close"
                     ? log.message.includes("+") ? "bg-green-900/5" : "bg-red-900/5"
                     : log.type === "error" ? "bg-red-950/10"
                       : ""
                 }`}>
-                  <span className="text-gray-600 shrink-0 text-[8px] mt-0.5">[{log.candleTime || log.time}]</span>
-                  <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"} leading-tight`}>{log.message}</span>
+                  <span className="text-gray-600 shrink-0 text-[10px] mt-0.5">[{log.candleTime || log.time}]</span>
+                  <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"} leading-tight text-[11px]`}>{log.message}</span>
                 </div>
               ))}
             </div>
@@ -647,12 +648,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       )}
 
       {/* Progress Footer */}
-      <div className="px-4 py-2.5 bg-black/40 border-t border-accent-gold/10">
-        <div className="flex justify-between text-[10px] font-mono">
+      <div className="px-5 py-3 bg-black/40 border-t border-accent-gold/10">
+        <div className="flex justify-between text-xs font-mono">
           <span className="text-accent-gold flex items-center gap-1.5">
-            {phase === "preparing" && !progress && <><Loader2 className="w-3 h-3 animate-spin" /> Fetching data...</>}
-            {phase === "running" && progress && progress.percent === 0 && <><Loader2 className="w-3 h-3 animate-spin" /> Initializing...</>}
-            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && <><Loader2 className="w-3 h-3 animate-spin" /> Simulating {Math.round(progressPercent)}%</>}
+            {phase === "preparing" && !progress && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Fetching data...</>}
+            {phase === "running" && progress && progress.percent === 0 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Initializing...</>}
+            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Simulating {Math.round(progressPercent)}%</>}
             {phase === "running" && progress && progress.percent >= 100 && <>Completed.</>}
             {phase === "complete" && <>Completed.</>}
           </span>
