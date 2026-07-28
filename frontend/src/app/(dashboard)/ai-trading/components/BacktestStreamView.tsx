@@ -311,6 +311,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             
             // Track open position (ref only — RAF flushes activeTradeCount)
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
+            liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
           } catch {}
         });
 
@@ -342,6 +343,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
             // Remove from active trades (ref only — RAF flushes)
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
+            liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
             
             // Update Global Win Rate (ref only — RAF flushes)
             if (data.pnl >= 0) globalWinsRef.current++;
@@ -576,8 +578,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-              <p className="text-[8px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
-              <div style={{ height: "80px", width: "100%" }}>
+              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
+              <div style={{ height: "140px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
@@ -594,8 +596,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
           {liveTrades.length > 0 && (
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-              <p className="text-[8px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions ({liveTrades.length})</p>
-              <div className="space-y-0.5 max-h-[80px] overflow-y-auto mt-1">
+              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions ({liveTrades.length})</p>
+              <div className="space-y-0.5 max-h-[100px] overflow-y-auto mt-1">
                 {liveTrades.map((t, idx) => (
                   <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
                     <div className="flex items-center gap-1">
@@ -613,7 +615,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative flex-1 min-h-0">
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative">
             <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
               <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Journal <span className="text-text-muted/60">({logs.length})</span></div>
               {!autoScroll && (
@@ -623,7 +625,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 flex-1 min-h-0">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[180px]">
               {logs.map((log) => (
                 <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
