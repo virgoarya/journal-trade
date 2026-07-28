@@ -1429,7 +1429,9 @@ class BacktestService {
               sharpeRatio: Math.round(sharpeRatio * 100) / 100,
               averageWin: Math.round(avgWin * 100) / 100,
               averageLoss: Math.round(avgLoss * 100) / 100,
-              equityCurve,
+              equityCurve: equityCurve.length > 500
+                ? equityCurve.filter((_, i) => i % Math.ceil(equityCurve.length / 500) === 0 || i === equityCurve.length - 1)
+                : equityCurve,
               recoveryFactor: Math.round(recoveryFactor * 100) / 100,
               symbolStats,
               methodologyStats,
@@ -1474,7 +1476,9 @@ class BacktestService {
       largestLoss: Math.round(largestLoss * 100) / 100,
       averageBarsHeld: Math.round(avgBarsHeld),
       recoveryFactor: Math.round(recoveryFactor * 100) / 100,
-      equityCurve,
+      equityCurve: equityCurve.length > 500
+        ? equityCurve.filter((_, i) => i % Math.ceil(equityCurve.length / 500) === 0 || i === equityCurve.length - 1)
+        : equityCurve,
       trades: tradeResults,
       symbolStats,
       methodologyStats,

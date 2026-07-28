@@ -179,9 +179,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         equityBufferRef.current = [];
         setEquityHistory(prev => {
           const next = [...prev, ...eq];
-          // Downsample: keep max ~800 points for chart performance to allow smooth high-res curves
-          if (next.length > 800) {
-            const step = Math.ceil(next.length / 800);
+          // Downsample: keep max ~300 points for chart performance to allow smooth high-res curves without browser lag
+          if (next.length > 300) {
+            const step = Math.ceil(next.length / 300);
             return next.filter((_, i) => i % step === 0 || i === next.length - 1);
           }
           return next;

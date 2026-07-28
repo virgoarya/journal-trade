@@ -30,7 +30,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface Props {
   result: BacktestResultData;
@@ -56,6 +56,46 @@ function MetricCard({ icon: Icon, label, value, color = "text-text-primary", sub
 
 export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApplyToPipeline, isApplying }: Props) {
   const [showTrades, setShowTrades] = useState(false);
+  const [tradePage, setTradePage] = useState(1);
+  const tradesPerPage = 50;
+
+  // Downsample equity curve to max 300 points for smooth Recharts rendering
+  const chartData = useMemo(() => {
+    if (!result?.equityCurve || result.equityCurve.length === 0) return [];
+    const raw = result.equityCurve;
+    const maxPoints = 300;
+    if (raw.length <= maxPoints) {
+      return raw.map((p) => ({
+        time: new Date(p.time * 1000).toLocaleDateString(),
+        equity: p.equity,
+      }));
+    }
+    const step = Math.ceil(raw.length / maxPoints);
+    const sampled = [];
+    for (let i = 0; i < raw.length; i += step) {
+      sampled.push({
+        time: new Date(raw[i].time * 1000).toLocaleDateString(),
+        equity: raw[i].equity,
+      });
+    }
+    // Always include last point
+    if (sampled[sampled.length - 1]?.time !== new Date(raw[raw.length - 1].time * 1000).toLocaleDateString()) {
+      sampled.push({
+        time: new Date(raw[raw.length - 1].time * 1000).toLocaleDateString(),
+        equity: raw[raw.length - 1].equity,
+      });
+    }
+    return sampled;
+  }, [result?.equityCurve]);
+
+  // Paginate trade history to prevent DOM bloat
+  const allTrades = result?.trades || [];
+  const totalTradePages = Math.max(1, Math.ceil(allTrades.length / tradesPerPage));
+  const paginatedTrades = useMemo(() => {
+    const start = (tradePage - 1) * tradesPerPage;
+    return allTrades.slice(start, start + tradesPerPage);
+  }, [allTrades, tradePage, tradesPerPage]);
+
   // Ensure result is not just a truthy empty object before rendering
   if (!result || Object.keys(result).length === 0 || result.totalTrades === undefined) return null;
 
@@ -64,8 +104,6 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
   const recoveryColor = recoveryFactor === Infinity ? "text-green-400" : recoveryFactor >= 3 ? "text-green-400" : recoveryFactor >= 1.5 ? "text-yellow-400" : "text-red-400";
   const bestSymbol = result.symbolStats?.length ? [...result.symbolStats].sort((a, b) => b.totalPnL - a.totalPnL)[0] : null;
   const worstSymbol = result.symbolStats?.length ? [...result.symbolStats].sort((a, b) => a.totalPnL - b.totalPnL)[0] : null;
-
-  const chartData = result.equityCurve?.map((p) => ({ time: new Date(p.time * 1000).toLocaleDateString(), equity: p.equity })) || [];
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -104,7 +142,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       {/* Equity Curve */}
       {chartData.length > 1 && (
         <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4 relative z-10">
-          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Equity Curve</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Equity Curve ({chartData.length} points)</p>
           <div className="w-full relative h-[200px] md:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
@@ -113,7 +151,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
                 <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 9 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fill: "#6b7280", fontSize: 9 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={60} />
                 <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "10px" }} />
-                <Area type="monotone" dataKey="equity" stroke="#D4AF37" strokeWidth={2} fill="url(#btEqGrad)" />
+                <Area type="monotone" dataKey="equity" stroke="#D4AF37" strokeWidth={2} fill="url(#btEqGrad)" isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -290,55 +328,80 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       <div className="bg-black/40 border border-accent-gold/20 rounded-lg overflow-hidden relative z-10">
         <button onClick={() => setShowTrades(!showTrades)}
           className="w-full px-4 py-3 flex items-center justify-between text-sm text-text-primary hover:bg-bg-input transition">
-          <span>Trade History ({(result.trades || []).length} trades)</span>
+          <span>Trade History ({allTrades.length} trades)</span>
           <span className="text-text-muted">{showTrades ? "▲" : "▼"}</span>
         </button>
         {showTrades && (
-          <div className="overflow-x-auto max-h-72 overflow-y-auto border-t border-border-subtle">
-            <table className="w-full text-xs">
-              <thead><tr className="text-text-muted uppercase">
-                <th className="text-left px-3 py-2">Symbol</th>
-                <th className="text-left px-3 py-2">Entry</th>
-                <th className="text-left px-3 py-2">Exit</th>
-                <th className="text-center px-3 py-2">Dir</th>
-                <th className="text-right px-3 py-2">Lot</th>
-                <th className="text-right px-3 py-2">Entry</th>
-                <th className="text-right px-3 py-2">Exit</th>
-                <th className="text-right px-3 py-2">PnL</th>
-                <th className="text-right px-3 py-2">RR</th>
-                <th className="text-center px-3 py-2">Method</th>
-                <th className="text-center px-3 py-2">Reason</th>
-                <th className="text-center px-3 py-2">Conf</th>
-                <th className="text-left px-3 py-2">Comment</th>
-              </tr></thead>
-              <tbody className="divide-y divide-gray-800/50">
-                {result.trades.map((t, i) => (
-                  <tr key={i} className="hover:bg-bg-input/30">
-                    <td className="px-3 py-2 text-text-muted font-mono">{(t as any).symbol || "-"}</td>
-                    <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.entryTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
-                    <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.exitTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
-                    <td className="px-3 py-2 text-center"><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${t.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{t.direction}</span></td>
-                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).volume ? (t as any).volume.toFixed(2) : "—"}</td>
-                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.entryPrice.toFixed(5)}</td>
-                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.exitPrice.toFixed(5)}</td>
-                    <td className={`px-3 py-2 text-right font-medium font-mono ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>${t.pnl.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).rr ? (t as any).rr.toFixed(2) + "R" : "—"}</td>
-                    <td className="px-3 py-2 text-center">{(t as any).primaryMethodology && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-400">{(t as any).primaryMethodology}</span>}</td>
-                    <td className="px-3 py-2 text-center">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${t.closeReason === "TP_HIT" ? "bg-green-500/10 text-green-400" : t.closeReason === "SL_HIT" ? "bg-red-500/10 text-red-400" : t.closeReason === "TRAILING_STOP" ? "bg-yellow-500/10 text-yellow-400" : "bg-gray-500/10 text-text-muted"}`}>
-                        {(t as any).exitMethodology && (t as any).exitMethodology !== "Risk Management" ? `${(t as any).exitMethodology.toUpperCase()} ` : ""}{t.closeReason === "SL_HIT" && (t as any).trailingHistory?.length > 0 ? "TRAILING_STOP" : t.closeReason}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-center text-text-secondary font-mono">{t.confidence}%</td>
-                    <td className="px-3 py-2 text-left text-text-muted text-[10px] max-w-[100px] truncate" title={(t as any).comment || ""}>{(t as any).comment || "—"}</td>
+          <div className="border-t border-border-subtle">
+            <div className="overflow-x-auto max-h-80 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-text-muted uppercase bg-black/60 sticky top-0 z-10">
+                  <th className="text-left px-3 py-2">Symbol</th>
+                  <th className="text-left px-3 py-2">Entry</th>
+                  <th className="text-left px-3 py-2">Exit</th>
+                  <th className="text-center px-3 py-2">Dir</th>
+                  <th className="text-right px-3 py-2">Lot</th>
+                  <th className="text-right px-3 py-2">Entry</th>
+                  <th className="text-right px-3 py-2">Exit</th>
+                  <th className="text-right px-3 py-2">PnL</th>
+                  <th className="text-right px-3 py-2">RR</th>
+                  <th className="text-center px-3 py-2">Method</th>
+                  <th className="text-center px-3 py-2">Reason</th>
+                  <th className="text-center px-3 py-2">Conf</th>
+                  <th className="text-left px-3 py-2">Comment</th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-800/50">
+                  {paginatedTrades.map((t, i) => (
+                    <tr key={i} className="hover:bg-bg-input/30">
+                      <td className="px-3 py-2 text-text-muted font-mono">{(t as any).symbol || "-"}</td>
+                      <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.entryTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
+                      <td className="px-3 py-2 text-text-secondary text-[11px]">{new Date(t.exitTime * 1000).toLocaleString('id-ID', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'})}</td>
+                      <td className="px-3 py-2 text-center"><span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${t.direction === "BUY" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{t.direction}</span></td>
+                      <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).volume ? (t as any).volume.toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.entryPrice.toFixed(5)}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary font-mono">{t.exitPrice.toFixed(5)}</td>
+                      <td className={`px-3 py-2 text-right font-medium font-mono ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>${t.pnl.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary font-mono">{(t as any).rr ? (t as any).rr.toFixed(2) + "R" : "—"}</td>
+                      <td className="px-3 py-2 text-center">{(t as any).primaryMethodology && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-400">{(t as any).primaryMethodology}</span>}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${t.closeReason === "TP_HIT" ? "bg-green-500/10 text-green-400" : t.closeReason === "SL_HIT" ? "bg-red-500/10 text-red-400" : t.closeReason === "TRAILING_STOP" ? "bg-yellow-500/10 text-yellow-400" : "bg-gray-500/10 text-text-muted"}`}>
+                          {(t as any).exitMethodology && (t as any).exitMethodology !== "Risk Management" ? `${(t as any).exitMethodology.toUpperCase()} ` : ""}{t.closeReason === "SL_HIT" && (t as any).trailingHistory?.length > 0 ? "TRAILING_STOP" : t.closeReason}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center text-text-secondary font-mono">{t.confidence}%</td>
+                      <td className="px-3 py-2 text-left text-text-muted text-[10px] max-w-[100px] truncate" title={(t as any).comment || ""}>{(t as any).comment || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Pagination Controls */}
+            {totalTradePages > 1 && (
+              <div className="flex items-center justify-between px-4 py-2 bg-black/40 border-t border-border-subtle text-xs font-mono text-text-muted">
+                <span>Page {tradePage} of {totalTradePages} ({allTrades.length} trades total)</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setTradePage((p) => Math.max(1, p - 1))}
+                    disabled={tradePage === 1}
+                    className="px-2.5 py-1 bg-surface border border-border-subtle rounded hover:bg-bg-input disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setTradePage((p) => Math.min(totalTradePages, p + 1))}
+                    disabled={tradePage === totalTradePages}
+                    className="px-2.5 py-1 bg-surface border border-border-subtle rounded hover:bg-bg-input disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     </motion.div>
   );
 }
+

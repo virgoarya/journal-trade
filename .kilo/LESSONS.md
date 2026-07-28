@@ -95,3 +95,16 @@
 3. Decompose `sig.signalType` ICT ke variabel boolean individual (`hasAMD`, `hasFVG`, `hasOTE`, `hasSweep`) sebelum evaluasi checklist.
 4. Tambahkan numbering ①②③④⑤⑥⑦ pada label checklist agar urutan langkah pembentukan sinyal terlihat jelas di UI.
 **Hindari**: Jangan evaluasi checklist item secara flat/independen tanpa memperhatikan urutan dependensi. Jangan biarkan exception step 5-7 jatuh ke generic catch-all tanpa log granular per-step.
+
+### [20260728] Backtest Browser Performance Optimization (Equity Curve Downsampling & Table Pagination)
+**Area**: Frontend / Backend / Backtest / Performance
+**Root Cause**:
+1. **Unbounded SVG Points**: `result.equityCurve` menyimpan puluhan ribu data point candle. Mempassing puluhan ribu node ke Recharts `AreaChart` menyebabkan browser UI thread nge-freeze total dan animasi Recharts mencoba merender ribuan elemen SVG sekaligus.
+2. **DOM Node Inflation**: `Trade History` merender ribuan elemen `<tr>` secara langsung di DOM tanpa batas/paginasi.
+3. **Payload Bloat**: Server menyimpan dan mengirimkan ribuan data point `equityCurve` yang tidak ter-downsample lewat JSON API response.
+**Solusi**:
+1. Impor `useMemo` di `BacktestResult.tsx` dan filter/downsample `equityCurve` maksimal 300 data point untuk grafik chart.
+2. Matikan animasi SVG Recharts dengan `isAnimationActive={false}`.
+3. Tambahkan paginasi pada `Trade History` (50 baris per halaman) dengan tombol Navigasi Next/Prev.
+4. Downsample `equityCurve` di `BacktestStreamView.tsx` dan di backend `backtest.service.ts` maksimal 300-500 data point sebelum disimpan/dikirim.
+**Hindari**: Jangan pernah mempassing raw array `equityCurve` atau list trade ribuan baris langsung ke komponen SVG Recharts atau DOM tanpa downsampling dan paginasi.
