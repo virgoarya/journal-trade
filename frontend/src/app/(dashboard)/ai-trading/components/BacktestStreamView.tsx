@@ -138,6 +138,23 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
     configKeyRef.current = newKey;
   }, [newKey]);
 
+  const journalRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    const el = journalRef.current;
+    if (!el || !autoScroll) return;
+    el.scrollTop = el.scrollHeight;
+  }, [logs, autoScroll]);
+
+  const handleJournalScroll = useCallback(() => {
+    const el = journalRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    if (atBottom && !autoScroll) setAutoScroll(true);
+    else if (!atBottom && autoScroll) setAutoScroll(false);
+  }, [autoScroll]);
+
   // ── RAF flush loop: push buffered data to React state at ~60fps ──
   useEffect(() => {
     let running = true;
@@ -186,12 +203,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs]);
 
   useEffect(() => {
     let mounted = true;
@@ -602,11 +613,17 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          <div className="flex-1 bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] overflow-hidden min-h-[150px]">
-            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center gap-1.5">
-              <Terminal className="w-3 h-3" /> Journal
+          <div className="flex-1 bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] overflow-hidden min-h-[150px] relative">
+            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between">
+              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Journal</div>
+              {!autoScroll && (
+                <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
+                  className="text-accent-gold hover:text-yellow-400 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
+                  ↓ Scroll to Bottom
+                </button>
+              )}
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {logs.map((log) => (
                 <div key={log.id} className={`flex gap-2 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
@@ -619,7 +636,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                   <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"}`}>{log.message}</span>
                 </div>
               ))}
-              <div ref={logsEndRef} />
             </div>
           </div>
         </div>
