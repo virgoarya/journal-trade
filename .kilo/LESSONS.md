@@ -108,3 +108,14 @@
 3. Tambahkan paginasi pada `Trade History` (50 baris per halaman) dengan tombol Navigasi Next/Prev.
 4. Downsample `equityCurve` di `BacktestStreamView.tsx` dan di backend `backtest.service.ts` maksimal 300-500 data point sebelum disimpan/dikirim.
 **Hindari**: Jangan pernah mempassing raw array `equityCurve` atau list trade ribuan baris langsung ke komponen SVG Recharts atau DOM tanpa downsampling dan paginasi.
+
+### [20260728] Defensive Render Safe-Guards & Float PnL Metric Synchronization
+**Area**: Frontend / Backtest / Error Recovery / State Synchronization
+**Root Cause**:
+1. **Completion Crash ("This page couldn't load")**: Panggilan `.toFixed()` atau `new Date().toLocaleString()` tanpa pemodelan safe fallback pada nilai `undefined`/`null` di `BacktestResult.tsx` memicu `TypeError` tak tertangkap saat rendering React. Hal ini menyebabkan crash pada Error Boundary Next.js.
+2. **Confusing Float Metric**: Tampilan `Float` saat tidak ada posisi mengambang menampilkan `+0` kaku tanpa format mata uang `$0.00`, dan timer interval 500ms yang bersaing dengan event SSE `trade_open`/`trade_close` sempat meriset state `liveTrades`.
+**Solusi**:
+1. Mengubah `BacktestResult.tsx` menggunakan safe helpers (`safeNum`, `safeFixed`, `safeDateStr`) dan membungkusnya dengan `React.ErrorBoundary`.
+2. Menyelaraskan event SSE `equity`, `trade_open`, dan `trade_close` secara langsung pada `liveTrades` tanpa race condition interval.
+3. Memformat tampilan `Float` dengan mata uang yang jelas (`$0.00` saat 0 posisi, `+$XX.XX` saat profit, dan `-$XX.XX` saat rugi).
+**Hindari**: Jangan pernah memanggil `.toFixed()` atau `new Date()` pada properti dinamis tanpa safe fallback. Selalu sertakan ErrorBoundary pada komponen UI utama.

@@ -261,19 +261,14 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
 
-            // Buffer live trades — flush via throttled timer for smooth visuals
-            if (data.activeTrades) {
+            // Synchronize active open trades from server
+            if (data.activeTrades && Array.isArray(data.activeTrades)) {
               liveTradesBufferRef.current = data.activeTrades;
+              setLiveTrades(data.activeTrades);
+              setActiveTradeCount(data.activeTrades.length);
             }
           } catch {}
         });
-
-        // Throttled flush for live trades (every 500ms) — prevents rapid re-renders
-        const liveTradesTimer = setInterval(() => {
-          if (!mounted) return;
-          setLiveTrades(liveTradesBufferRef.current);
-          setActiveTradeCount(liveTradesBufferRef.current.length);
-        }, 500);
 
         es.addEventListener("candle", (e: any) => {
           if (!mounted) return;
@@ -313,10 +308,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             methStatsRef.current.get(meth)!.count++;
             setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             
-            // Track open position
+            // Track open position locally
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
-            setActiveTradeCount(activeTradesRef.current.size);
-            setLiveTrades(Array.from(activeTradesRef.current.values()));
+            const currActive = Array.from(activeTradesRef.current.values());
+            setActiveTradeCount(currActive.length);
+            setLiveTrades(currActive);
           } catch {}
         });
 
@@ -348,8 +344,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
             // Remove from active trades
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
-            setActiveTradeCount(activeTradesRef.current.size);
-            setLiveTrades(Array.from(activeTradesRef.current.values()));
+            const currActive = Array.from(activeTradesRef.current.values());
+            setActiveTradeCount(currActive.length);
+            setLiveTrades(currActive);
             
             // Update Global Win Rate
             if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
@@ -529,8 +526,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
               <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2.5">
                 <p className="text-[10px] text-text-muted uppercase tracking-wider font-mono">Float</p>
-                <div className={`font-mono font-bold text-lg ${liveTradesTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {liveTradesTotal >= 0 ? "+" : ""}{liveTradesTotal.toFixed(0)}
+                <div className={`font-mono font-bold text-lg ${activeTradeCount === 0 ? 'text-text-muted' : liveTradesTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {activeTradeCount === 0 ? "$0.00" : `${liveTradesTotal >= 0 ? "+" : ""}$${liveTradesTotal.toFixed(2)}`}
                 </div>
                 <p className="text-[10px] text-text-muted font-mono">{activeTradeCount} pos</p>
               </div>
