@@ -485,9 +485,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
       {/* Main View */}
       {(phase === "preparing" || phase === "running" || phase === "complete") && (
-        <div className="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-hidden">
+        <div className="flex-1 flex flex-col lg:flex-row p-2 gap-2 overflow-hidden min-h-0">
         {/* Left Panel - Stats */}
-        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
+        <div className="w-full lg:w-72 shrink-0 flex flex-col gap-2 overflow-y-auto min-h-0">
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
               <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Equity</p>
@@ -573,19 +573,19 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         </div>
 
         {/* Right Panel: Equity Curve + Journal */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0">
+        <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
           {equityHistory.length > 1 && (
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5">Equity Curve</p>
-              <div style={{ height: "120px", width: "100%" }}>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
+              <p className="text-[8px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
+              <div style={{ height: "80px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), equity: p.equity }))}>
+                  <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                    <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 7 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 7 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={35} />
-                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "9px" }} />
-                    <Area type="monotone" dataKey="equity" stroke="#D4AF37" strokeWidth={1.5} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
+                    <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 6 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#6b7280", fontSize: 6 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={25} />
+                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "8px" }} />
+                    <Area type="monotone" dataKey="e" stroke="#D4AF37" strokeWidth={1.5} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -593,19 +593,19 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           )}
 
           {liveTrades.length > 0 && (
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5">Live Positions ({liveTrades.length})</p>
-              <div className="space-y-1 max-h-[120px] overflow-y-auto">
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
+              <p className="text-[8px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions ({liveTrades.length})</p>
+              <div className="space-y-0.5 max-h-[80px] overflow-y-auto mt-1">
                 {liveTrades.map((t, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-[10px] font-mono bg-black/30 p-1.5 rounded border border-accent-gold/5">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
+                  <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
+                    <div className="flex items-center gap-1">
+                      <span className={`px-1 py-0.5 rounded text-[7px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
                       <span className="text-text-primary font-bold">{t.symbol}</span>
-                      {t.primaryMethodology && <span className="text-text-muted text-[8px]">[{t.primaryMethodology.toUpperCase()}]</span>}
+                      {t.primaryMethodology && <span className="text-text-muted text-[7px]">[{t.primaryMethodology.toUpperCase()}]</span>}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-text-muted text-[9px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
-                      <span className={`font-bold w-14 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-text-muted text-[8px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
+                      <span className={`font-bold w-12 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
@@ -613,9 +613,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          <div className="flex-1 bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] overflow-hidden min-h-[150px] relative">
-            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between">
-              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Journal</div>
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative flex-1 min-h-0">
+            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Journal <span className="text-text-muted/60">({logs.length})</span></div>
               {!autoScroll && (
                 <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
                   className="text-accent-gold hover:text-yellow-400 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
@@ -623,17 +623,17 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="flex-1 overflow-y-auto p-2 space-y-0.5">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 flex-1 min-h-0">
               {logs.map((log) => (
-                <div key={log.id} className={`flex gap-2 py-0.5 px-1.5 rounded ${
+                <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
                   : log.type === "trade_close"
                     ? log.message.includes("+") ? "bg-green-900/5" : "bg-red-900/5"
                     : log.type === "error" ? "bg-red-950/10"
                       : ""
                 }`}>
-                  <span className="text-gray-600 shrink-0 text-[9px]">[{log.candleTime || log.time}]</span>
-                  <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"}`}>{log.message}</span>
+                  <span className="text-gray-600 shrink-0 text-[8px] mt-0.5">[{log.candleTime || log.time}]</span>
+                  <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"} leading-tight`}>{log.message}</span>
                 </div>
               ))}
             </div>
