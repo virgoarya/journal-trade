@@ -227,20 +227,20 @@ class SMCStrategy {
    * M5 Refinement Entry (H1 POI -> Retest -> M5 CHoCH + M5 OB Limit Entry -> Target PDH/PDL)
    */
   private detectM5ConfirmationEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
-    const htfStr = fractal.directionStr; // H1 structure
-    const m5Str = fractal.entryStr;      // M5 structure
+    const htfStr = fractal.directionStr || fractal.dailyStr; // H1 structure
+    const m5Str = fractal.entryStr;                          // M5 structure
     const m5Candles = fractal.entry;
-    if (!htfStr || !m5Str || m5Candles.length < 5) return null;
+    if (!htfStr || !m5Str || m5Candles.length < 3) return null;
 
     const atrM5 = atrService.calculate(m5Candles);
     const avgRange = atrM5 > 0 ? atrM5 : this.avgCandleRange(m5Candles, 5);
     const dailyBias = analyzeDaily3CandleBias(fractal.daily || fractal.direction);
 
     // Scan H1 Order Blocks
-    const h1Blocks = htfStr.orderBlocks.filter((ob) => !ob.mitigated);
+    const h1Blocks = htfStr.orderBlocks || [];
     if (h1Blocks.length === 0) return null;
 
-    const recentM5 = m5Candles.slice(-15);
+    const recentM5 = m5Candles.slice(-20);
     const lowestM5 = Math.min(...recentM5.map((c) => c.low));
     const highestM5 = Math.max(...recentM5.map((c) => c.high));
 
@@ -248,60 +248,56 @@ class SMCStrategy {
       // ── BULLISH M5 CONFIRMATION ENTRY ──
       if (h1OB.type === "BULLISH") {
         // Price must have retested H1 OB zone
-        const retestedH1OB = lowestM5 <= h1OB.top && lowestM5 >= h1OB.bottom - avgRange * 2;
+        const retestedH1OB = lowestM5 <= h1OB.top + avgRange * 1.5 && lowestM5 >= h1OB.bottom - avgRange * 2.0;
         if (!retestedH1OB) continue;
 
-        // Find active M5 Bullish Order Blocks formed after retesting H1 OB
-        const m5BullBlocks = m5Str.orderBlocks.filter((ob) => ob.type === "BULLISH" && !ob.mitigated && ob.hasCHOCH);
-        if (m5BullBlocks.length === 0) continue;
+        // Find active M5 Bullish Order Blocks formed in recent M5 candles
+        let m5OB = m5Str.orderBlocks.find((ob) => ob.type === "BULLISH" && (ob.hasCHOCH || ob.isImpulsive));
+        if (!m5OB && m5Str.orderBlocks.length > 0) {
+          m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BULLISH").pop();
+        }
 
-        const m5OB = m5BullBlocks[m5BullBlocks.length - 1]; // latest M5 OB with CHoCH
-        const entry = m5OB.top; // Limit order at M5 OB Top
-        const sl = m5OB.bottom - avgRange * 0.5; // SL below M5 OB low
+        const entry = m5OB ? m5OB.top : h1OB.top;
+        const sl = m5OB ? m5OB.bottom - avgRange * 0.5 : h1OB.bottom - avgRange * 0.5;
         const targetPDH = dailyBias.pdh > entry ? dailyBias.pdh : entry + (entry - sl) * 3;
-
-        if (marketStructureService.isTargetTakenBeforeEntry(m5Candles, m5OB.index, "BUY", targetPDH, fractal)) continue;
 
         return {
           direction: "BUY",
           entry,
           sl,
           tp: targetPDH,
-          orderBlock: m5OB,
+          orderBlock: m5OB || h1OB,
           h1OrderBlock: h1OB,
           breachType: "M5_CHOCH_OB",
           confidence: 90, // High confidence refinement entry
-          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 CHoCH Confirmation -> Pending BUY Limit @ M5 OB Top ${entry.toFixed(5)} [Target PDH: ${targetPDH.toFixed(5)}]`,
+          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 Confirmation -> Pending BUY Limit @ ${entry.toFixed(5)} [Target PDH: ${targetPDH.toFixed(5)}]`,
         };
       }
 
       // ── BEARISH M5 CONFIRMATION ENTRY ──
       if (h1OB.type === "BEARISH") {
-        // Price must have retested H1 OB zone
-        const retestedH1OB = highestM5 >= h1OB.bottom && highestM5 <= h1OB.top + avgRange * 2;
+        const retestedH1OB = highestM5 >= h1OB.bottom - avgRange * 1.5 && highestM5 <= h1OB.top + avgRange * 2.0;
         if (!retestedH1OB) continue;
 
-        // Find active M5 Bearish Order Blocks formed after retesting H1 OB
-        const m5BearBlocks = m5Str.orderBlocks.filter((ob) => ob.type === "BEARISH" && !ob.mitigated && ob.hasCHOCH);
-        if (m5BearBlocks.length === 0) continue;
+        let m5OB = m5Str.orderBlocks.find((ob) => ob.type === "BEARISH" && (ob.hasCHOCH || ob.isImpulsive));
+        if (!m5OB && m5Str.orderBlocks.length > 0) {
+          m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BEARISH").pop();
+        }
 
-        const m5OB = m5BearBlocks[m5BearBlocks.length - 1]; // latest M5 OB with CHoCH
-        const entry = m5OB.bottom; // Limit order at M5 OB Bottom
-        const sl = m5OB.top + avgRange * 0.5; // SL above M5 OB high
+        const entry = m5OB ? m5OB.bottom : h1OB.bottom;
+        const sl = m5OB ? m5OB.top + avgRange * 0.5 : h1OB.top + avgRange * 0.5;
         const targetPDL = dailyBias.pdl < entry ? dailyBias.pdl : entry - (sl - entry) * 3;
-
-        if (marketStructureService.isTargetTakenBeforeEntry(m5Candles, m5OB.index, "SELL", targetPDL, fractal)) continue;
 
         return {
           direction: "SELL",
           entry,
           sl,
           tp: targetPDL,
-          orderBlock: m5OB,
+          orderBlock: m5OB || h1OB,
           h1OrderBlock: h1OB,
           breachType: "M5_CHOCH_OB",
           confidence: 90, // High confidence refinement entry
-          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 CHoCH Confirmation -> Pending SELL Limit @ M5 OB Bottom ${entry.toFixed(5)} [Target PDL: ${targetPDL.toFixed(5)}]`,
+          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 Confirmation -> Pending SELL Limit @ ${entry.toFixed(5)} [Target PDL: ${targetPDL.toFixed(5)}]`,
         };
       }
     }
@@ -321,12 +317,25 @@ class SMCStrategy {
   // Helper to check HTF context (Liquidity Sweep or OB Mitigation)
   private hasHTFContext(fractal: import("./market-structure.service").FractalContext, dir: "BUY" | "SELL"): boolean {
     const htf = fractal.directionStr || fractal.dailyStr;
+    if (!htf) return true;
     const lzType = dir === "BUY" ? "SELL_SIDE" : "BUY_SIDE";
     const obType = dir === "BUY" ? "BULLISH" : "BEARISH";
+
+    const lastCandle = fractal.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const atr = this.avgCandleRange(fractal.entry || [], 5);
     
     const hasSweep = htf.liquidityZones.some(lz => lz.type === lzType && lz.swept);
-    const hasOBMitigation = htf.orderBlocks.some(ob => ob.type === obType && ob.touchCount > 0);
+    const hasOBMitigation = htf.orderBlocks.some(ob => 
+      ob.type === obType && (
+        ob.touchCount > 0 || 
+        (currentPrice > 0 && currentPrice >= ob.bottom - atr * 2.0 && currentPrice <= ob.top + atr * 2.0)
+      )
+    );
     
+    const hasAnyHTFPOI = (htf.orderBlocks?.length ?? 0) > 0 || (htf.liquidityZones?.length ?? 0) > 0;
+    if (!hasAnyHTFPOI) return true;
+
     return hasSweep || hasOBMitigation;
   }
 

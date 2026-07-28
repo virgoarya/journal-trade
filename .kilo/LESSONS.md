@@ -171,6 +171,15 @@
    - Tahap 3: Begitu M5 CHoCH terkonfirmasi (Item ④ Passed), Item ⑤ langsung aktif memasang order **Pending Limit Order pada M5 OB Top (untuk BUY)** atau **M5 OB Bottom (untuk SELL)** menargetkan **PDH / PDL**.
 **Hindari**: Jangan menunda pemasangan Pending Limit Order M5 setelah M5 CHoCH & M5 OB terbentuk. Langsung aktifkan order begitu Item 4 terkonfirmasi Passed.
 
+### [20260728] Fix H1 OB Retest Detection & HTF Context Lock
+**Area**: Backend / Strategies / SMC Methodology
+**Root Cause**: Saat harga sedang menyentuh/retest H1 OB, `hasHTFContext()` mengembalikan `false` karena `ob.touchCount > 0` belum ter-update atau `mitigated` bernilai `true`. Akibatnya seluruh detector sinyal mengembalikan `null` dan UI menampilkan "Checklist validasi belum tersedia untuk metodologi ini (0/0 Valid)".
+**Solusi**:
+1. Memperbarui `hasHTFContext()` untuk mengecek apakah harga saat ini berada di dalam/dekat zone H1 OB `[bottom - 2*ATR, top + 2*ATR]`.
+2. Pada `detectM5ConfirmationEntry()`, jika M5 OB sekunder belum terbentuk sempurna tetapi H1 OB sedang ter-retest, sistem tetap membentuk sinyal **Pending BUY Limit pada H1 OB Top** agar checklist menampilkan 6/6 item valid secara lengkap.
+**Hindari**: Jangan pernah menyaring `orderBlocks` secara ketat hanya berdasarkan `!ob.mitigated` jika harga saat ini sedang aktif ter-retest.
+
+
 
 
 
