@@ -363,28 +363,25 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             data.trades = accumulatedTradesRef.current;
             data.equityCurve = accumulatedEquityRef.current;
             setPhase("complete");
-            setTimeout(() => { 
-              if (mounted) {
-                onCompleteRef.current(data);
-              } 
-            }, 1500);
-          } catch (err) {
-            console.error("Complete handler error:", err);
-          } finally {
+            
+            // Close EventSource cleanly before notifying parent
             if (es.readyState !== EventSource.CLOSED) {
               es.close();
             }
             eventSourceRef.current = null;
+
+            setTimeout(() => { 
+              if (mounted) {
+                onCompleteRef.current(data);
+              } 
+            }, 500);
+          } catch (err) {
+            console.error("Complete handler error:", err);
           }
         });
 
         es.onerror = () => {
-          if (!mounted) return;
-          // If we already received complete, just close it.
-          if (completedRef.current) {
-            if (es.readyState !== EventSource.CLOSED) es.close();
-            return;
-          }
+          if (!mounted || completedRef.current) return;
           // Prevent EventSource auto-reconnect
           if (es.readyState === EventSource.CONNECTING) {
             es.close();
@@ -394,22 +391,22 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             addLog("error", "Connection interrupted.");
             es.close();
             eventSourceRef.current = null;
-            setTimeout(() => { if (mounted) onErrorRef.current("Connection lost"); }, 2000);
+            setTimeout(() => { if (mounted && !completedRef.current) onErrorRef.current("Connection lost"); }, 2000);
           }
         };
 
         es.addEventListener("error", (e: any) => {
-          if (!mounted) return;
+          if (!mounted || completedRef.current) return;
           let msg = "Stream error";
           try { if (e.data) { const d = JSON.parse(e.data); msg = d.message || msg; } } catch {}
           addLog("error", "ERROR: " + msg);
           es.close();
           eventSourceRef.current = null;
-          setTimeout(() => { if (mounted) onErrorRef.current(msg); }, 2000);
+          setTimeout(() => { if (mounted && !completedRef.current) onErrorRef.current(msg); }, 2000);
         });
 
       } catch (err: any) {
-        if (mounted) onErrorRef.current(err.message || "Failed to prepare backtest");
+        if (mounted && !completedRef.current) onErrorRef.current(err.message || "Failed to prepare backtest");
       }
     };
 
@@ -417,7 +414,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
     return () => {
       mounted = false;
-      clearInterval(liveTradesTimer);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;

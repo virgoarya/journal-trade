@@ -71,8 +71,10 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
     if (isStreaming) {
       setResult(btResult);
       setIsStreaming(false);
+      const totalTradesCount = btResult.totalTrades ?? 0;
+      const pnlPct = btResult.totalPnLPercent ?? 0;
       toast.success(
-        `Backtest complete: ${btResult.totalTrades} trades, ${btResult.totalPnLPercent >= 0 ? "+" : ""}${btResult.totalPnLPercent}%`,
+        `Backtest complete: ${totalTradesCount} trades, ${pnlPct >= 0 ? "+" : ""}${pnlPct}%`,
       );
 
       // Auto AI analysis
