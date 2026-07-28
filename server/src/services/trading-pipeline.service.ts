@@ -921,7 +921,12 @@ const pipeline = {
       if (bestAnalysisForUI) {
         pipeline.lastAnalysis = bestAnalysisForUI;
       }
-      pipeline.allAnalyses = analyses;
+      // Update per-symbol slot so allAnalyses accumulates across parallel pipelineLoop calls
+      for (const a of analyses) {
+        const idx = pipeline.allAnalyses.findIndex(x => x.symbol === a.symbol);
+        if (idx >= 0) pipeline.allAnalyses[idx] = a;
+        else pipeline.allAnalyses.push(a);
+      }
 
       for (const analysis of analyses) {
         const latestTime = latestCandleTimes.get(analysis.symbol);
@@ -1025,6 +1030,16 @@ const pipeline = {
             }
             pipeline.lastLlmSignalKey = llmSignalKey;
             pipeline.lastLlmVerdictTime = Date.now();
+
+            // Only send to LLM if ALL checklist items are PASSED
+            const sigChecklist = analysis.confluence.finalSignal?.checklistItems || [];
+            const allSigPassed = sigChecklist.length > 0 && sigChecklist.every(c => c.status === "PASSED");
+            if (!allSigPassed) {
+              this.addLog(userId, "CONFLUENCE",
+                `[2/4] [${signal.symbol}] LLM SKIPPED: Checklist belum 100% PASSED (${sigChecklist.filter(c => c.status === "PASSED").length}/${sigChecklist.length}). Menunggu validasi selesai.`
+              );
+              continue;
+            }
 
             this.addLog(userId, "CONFLUENCE",
               `[2/4] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
