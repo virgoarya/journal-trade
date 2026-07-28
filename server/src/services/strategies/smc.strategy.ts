@@ -7,7 +7,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
-import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analyzeDaily3CandleBias } from "./checklist-validator";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -123,7 +123,7 @@ class SMCStrategy {
     const isBuy = sig.direction === "BUY";
     const htfStr = fractal.directionStr || fractal.dailyStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
-    const dailyDirection = fractal.dailyStr?.trend.direction || "SIDEWAYS";
+    const dailyBias = analyzeDaily3CandleBias(fractal.daily || fractal.direction);
 
     const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
     const entryTfLabel = fractal.entryTimeframeStr || "M15";
@@ -139,15 +139,16 @@ class SMCStrategy {
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
 
-    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
+    const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
     return evaluateWaterfall([
       {
         id: "smc-daily",
-        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        label: () => dailyBias.label,
         timeframe: "D1",
-        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
         isIndependent: true,
+        details: () => dailyBias.details,
       },
       {
         id: "smc-bos",

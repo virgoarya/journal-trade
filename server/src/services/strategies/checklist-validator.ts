@@ -1,5 +1,5 @@
 import type { ChecklistItem } from "./confluence-engine";
-import type { FractalContext } from "./market-structure.service";
+import type { FractalContext, Candle } from "./market-structure.service";
 
 export interface WaterfallStepDef {
   id: string;
@@ -10,6 +10,18 @@ export interface WaterfallStepDef {
   isIndependent?: boolean;
   value?: string | ((status: "PASSED" | "WAITING" | "FAILED") => string | undefined);
   details?: string | ((status: "PASSED" | "WAITING" | "FAILED") => string | undefined);
+}
+
+export interface Daily3CandleBias {
+  type: "CONTINUATION" | "REVERSAL" | "RANGING";
+  direction: "BULL" | "BEAR" | "SIDEWAYS";
+  label: string;
+  details: string;
+  targetLevel: number;
+  targetLabel: "PDH" | "PDL" | "EQUILIBRIUM" | "N/A";
+  pdh: number;
+  pdl: number;
+  eq50: number;
 }
 
 /**
@@ -65,6 +77,129 @@ export function evaluateWaterfall(
   // Overall checklist is considered passed if no required step FAILED
   const passed = !hasFailed;
   return { items, passed };
+}
+
+/**
+ * Analyzes 3 consecutive daily candles to determine pattern bias:
+ * 1. Continuation: Candle 2 breaks structure of Candle 1, Candle 3 holds above 50% Eq -> Targets PDH/PDL.
+ * 2. Reversal: Candle 2/3 sweeps PDL/PDH and closes with rejection -> Targets PDH/PDL.
+ * 3. Ranging: Default sideways.
+ */
+export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
+  if (!candles || candles.length < 3) {
+    return {
+      type: "RANGING",
+      direction: "SIDEWAYS",
+      label: "Daily Bias : Sideways (Ranging)",
+      details: "Candle data < 3 bars.",
+      targetLevel: 0,
+      targetLabel: "N/A",
+      pdh: 0,
+      pdl: 0,
+      eq50: 0,
+    };
+  }
+
+  const c1 = candles[candles.length - 3]; // 2 days ago
+  const c2 = candles[candles.length - 2]; // yesterday
+  const c3 = candles[candles.length - 1]; // latest closed daily candle
+
+  const pdh = Math.max(c2.high, c3.high);
+  const pdl = Math.min(c2.low, c3.low);
+
+  // Equilibrium (50%) of c2 expansion candle
+  const c2Eq = c2.low + (c2.high - c2.low) * 0.5;
+
+  const isC2Bullish = c2.close > c2.open;
+  const isC2Bearish = c2.close < c2.open;
+  const isC3Bullish = c3.close > c3.open;
+  const isC3Bearish = c3.close < c3.open;
+
+  // 1. Check Bullish Continuation (Diagram 1):
+  // c2 broke c1 high (BOS) AND c3 closed above 50% Eq of c2, targeting PDH
+  const isBullBOS = c2.high > c1.high && c2.close > c1.high;
+  const isHoldingAbove50EqBull = c3.close >= c2Eq || c3.low >= c2Eq;
+  if (isBullBOS && isC2Bullish && isHoldingAbove50EqBull) {
+    return {
+      type: "CONTINUATION",
+      direction: "BULL",
+      label: `Daily Continuation Bullish (BOS + 50% Eq) — Target PDH (${pdh.toFixed(5)})`,
+      details: `BOS c2 over c1, c3 holding above 50% Eq (${c2Eq.toFixed(5)}). Target PDH: ${pdh.toFixed(5)}`,
+      targetLevel: pdh,
+      targetLabel: "PDH",
+      pdh,
+      pdl,
+      eq50: c2Eq,
+    };
+  }
+
+  // 2. Check Bearish Continuation (Inverse Diagram 1):
+  // c2 broke c1 low (BOS) AND c3 closed below 50% Eq of c2, targeting PDL
+  const isBearBOS = c2.low < c1.low && c2.close < c1.low;
+  const isHoldingBelow50EqBear = c3.close <= c2Eq || c3.high <= c2Eq;
+  if (isBearBOS && isC2Bearish && isHoldingBelow50EqBear) {
+    return {
+      type: "CONTINUATION",
+      direction: "BEAR",
+      label: `Daily Continuation Bearish (BOS + 50% Eq) — Target PDL (${pdl.toFixed(5)})`,
+      details: `BOS c2 under c1, c3 holding below 50% Eq (${c2Eq.toFixed(5)}). Target PDL: ${pdl.toFixed(5)}`,
+      targetLevel: pdl,
+      targetLabel: "PDL",
+      pdh,
+      pdl,
+      eq50: c2Eq,
+    };
+  }
+
+  // 3. Check Bullish Reversal (Diagram 2):
+  // c3 or c2 swept PDL (low below c2/c1 low) AND c3 closed bullish or rejected (closing above c2 low)
+  const isPdlSwept = c3.low < c2.low || c2.low < c1.low;
+  const isBullishRejection = isC3Bullish || c3.close > c2.low;
+  if (isPdlSwept && isBullishRejection) {
+    return {
+      type: "REVERSAL",
+      direction: "BULL",
+      label: `Daily Reversal Bullish (PDL Sweep + Close Bullish) — Target PDH (${pdh.toFixed(5)})`,
+      details: `Swept PDL (${Math.min(c2.low, c3.low).toFixed(5)}) and closed Bullish. Target PDH: ${pdh.toFixed(5)}`,
+      targetLevel: pdh,
+      targetLabel: "PDH",
+      pdh,
+      pdl,
+      eq50: c2Eq,
+    };
+  }
+
+  // 4. Check Bearish Reversal (Inverse Diagram 2):
+  // c3 or c2 swept PDH (high above c2/c1 high) AND c3 closed bearish or rejected (closing below c2 high)
+  const isPdhSwept = c3.high > c2.high || c2.high > c1.high;
+  const isBearishRejection = isC3Bearish || c3.close < c2.high;
+  if (isPdhSwept && isBearishRejection) {
+    return {
+      type: "REVERSAL",
+      direction: "BEAR",
+      label: `Daily Reversal Bearish (PDH Sweep + Close Bearish) — Target PDL (${pdl.toFixed(5)})`,
+      details: `Swept PDH (${Math.max(c2.high, c3.high).toFixed(5)}) and closed Bearish. Target PDL: ${pdl.toFixed(5)}`,
+      targetLevel: pdl,
+      targetLabel: "PDL",
+      pdh,
+      pdl,
+      eq50: c2Eq,
+    };
+  }
+
+  // 5. Fallback Ranging / Sideways
+  const lastCloseDir = c3.close >= c1.open ? "BULL" : "BEAR";
+  return {
+    type: "RANGING",
+    direction: lastCloseDir,
+    label: `Daily Direction : ${lastCloseDir === "BULL" ? "Bullish" : "Bearish"} (Ranging)`,
+    details: `Consolidation in 3-candle range [PDL: ${pdl.toFixed(5)}, PDH: ${pdh.toFixed(5)}]`,
+    targetLevel: lastCloseDir === "BULL" ? pdh : pdl,
+    targetLabel: lastCloseDir === "BULL" ? "PDH" : "PDL",
+    pdh,
+    pdl,
+    eq50: c2Eq,
+  };
 }
 
 /**

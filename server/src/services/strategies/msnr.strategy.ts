@@ -13,7 +13,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
-import { evaluateWaterfall, calculateRR, checkEntryRetest } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, analyzeDaily3CandleBias } from "./checklist-validator";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -349,21 +349,22 @@ class MSNRStrategy {
     const setupTfLabel = fractal?.setupTimeframeStr || "H1";
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
-    const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
+    const dailyBias = analyzeDaily3CandleBias(fractal?.daily || fractal?.direction);
 
     const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
     const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
-    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
+    const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
     return evaluateWaterfall([
       {
         id: "msnr-daily",
-        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        label: () => dailyBias.label,
         timeframe: "D1",
-        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
         isIndependent: true,
+        details: () => dailyBias.details,
       },
       {
         id: "msnr-zone",

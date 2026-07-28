@@ -21,7 +21,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { IPDAContext } from "./ipda-context";
 import type { ChecklistItem } from "./confluence-engine";
-import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analyzeDaily3CandleBias } from "./checklist-validator";
 
 export interface ICTSignal {
   direction: "BUY" | "SELL";
@@ -240,7 +240,7 @@ class ICTStrategy {
     const setupTfLabel = fractal?.setupTimeframeStr || "H1";
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
-    const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
+    const dailyBias = analyzeDaily3CandleBias(fractal?.daily || fractal?.direction);
 
     const { relHigh, relLow } = getSwingPrices(fractal);
     const htfStr = fractal?.directionStr || fractal?.dailyStr;
@@ -255,15 +255,16 @@ class ICTStrategy {
     const currentPrice = lastCandle ? lastCandle.close : 0;
     const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
-    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
+    const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
     return evaluateWaterfall([
       {
         id: "ict-daily",
-        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
+        label: () => dailyBias.label,
         timeframe: "D1",
-        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
         isIndependent: true,
+        details: () => dailyBias.details,
       },
       {
         id: "ict-bias",

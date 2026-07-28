@@ -137,4 +137,16 @@
 2. Dengan begitu, kriteria pembentukan sinyal dan label item ① konsisten menggunakan trend HTF Direction (`directionStr`, misal H1/H4).
 **Hindari**: Jangan mendahulukan `dailyStr` untuk variabel `htfStr` jika `directionStr` adalah acuan utama HTF Direction yang dipakai oleh engine konfluensi.
 
+### [20260728] 3-Candle Daily Bias Pattern Recognition (Continuation vs Reversal)
+**Area**: Backend / Strategies / Pattern Recognition
+**Root Cause**: Sebelumnya item 0 checklist hanya menampilkan `Daily Direction : Bullish / Bearish / Sideways` secara kaku tanpa informasi struktur pola 3 candle Daily (BOS 50% Equilibrium vs Sweep PDL/PDH Rejection).
+**Solusi**:
+1. Menambahkan fungsi `analyzeDaily3CandleBias(candles)` pada [checklist-validator.ts](file:///d:/Journal%20Trade/server/src/services/strategies/checklist-validator.ts).
+2. Mengevaluasi pola 3 candle Daily ke belakang:
+   - `Daily Continuation`: Candle 2 BOS + Candle 3 holding 50% Equilibrium Candle 2 ➔ Target PDH / PDL.
+   - `Daily Reversal`: Candle 2/3 Sweep PDL/PDH + Candle 3 Bullish/Bearish Close Rejection ➔ Target PDH / PDL.
+3. Item 0 checklist di seluruh strategi kini menampilkan label dan detail target PDH/PDL secara dinamis.
+**Hindari**: Jangan mengabaikan pergerakan 3 candle Daily saat menentukan bias harian. Selalu perhitungkan level 50% Equilibrium dan Sweep PDL/PDH.
+
+
 
