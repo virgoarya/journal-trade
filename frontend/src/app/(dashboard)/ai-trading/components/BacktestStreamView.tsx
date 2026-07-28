@@ -309,9 +309,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             methStatsRef.current.get(meth)!.count++;
             setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             
-            // Track open position (ref only — RAF flushes activeTradeCount)
+            // Track open position
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
             liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
+            setLiveTrades(liveTradesBufferRef.current);
           } catch {}
         });
 
@@ -341,9 +342,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
 
-            // Remove from active trades (ref only — RAF flushes)
+            // Remove from active trades
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
             liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
+            setLiveTrades(liveTradesBufferRef.current);
             
             // Update Global Win Rate (ref only — RAF flushes)
             if (data.pnl >= 0) globalWinsRef.current++;
@@ -635,7 +637,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 flex-1 min-h-0">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[120px]">
               {logs.map((log) => (
                 <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
