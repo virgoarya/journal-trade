@@ -179,6 +179,15 @@
 2. Pada `detectM5ConfirmationEntry()`, jika M5 OB sekunder belum terbentuk sempurna tetapi H1 OB sedang ter-retest, sistem tetap membentuk sinyal **Pending BUY Limit pada H1 OB Top** agar checklist menampilkan 6/6 item valid secara lengkap.
 **Hindari**: Jangan pernah menyaring `orderBlocks` secara ketat hanya berdasarkan `!ob.mitigated` jika harga saat ini sedang aktif ter-retest.
 
+### [20260728] Fix UI "Checklist validasi belum tersedia" (0/0 Valid) Glitch
+**Area**: Backend & Frontend / Confluence & UI State
+**Root Cause**: Sebelumnya `ai-trading-engine.service.ts` hanya mengirimkan `smcSignals[0]` ke `confluenceEngine.calculateConfluence()`. Saat sinyal pertama bernilai `null` atau `confidence < 50`, `confluenceEngine` memotong array `checklistByMethodology` sehingga frontend menerima data breakdown kosong (`0/0 Valid`).
+**Solusi**:
+1. Memperbarui `ai-trading-engine.service.ts` untuk mempassing seluruh array sinyal strategi (`{ smc: smcSignals, ict: ictSignals, msnr: msnrSignals }`).
+2. Memperbarui `getActiveChecklist()` pada [MethodologyConfluence.tsx](file:///d:/Journal%20Trade/frontend/src/app/%28dashboard%29/ai-trading/components/MethodologyConfluence.tsx) untuk melakukan fallback otomatis ke `confluence.checklistByMethodology` sehingga tab NET / SMC / ICT / MSNR selalu menampilkan item checklist secara utuh.
+**Hindari**: Jangan pernah melepas fallback checklist pada komponen UI konfluensi agar status pemindaian selalu transparan kepada user.
+
+
 
 
 

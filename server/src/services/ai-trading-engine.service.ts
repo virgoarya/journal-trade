@@ -149,7 +149,7 @@ class AITradingEngine {
       ]);
 
     const confluence = confluenceEngine.calculateConfluence(
-      { smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null, msnr: msnrSignals[0] ?? null },
+      { smc: smcSignals as any, ict: ictSignals as any, msnr: msnrSignals as any },
       methodologyWeights,
       activeMethodologies,
       undefined, // minConfidence (use default)

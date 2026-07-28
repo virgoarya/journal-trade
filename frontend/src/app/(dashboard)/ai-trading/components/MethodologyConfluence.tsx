@@ -84,13 +84,19 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
   // Get active checklist based on selected tab
   const getActiveChecklist = (): ChecklistItem[] => {
     if (activeTab === "NET") {
-      return confluence.checklistItems || finalSignal?.checklistItems || [];
+      if (confluence.checklistItems && confluence.checklistItems.length > 0) {
+        return confluence.checklistItems;
+      }
+      if (finalSignal?.checklistItems && finalSignal.checklistItems.length > 0) {
+        return finalSignal.checklistItems;
+      }
+      return confluence.checklistByMethodology?.["smc"] || confluence.checklistByMethodology?.["ict"] || confluence.checklistByMethodology?.["msnr"] || [];
     }
     const breakdownData = confluence.methodologyBreakdown?.[activeTab];
     if (breakdownData?.checklistItems && breakdownData.checklistItems.length > 0) {
       return breakdownData.checklistItems;
     }
-    if (confluence.checklistByMethodology?.[activeTab]) {
+    if (confluence.checklistByMethodology?.[activeTab] && confluence.checklistByMethodology[activeTab].length > 0) {
       return confluence.checklistByMethodology[activeTab];
     }
     return [];
