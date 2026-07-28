@@ -161,6 +161,9 @@ class TradingPipelineService {
         dailyPnLSum: number;
       };
       lastMetricsUpdate?: number;
+      /** Dedup LLM voting — prevents re-evaluating the same signal */
+      lastLlmSignalKey: string | null;
+      lastLlmVerdictTime: number;
     }
   > = new Map();
 
@@ -245,6 +248,8 @@ const pipeline = {
       currentDrawdownPct: 0,
       currentGrowthPct: 0,
       currentRiskMultiplier: 1,
+      lastLlmSignalKey: null,
+      lastLlmVerdictTime: 0,
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -1001,6 +1006,18 @@ const pipeline = {
           if (pipeline.llmCircuitOpen) {
             this.addLog(userId, "ERROR", `[2/4] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting, relying on technicals.`);
           } else {
+            // Dedup: skip LLM voting if same signal entry already evaluated within 1 hour
+            const llmSignalKey = `${signal.symbol}_${signal.direction}_${Math.round(signal.entry * 100000)}`;
+            const LLM_DEDUP_TTL_MS = 60 * 60 * 1000; // 1 hour
+            if (pipeline.lastLlmSignalKey === llmSignalKey && Date.now() - pipeline.lastLlmVerdictTime < LLM_DEDUP_TTL_MS) {
+              this.addLog(userId, "CONFLUENCE",
+                `[2/4] [${signal.symbol}] LLM SKIPPED: ${signal.direction} @ ${signal.entry.toFixed(5)} already evaluated. Waiting for next candle.`
+              );
+              continue;
+            }
+            pipeline.lastLlmSignalKey = llmSignalKey;
+            pipeline.lastLlmVerdictTime = Date.now();
+
             this.addLog(userId, "CONFLUENCE",
               `[2/4] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
             );
