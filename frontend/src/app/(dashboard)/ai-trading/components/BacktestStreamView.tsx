@@ -186,9 +186,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           return next;
         });
       }
-      // Flush win/loss/drawdown
-      setGlobalWins(globalWinsRef.current);
-      setGlobalLosses(globalLossesRef.current);
+      // Flush drawdown only (wins/losses now direct in trade_close)
       setMaxDrawdownPct(maxDrawdownPctRef.current);
 
       rafRef.current = requestAnimationFrame(flush);
@@ -261,6 +259,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             const pt = { time: data.time, equity: data.equity, floatingPnL: data.floatingPnL };
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
+
+            // Update live trade PnLs from equity event (has currentPrice + pnl per position)
+            if (data.activeTrades && data.activeTrades.length > 0) {
+              setLiveTrades(data.activeTrades);
+            } else if (activeTradesRef.current.size === 0) {
+              setLiveTrades([]);
+            }
           } catch {}
         });
 
@@ -340,9 +345,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             setActiveTradeCount(activeTradesRef.current.size);
             setLiveTrades(Array.from(activeTradesRef.current.values()));
             
-            // Update Global Win Rate (ref only — RAF flushes)
-            if (data.pnl >= 0) globalWinsRef.current++;
-            else globalLossesRef.current++;
+            // Update Global Win Rate
+            if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
+            else { globalLossesRef.current++; setGlobalLosses(globalLossesRef.current); }
           } catch {}
         });
 
