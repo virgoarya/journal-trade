@@ -9,7 +9,6 @@ import { TradingPanel } from "./components/TradingPanel";
 import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
 import { AITradeHistories } from "./components/AITradeHistories";
-import { SkillDisplay } from "./components/SkillDisplay";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
 
@@ -333,11 +332,6 @@ function AITradingPageContent() {
                 isRunning={pipelineStatus?.running ?? false}
               />
             )}
-
-            <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
-              setSkillConfig(skill);
-              if (isTradingDrawerOpen) setIsTradingDrawerOpen(false);
-            }} />
             </div>
 
             {/* Mobile Footer (Close Button Backup) */}

@@ -2,6 +2,7 @@
 
 import { useAiTrading } from "../context/AiTradingContext";
 import { Play, Square, Pause, Loader2, Signal, AlertTriangle, ShieldAlert } from "lucide-react";
+import { SkillDisplay } from "./SkillDisplay";
 import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
 
@@ -30,6 +31,9 @@ export function TradingPanel({
     pipelineStatus,
     llmMinProviders,
     llmModels,
+    accountInfo,
+    setSkillConfig,
+    skillVersion,
   } = useAiTrading();
 
   const handleStart = async () => {
@@ -315,6 +319,12 @@ export function TradingPanel({
             Execute backtest simulation to generate trading parameters.
           </p>
         </div>
+      )}
+
+      {skillConfig && (
+        <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
+          setSkillConfig(skill);
+        }} />
       )}
 
       {/* Pipeline Controls (Tactile Switches) */}
