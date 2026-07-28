@@ -79,7 +79,7 @@ export const llmConsensusSchema = z.object({
 
 export const pipelineConfigSchema = z.object({
   useAppliedConfig: z.boolean().optional(),
-  symbols: z.array(z.string()).min(1, "At least one symbol required").optional(),
+  symbols: z.array(z.string()).min(1, "At least one symbol required").max(2, "Max 2 pairs per config").optional(),
   timeframe: z.enum(["M5", "M15", "H1"]).default("M15").optional(),
   strategy: z
     .enum(["RSI_ENGULFING_SCALPING", "RSI_ENGULFING_INTRADAY", "MULTI_METHODOLOGY"])

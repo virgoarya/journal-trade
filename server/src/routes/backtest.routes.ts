@@ -36,7 +36,7 @@ function sendSSE(res: Response, event: string, data: any) {
 const streamQuerySchema = z.object({
   symbols: z.string().min(1, "At least one symbol required").transform((s) =>
     s.split(",").map((x) => x.trim()).filter(Boolean)
-  ),
+  ).pipe(z.array(z.string()).max(2, "Max 2 pairs per config")),
   timeframe: z.enum(["M5", "M15", "H1", "H4", "D1"]).default("M15"),
   fromDate: z.string().min(1, "Start date required"),
   toDate: z.string().min(1, "End date required"),

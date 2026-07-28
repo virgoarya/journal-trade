@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const backtestRunSchema = z.object({
-  symbols: z.array(z.string().min(1)).min(1, "At least one symbol required").default(["EURUSD"]),
+  symbols: z.array(z.string().min(1)).min(1, "At least one symbol required").max(2, "Max 2 pairs per config").default(["EURUSD"]),
   timeframe: z.enum(["M5", "M15", "H1", "H4", "D1"]).default("M15"),
   fromDate: z.string().min(1, "Start date required"),
   toDate: z.string().min(1, "End date required"),
