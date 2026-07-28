@@ -463,6 +463,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
   const killzone = getKillzone(candle?.time);
   const winRate = globalWins + globalLosses > 0 ? (globalWins / (globalWins + globalLosses)) * 100 : 0;
+  const liveTradesTotal = liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
 
   return (
     <div className="h-full min-h-[500px] flex flex-col glass overflow-hidden relative">
@@ -496,13 +497,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               <p className="text-2xl font-bold font-mono text-text-primary">
                 ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
               </p>
-              {candle && (candle.floatingPnL || 0) !== 0 && (
-                <div className={`flex items-center gap-1 font-mono mt-1 ${(candle.floatingPnL || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
-                  {(candle.floatingPnL || 0) > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                  <span className="text-sm font-bold">{(candle.floatingPnL || 0) > 0 ? "+" : ""}{(candle.floatingPnL || 0).toFixed(2)}</span>
-                  <span className="text-[9px] opacity-70">Float</span>
-                </div>
-              )}
+              <div className={`flex items-center gap-1 font-mono mt-1 ${liveTradesTotal >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {liveTradesTotal >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                <span className="text-sm font-bold">{liveTradesTotal >= 0 ? "+" : ""}{liveTradesTotal.toFixed(2)}</span>
+                <span className="text-[9px] opacity-70">Float ({liveTrades.length} pos)</span>
+              </div>
               {candle && candle.marginLevel > 0 && (
                 <p className="text-[10px] text-text-muted mt-0.5 font-mono">Margin: {candle.marginLevel.toFixed(1)}%</p>
               )}
@@ -537,8 +536,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Open Positions</p>
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-sm text-blue-400">{activeTradeCount}</span>
-                <span className={`font-mono text-xs ${(candle?.floatingPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {(candle?.floatingPnL || 0) >= 0 ? '+' : ''}${(candle?.floatingPnL || 0).toFixed(2)}
+                <span className={`font-mono text-xs ${liveTradesTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {liveTradesTotal >= 0 ? '+' : ''}${liveTradesTotal.toFixed(2)}
                 </span>
               </div>
             </div>
@@ -601,9 +600,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               <span>Live Positions {liveTrades.length > 0 ? `(${liveTrades.length})` : ""}</span>
               {liveTrades.length > 0 && (
                 <span className="text-[8px] text-text-muted normal-case font-normal">
-                  Float: <span className={`font-bold ${liveTrades.reduce((s,t) => s + (t.pnl||0), 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                    {liveTrades.reduce((s,t) => s + (t.pnl||0), 0) >= 0 ? "+" : ""}${liveTrades.reduce((s,t) => s + (t.pnl||0), 0).toFixed(2)}
-                  </span>
+                  Float: <span className={`font-bold ${liveTradesTotal >= 0 ? "text-green-400" : "text-red-400"}`}>{liveTradesTotal >= 0 ? "+" : ""}${liveTradesTotal.toFixed(2)}</span>
                 </span>
               )}
             </div>
