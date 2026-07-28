@@ -461,163 +461,119 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-black/40 border-b border-accent-gold/20 backdrop-blur-md relative z-10">
-        <div className="flex items-center gap-3">
-          <Cpu className="w-5 h-5 text-accent-gold animate-pulse" />
-          <h3 className="text-sm font-bold text-text-primary tracking-wider uppercase">AI Strategy Tester</h3>
-          <div className="flex items-center gap-2 text-xs font-mono text-text-muted bg-black/60 px-3 py-1 rounded border border-accent-gold/30 shadow-inner">
-            <span className="text-accent-gold">{config.symbols?.join(",") || ""}</span>
-            <span>{config.timeframe}</span>
-          </div>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-black/40 border-b border-accent-gold/15">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-accent-gold" />
+          <h3 className="text-xs font-bold text-text-primary tracking-wider uppercase">AI Strategy Tester</h3>
+          <span className="text-[10px] font-mono text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/20">{config.symbols?.join(",") || ""} · {config.timeframe}</span>
         </div>
-        <button onClick={handleCancelPreparation} className="flex items-center gap-2 text-xs font-medium text-text-muted hover:text-red-400 transition-colors bg-black/60 px-3 py-1.5 rounded border border-accent-gold/30 hover:border-red-500/50 hover:bg-red-900/20">
-          <XCircle className="w-4 h-4" /> Stop
+        <button onClick={handleCancelPreparation} className="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-red-400 transition bg-black/40 px-2 py-1 rounded border border-accent-gold/15 hover:border-red-500/30">
+          <XCircle className="w-3 h-3" /> Stop
         </button>
       </div>
 
       {/* Main View */}
       {(phase === "preparing" || phase === "running" || phase === "complete") && (
-        <div className="flex-1 flex flex-col lg:flex-row relative z-10 p-4 gap-4 overflow-hidden">
-        {/* Left Panel */}
-        <div className="w-full lg:w-72 flex flex-col gap-4 overflow-y-auto">
-          {/* Equity Card */}
-          <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
-            <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Current Equity</p>
-            <p className="text-2xl font-bold font-mono text-text-primary">
-              ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
-            </p>
-            {candle && (candle.floatingPnL || 0) !== 0 && (
-              <div className={`flex items-center gap-1 text-sm mt-1 font-mono ${(candle.floatingPnL || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
-                {(candle.floatingPnL || 0) > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                {(candle.floatingPnL || 0) > 0 ? "+" : ""}{(candle.floatingPnL || 0).toFixed(2)}
-              </div>
-            )}
-            {candle && candle.marginLevel > 0 && (
-              <p className="text-[10px] text-text-muted mt-1">Margin: {candle.marginLevel.toFixed(1)}%</p>
-            )}
-          </div>
+        <div className="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-hidden">
+        {/* Left Panel - Stats */}
+        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Equity</p>
+              <p className="text-lg font-bold font-mono text-text-primary">
+                ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
+              </p>
+              {candle && (candle.floatingPnL || 0) !== 0 && (
+                <div className={`flex items-center gap-1 text-xs mt-0.5 font-mono ${(candle.floatingPnL || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
+                  {(candle.floatingPnL || 0) > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {(candle.floatingPnL || 0) > 0 ? "+" : ""}{(candle.floatingPnL || 0).toFixed(2)} Float
+                </div>
+              )}
+              {candle && candle.marginLevel > 0 && (
+                <p className="text-[9px] text-text-muted mt-0.5 font-mono">Margin: {candle.marginLevel.toFixed(1)}%</p>
+              )}
+            </div>
 
-          {/* Price Card */}
-          <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
-            <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Activity className="w-3 h-3" /> Live Quote</p>
-            <div className="space-y-1 font-mono text-sm">
-              <div className="flex justify-between">
-                <span className="text-text-muted">Close</span>
-                <span className="text-accent-gold font-bold">{candle ? (candle.close || 0).toFixed(5) : "0.00000"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">High</span>
-                <span className="text-text-secondary">{candle ? (candle.high || 0).toFixed(5) : "0.00000"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Low</span>
-                <span className="text-text-secondary">{candle ? (candle.low || 0).toFixed(5) : "0.00000"}</span>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Price</p>
+              <div className="space-y-0.5 font-mono text-[11px]">
+                <div className="flex justify-between"><span className="text-text-muted">C</span><span className="text-accent-gold font-bold">{candle ? (candle.close || 0).toFixed(5) : "0.00000"}</span></div>
+                <div className="flex justify-between"><span className="text-text-muted">H</span><span className="text-text-secondary">{candle ? (candle.high || 0).toFixed(5) : "0.00000"}</span></div>
+                <div className="flex justify-between"><span className="text-text-muted">L</span><span className="text-text-secondary">{candle ? (candle.low || 0).toFixed(5) : "0.00000"}</span></div>
               </div>
             </div>
-          </div>
 
-          {/* New SMC-Focused Analytics Cards */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Killzone Card */}
-            <div className={`border border-accent-gold/20 rounded-lg p-3 ${killzone.bg}`}>
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Session</p>
+            <div className={`border border-accent-gold/10 rounded-lg p-3 ${killzone.bg}`}>
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Session</p>
               <div className={`font-mono font-bold text-sm ${killzone.color}`}>{killzone.name}</div>
             </div>
 
-            {/* Win Rate Card */}
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1 flex items-center justify-between">
-                <span>Win Rate</span>
-                <span className="text-text-muted">{globalWins}W / {globalLosses}L</span>
-              </p>
-              <div className={`font-mono font-bold text-sm ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                {winRate.toFixed(1)}%
-              </div>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Win Rate</p>
+              <div className={`font-mono font-bold text-sm ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>{winRate.toFixed(1)}%</div>
+              <p className="text-[9px] text-text-muted font-mono">{globalWins}W / {globalLosses}L</p>
             </div>
 
-            {/* Max Drawdown Card */}
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Max Drawdown</p>
-              <div className="font-mono font-bold text-sm text-red-400">
-                -{maxDrawdownPct.toFixed(2)}%
-              </div>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Max DD</p>
+              <div className="font-mono font-bold text-sm text-red-400">-{maxDrawdownPct.toFixed(2)}%</div>
             </div>
 
-            {/* Open Positions Card */}
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">Open Positions</p>
-              <div className="flex justify-between items-baseline">
-                <div className="font-mono font-bold text-sm text-blue-400">{activeTradeCount} Active</div>
-                <div className={`font-mono text-xs ${(candle?.floatingPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Open Positions</p>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-sm text-blue-400">{activeTradeCount}</span>
+                <span className={`font-mono text-xs ${(candle?.floatingPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {(candle?.floatingPnL || 0) >= 0 ? '+' : ''}${(candle?.floatingPnL || 0).toFixed(2)}
-                </div>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Live Symbol Stats */}
-          {liveSymbolStats.length > 0 && (
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
-              <div className="space-y-2">
-                {liveSymbolStats.map((s) => (
-                  <div key={s.symbol} className="text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-text-secondary font-medium">{s.symbol}</span>
-                      <span className={`font-mono ${s.totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {s.totalPnL >= 0 ? "+" : ""}${s.totalPnL.toFixed(2)}
-                      </span>
+          <div className="grid grid-cols-2 gap-2">
+            {liveSymbolStats.length > 0 && (
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+                <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Symbols</p>
+                <div className="space-y-1.5">
+                  {liveSymbolStats.map((s) => (
+                    <div key={s.symbol} className="text-[10px] font-mono">
+                      <div className="flex justify-between"><span className="text-text-secondary">{s.symbol}</span><span className={s.totalPnL >= 0 ? "text-green-400" : "text-red-400"}>{s.totalPnL >= 0 ? "+" : ""}${s.totalPnL.toFixed(2)}</span></div>
+                      <div className="text-[8px] text-text-muted">{s.totalTrades}t · {s.wins}W/{s.losses}L</div>
                     </div>
-                    <div className="flex gap-2 text-[10px] text-text-muted">
-                      <span>{s.totalTrades}t</span>
-                      <span>{s.wins}W/{s.losses}L</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Live Methodology Stats */}
-          {liveMethStats.length > 0 && (
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2 flex items-center gap-1"><Layers className="w-3 h-3" /> Methodologies</p>
-              <div className="space-y-2">
-                {liveMethStats.map((m) => (
-                  <div key={m.methodology} className="text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-text-secondary font-medium capitalize">{m.methodology}</span>
-                      <span className={`font-mono ${m.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {m.pnl >= 0 ? "+" : ""}${m.pnl.toFixed(2)}
-                      </span>
+            {liveMethStats.length > 0 && (
+              <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+                <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5 flex items-center gap-1"><Layers className="w-3 h-3" /> Methods</p>
+                <div className="space-y-1.5">
+                  {liveMethStats.map((m) => (
+                    <div key={m.methodology} className="text-[10px] font-mono">
+                      <div className="flex justify-between"><span className="text-text-secondary capitalize">{m.methodology}</span><span className={m.pnl >= 0 ? "text-green-400" : "text-red-400"}>{m.pnl >= 0 ? "+" : ""}${m.pnl.toFixed(2)}</span></div>
+                      <div className="text-[8px] text-text-muted">{m.count} trades</div>
                     </div>
-                    <span className="text-[10px] text-text-muted">{m.count} trades</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Right Panel: Equity Curve + Journal */}
-        <div className="flex-1 flex flex-col gap-4">
-          {/* Equity Curve Chart */}
+        <div className="flex-1 flex flex-col gap-3 min-w-0">
           {equityHistory.length > 1 && (
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Equity Curve</p>
-              <div style={{ height: "200px", width: "100%" }}>
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5">Equity Curve</p>
+              <div style={{ height: "120px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ time: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), equity: p.equity }))}>
-                    <defs>
-                      <linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
+                    <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                    <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={40} />
-                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "10px" }} />
+                    <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 7 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#6b7280", fontSize: 7 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={35} />
+                    <Tooltip contentStyle={{ backgroundColor: "#111827", border: "1px solid #1f2937", fontSize: "9px" }} />
                     <Area type="monotone" dataKey="equity" stroke="#D4AF37" strokeWidth={1.5} fill="url(#streamEqGrad)" isAnimationActive={false} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -625,25 +581,20 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          {/* Live Active Positions */}
           {liveTrades.length > 0 && (
-            <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-3">
-              <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">Live Positions</p>
-              <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
+              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1.5">Live Positions ({liveTrades.length})</p>
+              <div className="space-y-1 max-h-[120px] overflow-y-auto">
                 {liveTrades.map((t, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-surface/60 p-2 rounded-lg border border-border-subtle/50">
-                    <div className="flex items-center gap-3">
-                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.direction.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction.toUpperCase()}</span>
-                       <span className="text-gray-200 font-bold">{t.symbol}</span>
-                       <span className="text-text-muted text-[10px]">
-                         {t.primaryMethodology ? <span className="text-gray-600">[{t.primaryMethodology.toUpperCase()}]</span> : ""}
-                       </span>
+                  <div key={idx} className="flex justify-between items-center text-[10px] font-mono bg-black/30 p-1.5 rounded border border-accent-gold/5">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
+                      <span className="text-text-primary font-bold">{t.symbol}</span>
+                      {t.primaryMethodology && <span className="text-text-muted text-[8px]">[{t.primaryMethodology.toUpperCase()}]</span>}
                     </div>
-                    <div className="flex items-center gap-4">
-                       <span className="text-text-muted tracking-tight hidden sm:block">{t.entryPrice.toFixed(5)} → {t.currentPrice.toFixed(5)}</span>
-                       <span className={`font-bold w-16 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                         {t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}
-                       </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-text-muted text-[9px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
+                      <span className={`font-bold w-14 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
@@ -651,27 +602,22 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          {/* AI Trading Journal */}
-          <div className="flex-1 bg-black/40 border border-border-subtle rounded-xl flex flex-col font-mono text-xs overflow-hidden relative max-h-[400px]">
-            <div className="bg-bg-elevated px-4 py-2 border-b border-border-subtle text-text-muted flex items-center gap-2">
-              <Terminal className="w-4 h-4" /> AI Trading Journal
+          <div className="flex-1 bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] overflow-hidden min-h-[150px]">
+            <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center gap-1.5">
+              <Terminal className="w-3 h-3" /> Journal
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 relative">
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className={`flex gap-3 leading-relaxed border-l-2 pl-3 py-0.5 ${
-                      log.type === "trade_open" ? "border-blue-500 text-blue-100 bg-blue-900/10"
-                      : log.type === "trade_close"
-                        ? log.message.includes("+") ? "border-green-500 text-green-100 bg-green-900/10"
-                          : "border-red-500 text-red-100 bg-red-900/10"
-                        : log.type === "error" ? "border-red-500 text-red-400 bg-red-950/30"
-                          : "border-border-subtle text-text-muted"
-                    }`}
-                  >
-                    <span className="text-gray-600 shrink-0">[{log.candleTime || log.time}]</span>
-                    <span className="break-words">{log.message}</span>
-                  </div>
+                <div key={log.id} className={`flex gap-2 py-0.5 px-1.5 rounded ${
+                  log.type === "trade_open" ? "bg-blue-900/5"
+                  : log.type === "trade_close"
+                    ? log.message.includes("+") ? "bg-green-900/5" : "bg-red-900/5"
+                    : log.type === "error" ? "bg-red-950/10"
+                      : ""
+                }`}>
+                  <span className="text-gray-600 shrink-0 text-[9px]">[{log.candleTime || log.time}]</span>
+                  <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"}`}>{log.message}</span>
+                </div>
               ))}
               <div ref={logsEndRef} />
             </div>
@@ -681,27 +627,17 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       )}
 
       {/* Progress Footer */}
-      <div className="p-4 bg-bg-elevated border-t border-border-subtle backdrop-blur-md relative z-10 flex flex-col gap-2">
-        <div className="flex justify-between text-xs font-medium font-mono">
-          <span className="text-accent-gold flex items-center gap-2">
-            {phase === "preparing" && !progress && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Fetching historical data...</>
-            )}
-            {phase === "running" && progress && progress.percent === 0 && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Initializing Strategy Engine...</>
-            )}
-            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && (
-              <><Loader2 className="w-3 h-3 animate-spin" /> Simulating... {Math.round(progressPercent)}%</>
-            )}
-            {phase === "running" && progress && progress.percent >= 100 && (<>Completed.</>)}
-            {phase === "complete" && (<>Completed.</>)}
+      <div className="px-4 py-2.5 bg-black/40 border-t border-accent-gold/10">
+        <div className="flex justify-between text-[10px] font-mono">
+          <span className="text-accent-gold flex items-center gap-1.5">
+            {phase === "preparing" && !progress && <><Loader2 className="w-3 h-3 animate-spin" /> Fetching data...</>}
+            {phase === "running" && progress && progress.percent === 0 && <><Loader2 className="w-3 h-3 animate-spin" /> Initializing...</>}
+            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && <><Loader2 className="w-3 h-3 animate-spin" /> Simulating {Math.round(progressPercent)}%</>}
+            {phase === "running" && progress && progress.percent >= 100 && <>Completed.</>}
+            {phase === "complete" && <>Completed.</>}
           </span>
           <span className="text-text-muted">
-            {progress ? (
-              `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)`
-            ) : (
-              "loading data..."
-            )}
+            {progress ? `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)` : "loading..."}
           </span>
         </div>
       </div>
