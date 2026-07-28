@@ -219,7 +219,7 @@ class MSNRStrategy {
     }
 
     if (validSignals.length === 0) {
-      const htfStr = fractal.dailyStr || fractal.directionStr;
+      const htfStr = fractal.directionStr || fractal.dailyStr;
       const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
       const dummySig: MSNRSignal = {
         direction: dummyDir,
@@ -241,7 +241,7 @@ class MSNRStrategy {
   }
 
   private buildSignal(direction: "BUY"|"SELL", limitPrice: number, slPrice: number, type: any, reason: string, config: any, fractal: import("./market-structure.service").FractalContext, confBoost = 0): MSNRSignal {
-      const htfStr = fractal.dailyStr || fractal.directionStr;
+      const htfStr = fractal.directionStr || fractal.dailyStr;
       const tp = marketStructureService.findDynamicTarget(direction, limitPrice, slPrice, htfStr, 2.5); // Minimum 1:2.5 RR
 
       const sig: MSNRSignal = {

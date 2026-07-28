@@ -169,7 +169,7 @@ class ICTStrategy {
 
     // Filter out signals with R:R < 1:2 (RR < 2.0)
     // Recalculate dynamic TP based on HTF structure to maximize R:R
-    const htfStr = fractal.dailyStr || fractal.directionStr;
+    const htfStr = fractal.directionStr || fractal.dailyStr;
 
     // ── Invalidation: remove setups where TP was hit before entry ────
     const nonInvalidatedSignals = signals.filter(sig => {
@@ -243,7 +243,7 @@ class ICTStrategy {
     const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
 
     const { relHigh, relLow } = getSwingPrices(fractal);
-    const htfStr = fractal?.dailyStr || fractal?.directionStr;
+    const htfStr = fractal?.directionStr || fractal?.dailyStr;
     const isHtfDirectional = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
 
     const hasAMD = sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
@@ -709,7 +709,7 @@ class ICTStrategy {
 
       if (last.close >= ote79 && last.close <= ote618) {
         // Enforce OTE must be inside HTF POI (OB or FVG)
-        const htf = fractal.dailyStr || fractal.directionStr;
+        const htf = fractal.directionStr || fractal.dailyStr;
         const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BULLISH" && Math.max(ote79, ob.bottom) <= Math.min(ote618, ob.top)) ||
                              htf.fairValueGaps.some(fvg => fvg.type === "BULLISH" && Math.max(ote79, fvg.bottom) <= Math.min(ote618, fvg.top));
         
@@ -741,7 +741,7 @@ class ICTStrategy {
 
       if (last.close >= ote618 && last.close <= ote79) {
         // Enforce OTE must be inside HTF POI (OB or FVG)
-        const htf = fractal.dailyStr || fractal.directionStr;
+        const htf = fractal.directionStr || fractal.dailyStr;
         const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BEARISH" && Math.max(ote618, ob.bottom) <= Math.min(ote79, ob.top)) ||
                              htf.fairValueGaps.some(fvg => fvg.type === "BEARISH" && Math.max(ote618, fvg.bottom) <= Math.min(ote79, fvg.top));
         

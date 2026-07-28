@@ -75,7 +75,7 @@ class SMCStrategy {
 
     // Filter out signals with R:R < 1:2 (RR < 2.0)
     // Recalculate dynamic TP based on HTF structure to maximize R:R
-    const htfStr = fractal.dailyStr || fractal.directionStr;
+    const htfStr = fractal.directionStr || fractal.dailyStr;
     const validSignals = signals.filter(sig => {
       // Find dynamic target
       sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, htfStr, 2.0);
@@ -121,7 +121,7 @@ class SMCStrategy {
 
   private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
-    const htfStr = fractal.dailyStr || fractal.directionStr;
+    const htfStr = fractal.directionStr || fractal.dailyStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
     const dailyDirection = fractal.dailyStr?.trend.direction || "SIDEWAYS";
 
@@ -204,7 +204,7 @@ class SMCStrategy {
    */
   // Helper to check HTF context (Liquidity Sweep or OB Mitigation)
   private hasHTFContext(fractal: import("./market-structure.service").FractalContext, dir: "BUY" | "SELL"): boolean {
-    const htf = fractal.dailyStr || fractal.directionStr;
+    const htf = fractal.directionStr || fractal.dailyStr;
     const lzType = dir === "BUY" ? "SELL_SIDE" : "BUY_SIDE";
     const obType = dir === "BUY" ? "BULLISH" : "BEARISH";
     

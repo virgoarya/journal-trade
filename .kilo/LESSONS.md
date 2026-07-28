@@ -129,3 +129,12 @@
 3. Menyediakan helper umum `calculateRR`, `checkEntryRetest`, dan `getSwingPrices` untuk konsistensi di seluruh strategi.
 **Hindari**: Jangan pernah menuliskan status `"PASSED"`/`"WAITING"` secara hardcoded pada checklist item. Selalu gunakan `evaluateWaterfall()` untuk menjaga logika cascading prerequisite konsisten.
 
+### [20260728] HTF Direction Structure Precedence Misalignment
+**Area**: Backend / Strategies / Confluence
+**Root Cause**: Sebelumnya ketiga file strategi (`smc.strategy.ts`, `ict.strategy.ts`, `msnr.strategy.ts`) mengambil objek struktur HTF menggunakan `const htfStr = fractal.dailyStr || fractal.directionStr;`. Karena `fractal.dailyStr` (D1) selalu terdefinisi, variabel `htfStr` selalu mengambil D1 sebagai struktur HTF. Saat trend D1 Bearish tetapi trend HTF Direction (H1/H4) Bullish, header kartu di UI menampilkan `HTF Direction: Bullish`, namun label checklist item ① mengevaluasi D1 dan mencetak `H1 Break Of Structure Bearish`.
+**Solusi**:
+1. Mengubah urutan prioritas struktur HTF di ketiga file strategi menjadi `const htfStr = fractal.directionStr || fractal.dailyStr;`.
+2. Dengan begitu, kriteria pembentukan sinyal dan label item ① konsisten menggunakan trend HTF Direction (`directionStr`, misal H1/H4).
+**Hindari**: Jangan mendahulukan `dailyStr` untuk variabel `htfStr` jika `directionStr` adalah acuan utama HTF Direction yang dipakai oleh engine konfluensi.
+
+
