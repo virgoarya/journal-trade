@@ -190,10 +190,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       setGlobalWins(globalWinsRef.current);
       setGlobalLosses(globalLossesRef.current);
       setMaxDrawdownPct(maxDrawdownPctRef.current);
-      setActiveTradeCount(activeTradesRef.current.size);
-      
-      // Flush live trades PnL
-      setLiveTrades(liveTradesBufferRef.current);
 
       rafRef.current = requestAnimationFrame(flush);
     };
@@ -265,9 +261,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             const pt = { time: data.time, equity: data.equity, floatingPnL: data.floatingPnL };
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
-            if (data.activeTrades) {
-              liveTradesBufferRef.current = data.activeTrades;
-            }
           } catch {}
         });
 
@@ -311,8 +304,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             
             // Track open position
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
-            liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
-            setLiveTrades(liveTradesBufferRef.current);
+            setActiveTradeCount(activeTradesRef.current.size);
+            setLiveTrades(Array.from(activeTradesRef.current.values()));
           } catch {}
         });
 
@@ -344,8 +337,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
             // Remove from active trades
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
-            liveTradesBufferRef.current = Array.from(activeTradesRef.current.values());
-            setLiveTrades(liveTradesBufferRef.current);
+            setActiveTradeCount(activeTradesRef.current.size);
+            setLiveTrades(Array.from(activeTradesRef.current.values()));
             
             // Update Global Win Rate (ref only — RAF flushes)
             if (data.pnl >= 0) globalWinsRef.current++;
