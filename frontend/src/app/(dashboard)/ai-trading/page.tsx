@@ -70,6 +70,7 @@ function AITradingPageContent() {
     isPipelineStarting,
     isPipelineStopping,
     lastAnalysis,
+    allAnalyses,
     lastLlmVotes,
     llmModels,
     skillConfig,
@@ -316,12 +317,22 @@ function AITradingPageContent() {
               skillConfig={skillConfig}
             />
 
-            <MethodologyConfluence
-              confluence={lastAnalysis?.confluence}
-              marketStructure={lastAnalysis?.marketStructure}
-              symbol={lastAnalysis?.symbol}
-              isRunning={pipelineStatus?.running ?? false}
-            />
+            {allAnalyses && allAnalyses.length > 0 ? allAnalyses.map((a) => (
+              <MethodologyConfluence
+                key={a.symbol}
+                confluence={a.confluence}
+                marketStructure={a.marketStructure}
+                symbol={a.symbol}
+                isRunning={pipelineStatus?.running ?? false}
+              />
+            )) : (
+              <MethodologyConfluence
+                confluence={lastAnalysis?.confluence}
+                marketStructure={lastAnalysis?.marketStructure}
+                symbol={lastAnalysis?.symbol}
+                isRunning={pipelineStatus?.running ?? false}
+              />
+            )}
 
             <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
               setSkillConfig(skill);

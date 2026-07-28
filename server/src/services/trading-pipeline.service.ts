@@ -85,6 +85,7 @@ export interface PipelineStatus {
   };
   lastSignal: TradingSignal | null;
   lastAnalysis: MultiStrategySymbolAnalysis | null;
+  allAnalyses: MultiStrategySymbolAnalysis[];
   lastError: string | null;
   // Circuit breaker states
   mt5CircuitState?: string;
@@ -164,6 +165,8 @@ class TradingPipelineService {
       /** Dedup LLM voting — prevents re-evaluating the same signal */
       lastLlmSignalKey: string | null;
       lastLlmVerdictTime: number;
+      /** All analyses from latest cycle, keyed by symbol for per-pair display */
+      allAnalyses: MultiStrategySymbolAnalysis[];
     }
   > = new Map();
 
@@ -250,6 +253,7 @@ const pipeline = {
       currentRiskMultiplier: 1,
       lastLlmSignalKey: null,
       lastLlmVerdictTime: 0,
+      allAnalyses: [],
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -465,6 +469,7 @@ const pipeline = {
         },
         lastSignal: null,
         lastAnalysis: null,
+        allAnalyses: [],
         lastError: null,
       };
     }
@@ -496,6 +501,7 @@ const pipeline = {
           },
           lastSignal: pipeline.lastSignal,
           lastAnalysis: pipeline.lastAnalysis,
+          allAnalyses: pipeline.allAnalyses || [],
           lastError: pipeline.lastError,
           mt5CircuitState: "DISCONNECTED",
           llmCircuitStates: pipeline.llmCircuitStates,
@@ -600,6 +606,7 @@ const pipeline = {
       },
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
+      allAnalyses: pipeline.allAnalyses || [],
       lastError: pipeline.lastError,
       mt5CircuitState: mt5McpService.circuitBreakerState,
       llmCircuitStates: llmConsensusService.getCircuitStates(),
@@ -914,6 +921,7 @@ const pipeline = {
       if (bestAnalysisForUI) {
         pipeline.lastAnalysis = bestAnalysisForUI;
       }
+      pipeline.allAnalyses = analyses;
 
       for (const analysis of analyses) {
         const latestTime = latestCandleTimes.get(analysis.symbol);

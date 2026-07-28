@@ -51,6 +51,7 @@ interface AiTradingContextType {
   isPipelineStarting: boolean;
   isPipelineStopping: boolean;
   lastAnalysis: MultiStrategyAnalysis | null;
+  allAnalyses: MultiStrategyAnalysis[];
   lastLlmVotes: LLMConsensusResult | null;
   startPipeline: (config: PipelineConfig) => Promise<boolean>;
   stopPipeline: () => Promise<void>;
@@ -119,6 +120,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const {
     status: pipelineStatus,
     lastAnalysis,
+    allAnalyses,
     logs: pipelineLogs,
     isStarting: isPipelineStarting,
     isStopping: isPipelineStopping,
@@ -271,6 +273,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       isPipelineStarting,
       isPipelineStopping,
       lastAnalysis,
+      allAnalyses,
       lastLlmVotes: lastLLMVotes,
       startPipeline,
       stopPipeline,
@@ -331,6 +334,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       isPipelineStarting,
       isPipelineStopping,
       lastAnalysis,
+      allAnalyses,
       lastLLMVotes,
       startPipeline,
       stopPipeline,

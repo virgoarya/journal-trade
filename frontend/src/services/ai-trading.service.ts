@@ -163,6 +163,7 @@ export interface PipelineStatus {
   };
   lastSignal: TradingSignal | null;
   lastAnalysis: MultiStrategyAnalysis | null;
+  allAnalyses: MultiStrategyAnalysis[];
   lastError: string | null;
 }
 

@@ -16,6 +16,7 @@ export function usePipeline() {
   const [logs, setLogs] = useState<PipelineLog[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);
+  const [allAnalyses, setAllAnalyses] = useState<MultiStrategyAnalysis[]>([]);
   const [isStopping, setIsStopping] = useState(false);
   const [lastLLMVotes, setLastLLMVotes] = useState<LLMConsensusResult | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,6 +43,7 @@ export function usePipeline() {
           },
           lastSignal: null,
           lastAnalysis: null,
+          allAnalyses: [],
           lastError: null,
         });
         toast.success("AI Trading Pipeline started");
@@ -99,6 +101,9 @@ export function usePipeline() {
             if (res.data.status.lastAnalysis) {
               setLastAnalysis(res.data.status.lastAnalysis);
             }
+            if (res.data.status.allAnalyses) {
+              setAllAnalyses(res.data.status.allAnalyses);
+            }
             setLogs(res.data.logs);
             // Extract latest LLM consensus from CONFLUENCE logs
             const llmLogs = res.data.logs.filter(
@@ -129,6 +134,9 @@ export function usePipeline() {
         if (res.data.status.lastAnalysis) {
           setLastAnalysis(res.data.status.lastAnalysis);
         }
+        if (res.data.status.allAnalyses) {
+          setAllAnalyses(res.data.status.allAnalyses);
+        }
         setLogs(res.data.logs);
         const llmLogs = res.data.logs.filter(
           (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
@@ -146,6 +154,7 @@ export function usePipeline() {
   return {
     status,
     lastAnalysis,
+    allAnalyses,
     logs,
     isStarting,
     isStopping,
