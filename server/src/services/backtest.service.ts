@@ -1374,6 +1374,34 @@ class BacktestService {
       avgConfidence: m.count > 0 ? Math.round(m.confSum / m.count) : 0,
     })).sort((a, b) => b.totalTrades - a.totalTrades);
 
+    // ── Calculate Market Session stats (by Entry Time UTC) ─────────────
+    const sessMap = new Map<string, { wins: number; losses: number; pnl: number; count: number }>();
+    for (const t of tradeResults) {
+      const h = new Date(t.entryTime * 1000).getUTCHours();
+      let sess = "Off-Hours";
+      if (h >= 0 && h < 6) sess = "Asian";
+      else if (h >= 6 && h < 12) sess = "London";
+      else if (h >= 12 && h < 21) sess = "New York";
+
+      if (!sessMap.has(sess)) sessMap.set(sess, { wins: 0, losses: 0, pnl: 0, count: 0 });
+      const sm = sessMap.get(sess)!;
+      sm.count++;
+      sm.pnl += t.pnl;
+      if (t.pnl > 0) sm.wins++;
+      else if (t.pnl < 0) sm.losses++;
+    }
+    const SESS_ORDER = ["Asian", "London", "New York", "Off-Hours"];
+    const sessionStats = Array.from(sessMap.entries())
+      .map(([session, s]) => ({
+        session,
+        totalTrades: s.count,
+        winningTrades: s.wins,
+        losingTrades: s.losses,
+        totalPnL: Math.round(s.pnl * 100) / 100,
+        winRate: s.count > 0 ? Math.round((s.wins / s.count) * 10000) / 100 : 0,
+      }))
+      .sort((a, b) => SESS_ORDER.indexOf(a.session) - SESS_ORDER.indexOf(b.session));
+
     const avgReturn = allReturns.length > 0
       ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length
       : 0;
@@ -1428,6 +1456,7 @@ class BacktestService {
               recoveryFactor: Math.round(recoveryFactor * 100) / 100,
               symbolStats,
               methodologyStats,
+              sessionStats,
             },
             pipelineConfigSnapshot: merged,
           }
@@ -1475,6 +1504,7 @@ class BacktestService {
       trades: tradeResults,
       symbolStats,
       methodologyStats,
+      sessionStats,
     };
 
     // Strip massive arrays from SSE emit to prevent truncation/parsing errors on frontend

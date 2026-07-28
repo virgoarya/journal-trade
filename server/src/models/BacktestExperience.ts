@@ -49,6 +49,14 @@ export interface IBacktestExperience extends Document {
       winRate: number;
       avgConfidence: number;
     }>;
+    sessionStats?: Array<{
+      session: string;
+      totalTrades: number;
+      winningTrades: number;
+      losingTrades: number;
+      totalPnL: number;
+      winRate: number;
+    }>;
   };
 
   aiLearningSummary?: {
@@ -121,6 +129,16 @@ const BacktestExperienceSchema = new Schema<IBacktestExperience>(
           totalPnL: Number,
           winRate: Number,
           avgConfidence: Number,
+        },
+      ],
+      sessionStats: [
+        {
+          session: String,
+          totalTrades: Number,
+          winningTrades: Number,
+          losingTrades: Number,
+          totalPnL: Number,
+          winRate: Number,
         },
       ],
     },

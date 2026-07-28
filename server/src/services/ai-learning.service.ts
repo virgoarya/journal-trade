@@ -329,6 +329,27 @@ class AILearningService {
         });
       });
 
+    // ── Market Session Performance Analysis ───────────────────────────
+    if ((result as any).sessionStats && (result as any).sessionStats.length > 0) {
+      const sessStats: Array<{ session: string; totalTrades: number; winningTrades: number; losingTrades: number; totalPnL: number; winRate: number }> = (result as any).sessionStats;
+      sessStats.forEach((s) => {
+        if (s.totalTrades >= 3) {
+          if (s.totalPnL < 0 || s.winRate < 45) {
+            weaknesses.push(
+              `Weak performance during ${s.session} session: ${s.winRate}% win rate (${s.winningTrades}W/${s.losingTrades}L), PnL -$${Math.abs(s.totalPnL).toFixed(2)}.`,
+            );
+            lessons.push(
+              `Filter out or avoid entering trades during the ${s.session} session to reduce drawdown risks.`,
+            );
+          } else if (s.winRate >= 60 && s.totalPnL > 0) {
+            strengths.push(
+              `High-performing ${s.session} session: ${s.winRate}% win rate (${s.winningTrades}W/${s.losingTrades}L), Net PnL +$${s.totalPnL.toFixed(2)}.`,
+            );
+          }
+        }
+      });
+    }
+
       // Best methodology
       const bestMeth = methStats.filter(m => m.totalTrades >= 3).sort((a, b) => b.totalPnL - a.totalPnL)[0];
       if (bestMeth) {

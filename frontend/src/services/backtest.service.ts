@@ -183,6 +183,14 @@ export interface BacktestResult {
     winRate: number;
     avgConfidence: number;
   }>;
+  sessionStats?: Array<{
+    session: string;
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    totalPnL: number;
+    winRate: number;
+  }>;
 }
 
 export interface BacktestAnalysis {

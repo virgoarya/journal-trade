@@ -355,14 +355,15 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
 
-            // Market Session Stats tracking
-            const sess = getSessionInfo(data.exitTime || data.entryTime);
+            // Market Session Stats tracking (by Entry Time)
+            const sess = getSessionInfo(data.entryTime || data.exitTime);
             if (!sessionStatsRef.current.has(sess.name)) {
-              sessionStatsRef.current.set(sess.name, { count: 0, pnl: 0 });
+              sessionStatsRef.current.set(sess.name, { count: 0, wins: 0, losses: 0, pnl: 0 });
             }
             const sData = sessionStatsRef.current.get(sess.name)!;
             sData.count++;
             sData.pnl += data.pnl;
+            if (data.pnl >= 0) sData.wins++; else sData.losses++;
 
             const SESS_ORDER = ["Asian", "London", "New York", "Off-Hours"];
             setLiveSessionStats(
@@ -370,6 +371,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 .map(([session, s]) => ({
                   session,
                   count: s.count,
+                  wins: s.wins,
+                  losses: s.losses,
+                  winRate: s.count > 0 ? Math.round((s.wins / s.count) * 100) : 0,
                   pnl: Math.round(s.pnl * 100) / 100,
                   color: session === "Asian" ? "text-yellow-400" : session === "London" ? "text-blue-400" : session === "New York" ? "text-red-400" : "text-gray-400",
                 }))
@@ -604,7 +608,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                           {s.pnl >= 0 ? "+" : ""}${s.pnl.toFixed(2)}
                         </span>
                       </div>
-                      <div className="text-[10px] text-text-muted">{s.count} trades</div>
+                      <div className="text-[10px] text-text-muted flex justify-between">
+                        <span>{s.count}t · {s.wins}W/{s.losses}L</span>
+                        <span className="text-gray-400 font-mono">{s.winRate}% WR</span>
+                      </div>
                     </div>
                   ))}
                 </div>

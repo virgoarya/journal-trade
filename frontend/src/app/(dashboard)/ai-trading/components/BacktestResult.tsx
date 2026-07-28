@@ -21,6 +21,7 @@ import {
   Shield,
   Layers,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -384,6 +385,58 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
           </table>
         </div>
       </div>
+
+      {/* ── MARKET SESSION PERFORMANCE ── */}
+      {result.sessionStats && Array.isArray(result.sessionStats) && result.sessionStats.length > 0 && (
+        <div className="space-y-4 pt-6 border-t border-border-subtle relative z-10">
+          <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+            <Clock className="w-4 h-4 text-accent-gold" />
+            Market Session Performance (Entry Time)
+          </h4>
+          <div className="bg-surface/80 border border-border-subtle/80 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-left text-sm text-text-muted">
+              <thead className="bg-surface/50 text-xs uppercase text-text-muted border-b border-border-subtle">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Session</th>
+                  <th className="px-4 py-3 font-medium text-center">Trades</th>
+                  <th className="px-4 py-3 font-medium text-center">Win %</th>
+                  <th className="px-4 py-3 font-medium text-center">W/L</th>
+                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {result.sessionStats.map((sess, idx) => {
+                  const allStats = result.sessionStats || [];
+                  const bestStat = allStats.length ? [...allStats].sort((a: any, b: any) => safeNum(b?.totalPnL) - safeNum(a?.totalPnL))[0] : null;
+                  const worstStat = allStats.length ? [...allStats].sort((a: any, b: any) => safeNum(a?.totalPnL) - safeNum(b?.totalPnL))[0] : null;
+                  const isBest = bestStat?.session === sess.session && safeNum(sess.totalPnL) > 0;
+                  const isWorst = worstStat?.session === sess.session && safeNum(sess.totalPnL) < 0;
+                  const color = sess.session === "Asian" ? "text-yellow-400" : sess.session === "London" ? "text-blue-400" : sess.session === "New York" ? "text-red-400" : "text-gray-400";
+                  return (
+                    <tr key={idx} className="hover:bg-surface/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-text-primary flex items-center gap-2">
+                        <span className={color}>{sess.session}</span>
+                        {isBest && <span className="text-[8px] bg-green-500/20 text-green-400 px-1 rounded">BEST</span>}
+                        {isWorst && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 rounded">WORST</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">{safeNum(sess.totalTrades)}</td>
+                      <td className="px-4 py-3 text-center font-mono">{safeFixed(sess.winRate, 1)}%</td>
+                      <td className="px-4 py-3 text-center font-mono text-xs">
+                        <span className="text-green-400">{safeNum(sess.winningTrades)}W</span>
+                        <span className="text-text-muted"> / </span>
+                        <span className="text-red-400">{safeNum(sess.losingTrades)}L</span>
+                      </td>
+                      <td className={`px-4 py-3 text-right font-mono font-medium ${safeNum(sess.totalPnL) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        {safeNum(sess.totalPnL) >= 0 ? "+" : ""}${safeFixed(sess.totalPnL, 2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-3 relative z-10">
