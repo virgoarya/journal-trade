@@ -11,12 +11,13 @@ import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analy
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
-  confidence: number; // 0–100
   entry: number;
   sl: number;
   tp: number;
   orderBlock?: OrderBlock;
-  breachType: "MSS" | "LIQUIDITY_GRAB" | "BREAKER" | "OB_MITIGATION" | "CHOCH";
+  h1OrderBlock?: OrderBlock;
+  breachType: "MSS" | "CHOCH" | "OB_MITIGATION" | "BREAKER" | "LIQUIDITY_GRAB" | "M5_CHOCH_OB";
+  confidence: number;
   reason: string;
   checklistItems?: ChecklistItem[];
 }
@@ -39,6 +40,10 @@ class SMCStrategy {
     if (!fractal.isAligned) {
       return signals;
     }
+
+    // 0. M5 Confirmation Entry after Retest H1 OB (highest priority refinement entry)
+    const m5ConfirmSignal = this.detectM5ConfirmationEntry(fractal);
+    if (m5ConfirmSignal) signals.push(m5ConfirmSignal);
 
     // 1. Market Structure Shift (MSS) / Change of Character (CHOCH)
     const mssSignal = this.detectMSS(fractal);
@@ -170,28 +175,40 @@ class SMCStrategy {
       },
       {
         id: "smc-ob",
-        label: (status) => status === "PASSED" && sig.orderBlock
-          ? `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} : ${obBottom} - ${obTop}) [Displacement + CHoCH]`
-          : `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} detection zone)`,
-        timeframe: setupTfLabel,
-        condition: !!(sig.orderBlock || sig.breachType === "OB_MITIGATION"),
-        value: (status) => status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined,
+        label: (status) => {
+          if (sig.h1OrderBlock) {
+            return `③ Retest H1 ${sig.direction === "BUY" ? "Bullish" : "Bearish"} Order Block (H1 POI : ${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)})`;
+          }
+          return status === "PASSED" && sig.orderBlock
+            ? `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} : ${obBottom} - ${obTop}) [Displacement + CHoCH]`
+            : `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} detection zone)`;
+        },
+        timeframe: htfTfLabel,
+        condition: !!(sig.orderBlock || sig.h1OrderBlock || sig.breachType === "OB_MITIGATION"),
+        value: (status) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
         details: (status) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
       },
       {
         id: "smc-mss",
-        label: (status) => status === "PASSED"
-          ? `④ ${entryTfLabel} CHoCH Confirmation (Breakout above Swing Level ${obChochPrice})`
-          : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`,
+        label: (status) => {
+          if (sig.breachType === "M5_CHOCH_OB" && sig.orderBlock) {
+            return `④ ${entryTfLabel} CHoCH Confirmation & M5 OB Zone (Refinement : ${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)})`;
+          }
+          return status === "PASSED"
+            ? `④ ${entryTfLabel} CHoCH Confirmation (Breakout above Swing Level ${obChochPrice})`
+            : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`;
+        },
         timeframe: entryTfLabel,
-        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || (sig.orderBlock?.hasCHOCH ?? false),
+        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || sig.breachType === "M5_CHOCH_OB" || (sig.orderBlock?.hasCHOCH ?? false),
       },
       {
         id: "smc-entry-rejection",
-        label: () => `⑤ Retest ${pdArrayType} Zone (Pending ${sig.direction} Limit Order @ ${sig.entry.toFixed(5)})`,
+        label: () => sig.breachType === "M5_CHOCH_OB"
+          ? `⑤ Pending ${sig.direction} Limit Order @ M5 OB ${sig.direction === "BUY" ? "Top" : "Bottom"} (${sig.entry.toFixed(5)}) — Target ${sig.direction === "BUY" ? "PDH" : "PDL"} (${sig.tp.toFixed(5)})`
+          : `⑤ Retest ${pdArrayType} Zone (Pending ${sig.direction} Limit Order @ ${sig.entry.toFixed(5)})`,
         timeframe: entryTfLabel,
-        condition: isEntryRetested,
-        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga retest zone.",
+        condition: sig.breachType === "M5_CHOCH_OB" ? true : isEntryRetested,
+        details: (status) => `Pending ${sig.direction} Limit Order at ${sig.entry.toFixed(5)} (Target: ${sig.tp.toFixed(5)})`,
       },
       {
         id: "smc-rr",
@@ -203,6 +220,94 @@ class SMCStrategy {
     ]);
   }
 
+
+  // ── M5 Confirmation Entry after Retest H1 OB ───────────────────────
+
+  /**
+   * M5 Refinement Entry (H1 POI -> Retest -> M5 CHoCH + M5 OB Limit Entry -> Target PDH/PDL)
+   */
+  private detectM5ConfirmationEntry(fractal: import("./market-structure.service").FractalContext): SMCSignal | null {
+    const htfStr = fractal.directionStr; // H1 structure
+    const m5Str = fractal.entryStr;      // M5 structure
+    const m5Candles = fractal.entry;
+    if (!htfStr || !m5Str || m5Candles.length < 5) return null;
+
+    const atrM5 = atrService.calculate(m5Candles);
+    const avgRange = atrM5 > 0 ? atrM5 : this.avgCandleRange(m5Candles, 5);
+    const dailyBias = analyzeDaily3CandleBias(fractal.daily || fractal.direction);
+
+    // Scan H1 Order Blocks
+    const h1Blocks = htfStr.orderBlocks.filter((ob) => !ob.mitigated);
+    if (h1Blocks.length === 0) return null;
+
+    const recentM5 = m5Candles.slice(-15);
+    const lowestM5 = Math.min(...recentM5.map((c) => c.low));
+    const highestM5 = Math.max(...recentM5.map((c) => c.high));
+
+    for (const h1OB of h1Blocks) {
+      // ── BULLISH M5 CONFIRMATION ENTRY ──
+      if (h1OB.type === "BULLISH") {
+        // Price must have retested H1 OB zone
+        const retestedH1OB = lowestM5 <= h1OB.top && lowestM5 >= h1OB.bottom - avgRange * 2;
+        if (!retestedH1OB) continue;
+
+        // Find active M5 Bullish Order Blocks formed after retesting H1 OB
+        const m5BullBlocks = m5Str.orderBlocks.filter((ob) => ob.type === "BULLISH" && !ob.mitigated && ob.hasCHOCH);
+        if (m5BullBlocks.length === 0) continue;
+
+        const m5OB = m5BullBlocks[m5BullBlocks.length - 1]; // latest M5 OB with CHoCH
+        const entry = m5OB.top; // Limit order at M5 OB Top
+        const sl = m5OB.bottom - avgRange * 0.5; // SL below M5 OB low
+        const targetPDH = dailyBias.pdh > entry ? dailyBias.pdh : entry + (entry - sl) * 3;
+
+        if (marketStructureService.isTargetTakenBeforeEntry(m5Candles, m5OB.index, "BUY", targetPDH, fractal)) continue;
+
+        return {
+          direction: "BUY",
+          entry,
+          sl,
+          tp: targetPDH,
+          orderBlock: m5OB,
+          h1OrderBlock: h1OB,
+          breachType: "M5_CHOCH_OB",
+          confidence: 90, // High confidence refinement entry
+          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 CHoCH Confirmation -> Pending BUY Limit @ M5 OB Top ${entry.toFixed(5)} [Target PDH: ${targetPDH.toFixed(5)}]`,
+        };
+      }
+
+      // ── BEARISH M5 CONFIRMATION ENTRY ──
+      if (h1OB.type === "BEARISH") {
+        // Price must have retested H1 OB zone
+        const retestedH1OB = highestM5 >= h1OB.bottom && highestM5 <= h1OB.top + avgRange * 2;
+        if (!retestedH1OB) continue;
+
+        // Find active M5 Bearish Order Blocks formed after retesting H1 OB
+        const m5BearBlocks = m5Str.orderBlocks.filter((ob) => ob.type === "BEARISH" && !ob.mitigated && ob.hasCHOCH);
+        if (m5BearBlocks.length === 0) continue;
+
+        const m5OB = m5BearBlocks[m5BearBlocks.length - 1]; // latest M5 OB with CHoCH
+        const entry = m5OB.bottom; // Limit order at M5 OB Bottom
+        const sl = m5OB.top + avgRange * 0.5; // SL above M5 OB high
+        const targetPDL = dailyBias.pdl < entry ? dailyBias.pdl : entry - (sl - entry) * 3;
+
+        if (marketStructureService.isTargetTakenBeforeEntry(m5Candles, m5OB.index, "SELL", targetPDL, fractal)) continue;
+
+        return {
+          direction: "SELL",
+          entry,
+          sl,
+          tp: targetPDL,
+          orderBlock: m5OB,
+          h1OrderBlock: h1OB,
+          breachType: "M5_CHOCH_OB",
+          confidence: 90, // High confidence refinement entry
+          reason: `Retest H1 OB (${h1OB.bottom.toFixed(5)}-${h1OB.top.toFixed(5)}) + M5 CHoCH Confirmation -> Pending SELL Limit @ M5 OB Bottom ${entry.toFixed(5)} [Target PDL: ${targetPDL.toFixed(5)}]`,
+        };
+      }
+    }
+
+    return null;
+  }
 
   // ── Market Structure Shift ─────────────────────────────────────────
 

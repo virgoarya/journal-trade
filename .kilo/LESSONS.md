@@ -160,6 +160,18 @@
    - `Retest Discount PD Array Zone (Pending BUY Limit)`
 **Hindari**: Jangan menggunakan terminologi generik jika ada terminologi baku baku SMC/ICT (seperti Discount PD Array & SSL/BSL Sweep).
 
+### [20260728] M5 Refinement Entry (H1 POI Retest ➔ M5 CHoCH + M5 OB Limit Entry ➔ Target PDH/PDL)
+**Area**: Backend / Strategies / Multi-Timeframe Refinement
+**Root Cause**: Sebelumnya entry SMC hanya mendeteksi Order Block di timeframe tunggal tanpa konfirmasi konfluen multi-timeframe (retest H1 POI diikuti M5 CHoCH + M5 OB Limit Entry).
+**Solusi**:
+1. Menambahkan method `detectM5ConfirmationEntry()` pada [smc.strategy.ts](file:///d:/Journal%20Trade/server/src/services/strategies/smc.strategy.ts).
+2. Alur Eksekusi:
+   - Tahap 1: Memastikan harga telah menyentuh/retest area H1 Order Block (`h1OrderBlock`).
+   - Tahap 2: Beralih ke timeframe M5 (`entryStr`) untuk mengonfirmasi M5 CHoCH dan terbentuknya M5 Order Block (`m5OB`).
+   - Tahap 3: Begitu M5 CHoCH terkonfirmasi (Item ④ Passed), Item ⑤ langsung aktif memasang order **Pending Limit Order pada M5 OB Top (untuk BUY)** atau **M5 OB Bottom (untuk SELL)** menargetkan **PDH / PDL**.
+**Hindari**: Jangan menunda pemasangan Pending Limit Order M5 setelah M5 CHoCH & M5 OB terbentuk. Langsung aktifkan order begitu Item 4 terkonfirmasi Passed.
+
+
 
 
 
