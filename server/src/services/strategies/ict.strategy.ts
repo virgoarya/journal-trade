@@ -245,13 +245,12 @@ class ICTStrategy {
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
 
     const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
-    
-    // Extract dynamic prices
+
     const relHigh = fractal && fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
     const relLow = fractal && fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
 
     const htfStr = fractal?.dailyStr || fractal?.directionStr;
-    const isHtfBosConfirmed = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
+    const isHtfDirectional = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
 
     // Decompose signal type into individual concepts
     const hasAMD = sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
@@ -259,32 +258,32 @@ class ICTStrategy {
     const hasOTE = sig.signalType.includes("OTE");
     const hasSweep = sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
 
-    // Evaluate each condition independently
-    const step1 = isHtfBosConfirmed;
-    const step2 = killzone !== "NONE";
-    const step3 = hasSweep || hasAMD;
-    const step4 = hasFVG;
-    const step5 = isRRValid;
+    // ── ICT Akidah: ① Bias → ② Killzone → ③ Sweep/AMD → ④ FVG/OTE → ⑤ Entry → ⑥ RR ──
+    const step1 = isHtfDirectional;                                           // ① HTF Directional Bias
+    const killzoneActive = killzone !== "NONE";                                // ② Killzone (independent, doesn't block waterfall)
+    const step3 = hasSweep || hasAMD;                                          // ③ Liquidity Inducement / AMD / Judas
+    const step4 = hasFVG || hasOTE;                                           // ④ Displacement + FVG/OTE creation
     const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
     const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
       isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
     );
-    const step6 = isEntryRetested;
+    const step5 = isEntryRetested;                                            // ⑤ Entry retest FVG/OTE
+    const step6 = isRRValid;                                                  // ⑥ R:R 1:2
 
-    // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
       return stepPassed ? "PASSED" : "WAITING";
     };
 
-    const stat1 = s(step1, true, true); // HTF Alignment is critical
-    const stat2 = s(step2, step1); // Killzone is preferred but maybe not critical for dropping
+    const stat1 = s(step1, true, true);
+    // Killzone is informational — independent status, doesn't block waterfall
+    const stat2: "PASSED" | "WAITING" = killzoneActive ? "PASSED" : "WAITING";
     const stat3 = s(step3, step1);
     const stat4 = s(step4, step1 && step3);
-    const stat5 = s(step5, step1 && step3 && step4, true); // RR is critical
-    const stat6 = s(step6, step1 && step3 && step4 && step5);
+    const stat5 = s(step5, step1 && step3 && step4);
+    const stat6 = s(step6, step1 && step3 && step4 && step5, true);
 
     const items: ChecklistItem[] = [
       {
@@ -294,8 +293,8 @@ class ICTStrategy {
         timeframe: "D1",
       },
       {
-        id: "ict-bos",
-        label: `① ${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        id: "ict-bias",
+        label: `① ${htfTfLabel} Directional Bias ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} (High ${relHigh}, Low ${relLow})`,
         status: stat1,
         timeframe: htfTfLabel,
       },
@@ -313,26 +312,26 @@ class ICTStrategy {
       },
       {
         id: "ict-fvg",
-        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement & FVG (Fair Value Gap) creation`,
+        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement + FVG/OTE creation`,
         status: stat4,
         timeframe: entryTfLabel
       },
       {
-        id: "ict-rr",
-        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        id: "ict-entry",
+        label: `⑤ ${entryTfLabel} Entry retest FVG${hasOTE ? "/OTE" : ""} gap (pending order)`,
         status: stat5,
-        details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
+        timeframe: entryTfLabel,
+        details: stat5 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       },
       {
-        id: "ict-entry",
-        label: `⑥ ${entryTfLabel} entry retest level FVG/OTE (pending order atau market execution)`,
+        id: "ict-rr",
+        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat6,
-        timeframe: entryTfLabel,
-        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        details: stat6 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       }
     ];
 
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
+    const passed = stat1 !== "FAILED" && stat6 !== "FAILED";
 
     return { items, passed };
   }

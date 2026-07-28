@@ -120,7 +120,6 @@ class SMCStrategy {
 
   private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
-    const pdArray = isBuy ? "Discount PD Array" : "Premium PD Array";
 
     const htfStr = fractal.dailyStr || fractal.directionStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
@@ -135,38 +134,34 @@ class SMCStrategy {
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
 
-    // Extract dynamic prices
     const relHigh = fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
     const relLow = fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
-    
-    // Evaluate each condition independently
-    const step1 = isHtfBosConfirmed;
-    const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;
-    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION" || sig.breachType === "MSS" || sig.breachType === "LIQUIDITY_GRAB");
-    const step4 = true; // SMC setup does not strictly require an FVG on the setup timeframe if OB or MSS is valid
-    const step5 = isRRValid;
+
+    // ── SMC Akidah: ① BOS → ② Sweep → ③ PD Array → ④ MSS → ⑤ Entry → ⑥ RR ──
+    const step1 = isHtfBosConfirmed;                                         // ① HTF BOS
+    const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;    // ② Liquidity Inducement / Sweep
+    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION");  // ③ PD Array / Order Block
+    const step4 = sig.breachType === "MSS" || sig.breachType === "CHOCH";    // ④ MSS / CHOCH
     const lastCandle = fractal.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
     const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
       isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
     );
-    const step6 = isEntryRetested;
+    const step5 = isEntryRetested;                                           // ⑤ Entry retest PD Array
+    const step6 = isRRValid;                                                 // ⑥ R:R 1:2
 
-    // Cascading waterfall: if a prior step hasn't passed, all subsequent steps are WAITING
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
       return stepPassed ? "PASSED" : "WAITING";
     };
 
-    const stat1 = s(step1, true, true); // HTF Alignment is critical
+    const stat1 = s(step1, true, true);
     const stat2 = s(step2, step1);
     const stat3 = s(step3, step1 && step2);
     const stat4 = s(step4, step1 && step2 && step3);
-    const stat5 = s(step5, step1 && step2 && step3 && step4, true); // RR is critical
-    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
-
-
+    const stat5 = s(step5, step1 && step2 && step3 && step4);
+    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5, true);
 
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
@@ -198,27 +193,27 @@ class SMCStrategy {
         value: stat3 === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
       },
       {
-        id: "smc-fvg",
-        label: stat4 === "PASSED" ? `④ ${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS detection align ${setupTfLabel} direction + CISD/OB/FVG`,
+        id: "smc-mss",
+        label: stat4 === "PASSED" ? `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array`,
         status: stat4,
         timeframe: entryTfLabel
       },
       {
-        id: "smc-rr",
-        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        id: "smc-entry-rejection",
+        label: `⑤ ${entryTfLabel} Entry retest PD Array (pending order ${sig.direction} Limit)`,
         status: stat5,
-        details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
+        timeframe: entryTfLabel,
+        details: stat5 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       },
       {
-        id: "smc-entry-rejection",
-        label: `⑥ ${entryTfLabel} entry retest level CISD/FVG (pending order atau market execution)`,
+        id: "smc-rr",
+        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat6,
-        timeframe: entryTfLabel,
-        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        details: stat6 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
       }
     ];
 
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
+    const passed = stat1 !== "FAILED" && stat6 !== "FAILED";
 
     return { items, passed };
   }

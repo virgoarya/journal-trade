@@ -342,7 +342,7 @@ class MSNRStrategy {
 
   private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
-    const snrType = sig.signalType.includes("QML") ? "QML Level" : (sig.signalType === "RBS" ? "RBS Level" : (sig.signalType === "SBR" ? "SBR Level" : "Support/Resistance"));
+    const snrType = sig.signalType.includes("QML") ? "QML Level" : (sig.signalType === "RBS" ? "RBS Level" : (sig.signalType === "SBR" ? "SBR Level" : "Key S/R Zone"));
 
     const slDist = Math.abs(sig.entry - sig.sl);
     const tpDist = Math.abs(sig.tp - sig.entry);
@@ -355,27 +355,18 @@ class MSNRStrategy {
     
     const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
 
-    // Extract dynamic prices
-    const relHigh = fractal && fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
-    const relLow = fractal && fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
-
-    const htfStr = fractal?.dailyStr || fractal?.directionStr;
-    const isHtfBosConfirmed = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
-
-    // MSNR signal types: "QML_BULLISH", "QML_BEARISH", "RBS", "SBR"
-    const step1 = isHtfBosConfirmed;
-    const step2 = sig.confidence >= 50; // Key level found
-    const step3 = sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR"); // Sweep confirmed
-    const step4 = step3; // Since step 4 (LTF MSS + OB) is checked in analyze() and we only push valid ones
-    const step5 = isRRValid;
+    // ── MSNR Akidah: ① SNR Zone → ② Turtle Soup → ③ MSS+OB → ④ Entry → ⑤ RR ──
+    const step1 = sig.confidence >= 50;                                        // ① Key SNR Zone identified
+    const step2 = sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP"); // ② Turtle Soup / Sweep
+    const step3 = sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"); // ③ MSS + OB/CISD formed
     const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
     const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
       isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
     );
-    const step6 = isEntryRetested;
+    const step4 = isEntryRetested;                                             // ④ Entry retest OB/CISD
+    const step5 = isRRValid;                                                   // ⑤ R:R 1:2
 
-    // Cascading waterfall
     const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
       if (!priorAllPassed) return "WAITING";
       if (isFailable && !stepPassed) return "FAILED";
@@ -387,7 +378,6 @@ class MSNRStrategy {
     const stat3 = s(step3, step1 && step2);
     const stat4 = s(step4, step1 && step2 && step3);
     const stat5 = s(step5, step1 && step2 && step3 && step4, true);
-    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5);
 
     const items: ChecklistItem[] = [
       {
@@ -397,41 +387,35 @@ class MSNRStrategy {
         timeframe: "D1",
       },
       {
-        id: "msnr-bos",
-        label: `① ${htfTfLabel} Break Of Structure ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
+        id: "msnr-zone",
+        label: `① ${htfTfLabel} Key SNR Zone (${snrType}) — Level teridentifikasi`,
         status: stat1,
-        timeframe: htfTfLabel,
-      },
-      {
-        id: "msnr-snr",
-        label: `② ${htfTfLabel} Malaysian SNR Zone (${snrType})`,
-        status: stat2,
         timeframe: htfTfLabel
       },
       {
         id: "msnr-turtle",
-        label: `③ ${htfTfLabel} Liquidity Sweep & Rejection (Turtle Soup)`,
-        status: stat3,
+        label: `② ${htfTfLabel} Turtle Soup / Liquidity Sweep — False breakout SNR zone`,
+        status: stat2,
         timeframe: htfTfLabel
       },
       {
         id: "msnr-mss-ob",
-        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Market Structure Shift + OB/CISD (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Market Structure Shift + OB/CISD`,
-        status: stat4,
+        label: stat3 === "PASSED" ? `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD (${sig.entry.toFixed(5)})` : `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD`,
+        status: stat3,
         timeframe: entryTfLabel
+      },
+      {
+        id: "msnr-entry",
+        label: `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
+        status: stat4,
+        timeframe: entryTfLabel,
+        details: stat4 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       },
       {
         id: "msnr-rr",
         label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         status: stat5,
         details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
-      },
-      {
-        id: "msnr-entry",
-        label: `⑥ ${entryTfLabel} entry retest level OB/CISD (pending order)`,
-        status: stat6,
-        timeframe: entryTfLabel,
-        details: stat6 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
       }
     ];
 
