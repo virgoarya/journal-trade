@@ -260,11 +260,13 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
 
-            // Update live trade PnLs from equity event (has currentPrice + pnl per position)
+            // Single source of truth for live trades & position count
             if (data.activeTrades && data.activeTrades.length > 0) {
               setLiveTrades(data.activeTrades);
-            } else if (activeTradesRef.current.size === 0) {
+              setActiveTradeCount(data.activeTrades.length);
+            } else {
               setLiveTrades([]);
+              setActiveTradeCount(0);
             }
           } catch {}
         });
@@ -306,11 +308,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             }
             methStatsRef.current.get(meth)!.count++;
             setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
-            
-            // Track open position
-            activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
-            setActiveTradeCount(activeTradesRef.current.size);
-            setLiveTrades(Array.from(activeTradesRef.current.values()));
           } catch {}
         });
 
@@ -340,11 +337,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             }
 
-            // Remove from active trades
-            activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
-            setActiveTradeCount(activeTradesRef.current.size);
-            setLiveTrades(Array.from(activeTradesRef.current.values()));
-            
             // Update Global Win Rate
             if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
             else { globalLossesRef.current++; setGlobalLosses(globalLossesRef.current); }
