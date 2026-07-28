@@ -173,7 +173,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
     );
   }, [symbolSearch, symbols]);
 
+  const MAX_SYMBOLS = 2;
+  const atSymbolLimit = selectedSymbols.length >= MAX_SYMBOLS;
+
   const addSymbol = (sym: string) => {
+    if (atSymbolLimit) return;
     const s = sym.trim();
     const matched = symbols.find(x => x.toLowerCase() === s.toLowerCase()) || s.toUpperCase();
     if (matched && !selectedSymbols.includes(matched)) {
@@ -205,10 +209,10 @@ export function BacktestForm({ onRun, isRunning }: Props) {
       const res = await aiTradingService.getSkill();
       if (!res.success || !res.data?.symbolRankings) return;
 
-      // Symbols — 5 best pairs with score ≥ 50
+      // Symbols — max 2 best pairs with score ≥ 50
       const topSymbols = res.data.symbolRankings
         .filter((s: any) => s.score >= 50)
-        .slice(0, 5)
+        .slice(0, MAX_SYMBOLS)
         .map((s: any) => s.symbol);
       if (topSymbols.length > 0) setSelectedSymbols(topSymbols);
 
@@ -316,8 +320,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                 setSymbolSearch("");
               }
             }}
-            placeholder="Type symbol & Enter (e.g. EURUSD) or search..."
-            className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none mb-2"
+            placeholder={atSymbolLimit ? "Max 2 pairs reached" : "Type symbol & Enter (e.g. EURUSD) or search..."}
+            disabled={atSymbolLimit}
+            className={`w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none mb-2 ${atSymbolLimit ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
 
           {/* Selected symbols sebagai tag */}
@@ -334,22 +339,28 @@ export function BacktestForm({ onRun, isRunning }: Props) {
 
           {/* Daftar symbols terfilter */}
           <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-            {filteredSymbols.map((sym) => (
-              <button
-                key={sym}
-                type="button"
-                onClick={() => addSymbol(sym)}
-                className={`px-2 py-1 text-[10px] rounded font-medium transition ${
-                  selectedSymbols.includes(sym)
-                    ? "bg-accent-gold text-black"
-                    : "bg-bg-input text-text-muted hover:text-text-primary"
-                }`}
-              >
-                {sym}
-              </button>
-            ))}
+            {filteredSymbols.map((sym) => {
+              const isDisabled = atSymbolLimit && !selectedSymbols.includes(sym);
+              return (
+                <button
+                  key={sym}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => addSymbol(sym)}
+                  className={`px-2 py-1 text-[10px] rounded font-medium transition ${
+                    selectedSymbols.includes(sym)
+                      ? "bg-accent-gold text-black"
+                      : isDisabled
+                        ? "bg-bg-input text-gray-700 cursor-not-allowed"
+                        : "bg-bg-input text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  {sym}
+                </button>
+              );
+            })}
           </div>
-          <p className="text-[10px] text-gray-600">Click symbol to add. Type custom symbol + Enter.</p>
+          <p className="text-[10px] text-gray-600">Max 2 symbols per backtest. {atSymbolLimit ? "Remove one to add another." : "Click to add or type + Enter."}</p>
         </div>
 
         {/* Tombol AI Auto-Config */}
