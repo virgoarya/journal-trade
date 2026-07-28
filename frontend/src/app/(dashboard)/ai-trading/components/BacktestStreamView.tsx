@@ -493,17 +493,18 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
               <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono mb-1">Equity</p>
-              <p className="text-lg font-bold font-mono text-text-primary">
+              <p className="text-2xl font-bold font-mono text-text-primary">
                 ${candle ? (candle.equity || 0).toFixed(2) : (config.initialBalance || 0).toFixed(2)}
               </p>
               {candle && (candle.floatingPnL || 0) !== 0 && (
-                <div className={`flex items-center gap-1 text-xs mt-0.5 font-mono ${(candle.floatingPnL || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
-                  {(candle.floatingPnL || 0) > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {(candle.floatingPnL || 0) > 0 ? "+" : ""}{(candle.floatingPnL || 0).toFixed(2)} Float
+                <div className={`flex items-center gap-1 font-mono mt-1 ${(candle.floatingPnL || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
+                  {(candle.floatingPnL || 0) > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  <span className="text-sm font-bold">{(candle.floatingPnL || 0) > 0 ? "+" : ""}{(candle.floatingPnL || 0).toFixed(2)}</span>
+                  <span className="text-[9px] opacity-70">Float</span>
                 </div>
               )}
               {candle && candle.marginLevel > 0 && (
-                <p className="text-[9px] text-text-muted mt-0.5 font-mono">Margin: {candle.marginLevel.toFixed(1)}%</p>
+                <p className="text-[10px] text-text-muted mt-0.5 font-mono">Margin: {candle.marginLevel.toFixed(1)}%</p>
               )}
             </div>
 
@@ -579,7 +580,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
               <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
-              <div style={{ height: "140px", width: "100%" }}>
+              <div style={{ height: "200px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
@@ -594,9 +595,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
-          {liveTrades.length > 0 && (
-            <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions ({liveTrades.length})</p>
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
+              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions {liveTrades.length > 0 ? `(${liveTrades.length})` : ""}</p>
+              {liveTrades.length > 0 ? (
               <div className="space-y-0.5 max-h-[100px] overflow-y-auto mt-1">
                 {liveTrades.map((t, idx) => (
                   <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
@@ -612,8 +613,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                   </div>
                 ))}
               </div>
+              ) : (
+                <p className="text-[9px] text-text-muted font-mono mt-1">No open trades</p>
+              )}
             </div>
-          )}
 
           <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative">
             <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
@@ -625,7 +628,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[180px]">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[100px]">
               {logs.map((log) => (
                 <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
