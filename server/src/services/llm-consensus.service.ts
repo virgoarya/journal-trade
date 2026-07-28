@@ -310,8 +310,8 @@ PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan HARUS menggu
 ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan 2-4 poin kesimpulan akhir yang padat dalam Bahasa Indonesia.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
-- GOOD: Sinyal kuat, ≥2 methodology berbobot setuju (terutama SMC/ICT), R:R >= 1:1.5, searah tren HTF.
-- BAD: Sinyal buruk, melawan tren dominan, R:R < 1:1, hanya 1 atau 0 methodology setuju, atau korelasi berisiko.
+- GOOD: Sinyal kuat, ≥2 methodology berbobot setuju (terutama SMC/ICT), R:R >= 1:1.5, searah tren HTF atau konfirmasi Reversal H1/M15 (Sweep + CHOCH/MSS). Abaikan item 'Daily Direction WAITING' jika terjadi Reversal H1 yang matang.
+- BAD: Sinyal buruk tanpa konfirmasi struktur, R:R < 1:1, hanya 1 atau 0 methodology setuju, atau korelasi berisiko.
 - SKIP: Data meragukan, kondisi sideways berisiko, R:R 1:1–1:1.5, hanya 1 methodology low-weight setuju, atau fundamental bertentangan.`;
 
 

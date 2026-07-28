@@ -1031,12 +1031,15 @@ const pipeline = {
             pipeline.lastLlmSignalKey = llmSignalKey;
             pipeline.lastLlmVerdictTime = Date.now();
 
-            // Only send to LLM if ALL checklist items are PASSED
+            // Only send to LLM if all core checklist items are PASSED (excluding informational daily direction) and no step FAILED
             const sigChecklist = analysis.confluence.finalSignal?.checklistItems || [];
-            const allSigPassed = sigChecklist.length > 0 && sigChecklist.every(c => c.status === "PASSED");
-            if (!allSigPassed) {
+            const hasFailedStep = sigChecklist.some(c => c.status === "FAILED");
+            const coreChecklist = sigChecklist.filter(c => !c.id.endsWith("-daily") && c.id !== "ict-kz");
+            const allCorePassed = coreChecklist.length > 0 && coreChecklist.every(c => c.status === "PASSED");
+
+            if (hasFailedStep || !allCorePassed) {
               this.addLog(userId, "CONFLUENCE",
-                `[2/4] [${signal.symbol}] LLM SKIPPED: Checklist belum 100% PASSED (${sigChecklist.filter(c => c.status === "PASSED").length}/${sigChecklist.length}). Menunggu validasi selesai.`
+                `[2/4] [${signal.symbol}] LLM SKIPPED: Checklist belum 100% PASSED (${coreChecklist.filter(c => c.status === "PASSED").length}/${coreChecklist.length} core steps). Menunggu validasi selesai.`
               );
               continue;
             }
