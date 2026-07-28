@@ -78,10 +78,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [signalInterval, setSignalInterval] = useStickyState(3, "bt_signalInterval");
   const [speedMs, setSpeedMs] = useStickyState(0, "bt_speedMs");
 
-  // Migration: old speed values (10, 50) → new values (30, 80)
+  // Migration: old speed values (10, 30, 50, 80, 150) → new values (40, 100, 250)
   useEffect(() => {
-    if (speedMs === 10) setSpeedMs(30);
-    else if (speedMs === 50) setSpeedMs(80);
+    if (speedMs === 10 || speedMs === 30) setSpeedMs(40);
+    else if (speedMs === 50 || speedMs === 80) setSpeedMs(100);
+    else if (speedMs === 150) setSpeedMs(250);
   }, []);
 
   const [activeMethodologies, setActiveMethodologies] = useStickyState<string[]>(METHODOLOGY_NAMES, "bt_activeMethodologies");
@@ -583,9 +584,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
               className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary outline-none"
             >
               <option value={0}>⚡ Max Speed</option>
-              <option value={30}>🏎️ Visual (Smooth)</option>
-              <option value={80}>👁️ Observable</option>
-              <option value={150}>🔍 Detailed</option>
+              <option value={40}>🏎️ Visual (Smooth)</option>
+              <option value={100}>👁️ Observable</option>
+              <option value={250}>🔍 Detailed</option>
             </select>
             <p className="text-[9px] text-gray-600">Max = fastest. Smooth = balanced. Detailed = slow & precise.</p>
           </div>

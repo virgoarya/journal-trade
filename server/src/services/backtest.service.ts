@@ -1219,14 +1219,7 @@ class BacktestService {
       
       // 1. If it's a visual frame, apply the visual delay
       if (merged.speedMs && merged.speedMs > 0 && shouldEmitLive) {
-        if (merged.speedMs < 50) {
-          // Fast visual (e.g. 10ms): Use setImmediate to avoid Windows 15ms timer penalty.
-          // This allows ~1000 candles/sec, finishing a 30k backtest in ~30s very smoothly.
-          await new Promise<void>((resolve) => setImmediate(resolve));
-        } else {
-          // Observable: use actual setTimeout
-          await new Promise<void>((resolve) => setTimeout(resolve, merged.speedMs!));
-        }
+        await new Promise<void>((resolve) => setTimeout(resolve, merged.speedMs!));
         yielded = true;
       }
       
