@@ -124,6 +124,15 @@ export interface MethodologyStat {
   avgConfidence: number;
 }
 
+export interface SessionStat {
+  session: string;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  totalPnL: number;
+  winRate: number;
+}
+
 export interface BacktestResult {
   backtestId?: string;
   symbols: string[];
@@ -152,6 +161,7 @@ export interface BacktestResult {
   trades: SimulatedTrade[];
   symbolStats: SymbolStat[];
   methodologyStats: MethodologyStat[];
+  sessionStats?: SessionStat[];
 }
 
 interface OpenSimTrade {

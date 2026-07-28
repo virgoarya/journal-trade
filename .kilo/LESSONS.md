@@ -119,3 +119,13 @@
 2. Menyelaraskan event SSE `equity`, `trade_open`, dan `trade_close` secara langsung pada `liveTrades` tanpa race condition interval.
 3. Memformat tampilan `Float` dengan mata uang yang jelas (`$0.00` saat 0 posisi, `+$XX.XX` saat profit, dan `-$XX.XX` saat rugi).
 **Hindari**: Jangan pernah memanggil `.toFixed()` atau `new Date()` pada properti dinamis tanpa safe fallback. Selalu sertakan ErrorBoundary pada komponen UI utama.
+
+### [20260728] Dynamic Waterfall Checklist Validator & Zero-Hardcode Architecture
+**Area**: Backend / Strategies / Refactoring
+**Root Cause**: Sebelumnya fungsi pembentuk checklist di setiap strategi (SMC, ICT, MSNR) mengulang-ulang logika helper lokal `s(...)` dan memproduksi ekspresi boolean panjang yang rawan human error (`step1 && step2 && step3...`). Selain itu status item daily sempat statis `"PASSED"`.
+**Solusi**:
+1. Membuat modul helper terpusat [checklist-validator.ts](file:///d:/Journal%20Trade/server/src/services/strategies/checklist-validator.ts) yang mengevaluasi skenario *cascading waterfall* secara otomatis (`evaluateWaterfall`).
+2. Mengubah semua item checklist pada [smc.strategy.ts](file:///d:/Journal%20Trade/server/src/services/strategies/smc.strategy.ts), [ict.strategy.ts](file:///d:/Journal%20Trade/server/src/services/strategies/ict.strategy.ts), dan [msnr.strategy.ts](file:///d:/Journal%20Trade/server/src/services/strategies/msnr.strategy.ts) menjadi 100% terevaluasi secara dinamis tanpa status hardcoded.
+3. Menyediakan helper umum `calculateRR`, `checkEntryRetest`, dan `getSwingPrices` untuk konsistensi di seluruh strategi.
+**Hindari**: Jangan pernah menuliskan status `"PASSED"`/`"WAITING"` secara hardcoded pada checklist item. Selalu gunakan `evaluateWaterfall()` untuk menjaga logika cascading prerequisite konsisten.
+

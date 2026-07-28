@@ -7,6 +7,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices } from "./checklist-validator";
 
 export interface SMCSignal {
   direction: "BUY" | "SELL";
@@ -120,102 +121,75 @@ class SMCStrategy {
 
   private buildSMCChecklist(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
     const isBuy = sig.direction === "BUY";
-
     const htfStr = fractal.dailyStr || fractal.directionStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
     const dailyDirection = fractal.dailyStr?.trend.direction || "SIDEWAYS";
 
-    const slDist = Math.abs(sig.entry - sig.sl);
-    const tpDist = Math.abs(sig.tp - sig.entry);
-    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-    const isRRValid = rrRatio >= 2.0;
-
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
     const entryTfLabel = fractal.entryTimeframeStr || "M15";
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
 
-    const relHigh = fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
-    const relLow = fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
+    const { relHigh, relLow } = getSwingPrices(fractal);
 
-    // ── SMC Akidah: ① BOS → ② Sweep → ③ PD Array → ④ MSS → ⑤ Entry → ⑥ RR ──
-    const step1 = isHtfBosConfirmed;                                         // ① HTF BOS
-    const step2 = (fractal.directionStr.liquidityZones?.length ?? 0) > 0;    // ② Liquidity Inducement / Sweep
-    const step3 = !!(sig.orderBlock || sig.breachType === "OB_MITIGATION");  // ③ PD Array / Order Block
-    const step4 = sig.breachType === "MSS" || sig.breachType === "CHOCH";    // ④ MSS / CHOCH
     const lastCandle = fractal.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
-    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
-      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
-    );
-    const step5 = isEntryRetested;                                           // ⑤ Entry retest PD Array
-    const step6 = isRRValid;                                                 // ⑥ R:R 1:2
-
-    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
-      if (!priorAllPassed) return "WAITING";
-      if (isFailable && !stepPassed) return "FAILED";
-      return stepPassed ? "PASSED" : "WAITING";
-    };
-
-    const stat1 = s(step1, true, true);
-    const stat2 = s(step2, step1);
-    const stat3 = s(step3, step1 && step2);
-    const stat4 = s(step4, step1 && step2 && step3);
-    const stat5 = s(step5, step1 && step2 && step3 && step4);
-    const stat6 = s(step6, step1 && step2 && step3 && step4 && step5, true);
+    const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
 
-    const items: ChecklistItem[] = [
+    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
+
+    return evaluateWaterfall([
       {
         id: "smc-daily",
-        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
-        status: "PASSED",
+        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
         timeframe: "D1",
+        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        isIndependent: true,
       },
       {
         id: "smc-bos",
-        label: `① ${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
-        status: stat1,
+        label: () => `① ${htfTfLabel} Break Of Structure ${htfStr.trend.direction === "BULL" ? "Bullish" : "Bearish"} dengan High (${relHigh}), Low (${relLow}) Relevan`,
         timeframe: htfTfLabel,
+        condition: isHtfBosConfirmed,
+        isFailable: true,
       },
       {
         id: "smc-liq",
-        label: `② ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Zone Swept`,
-        status: stat2,
-        timeframe: setupTfLabel
+        label: () => `② ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Zone Swept`,
+        timeframe: setupTfLabel,
+        condition: (fractal.directionStr.liquidityZones?.length ?? 0) > 0,
       },
       {
         id: "smc-ob",
-        label: stat3 === "PASSED" && sig.orderBlock ? `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block (${obBottom} - ${obTop})` : `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block detection zone`,
-        status: stat3,
+        label: (status) => status === "PASSED" && sig.orderBlock ? `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block (${obBottom} - ${obTop})` : `③ ${htfTfLabel}/${setupTfLabel} PD Array / Order Block detection zone`,
         timeframe: setupTfLabel,
-        value: stat3 === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined
+        condition: !!(sig.orderBlock || sig.breachType === "OB_MITIGATION"),
+        value: (status) => status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined,
       },
       {
         id: "smc-mss",
-        label: stat4 === "PASSED" ? `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array`,
-        status: stat4,
-        timeframe: entryTfLabel
+        label: (status) => status === "PASSED" ? `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} MSS / CHOCH confirmasi setelah PD Array`,
+        timeframe: entryTfLabel,
+        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH",
       },
       {
         id: "smc-entry-rejection",
-        label: `⑤ ${entryTfLabel} Entry retest PD Array (pending order ${sig.direction} Limit)`,
-        status: stat5,
+        label: () => `⑤ ${entryTfLabel} Entry retest PD Array (pending order ${sig.direction} Limit)`,
         timeframe: entryTfLabel,
-        details: stat5 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        condition: isEntryRetested,
+        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "smc-rr",
-        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        status: stat6,
-        details: stat6 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
-      }
-    ];
-
-    const passed = stat1 !== "FAILED" && stat6 !== "FAILED";
-
-    return { items, passed };
+        label: (status) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        condition: isRRValid,
+        isFailable: true,
+        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+      },
+    ]);
   }
 
 

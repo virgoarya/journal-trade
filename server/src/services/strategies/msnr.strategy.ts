@@ -13,6 +13,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
+import { evaluateWaterfall, calculateRR, checkEntryRetest } from "./checklist-validator";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -344,84 +345,60 @@ class MSNRStrategy {
     const isBuy = sig.direction === "BUY";
     const snrType = sig.signalType.includes("QML") ? "QML Level" : (sig.signalType === "RBS" ? "RBS Level" : (sig.signalType === "SBR" ? "SBR Level" : "Key S/R Zone"));
 
-    const slDist = Math.abs(sig.entry - sig.sl);
-    const tpDist = Math.abs(sig.tp - sig.entry);
-    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-    const isRRValid = rrRatio >= 2.0;
-
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
     const setupTfLabel = fractal?.setupTimeframeStr || "H1";
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
-    
     const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
 
-    // ── MSNR Akidah: ① SNR Zone → ② Turtle Soup → ③ MSS+OB → ④ Entry → ⑤ RR ──
-    const step1 = sig.confidence >= 50;                                        // ① Key SNR Zone identified
-    const step2 = sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP"); // ② Turtle Soup / Sweep
-    const step3 = sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"); // ③ MSS + OB/CISD formed
     const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
-    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
-      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
-    );
-    const step4 = isEntryRetested;                                             // ④ Entry retest OB/CISD
-    const step5 = isRRValid;                                                   // ⑤ R:R 1:2
+    const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
-    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
-      if (!priorAllPassed) return "WAITING";
-      if (isFailable && !stepPassed) return "FAILED";
-      return stepPassed ? "PASSED" : "WAITING";
-    };
+    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
 
-    const stat1 = s(step1, true, true);
-    const stat2 = s(step2, step1);
-    const stat3 = s(step3, step1 && step2);
-    const stat4 = s(step4, step1 && step2 && step3);
-    const stat5 = s(step5, step1 && step2 && step3 && step4, true);
-
-    const items: ChecklistItem[] = [
+    return evaluateWaterfall([
       {
         id: "msnr-daily",
-        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
-        status: "PASSED",
+        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
         timeframe: "D1",
+        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        isIndependent: true,
       },
       {
         id: "msnr-zone",
-        label: `① ${htfTfLabel} Key SNR Zone (${snrType}) — Level teridentifikasi`,
-        status: stat1,
-        timeframe: htfTfLabel
+        label: () => `① ${htfTfLabel} Key SNR Zone (${snrType}) — Level teridentifikasi`,
+        timeframe: htfTfLabel,
+        condition: sig.confidence >= 50,
+        isFailable: true,
       },
       {
         id: "msnr-turtle",
-        label: `② ${htfTfLabel} Turtle Soup / Liquidity Sweep — False breakout SNR zone`,
-        status: stat2,
-        timeframe: htfTfLabel
+        label: () => `② ${htfTfLabel} Turtle Soup / Liquidity Sweep — False breakout SNR zone`,
+        timeframe: htfTfLabel,
+        condition: sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP"),
       },
       {
         id: "msnr-mss-ob",
-        label: stat3 === "PASSED" ? `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD (${sig.entry.toFixed(5)})` : `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD`,
-        status: stat3,
-        timeframe: entryTfLabel
+        label: (status) => status === "PASSED" ? `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD (${sig.entry.toFixed(5)})` : `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD`,
+        timeframe: entryTfLabel,
+        condition: sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"),
       },
       {
         id: "msnr-entry",
-        label: `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
-        status: stat4,
+        label: () => `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
         timeframe: entryTfLabel,
-        details: stat4 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        condition: isEntryRetested,
+        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "msnr-rr",
-        label: `⑤ Minimum Risk-to-Reward 1:2 ${stat5 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        status: stat5,
-        details: stat5 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
-      }
-    ];
-
-    const passed = stat1 !== "FAILED" && stat5 !== "FAILED";
-
-    return { items, passed };
+        label: (status) => `⑤ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        condition: isRRValid,
+        isFailable: true,
+        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+      },
+    ]);
   }
 }
 

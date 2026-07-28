@@ -21,6 +21,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { IPDAContext } from "./ipda-context";
 import type { ChecklistItem } from "./confluence-engine";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices } from "./checklist-validator";
 
 export interface ICTSignal {
   direction: "BUY" | "SELL";
@@ -235,105 +236,76 @@ class ICTStrategy {
     const isBuy = sig.direction === "BUY";
     const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
 
-    const slDist = Math.abs(sig.entry - sig.sl);
-    const tpDist = Math.abs(sig.tp - sig.entry);
-    const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-    const isRRValid = rrRatio >= 2.0;
-
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
     const setupTfLabel = fractal?.setupTimeframeStr || "H1";
     const htfTfLabel = fractal?.directionTimeframeStr || "H4";
     const entryTfLabel = fractal?.entryTimeframeStr || "M15";
-
     const dailyDirection = fractal?.dailyStr?.trend.direction || "SIDEWAYS";
 
-    const relHigh = fractal && fractal.directionStr.swingHighs.length > 0 ? fractal.directionStr.swingHighs[fractal.directionStr.swingHighs.length - 1].price.toFixed(5) : "N/A";
-    const relLow = fractal && fractal.directionStr.swingLows.length > 0 ? fractal.directionStr.swingLows[fractal.directionStr.swingLows.length - 1].price.toFixed(5) : "N/A";
-
+    const { relHigh, relLow } = getSwingPrices(fractal);
     const htfStr = fractal?.dailyStr || fractal?.directionStr;
     const isHtfDirectional = htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false;
 
-    // Decompose signal type into individual concepts
     const hasAMD = sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
     const hasFVG = sig.signalType.includes("FVG");
     const hasOTE = sig.signalType.includes("OTE");
     const hasSweep = sig.signalType.includes("SWEEP") || sig.signalType.includes("AMD") || sig.signalType === "JUDAS_SWEEP";
 
-    // ── ICT Akidah: ① Bias → ② Killzone → ③ Sweep/AMD → ④ FVG/OTE → ⑤ Entry → ⑥ RR ──
-    const step1 = isHtfDirectional;                                           // ① HTF Directional Bias
-    const killzoneActive = killzone !== "NONE";                                // ② Killzone (independent, doesn't block waterfall)
-    const step3 = hasSweep || hasAMD;                                          // ③ Liquidity Inducement / AMD / Judas
-    const step4 = hasFVG || hasOTE;                                           // ④ Displacement + FVG/OTE creation
     const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
     const currentPrice = lastCandle ? lastCandle.close : 0;
-    const isEntryRetested = currentPrice > 0 && sig.entry > 0 && (
-      isBuy ? currentPrice <= sig.entry : currentPrice >= sig.entry
-    );
-    const step5 = isEntryRetested;                                            // ⑤ Entry retest FVG/OTE
-    const step6 = isRRValid;                                                  // ⑥ R:R 1:2
+    const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
-    const s = (stepPassed: boolean, priorAllPassed: boolean, isFailable?: boolean): "PASSED" | "WAITING" | "FAILED" => {
-      if (!priorAllPassed) return "WAITING";
-      if (isFailable && !stepPassed) return "FAILED";
-      return stepPassed ? "PASSED" : "WAITING";
-    };
+    const isDailyAligned = isBuy ? dailyDirection === "BULL" : dailyDirection === "BEAR";
 
-    const stat1 = s(step1, true, true);
-    // Killzone is informational — independent status, doesn't block waterfall
-    const stat2: "PASSED" | "WAITING" = killzoneActive ? "PASSED" : "WAITING";
-    const stat3 = s(step3, step1);
-    const stat4 = s(step4, step1 && step3);
-    const stat5 = s(step5, step1 && step3 && step4);
-    const stat6 = s(step6, step1 && step3 && step4 && step5, true);
-
-    const items: ChecklistItem[] = [
+    return evaluateWaterfall([
       {
         id: "ict-daily",
-        label: `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
-        status: "PASSED",
+        label: () => `Daily Direction : ${dailyDirection === "BULL" ? "Bullish" : dailyDirection === "BEAR" ? "Bearish" : "Sideways"}`,
         timeframe: "D1",
+        condition: isDailyAligned || dailyDirection === "SIDEWAYS",
+        isIndependent: true,
       },
       {
         id: "ict-bias",
-        label: `① ${htfTfLabel} Directional Bias ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} (High ${relHigh}, Low ${relLow})`,
-        status: stat1,
+        label: () => `① ${htfTfLabel} Directional Bias ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} (High ${relHigh}, Low ${relLow})`,
         timeframe: htfTfLabel,
+        condition: isHtfDirectional,
+        isFailable: true,
       },
       {
         id: "ict-kz",
-        label: `② ${kzLabel} (Waktu & Volatilitas)`,
-        status: stat2,
-        timeframe: entryTfLabel
+        label: () => `② ${kzLabel} (Waktu & Volatilitas)`,
+        timeframe: entryTfLabel,
+        condition: killzone !== "NONE",
+        isIndependent: true,
       },
       {
         id: "ict-sweep",
-        label: `③ ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Judas Swing / AMD Sweep`,
-        status: stat3,
-        timeframe: htfTfLabel
+        label: () => `③ ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Judas Swing / AMD Sweep`,
+        timeframe: htfTfLabel,
+        condition: hasSweep || hasAMD,
       },
       {
         id: "ict-fvg",
-        label: stat4 === "PASSED" ? `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement + FVG/OTE creation`,
-        status: stat4,
-        timeframe: entryTfLabel
+        label: (status) => status === "PASSED" ? `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement + FVG/OTE creation`,
+        timeframe: entryTfLabel,
+        condition: hasFVG || hasOTE,
       },
       {
         id: "ict-entry",
-        label: `⑤ ${entryTfLabel} Entry retest FVG${hasOTE ? "/OTE" : ""} gap (pending order)`,
-        status: stat5,
+        label: () => `⑤ ${entryTfLabel} Entry retest FVG${hasOTE ? "/OTE" : ""} gap (pending order)`,
         timeframe: entryTfLabel,
-        details: stat5 === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga."
+        condition: isEntryRetested,
+        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "ict-rr",
-        label: `⑥ Minimum Risk-to-Reward 1:2 ${stat6 === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        status: stat6,
-        details: stat6 === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`
-      }
-    ];
-
-    const passed = stat1 !== "FAILED" && stat6 !== "FAILED";
-
-    return { items, passed };
+        label: (status) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        condition: isRRValid,
+        isFailable: true,
+        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+      },
+    ]);
   }
 
 
