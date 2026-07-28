@@ -575,12 +575,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           </div>
         </div>
 
-        {/* Right Panel: Equity Curve + Journal */}
+        {/* Right Panel: Equity Curve */}
         <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
           {equityHistory.length > 1 && (
             <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
               <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Equity Curve</p>
-              <div style={{ height: "200px", width: "100%" }}>
+              <div style={{ height: "140px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.15} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
@@ -595,32 +595,42 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             </div>
           )}
 
+          {/* Combined Live Positions + Journal */}
           <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-2 shrink-0">
-              <p className="text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono">Live Positions {liveTrades.length > 0 ? `(${liveTrades.length})` : ""}</p>
-              {liveTrades.length > 0 ? (
-              <div className="space-y-0.5 max-h-[100px] overflow-y-auto mt-1">
-                {liveTrades.map((t, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
-                    <div className="flex items-center gap-1">
-                      <span className={`px-1 py-0.5 rounded text-[7px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
-                      <span className="text-text-primary font-bold">{t.symbol}</span>
-                      {t.primaryMethodology && <span className="text-text-muted text-[7px]">[{t.primaryMethodology.toUpperCase()}]</span>}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-text-muted text-[8px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
-                      <span className={`font-bold w-12 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              ) : (
-                <p className="text-[9px] text-text-muted font-mono mt-1">No open trades</p>
+            <div className="flex items-center justify-between text-[9px] text-accent-gold-dim uppercase tracking-wider font-mono mb-1">
+              <span>Live Positions {liveTrades.length > 0 ? `(${liveTrades.length})` : ""}</span>
+              {liveTrades.length > 0 && (
+                <span className="text-[8px] text-text-muted normal-case font-normal">
+                  Float: <span className={`font-bold ${liveTrades.reduce((s,t) => s + (t.pnl||0), 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                    {liveTrades.reduce((s,t) => s + (t.pnl||0), 0) >= 0 ? "+" : ""}${liveTrades.reduce((s,t) => s + (t.pnl||0), 0).toFixed(2)}
+                  </span>
+                </span>
               )}
             </div>
+            {liveTrades.length > 0 ? (
+            <div className="space-y-0.5 max-h-[80px] overflow-y-auto">
+              {liveTrades.map((t, idx) => (
+                <div key={idx} className="flex justify-between items-center text-[9px] font-mono bg-black/30 p-1 rounded">
+                  <div className="flex items-center gap-1">
+                    <span className={`px-1 py-0.5 rounded text-[7px] font-bold ${t.direction?.toUpperCase() === "BUY" ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"}`}>{t.direction?.toUpperCase() || "?"}</span>
+                    <span className="text-text-primary font-bold">{t.symbol}</span>
+                    {t.primaryMethodology && <span className="text-text-muted text-[7px]">[{t.primaryMethodology.toUpperCase()}]</span>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-text-muted text-[8px]">{t.entryPrice?.toFixed(5)}→{t.currentPrice?.toFixed(5)}</span>
+                    <span className={`font-bold w-12 text-right ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            ) : (
+              <p className="text-[9px] text-text-muted font-mono">No open trades</p>
+            )}
+          </div>
 
-          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative">
+          <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-[10px] relative flex-1 min-h-0">
             <div className="px-3 py-1.5 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Journal <span className="text-text-muted/60">({logs.length})</span></div>
+              <div className="flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Run Log <span className="text-text-muted/60">({logs.length})</span></div>
               {!autoScroll && (
                 <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
                   className="text-accent-gold hover:text-yellow-400 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
@@ -628,7 +638,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                 </button>
               )}
             </div>
-            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 max-h-[100px]">
+            <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-1.5 space-y-0.5 flex-1 min-h-0">
               {logs.map((log) => (
                 <div key={log.id} className={`flex gap-1.5 py-0.5 px-1.5 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
