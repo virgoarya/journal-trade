@@ -45,15 +45,11 @@ function MetricCard({ icon: Icon, label, value, color = "text-text-primary", sub
   icon: React.ElementType; label: string; value: string; color?: string; sub?: string;
 }) {
   return (
-    <div className="bg-black/30 border border-accent-gold/10 rounded-lg p-3">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[9px] text-text-muted uppercase tracking-wider font-mono">{label}</p>
-          <p className={`text-lg font-bold font-mono mt-0.5 ${color}`}>{value}</p>
-          {sub && <p className="text-[10px] text-text-muted mt-0.5 font-mono">{sub}</p>}
-        </div>
-        <Icon className={`w-4 h-4 text-accent-gold-dim ${color.includes("text-") ? "" : "text-accent-gold-dim"}`} />
-      </div>
+    <div className="panel p-4 flex flex-col items-center justify-center text-center transition">
+      <Icon className={`w-5 h-5 ${color.includes("text-") ? color : "text-text-muted"} mb-3`} />
+      <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">{label}</p>
+      <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-text-muted mt-1">{sub}</p>}
     </div>
   );
 }
@@ -73,22 +69,23 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="glass p-4 space-y-4">
+      className="glass p-6 space-y-6 relative overflow-hidden">
+      <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-3xl pointer-events-none ${isProfitable ? "bg-green-500/10" : "bg-red-500/10"}`} />
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-accent-gold" />
+      <div className="flex items-center justify-between border-b border-accent-gold/20 pb-4 relative z-10">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-black/60 rounded-lg border border-accent-gold/30"><BarChart3 className="w-5 h-5 text-accent-gold" /></div>
           <div>
-            <h3 className="text-xs font-bold text-text-primary tracking-wide">Simulation Results</h3>
-            <p className="text-[9px] text-text-muted font-mono">{(result.symbols || []).join(", ")} · {result.timeframe} · {result.totalCandles} candles</p>
+            <h3 className="text-lg font-semibold text-text-primary tracking-wide">Simulation Results</h3>
+            <p className="text-xs text-text-muted mt-0.5">{(result.symbols || []).join(", ")} · {result.timeframe} · {result.totalCandles} candles</p>
           </div>
         </div>
-        {result.backtestId && <div className="text-[9px] font-mono text-text-muted bg-black/60 px-2 py-1 rounded border border-accent-gold/20">ID: {result.backtestId.substring(0, 8)}</div>}
+        {result.backtestId && <div className="text-xs font-mono text-text-muted bg-black/60 px-3 py-1.5 rounded border border-accent-gold/30">ID: {result.backtestId.substring(0, 8)}</div>}
       </div>
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
         <MetricCard icon={Activity} label="Total Trades" value={`${result.totalTrades}`} />
         <MetricCard icon={Target} label="Win Rate" value={`${result.winRate}%`} color={result.winRate >= 50 ? "text-green-400" : "text-red-400"} sub={`${result.winningTrades}W / ${result.losingTrades}L`} />
         <MetricCard icon={isProfitable ? TrendingUp : TrendingDown} label="Net PnL" value={`${isProfitable ? "+" : ""}${result.totalPnLPercent}%`} color={isProfitable ? "text-green-400" : "text-red-400"} sub={`$${(result.totalPnL || 0).toFixed(2)}`} />
@@ -96,7 +93,7 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
       </div>
 
       {/* Second Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 relative z-10">
         <MetricCard icon={Shield} label="Recovery Factor" value={recoveryFactor === Infinity ? "∞" : (recoveryFactor || 0).toFixed(2)} color={recoveryColor} />
         <MetricCard icon={Award} label="Profit Factor" value={result.profitFactor === Infinity ? "∞" : (result.profitFactor || 0).toFixed(2)} color={(result.profitFactor || 0) >= 1.5 ? "text-green-400" : (result.profitFactor || 0) >= 1 ? "text-yellow-400" : "text-red-400"} />
         <MetricCard icon={Activity} label="Avg Win" value={`$${(result.averageWin || 0).toFixed(2)}`} color="text-green-400" />
@@ -106,9 +103,9 @@ export function BacktestResult({ result, analysis, isAnalyzing, onAnalyze, onApp
 
       {/* Equity Curve */}
       {chartData.length > 1 && (
-        <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-3">
-          <p className="text-[9px] font-bold text-accent-gold-dim uppercase tracking-wider mb-2 font-mono">Equity Curve</p>
-          <div className="w-full h-28">
+        <div className="bg-black/40 border border-accent-gold/20 rounded-lg p-4 relative z-10">
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Equity Curve</p>
+          <div className="w-full relative h-[200px] md:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs><linearGradient id="btEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.2} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
