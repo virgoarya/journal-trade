@@ -187,6 +187,14 @@ class MSNRStrategy {
       }
     }
 
+    // ── Offset SL by broker spread so SL distance isn't eaten by spread ──
+    const spreadPrice = (fractal.spread || 0) * (fractal.point || 0.00001);
+    if (spreadPrice > 0) {
+      for (const sig of signals) {
+        sig.sl = sig.direction === "BUY" ? sig.sl - spreadPrice : sig.sl + spreadPrice;
+      }
+    }
+
     // ── Invalidation: remove setups where TP was hit before entry ────
     const nonInvalidatedSignals = signals.filter(sig => {
       const setupIdx = ltfCandles.length - 1;
