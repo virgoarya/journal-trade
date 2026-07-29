@@ -274,15 +274,9 @@ class RiskManagerService {
       // Get deals from MT5 (all-time)
       const deals = await mt5McpService.getHistory(0);
       const positions = await mt5McpService.getPositions();
+      const floatingPnL = positions.reduce((sum, p) => sum + p.profit, 0);
 
-      // AI-only PnL: filter by comment prefix "ai-" so manual trades don't inflate AI circuit breaker
-      const isAiComment = (c?: string) => { const s = (c || "").toLowerCase(); return s.startsWith("ai-"); };
-      let floatingPnL = 0;
-      for (const pos of positions) {
-        if (isAiComment(pos.comment)) floatingPnL += pos.profit;
-      }
-
-      // Calculate PnL from AI deals only (one pass)
+      // Calculate PnL from ALL deals (AI + Manual) so circuit breaker trips on total account loss
       let dailyPnL = 0;
       let weeklyPnL = 0;
       let monthlyPnL = 0;
@@ -290,9 +284,6 @@ class RiskManagerService {
       for (const d of deals) {
         // Skip balance operations (deposits, withdrawals, etc)
         if (d.type !== "BUY" && d.type !== "SELL") continue;
-
-        // AI-only attribution: skip manual deals so AI circuit breaker only trips on AI losses
-        if (!isAiComment(d.comment)) continue;
 
         // Also add swap and commission to profit to get accurate net PnL for the deal
         const netProfit = (d.profit || 0) + (d.swap || 0) + (d.commission || 0);
