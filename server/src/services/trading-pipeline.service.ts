@@ -986,12 +986,18 @@ const pipeline = {
         const rrInitial = slDistInitial > 0 ? (tpDistInitial / slDistInitial) : 0;
 
         const sigChecklist = finalSig.checklistItems || [];
-        const hasFailedStep = sigChecklist.some(c => c.status === "FAILED");
-        const coreChecklist = sigChecklist.filter(c => !c.id.endsWith("-daily") && c.id !== "ict-kz");
+        const coreChecklist = sigChecklist.filter(c => 
+          !c.id.endsWith("-daily") && 
+          c.id !== "ict-kz" &&
+          !c.id.endsWith("-entry-rejection") &&
+          !c.id.endsWith("-entry") &&
+          !c.id.endsWith("-rr")
+        );
+        const hasFailedCoreStep = coreChecklist.some(c => c.status === "FAILED");
         const allCorePassed = coreChecklist.length > 0 && coreChecklist.every(c => c.status === "PASSED");
 
         // ── STAGE 1: SIGNAL FORMED (OR CANDIDATE SETUP) ─────────────────────
-        if (hasFailedStep || !allCorePassed) {
+        if (hasFailedCoreStep || !allCorePassed) {
           this.addLog(userId, "CANDIDATE",
             `[1/4] [${analysis.symbol}] CANDIDATE SETUP: ${finalSig.direction} | ` +
             `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
@@ -1045,7 +1051,7 @@ const pipeline = {
             pipeline.lastLlmSignalKey = llmSignalKey;
             pipeline.lastLlmVerdictTime = Date.now();
 
-            if (hasFailedStep || !allCorePassed) {
+            if (hasFailedCoreStep || !allCorePassed) {
               this.addLog(userId, "CONFLUENCE",
                 `[2/4] [${signal.symbol}] LLM SKIPPED: Checklist belum 100% PASSED (${coreChecklist.filter(c => c.status === "PASSED").length}/${coreChecklist.length} core steps). Menunggu validasi selesai.`
               );
