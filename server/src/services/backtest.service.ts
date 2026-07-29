@@ -1135,21 +1135,26 @@ class BacktestService {
         startOfDayEquity = currentEquity;
       }
 
+      // ── Drawdown: measured from INITIAL BALANCE (not peak equity) ──
+      // DD only exists when equity drops BELOW the starting capital.
+      // Profit pullbacks from peak are NOT counted as drawdown.
       if (currentEquity > peakEquity) peakEquity = currentEquity;
-      const drawdown = peakEquity - currentEquity;
-      const currentDrawdownPct = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
+      const lossFromInitial = Math.max(0, merged.initialBalance - currentEquity);
+      const currentDrawdownPct = (lossFromInitial / merged.initialBalance) * 100;
+      // Also track absolute dollar drawdown from peak for position sizing reference
+      const drawdownFromPeak = peakEquity - currentEquity;
 
       // ── EARLY Circuit Breaker Check (BEFORE recording maxDD) ──────
-      // Must run here so maxDrawdownPctGlobal is never recorded above the limit
+      // Triggers only when equity drops X% BELOW initial balance.
       const smartEarly = merged.smartRisk;
       if (smartEarly?.enabled && smartEarly.globalDrawdownLimit?.enabled && !globalTradingBlocked) {
         if (currentDrawdownPct >= smartEarly.globalDrawdownLimit.maxDrawdownPct) {
           globalTradingBlocked = true;
           // Cap the recorded max DD at the circuit breaker limit
           if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = smartEarly.globalDrawdownLimit.maxDrawdownPct;
-          if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+          if (drawdownFromPeak > maxDrawdown) maxDrawdown = drawdownFromPeak;
 
-          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit (${currentDrawdownPct.toFixed(2)}%). Force-closing all trades and halting.`);
+          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit: equity ${currentEquity.toFixed(2)} is ${currentDrawdownPct.toFixed(2)}% below initial ${merged.initialBalance}. Halting.`);
 
           // ── Force-close ALL open trades at current price ──────────────
           for (const [key, trade] of openTrades.entries()) {
@@ -1185,7 +1190,7 @@ class BacktestService {
             data: {
               currentStep: timelineStep, totalSteps: totalTimelineSteps,
               equity: Math.round(equity * 100) / 100,
-              message: `⛔ Circuit Breaker: Global Max Drawdown (${smartEarly.globalDrawdownLimit.maxDrawdownPct}%) reached. Backtest halted.`,
+              message: `⛔ Circuit Breaker: Equity dropped ${smartEarly.globalDrawdownLimit.maxDrawdownPct}% below initial balance. Backtest halted.`,
             }
           });
           break; // Stop the entire backtest loop immediately
