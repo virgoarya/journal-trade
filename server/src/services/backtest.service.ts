@@ -8,6 +8,7 @@ import { msnrStrategy } from "./strategies/msnr.strategy";
 
 import { confluenceEngine } from "./strategies/confluence-engine";
 import { atrService } from "./strategies/atr.service";
+import { ipdaContextService } from "./strategies/ipda-context";
 import { BacktestExperience } from "../models/BacktestExperience";
 import { MT5Connection } from "../models/MT5Connection";
 import { silentLogger } from "../utils/silent-logger";
@@ -941,6 +942,12 @@ class BacktestService {
             didStrategyEval = true; // flag for forced yield
           }
 
+          const ipdaCtx = ipdaContextService.buildContext(
+            dailyCandles,
+            dailyMs,
+            entryCandles[entryCandles.length - 1]?.time || 0
+          );
+
           const fractalCtx: import("./strategies/market-structure.service").FractalContext = {
             daily: strategyCandles.slice(0, Math.max(10, Math.floor(strategyCandles.length * 0.2))),
             direction: strategyCandles,
@@ -961,9 +968,9 @@ class BacktestService {
           };
 
           const [smcSignals, ictSignals, msnrSignals] = [
-            smcStrategy.analyze(fractalCtx),
-            ictStrategy.analyze(fractalCtx),
-            msnrStrategy.analyze(fractalCtx),
+            smcStrategy.analyze(fractalCtx, ipdaCtx),
+            ictStrategy.analyze(fractalCtx, ipdaCtx),
+            msnrStrategy.analyze(fractalCtx, ipdaCtx),
 
           ];
 
@@ -974,8 +981,9 @@ class BacktestService {
 
           const confluence = confluenceEngine.calculateConfluence(
             {
-              smc: smcSignals[0] ?? null, ict: ictSignals[0] ?? null,
-              msnr: msnrSignals[0] ?? null,
+              smc: smcSignals as any, 
+              ict: ictSignals as any,
+              msnr: msnrSignals as any,
             }, mw, am, undefined, dirMs?.trend
           );
 

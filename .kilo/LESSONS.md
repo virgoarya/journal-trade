@@ -20,6 +20,17 @@
 
 ## Lessons Log
 
+### [20260729] Checklist 0/0 valid and Confidence Mismatch on Backtest
+**Area**: Backend / Backtest / Confluence
+**Root Cause**: 
+1. `backtest.service.ts` did not build or pass `ipdaCtx` to the strategy `analyze` functions, causing confidence scores to lack IPDA daily bias adjustments present in the live pipeline.
+2. `backtest.service.ts` passed `smcSignals[0] ?? null` instead of the full array to `calculateConfluence`, preventing `confluenceEngine` from mapping the full checklist structure if the best signal didn't meet confidence thresholds.
+**Solusi**:
+1. Added `ipdaContextService.buildContext` inside `backtest.service.ts` and passed `ipdaCtx` to `smcStrategy`, `ictStrategy`, `msnrStrategy`.
+2. Passed the full arrays (`smcSignals` etc.) to `calculateConfluence` in `backtest.service.ts`, similar to `ai-trading-engine.service.ts`.
+**Hindari**: Jangan biarkan backtest logic tertinggal saat memperbarui engine live trading. Keduanya harus disinkronisasikan (seperti saat implementasi IPDA context dan fixing array checklist passing).
+
+
 ### [20260719] TypeError: fetch failed - TLS Handshake SSE Connection Drop
 **Area**: Backend / WebSocket / Python Client
 **Root Cause**: `SSEClientTransport` dari `@modelcontextprotocol/sdk` menggunakan `undici` untuk fetch yang tidak kompatibel dengan environment Railway (TLS handshake terputus). Bukan masalah firewall, bukan masalah URL, bukan masalah env var.
