@@ -1054,7 +1054,7 @@ const pipeline = {
         );
 
         // ── STAGE 2: POSITION GATE & LLM CONSENSUS VOTING ─────────────────────
-        // Cek posisi dulu sebelum LLM — buang2 token klo udah ada position
+        // Cek posisi + pending order dulu sebelum LLM — buang2 token klo udah ada
         let symbolPosCount = 0;
         let currentPosCount = 0;
         try {
@@ -1062,9 +1062,11 @@ const pipeline = {
           currentPosCount = positions.length;
           symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
         } catch {}
-        if (symbolPosCount > 0) {
+        const symbolPendingCount = Array.from(pipeline.pendingOrders.values())
+          .filter(o => o.symbol === signal.symbol).length;
+        if (symbolPosCount > 0 || symbolPendingCount > 0) {
           this.addLog(userId, "CANDIDATE",
-            `[1/4] [${analysis.symbol}] SKIP LLM: Already open position on ${signal.symbol}. Waiting for close.`,
+            `[1/4] [${analysis.symbol}] SKIP LLM: Already ${symbolPosCount} position + ${symbolPendingCount} pending on ${signal.symbol}. Waiting for close.`,
           );
           continue;
         }
