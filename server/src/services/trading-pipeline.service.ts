@@ -1480,6 +1480,10 @@ const pipeline = {
         (p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")))
       );
 
+      if (aiPositions.length === 0) {
+        silentLogger.debug(`[TRAILING] No AI positions found. Total positions: ${allPositions.length}, AI tickets in DB: ${aiTickets.size}`);
+      }
+
       for (const pos of aiPositions) {
         // Cek cooldown market closed (30 menit)
         const closedTime = this.marketClosedCache.get(pos.symbol);
@@ -1497,18 +1501,21 @@ const pipeline = {
         if (atrValue === 0) continue;
 
         // ── BREAKEVEN: Jika harga bergerak 1× ATR sesuai prediksi → SL geser ke entry
-        const breakevenDistance = atrValue * 1.0;
+        // Hanya jika breakEven di-enabled di config
         let shouldBreakeven = false;
+        if (pipeline.config.trailingStop.breakEven) {
+          const breakevenDistance = atrValue * 1.0;
 
-        // Memberikan toleransi floating point MT5 untuk mencegah spam 'No changes'
-        const EPSILON = 0.00001;
-        if (pos.type === "BUY" && pos.priceCurrent >= pos.priceOpen + breakevenDistance) {
-          if (pos.sl < pos.priceOpen - EPSILON) {
-            shouldBreakeven = true;
-          }
-        } else if (pos.type === "SELL" && pos.priceCurrent <= pos.priceOpen - breakevenDistance) {
-          if (pos.sl > pos.priceOpen + EPSILON) {
-            shouldBreakeven = true;
+          // Memberikan toleransi floating point MT5 untuk mencegah spam 'No changes'
+          const EPSILON = 0.00001;
+          if (pos.type === "BUY" && pos.priceCurrent >= pos.priceOpen + breakevenDistance) {
+            if (pos.sl < pos.priceOpen - EPSILON) {
+              shouldBreakeven = true;
+            }
+          } else if (pos.type === "SELL" && pos.priceCurrent <= pos.priceOpen - breakevenDistance) {
+            if (pos.sl > pos.priceOpen + EPSILON) {
+              shouldBreakeven = true;
+            }
           }
         }
 
