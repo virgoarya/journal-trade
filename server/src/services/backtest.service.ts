@@ -1198,7 +1198,7 @@ class BacktestService {
       }
 
       // Record max drawdown AFTER circuit breaker (won't exceed limit)
-      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+      if (drawdownFromPeak > maxDrawdown) maxDrawdown = drawdownFromPeak;
       if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = currentDrawdownPct;
 
       // ── Pipeline Native Risk Check ──
