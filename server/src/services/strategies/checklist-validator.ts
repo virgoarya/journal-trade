@@ -90,7 +90,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
     return {
       type: "RANGING",
       direction: "SIDEWAYS",
-      label: "Daily Bias : Sideways (Ranging)",
+      label: "HTF Bias : Sideways (Ranging)",
       details: "Candle data < 3 bars.",
       targetLevel: 0,
       targetLabel: "N/A",
@@ -123,7 +123,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
     return {
       type: "CONTINUATION",
       direction: "BULL",
-      label: `Daily Continuation Bullish (BOS + 50% Eq) — Target PDH (${pdh.toFixed(5)})`,
+      label: `HTF Continuation Bullish (BOS + 50% Eq) — Target PDH (${pdh.toFixed(5)})`,
       details: `BOS c2 over c1, c3 holding above 50% Eq (${c2Eq.toFixed(5)}). Target PDH: ${pdh.toFixed(5)}`,
       targetLevel: pdh,
       targetLabel: "PDH",
@@ -141,7 +141,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
     return {
       type: "CONTINUATION",
       direction: "BEAR",
-      label: `Daily Continuation Bearish (BOS + 50% Eq) — Target PDL (${pdl.toFixed(5)})`,
+      label: `HTF Continuation Bearish (BOS + 50% Eq) — Target PDL (${pdl.toFixed(5)})`,
       details: `BOS c2 under c1, c3 holding below 50% Eq (${c2Eq.toFixed(5)}). Target PDL: ${pdl.toFixed(5)}`,
       targetLevel: pdl,
       targetLabel: "PDL",
@@ -159,7 +159,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
     return {
       type: "REVERSAL",
       direction: "BULL",
-      label: `Daily Reversal Bullish (PDL Sweep + Close Bullish) — Target PDH (${pdh.toFixed(5)})`,
+      label: `HTF Reversal Bullish (PDL Sweep + Close Bullish) — Target PDH (${pdh.toFixed(5)})`,
       details: `Swept PDL (${Math.min(c2.low, c3.low).toFixed(5)}) and closed Bullish. Target PDH: ${pdh.toFixed(5)}`,
       targetLevel: pdh,
       targetLabel: "PDH",
@@ -177,7 +177,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
     return {
       type: "REVERSAL",
       direction: "BEAR",
-      label: `Daily Reversal Bearish (PDH Sweep + Close Bearish) — Target PDL (${pdl.toFixed(5)})`,
+      label: `HTF Reversal Bearish (PDH Sweep + Close Bearish) — Target PDL (${pdl.toFixed(5)})`,
       details: `Swept PDH (${Math.max(c2.high, c3.high).toFixed(5)}) and closed Bearish. Target PDL: ${pdl.toFixed(5)}`,
       targetLevel: pdl,
       targetLabel: "PDL",
@@ -192,7 +192,7 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
   return {
     type: "RANGING",
     direction: lastCloseDir,
-    label: `Daily Direction : ${lastCloseDir === "BULL" ? "Bullish" : "Bearish"} (Ranging)`,
+    label: `HTF Direction : ${lastCloseDir === "BULL" ? "Bullish" : "Bearish"} (Ranging)`,
     details: `Consolidation in 3-candle range [PDL: ${pdl.toFixed(5)}, PDH: ${pdh.toFixed(5)}]`,
     targetLevel: lastCloseDir === "BULL" ? pdh : pdl,
     targetLabel: lastCloseDir === "BULL" ? "PDH" : "PDL",
