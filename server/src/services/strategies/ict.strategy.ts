@@ -116,6 +116,8 @@ class ICTStrategy {
         avgRange,
         config,
         currentKillzone,
+        sweepResult.swingSweepLow,
+        sweepResult.swingSweepHigh,
       );
       if (sweepFvgSignal) signals.push(sweepFvgSignal);
     }
@@ -418,7 +420,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: fvg.bottom,
-          sl: zoneLow - avgRange * 0.2, // SL strictly below AMD sweep low (zoneLow)
+          sl: zoneLow - avgRange * 0.5, // SL below sweep swing low (zoneLow) with buffer
           tp: Math.max(fvg.top + avgRange * 1.5, zoneHigh), // TP targeting AMD high
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.bottom,
@@ -440,7 +442,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: fvg.top,
-          sl: zoneHigh + avgRange * 0.2, // SL strictly above AMD sweep high (zoneHigh)
+          sl: zoneHigh + avgRange * 0.5, // SL above sweep swing high (zoneHigh) with buffer
           tp: Math.min(fvg.bottom - avgRange * 1.5, zoneLow), // TP targeting AMD low
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.top,
@@ -524,7 +526,7 @@ class ICTStrategy {
     candles: Candle[],
     avgRange: number,
     htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
-  ): { direction: "BUY" | "SELL"; sweepLevel: number } | null {
+  ): { direction: "BUY" | "SELL"; sweepLevel: number; swingSweepLow?: number; swingSweepHigh?: number } | null {
     if (candles.length < 3) return null;
 
     const lookback = candles.slice(-20, -1);
@@ -537,14 +539,14 @@ class ICTStrategy {
     // Bullish sweep: prev wick went below rangeLow, last closed back above
     if (htfTrend === "BULL") {
       if (prev.low < rangeLow && last.close > rangeLow) {
-        return { direction: "BUY", sweepLevel: rangeLow };
+        return { direction: "BUY", sweepLevel: rangeLow, swingSweepLow: prev.low };
       }
     }
 
     // Bearish sweep: prev wick went above rangeHigh, last closed back below
     if (htfTrend === "BEAR") {
       if (prev.high > rangeHigh && last.close < rangeHigh) {
-        return { direction: "SELL", sweepLevel: rangeHigh };
+        return { direction: "SELL", sweepLevel: rangeHigh, swingSweepHigh: prev.high };
       }
     }
 
@@ -561,6 +563,8 @@ class ICTStrategy {
     avgRange: number,
     config: ReturnType<typeof strategyConfigService.getICTConfig>,
     killzone: KillzoneType,
+    swingSweepLow?: number,
+    swingSweepHigh?: number,
   ): ICTSignal | null {
     const last = candles[candles.length - 1];
 
@@ -579,7 +583,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: fvg.bottom,
-          sl: sweepLevel - avgRange * 0.5,
+          sl: swingSweepLow ? swingSweepLow : sweepLevel - avgRange * 0.5,
           tp: fvg.top + avgRange * 2.0,
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.bottom,
@@ -601,7 +605,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: fvg.top,
-          sl: sweepLevel + avgRange * 0.5,
+          sl: swingSweepHigh ? swingSweepHigh : sweepLevel + avgRange * 0.5,
           tp: fvg.bottom - avgRange * 2.0,
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.top,
@@ -646,7 +650,7 @@ class ICTStrategy {
           return {
             direction: "BUY",
             entry: last.close,
-            sl: prev.low - avgRange * 0.3,
+            sl: prev.low - avgRange * 0.5,
             tp: last.close + avgRange * 2.5,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",
@@ -668,7 +672,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: last.close,
-            sl: prev.high + avgRange * 0.3,
+            sl: prev.high + avgRange * 0.5,
             tp: last.close - avgRange * 2.5,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",

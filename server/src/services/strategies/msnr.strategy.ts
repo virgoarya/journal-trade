@@ -164,7 +164,17 @@ class MSNRStrategy {
         
         // Wait for price to pullback to OB
         const entryPrice = isBuy ? bestOB.top : bestOB.bottom;
-        const slPrice = isBuy ? bestOB.bottom - ltfAtr * 0.5 : bestOB.top + ltfAtr * 0.5;
+
+        // Swing-protected SL: nearest swing low/high below/above OB
+        let swingProtectedSl: number;
+        if (isBuy) {
+          const slCandidates = ltfStr.swingLows.filter(s => s.price < bestOB.bottom).sort((a, b) => b.price - a.price);
+          swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : bestOB.bottom;
+        } else {
+          const slCandidates = ltfStr.swingHighs.filter(s => s.price > bestOB.top).sort((a, b) => a.price - b.price);
+          swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : bestOB.top;
+        }
+        const slPrice = isBuy ? swingProtectedSl - ltfAtr * 0.5 : swingProtectedSl + ltfAtr * 0.5;
         
         const lastLtf = ltfCandles[ltfCandles.length - 1];
         

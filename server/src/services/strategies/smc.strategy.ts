@@ -375,18 +375,21 @@ class SMCStrategy {
       if (last.close > swing.price && last.high > swing.price) {
         const bodyBottom = Math.min(last.open, last.close);
         if (bodyBottom > swing.price && this.hasHTFContext(fractal, "BUY")) {
-          const sl = swing.price - buffer;
+          // Swing-protected SL: nearest swing low below entry
+          const slCandidates = ms.swingLows.filter(s => s.price < swing.price).sort((a, b) => b.price - a.price);
+          const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : swing.price - buffer;
+          const sl = swingProtectedSl - avgRangeEntry * 0.5;
           const tp = swing.price + buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "BUY", tp, fractal)) continue;
 
           return {
             direction: "BUY",
             entry: swing.price, // Pending BUY Limit on retest
-            sl, // SL 1× ATR below broken structure
-            tp, // RR 1:3 (Temporary, dynamic TP is calculated later)
+            sl,
+            tp,
             breachType: "MSS",
-            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY") + 15, // Boost for HTF context
-            reason: `HTF Context + Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)})`,
+            confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "BUY") + 15,
+            reason: `HTF Context + Pending BUY Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)} swing-protected)`,
           };
         }
       }
@@ -398,18 +401,21 @@ class SMCStrategy {
       if (last.close < swing.price && last.low < swing.price) {
         const bodyTop = Math.max(last.open, last.close);
         if (bodyTop < swing.price && this.hasHTFContext(fractal, "SELL")) {
-          const sl = swing.price + buffer;
+          // Swing-protected SL: nearest swing high above entry
+          const slCandidates = ms.swingHighs.filter(s => s.price > swing.price).sort((a, b) => a.price - b.price);
+          const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : swing.price + buffer;
+          const sl = swingProtectedSl + avgRangeEntry * 0.5;
           const tp = swing.price - buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "SELL", tp, fractal)) continue;
 
           return {
             direction: "SELL",
             entry: swing.price, // Pending SELL Limit on retest
-            sl, // SL 1× ATR above broken structure
-            tp, // RR 1:3 (Temporary, dynamic TP is calculated later)
+            sl,
+            tp,
             breachType: "MSS",
             confidence: this.scoreMSS(ms, swing, last, avgRangeEntry, "SELL") + 15,
-            reason: `HTF Context + Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)})`,
+            reason: `HTF Context + Pending SELL Limit at MSS retest ${swing.price.toFixed(5)} (SL: ${sl.toFixed(5)} swing-protected)`,
           };
         }
       }
@@ -440,20 +446,23 @@ class SMCStrategy {
       if (ob.type === "BULLISH") {
         if (!this.hasHTFContext(fractal, "BUY")) continue;
 
+        // Swing-protected SL: nearest swing low below OB bottom
+        const slCandidates = ms.swingLows.filter(s => s.price < ob.bottom).sort((a, b) => b.price - a.price);
+        const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : ob.bottom;
         const obHeight = ob.top - ob.bottom;
         const tp = ob.top + obHeight * 3;
-        const sl = ob.bottom - buffer;
+        const sl = swingProtectedSl - buffer;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "BUY", tp, fractal)) continue;
 
         return {
           direction: "BUY",
           entry: ob.top,            // Pending order price (Limit)
-          sl,   // SL below OB bottom + ATR buffer
+          sl,   // SL below nearest swing low + buffer (swing-protected)
           tp, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${sl.toFixed(5)})`,
+          reason: `Pending BUY Limit at OB Top ${ob.top.toFixed(5)} (SL: ${sl.toFixed(5)} swing-protected)`,
         };
       }
 
@@ -461,20 +470,23 @@ class SMCStrategy {
       if (ob.type === "BEARISH") {
         if (!this.hasHTFContext(fractal, "SELL")) continue;
 
+        // Swing-protected SL: nearest swing high above OB top
+        const slCandidates = ms.swingHighs.filter(s => s.price > ob.top).sort((a, b) => a.price - b.price);
+        const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : ob.top;
         const obHeight = ob.top - ob.bottom;
         const tp = ob.bottom - obHeight * 3;
-        const sl = ob.top + buffer;
+        const sl = swingProtectedSl + buffer;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "SELL", tp, fractal)) continue;
 
         return {
           direction: "SELL",
           entry: ob.bottom,         // Pending order price (Limit)
-          sl,      // SL above OB top + ATR buffer
+          sl,      // SL above nearest swing high + buffer (swing-protected)
           tp, // RR 1:3 based on OB height
           orderBlock: ob,
           breachType: "OB_MITIGATION",
           confidence: this.scoreOB(ob, ms),
-          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${sl.toFixed(5)})`,
+          reason: `Pending SELL Limit at OB Bottom ${ob.bottom.toFixed(5)} (SL: ${sl.toFixed(5)} swing-protected)`,
         };
       }
     }
