@@ -1239,7 +1239,7 @@ const pipeline = {
           
           const symInfoForThreshold = await mt5McpService.getSymbolInfo(signal.symbol);
           const minPendingDist = symInfoForThreshold
-            ? symInfoForThreshold.spread * symInfoForThreshold.point * 3
+            ? symInfoForThreshold.spread * symInfoForThreshold.point
             : 0.0003;
           
           if (pointDist > minPendingDist) { 
