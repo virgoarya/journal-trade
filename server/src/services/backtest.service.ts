@@ -1135,14 +1135,11 @@ class BacktestService {
         startOfDayEquity = currentEquity;
       }
 
-      // ── Drawdown: measured from INITIAL BALANCE (not peak equity) ──
-      // DD only exists when equity drops BELOW the starting capital.
-      // Profit pullbacks from peak are NOT counted as drawdown.
+      // ── Drawdown: measured from PEAK EQUITY (high-water mark) ──
+      // Max DD = (peak - trough) / peak. Profit pullbacks from peak ARE drawdown.
       if (currentEquity > peakEquity) peakEquity = currentEquity;
-      const lossFromInitial = Math.max(0, merged.initialBalance - currentEquity);
-      const currentDrawdownPct = (lossFromInitial / merged.initialBalance) * 100;
-      // Also track absolute dollar drawdown from peak for position sizing reference
       const drawdownFromPeak = peakEquity - currentEquity;
+      const currentDrawdownPct = peakEquity > 0 ? (drawdownFromPeak / peakEquity) * 100 : 0;
 
       // ── EARLY Circuit Breaker Check (BEFORE recording maxDD) ──────
       // Triggers only when equity drops X% BELOW initial balance.
@@ -1154,7 +1151,7 @@ class BacktestService {
           if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = smartEarly.globalDrawdownLimit.maxDrawdownPct;
           if (drawdownFromPeak > maxDrawdown) maxDrawdown = drawdownFromPeak;
 
-          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit: equity ${currentEquity.toFixed(2)} is ${currentDrawdownPct.toFixed(2)}% below initial ${merged.initialBalance}. Halting.`);
+          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit: equity ${currentEquity.toFixed(2)} is ${currentDrawdownPct.toFixed(2)}% below peak ${peakEquity.toFixed(2)}. Halting.`);
 
           // ── Force-close ALL open trades at current price ──────────────
           for (const [key, trade] of openTrades.entries()) {
