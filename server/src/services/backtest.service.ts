@@ -602,7 +602,7 @@ class BacktestService {
     const ATR_PERIOD = 14;
     const warmupCandles = Math.max(RSI_PERIOD, ATR_PERIOD) + 2;
     /** Limit strategy analysis to last N candles for performance */
-    const MAX_STRATEGY_CANDLES = 2000;
+    const MAX_STRATEGY_CANDLES = 1000;
 
     let allTimelineCandles: TimelineCandle[] = [];
     for (const [sym, state] of symbolStates) {
@@ -1077,8 +1077,17 @@ class BacktestService {
         emitInterval = 1;
       }
       
-      const shouldEmitLive = tradeStateChanged || timelineStep % emitInterval === 0 || timelineStep === totalTimelineSteps;
-
+      const now = Date.now();
+      const timeSinceLastEmit = now - (this as any)._lastEmitTime || 0;
+      let shouldEmitLive = tradeStateChanged || timelineStep % emitInterval === 0 || timelineStep === totalTimelineSteps;
+      
+      if (timeSinceLastEmit > 1000) {
+        shouldEmitLive = true; // Force emit at least once per second to prevent SSE stream timeouts
+        (this as any)._lastEmitTime = now;
+      } else if (shouldEmitLive) {
+        (this as any)._lastEmitTime = now;
+      }
+      
       // ─────────────────────────────────────────────────────────────
       // PHASE B — Calculate global floating PnL across ALL positions
       //           using each symbol's current candle close
