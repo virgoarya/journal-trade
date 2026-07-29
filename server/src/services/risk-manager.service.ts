@@ -354,6 +354,8 @@ class RiskManagerService {
   /**
    * Attribute daily PnL to AI trades vs manual trades.
    * AI trades have a comment starting with "AI-" in MT5.
+   * Uses position_id to attribute closed deals: if ANY deal with the same
+   * position_id is AI (comment "ai-"), all PnL for that position counts as AI.
    */
   async getDailyPnLAttribution(userId: string): Promise<{ aiPnL: number; manualPnL: number }> {
     try {
@@ -364,16 +366,33 @@ class RiskManagerService {
       const deals = await mt5McpService.getHistory(0);
       const positions = await mt5McpService.getPositions();
 
+      const isAiComment = (c?: string) => (c || "").toLowerCase().startsWith("ai-");
+
+      // Build set of AI position_ids from deals (entry deals have comment)
+      const aiPositionIds = new Set<number>();
+      for (const d of deals) {
+        if (isAiComment(d.comment) && d.position_id) {
+          aiPositionIds.add(d.position_id);
+        }
+      }
+      // Also add current open positions comment
+      const openAiPositionIds = new Set<number>();
+      for (const pos of positions) {
+        if (isAiComment(pos.comment)) {
+          openAiPositionIds.add(pos.ticket ?? pos.position_id ?? 0);
+        }
+      }
+
       let aiPnL = 0;
       let manualPnL = 0;
 
+      // Deal PnL: attribute by position_id
       for (const d of deals) {
         if (d.type !== "BUY" && d.type !== "SELL") continue;
         if (d.time < todayTs) continue;
 
         const netProfit = (d.profit || 0) + (d.swap || 0) + (d.commission || 0);
-        const comment: string = (d.comment || "").toLowerCase();
-        const isAi = comment.startsWith("ai-") || comment.includes("ai-");
+        const isAi = isAiComment(d.comment) || aiPositionIds.has(d.position_id || 0);
         if (isAi) {
           aiPnL += netProfit;
         } else {
@@ -381,10 +400,9 @@ class RiskManagerService {
         }
       }
 
-      // Add floating PnL — attribute by position comment
+      // Floating PnL: attribute by position comment
       for (const pos of positions) {
-        const comment: string = (pos.comment || "").toLowerCase();
-        const isAi = comment.startsWith("ai-") || comment.includes("ai-");
+        const isAi = isAiComment(pos.comment) || openAiPositionIds.has(pos.ticket ?? pos.position_id ?? 0);
         if (isAi) {
           aiPnL += pos.profit;
         } else {
