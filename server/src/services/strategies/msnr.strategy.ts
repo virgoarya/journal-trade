@@ -383,7 +383,7 @@ class MSNRStrategy {
         id: "msnr-mss-ob",
         label: (status) => status === "PASSED" ? `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD (${sig.entry.toFixed(5)})` : `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD`,
         timeframe: entryTfLabel,
-        condition: sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"),
+        condition: sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"),
       },
       {
         id: "msnr-entry",

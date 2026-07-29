@@ -284,13 +284,13 @@ class ICTStrategy {
         id: "ict-sweep",
         label: () => `③ ${htfTfLabel}/${setupTfLabel} Liquidity Inducement / Judas Swing / AMD Sweep`,
         timeframe: htfTfLabel,
-        condition: hasSweep || hasAMD,
+        condition: hasSweep || hasAMD || sig.signalType === "IFVG_RETEST",
       },
       {
         id: "ict-fvg",
         label: (status) => status === "PASSED" ? `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement + FVG/OTE creation`,
         timeframe: entryTfLabel,
-        condition: hasFVG || hasOTE,
+        condition: hasFVG || hasOTE || sig.signalType === "JUDAS_SWEEP",
       },
       {
         id: "ict-entry",

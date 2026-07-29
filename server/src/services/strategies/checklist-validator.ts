@@ -40,22 +40,24 @@ export function evaluateWaterfall(
 
     if (step.isIndependent) {
       status = step.condition ? "PASSED" : "WAITING";
+    } else if (step.isFailable) {
+      // Failable: evaluate independently regardless of prior state
+      status = step.condition ? "PASSED" : "FAILED";
+      if (status !== "PASSED") {
+        priorAllPassed = false;
+        hasFailed = true;
+      }
     } else {
+      // Non-failable: cascade WAITING if prior steps didn't pass
       if (!priorAllPassed) {
         status = "WAITING";
       } else if (step.condition) {
         status = "PASSED";
-      } else if (step.isFailable) {
-        status = "FAILED";
       } else {
         status = "WAITING";
       }
-
       if (status !== "PASSED") {
         priorAllPassed = false;
-      }
-      if (status === "FAILED") {
-        hasFailed = true;
       }
     }
 

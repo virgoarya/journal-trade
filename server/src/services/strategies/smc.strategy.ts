@@ -184,7 +184,7 @@ class SMCStrategy {
             : `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} detection zone)`;
         },
         timeframe: htfTfLabel,
-        condition: !!(sig.orderBlock || sig.h1OrderBlock || sig.breachType === "OB_MITIGATION"),
+        condition: sig.breachType === "MSS" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || !!(sig.orderBlock || sig.h1OrderBlock || sig.breachType === "OB_MITIGATION"),
         value: (status) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
         details: (status) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
       },
@@ -199,7 +199,7 @@ class SMCStrategy {
             : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`;
         },
         timeframe: entryTfLabel,
-        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || sig.breachType === "M5_CHOCH_OB" || (sig.orderBlock?.hasCHOCH ?? false),
+        condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || sig.breachType === "M5_CHOCH_OB" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || sig.breachType === "OB_MITIGATION" || (sig.orderBlock?.hasCHOCH ?? false),
       },
       {
         id: "smc-entry-rejection",
