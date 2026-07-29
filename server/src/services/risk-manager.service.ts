@@ -80,24 +80,16 @@ class RiskManagerService {
         };
       }
 
-      // ── 4. Check duplicate symbol (same direction = reject, opposite = allow hedging) ──
-      const sameDirectionDuplicate = positions.some(
-        (p) => p.symbol === signal.symbol && p.type === signal.direction,
+      // ── 4. Check duplicate symbol (strictly ONE position per symbol) ──
+      const symbolDuplicate = positions.some(
+        (p) => p.symbol === signal.symbol,
       );
-      if (sameDirectionDuplicate) {
+      if (symbolDuplicate) {
         return {
           allowed: false,
-          reason: `Already have a ${signal.direction} position on ${signal.symbol} — concentrated risk`,
+          reason: `Already have an open position on ${signal.symbol}. Strict 1 trade per symbol policy prevents hedging or overexposure.`,
           warnings,
         };
-      }
-      const oppositeDirectionExists = positions.some(
-        (p) => p.symbol === signal.symbol && p.type !== signal.direction,
-      );
-      if (oppositeDirectionExists) {
-        warnings.push(
-          `Hedging: existing opposite position on ${signal.symbol}`,
-        );
       }
 
       // ── 5. Check daily PnL and risk limit ────────────────────────────

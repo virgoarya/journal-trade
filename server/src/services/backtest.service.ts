@@ -902,8 +902,9 @@ class BacktestService {
 
         if (doEval && openTrades.size < merged.maxOpenPositions && !dailyTradingBlocked) {
           let newTrade: OpenSimTrade | null = null;
-          const volumeBuy = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "BUY");
-          const volumeSell = openTrades.size === 0 || !Array.from(openTrades.values()).some(t => t.direction === "SELL");
+          const hasSymbolOpen = Array.from(openTrades.values()).some(t => t.symbol === tc.symbol);
+          const volumeBuy = !hasSymbolOpen;
+          const volumeSell = !hasSymbolOpen;
 
           const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1).map((r: MT5Rate) => ({
             time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
