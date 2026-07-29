@@ -113,7 +113,7 @@ class SMCStrategy {
     }
 
     if (validSignals.length === 0) {
-      const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
+      const dummyDir = h1Str.trend.direction === "BULL" ? "BUY" : "SELL";
       const dummySig: SMCSignal = {
         direction: dummyDir,
         confidence: 0,
