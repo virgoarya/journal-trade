@@ -795,40 +795,38 @@ class ICTStrategy {
 
       // Bullish IFVG (Former Bearish FVG inverted to support)
       if (htfTrend === "BULL" && fvg.type === "BEARISH") {
-        // Price must be near FVG BOTTOM (support level), not top
-        if (Math.abs(last.close - fvg.bottom) <= avgRange * config.fvgProximityAtrMult || 
-            (last.close >= fvg.bottom && last.close <= fvg.top)) {
-          
-          const sl = Math.min(fvg.bottom - avgRange * 0.5, last.close - avgRange * 0.3);
+        // Price must be ABOVE support (waiting for retrace down), not below it
+        if (last.close >= fvg.bottom &&
+            Math.abs(last.close - fvg.bottom) <= avgRange * config.fvgProximityAtrMult) {
           return {
             direction: "BUY",
-            entry: last.close,
-            sl: sl > 0 ? sl : last.close - avgRange * 0.5,
-            tp: last.close + avgRange * 2.5,
-            orderType: "MARKET",
+            entry: fvg.bottom,
+            sl: fvg.bottom - avgRange * 0.5,
+            tp: fvg.bottom + avgRange * 3,
+            orderType: "PENDING_LIMIT",
+            limitPrice: fvg.bottom,
             signalType: "IFVG_RETEST",
             confidence: config.minConfidence + 18,
-            reason: `ICT IFVG BUY: Retest of inverted Bearish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}] acting as support`,
+            reason: `ICT IFVG BUY: Pending Limit @ FVG bottom ${fvg.bottom.toFixed(5)} (former Bearish FVG inverted to support)`,
           };
         }
       }
 
       // Bearish IFVG (Former Bullish FVG inverted to resistance)
       if (htfTrend === "BEAR" && fvg.type === "BULLISH") {
-        // Price must be near FVG TOP (resistance level), not bottom
-        if (Math.abs(last.close - fvg.top) <= avgRange * config.fvgProximityAtrMult || 
-            (last.close >= fvg.bottom && last.close <= fvg.top)) {
-          
-          const sl = Math.max(fvg.top + avgRange * 0.5, last.close + avgRange * 0.3);
+        // Price must be BELOW resistance (waiting for retrace up), not above it
+        if (last.close <= fvg.top &&
+            Math.abs(last.close - fvg.top) <= avgRange * config.fvgProximityAtrMult) {
           return {
             direction: "SELL",
-            entry: last.close,
-            sl,
-            tp: last.close - avgRange * 2.5,
-            orderType: "MARKET",
+            entry: fvg.top,
+            sl: fvg.top + avgRange * 0.5,
+            tp: fvg.top - avgRange * 3,
+            orderType: "PENDING_LIMIT",
+            limitPrice: fvg.top,
             signalType: "IFVG_RETEST",
             confidence: config.minConfidence + 18,
-            reason: `ICT IFVG SELL: Retest of inverted Bullish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}] acting as resistance`,
+            reason: `ICT IFVG SELL: Pending Limit @ FVG top ${fvg.top.toFixed(5)} (former Bullish FVG inverted to resistance)`,
           };
         }
       }
