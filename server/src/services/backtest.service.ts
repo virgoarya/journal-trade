@@ -941,8 +941,8 @@ class BacktestService {
           }
 
           const ipdaCtx = ipdaContextService.buildContext(
-            dailyCandles,
-            dailyMs,
+            dirCandles, dirMs,
+            entryCandles, entryMs,
             entryCandles[entryCandles.length - 1]?.time || 0
           );
 
