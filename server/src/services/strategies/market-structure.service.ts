@@ -176,19 +176,19 @@ const KILLZONES = {
 // ─── Service ─────────────────────────────────────────────────────────
 
 class MarketStructureService {
-  /** Get EST minutes from timestamp (0-1439). */
+  /** Get EST minutes from MT5 timestamp (Broker time is exactly 7 hours ahead of New York). */
   getEstMinutesFromTimestamp(timestamp: number): number {
+    // 1. timestamp is MT5 Broker Time (e.g., 11:00 Server Time).
+    // JS `new Date(ts * 1000)` will read this as 11:00 UTC.
     const d = new Date(timestamp * 1000);
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = formatter.formatToParts(d);
-    const h = parseInt(parts.find(p => p.type === "hour")?.value ?? "0");
-    const m = parseInt(parts.find(p => p.type === "minute")?.value ?? "0");
-    return h * 60 + m;
+    const hMt5 = d.getUTCHours();
+    const mMt5 = d.getUTCMinutes();
+    
+    // 2. NY time is always MT5 time minus 7 hours.
+    let hNy = hMt5 - 7;
+    if (hNy < 0) hNy += 24;
+    
+    return hNy * 60 + mMt5;
   }
 
   /** Get killzone for a given timestamp (used in backtesting). */

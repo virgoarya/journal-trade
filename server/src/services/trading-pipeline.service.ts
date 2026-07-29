@@ -985,15 +985,29 @@ const pipeline = {
         const tpDistInitial = Math.abs(finalSig.tp - finalSig.entry);
         const rrInitial = slDistInitial > 0 ? (tpDistInitial / slDistInitial) : 0;
 
-        // ── STAGE 1: SIGNAL FORMED (100% CHECKLIST PASSED) ─────────────────────
-        this.addLog(userId, "SIGNAL",
-          `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
-          `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
-          `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
-          `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
-          `R:R 1:${rrInitial.toFixed(2)}`,
-          analysis.confluence.methodologyBreakdown,
-        );
+        const sigChecklist = finalSig.checklistItems || [];
+        const hasFailedStep = sigChecklist.some(c => c.status === "FAILED");
+        const coreChecklist = sigChecklist.filter(c => !c.id.endsWith("-daily") && c.id !== "ict-kz");
+        const allCorePassed = coreChecklist.length > 0 && coreChecklist.every(c => c.status === "PASSED");
+
+        // ── STAGE 1: SIGNAL FORMED (OR CANDIDATE SETUP) ─────────────────────
+        if (hasFailedStep || !allCorePassed) {
+          this.addLog(userId, "CANDIDATE",
+            `[1/4] [${analysis.symbol}] CANDIDATE SETUP: ${finalSig.direction} | ` +
+            `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
+            `Primary: ${finalSig.primaryMethodology.toUpperCase()} | Checklist Incomplete`,
+            analysis.confluence.methodologyBreakdown,
+          );
+        } else {
+          this.addLog(userId, "SIGNAL",
+            `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
+            `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
+            `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
+            `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
+            `R:R 1:${rrInitial.toFixed(2)}`,
+            analysis.confluence.methodologyBreakdown,
+          );
+        }
 
         const signal: TradingSignal = {
           symbol: analysis.symbol,
@@ -1030,12 +1044,6 @@ const pipeline = {
             }
             pipeline.lastLlmSignalKey = llmSignalKey;
             pipeline.lastLlmVerdictTime = Date.now();
-
-            // Only send to LLM if all core checklist items are PASSED (excluding informational daily direction) and no step FAILED
-            const sigChecklist = analysis.confluence.finalSignal?.checklistItems || [];
-            const hasFailedStep = sigChecklist.some(c => c.status === "FAILED");
-            const coreChecklist = sigChecklist.filter(c => !c.id.endsWith("-daily") && c.id !== "ict-kz");
-            const allCorePassed = coreChecklist.length > 0 && coreChecklist.every(c => c.status === "PASSED");
 
             if (hasFailedStep || !allCorePassed) {
               this.addLog(userId, "CONFLUENCE",
