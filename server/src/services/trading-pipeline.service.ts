@@ -171,6 +171,8 @@ class TradingPipelineService {
       lastLlmVerdictTime: number;
       /** All analyses from latest cycle, keyed by symbol for per-pair display */
       allAnalyses: MultiStrategySymbolAnalysis[];
+      /** Per-symbol lock to prevent race condition: signals arriving between gate check and order placement */
+      busySymbols: Set<string>;
     }
   > = new Map();
 
@@ -261,6 +263,7 @@ const pipeline = {
       lastLlmSignalKey: null,
       lastLlmVerdictTime: 0,
       allAnalyses: [],
+      busySymbols: new Set(),
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -489,6 +492,7 @@ const pipeline = {
         lastSignal: null,
         lastAnalysis: null,
         allAnalyses: [],
+        busySymbols: new Set(),
         lastError: null,
         circuitBreakerReason,
       };
@@ -1070,6 +1074,13 @@ const pipeline = {
           );
           continue;
         }
+        // Per-symbol lock: prevent race condition between gate check and order placement
+        if (pipeline.busySymbols.has(signal.symbol)) {
+          this.addLog(userId, "CANDIDATE",
+            `[1/4] [${analysis.symbol}] SKIP: ${signal.symbol} is busy processing another signal.`);
+          continue;
+        }
+        pipeline.busySymbols.add(signal.symbol);
 
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
@@ -1366,14 +1377,16 @@ const pipeline = {
       }
 
       pipeline.lastError = null;
-    } catch (error: any) {
-      pipeline.lastError = error.message;
-      this.addLog(userId, "ERROR", `Pipeline error: ${error.message}`);
-      silentLogger.error(`[PIPELINE] Error for ${userId}: ${error.message}`);
+      } catch (error: any) {
+        pipeline.lastError = error.message;
+        this.addLog(userId, "ERROR", `Pipeline error: ${error.message}`);
+        silentLogger.error(`[PIPELINE] Error for ${userId}: ${error.message}`);
+      } finally {
+        // Release per-symbol lock regardless of outcome
+        const relSymbol = analysis?.symbol;
+        if (relSymbol) pipeline.busySymbols.delete(relSymbol);
+      }
     }
-  }
-
-  // ─── Position & Pending Order Management ──────────────────────────
   private marketClosedCache = new Map<string, number>();
 
   private async managePositions(userId: string): Promise<void> {
