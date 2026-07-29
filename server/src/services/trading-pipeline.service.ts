@@ -142,7 +142,7 @@ class TradingPipelineService {
       waitingReconnect?: boolean;
       paused: boolean;
       /** Track pending orders for expiry management */
-      pendingOrders: Map<number, { symbol: string; placedAt: number; expiryAt: number }>;
+      pendingOrders: Map<number, { symbol: string; direction: string; entry: number; tp: number; sl: number; placedAt: number; expiryAt: number }>;
       /** Circuit breaker states */
       mt5CircuitOpen: boolean;
       llmCircuitOpen: boolean;
@@ -249,7 +249,7 @@ const pipeline = {
       llmCircuitOpen: false,
       llmCircuitStates: {},
       /** Track pending orders for expiry management */
-      pendingOrders: new Map<number, { symbol: string; placedAt: number; expiryAt: number }>(),
+      pendingOrders: new Map<number, { symbol: string; direction: string; entry: number; tp: number; sl: number; placedAt: number; expiryAt: number }>(),
       startOfDayEquity: 0,
       currentDayStr: new Date().toLocaleDateString(),
       peakEquity: 0,
@@ -1320,6 +1320,10 @@ const pipeline = {
             const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60;
             pipeline.pendingOrders.set(orderResult.ticket, {
               symbol: signal.symbol,
+              direction: signal.direction,
+              entry: signal.entry,
+              tp: signal.tp,
+              sl: signal.sl,
               placedAt: Date.now(),
               expiryAt: Date.now() + expiryMs,
             });
@@ -1401,6 +1405,41 @@ const pipeline = {
               silentLogger.warn(`[PIPELINE] Failed to cancel expired order #${ticket}: ${cancelErr.message}`);
             }
             pipeline.pendingOrders.delete(ticket);
+            continue;
+          }
+          // Cancel if TP target already hit (price went past TP before entry filled)
+          try {
+            const tick = await mt5McpService.getTick(info.symbol);
+            if (tick) {
+              const isBuy = info.direction === "BUY";
+              const spot = isBuy ? tick.bid : tick.ask;
+              if (isBuy && spot >= info.tp) {
+                await mt5McpService.call("mt5_order_cancel", { ticket });
+                this.addLog(userId, "INFO",
+                  `[INVALID] Pending order #${ticket} (${info.symbol}) cancelled — TP ${info.tp} already reached before entry ${info.entry}.`
+                );
+                await AITradeLog.updateOne(
+                  { mt5Ticket: ticket, closed: false },
+                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0 }
+                );
+                pipeline.pendingOrders.delete(ticket);
+                continue;
+              }
+              if (!isBuy && spot <= info.tp) {
+                await mt5McpService.call("mt5_order_cancel", { ticket });
+                this.addLog(userId, "INFO",
+                  `[INVALID] Pending order #${ticket} (${info.symbol}) cancelled — TP ${info.tp} already reached before entry ${info.entry}.`
+                );
+                await AITradeLog.updateOne(
+                  { mt5Ticket: ticket, closed: false },
+                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0 }
+                );
+                pipeline.pendingOrders.delete(ticket);
+                continue;
+              }
+            }
+          } catch (tickErr: any) {
+            silentLogger.warn(`[PIPELINE] TP check failed for pending order #${ticket}: ${tickErr.message}`);
           }
         }
       } catch (e: any) {
