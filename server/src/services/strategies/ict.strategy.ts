@@ -795,14 +795,15 @@ class ICTStrategy {
 
       // Bullish IFVG (Former Bearish FVG inverted to support)
       if (htfTrend === "BULL" && fvg.type === "BEARISH") {
-        // Price must retrace down into the IFVG (or very close)
-        if (Math.abs(last.close - fvg.top) <= avgRange * config.fvgProximityAtrMult || 
+        // Price must be near FVG BOTTOM (support level), not top
+        if (Math.abs(last.close - fvg.bottom) <= avgRange * config.fvgProximityAtrMult || 
             (last.close >= fvg.bottom && last.close <= fvg.top)) {
           
+          const sl = Math.min(fvg.bottom - avgRange * 0.5, last.close - avgRange * 0.3);
           return {
             direction: "BUY",
             entry: last.close,
-            sl: fvg.bottom - avgRange * 0.5,
+            sl: sl > 0 ? sl : last.close - avgRange * 0.5,
             tp: last.close + avgRange * 2.5,
             orderType: "MARKET",
             signalType: "IFVG_RETEST",
@@ -814,14 +815,15 @@ class ICTStrategy {
 
       // Bearish IFVG (Former Bullish FVG inverted to resistance)
       if (htfTrend === "BEAR" && fvg.type === "BULLISH") {
-        // Price must retrace up into the IFVG (or very close)
-        if (Math.abs(last.close - fvg.bottom) <= avgRange * config.fvgProximityAtrMult || 
+        // Price must be near FVG TOP (resistance level), not bottom
+        if (Math.abs(last.close - fvg.top) <= avgRange * config.fvgProximityAtrMult || 
             (last.close >= fvg.bottom && last.close <= fvg.top)) {
           
+          const sl = Math.max(fvg.top + avgRange * 0.5, last.close + avgRange * 0.3);
           return {
             direction: "SELL",
             entry: last.close,
-            sl: fvg.top + avgRange * 0.5,
+            sl,
             tp: last.close - avgRange * 2.5,
             orderType: "MARKET",
             signalType: "IFVG_RETEST",
