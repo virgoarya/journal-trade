@@ -679,7 +679,7 @@ const pipeline = {
         // Hitung minimum distance dalam unit HARGA (bukan point!)
         // spread dari MT5 sudah dalam unit point, kalikan dengan point untuk dapat satuan harga
         const spreadPrice = symbolInfo.spread * symbolInfo.point;
-        const minSlDistance = Math.max(spreadPrice * 2, symbolInfo.point * 10);
+        const minSlDistance = Math.max(spreadPrice, symbolInfo.point * 10);
 
         if (slDistance < minSlDistance) {
           return {
