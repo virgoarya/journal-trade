@@ -729,6 +729,8 @@ const pipeline = {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
 
+    let currentSymbol: string | undefined; // Declared here
+
     try {
       // Handle MT5 disconnections by auto-pausing without killing the timer
       // Check MT5 circuit breaker state
@@ -952,7 +954,6 @@ const pipeline = {
         else pipeline.allAnalyses.push(a);
       }
 
-      let currentSymbol: string | undefined;
       for (const analysis of analyses) {
         const latestTime = latestCandleTimes.get(analysis.symbol);
         if (latestTime !== undefined) {
