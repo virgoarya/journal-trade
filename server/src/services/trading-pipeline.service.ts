@@ -996,25 +996,6 @@ const pipeline = {
         const hasFailedCoreStep = coreChecklist.some(c => c.status === "FAILED");
         const allCorePassed = coreChecklist.length > 0 && coreChecklist.every(c => c.status === "PASSED");
 
-        // ── STAGE 1: SIGNAL FORMED (OR CANDIDATE SETUP) ─────────────────────
-        if (hasFailedCoreStep || !allCorePassed) {
-          this.addLog(userId, "CANDIDATE",
-            `[1/4] [${analysis.symbol}] CANDIDATE SETUP: ${finalSig.direction} | ` +
-            `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
-            `Primary: ${finalSig.primaryMethodology.toUpperCase()} | Checklist Incomplete`,
-            analysis.confluence.methodologyBreakdown,
-          );
-        } else {
-          this.addLog(userId, "SIGNAL",
-            `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
-            `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
-            `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
-            `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
-            `R:R 1:${rrInitial.toFixed(2)}`,
-            analysis.confluence.methodologyBreakdown,
-          );
-        }
-
         const signal: TradingSignal = {
           symbol: analysis.symbol,
           direction: finalSig.direction,
@@ -1030,6 +1011,27 @@ const pipeline = {
         };
 
         pipeline.lastSignal = signal;
+
+        // ── STAGE 1: SIGNAL FORMED (OR CANDIDATE SETUP) ─────────────────────
+        if (hasFailedCoreStep || !allCorePassed) {
+          this.addLog(userId, "CANDIDATE",
+            `[1/4] [${analysis.symbol}] CANDIDATE SETUP: ${finalSig.direction} | ` +
+            `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
+            `Primary: ${finalSig.primaryMethodology.toUpperCase()} | Checklist Incomplete`,
+            analysis.confluence.methodologyBreakdown,
+          );
+          // Do not proceed to Confluence & LLM if checklist is incomplete.
+          continue;
+        }
+
+        this.addLog(userId, "SIGNAL",
+          `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
+          `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
+          `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
+          `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
+          `R:R 1:${rrInitial.toFixed(2)}`,
+          analysis.confluence.methodologyBreakdown,
+        );
 
         // ── STAGE 2: CONFLUENCE & LLM CONSENSUS VOTING ─────────────────────
         const llmProviders = llmConsensusService.getAvailableProviders();
@@ -1050,13 +1052,6 @@ const pipeline = {
             }
             pipeline.lastLlmSignalKey = llmSignalKey;
             pipeline.lastLlmVerdictTime = Date.now();
-
-            if (hasFailedCoreStep || !allCorePassed) {
-              this.addLog(userId, "CONFLUENCE",
-                `[2/4] [${signal.symbol}] LLM SKIPPED: Checklist belum 100% PASSED (${coreChecklist.filter(c => c.status === "PASSED").length}/${coreChecklist.length} core steps). Menunggu validasi selesai.`
-              );
-              continue;
-            }
 
             this.addLog(userId, "CONFLUENCE",
               `[2/4] [${signal.symbol}] LLM CONSENSUS: Initiating AI voting across multi-LLM models...`,
