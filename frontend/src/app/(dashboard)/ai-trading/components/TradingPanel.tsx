@@ -1,10 +1,11 @@
 "use client";
 
 import { useAiTrading } from "../context/AiTradingContext";
-import { Play, Square, Pause, Loader2, Signal, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Play, Square, Pause, Loader2, Signal, AlertTriangle, ShieldAlert, ShieldX, TriangleAlert } from "lucide-react";
 import { SkillDisplay } from "./SkillDisplay";
 import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
+import { useState, useEffect } from "react";
 
 interface TradingPanelProps {
   pipelineRunning: boolean;
@@ -41,8 +42,20 @@ export function TradingPanel({
       toast.error("No backtest configuration applied. Please run a backtest first.");
       return;
     }
+    // Clear any lingering circuit breaker alert before starting
+    setCircuitBreakerAlert(null);
     await startPipeline({ useAppliedConfig: true } as any);
   };
+
+  // ── Circuit Breaker Alert State ─────────────────────────────────────
+  const [circuitBreakerAlert, setCircuitBreakerAlert] = useState<string | null>(null);
+
+  // Watch for circuit breaker reason from backend
+  useEffect(() => {
+    if (pipelineStatus?.circuitBreakerReason && !pipelineRunning && !pipelinePaused) {
+      setCircuitBreakerAlert(pipelineStatus.circuitBreakerReason);
+    }
+  }, [pipelineStatus?.circuitBreakerReason, pipelineRunning, pipelinePaused]);
 
   const displayConfig = pipelineRunning || pipelinePaused ? pipelineStatus?.config : savedPipelineConfig;
 
@@ -99,7 +112,86 @@ export function TradingPanel({
   const gradeInfo = getOverallGrade();
 
   return (
-    <div className="glass p-4 space-y-4">
+    <div className="glass p-4 space-y-4 relative">
+
+      {/* ── Circuit Breaker Alert Modal ─────────────────────────────────── */}
+      {circuitBreakerAlert && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.7)' }}>
+          <div className="relative w-full max-w-md bg-[#0f0a0a] border border-red-500/50 rounded-2xl shadow-[0_0_60px_rgba(255,56,100,0.3)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {/* Danger glow top bar */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-700 via-red-400 to-red-700 animate-pulse" />
+            
+            <div className="p-6">
+              {/* Icon + Title */}
+              <div className="flex flex-col items-center text-center gap-3 mb-5">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl scale-150 animate-pulse" />
+                  <ShieldX className="relative w-12 h-12 text-red-400 drop-shadow-[0_0_12px_rgba(255,56,100,0.8)]" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-red-400 uppercase tracking-widest font-mono drop-shadow-[0_0_8px_rgba(255,56,100,0.6)]">
+                    Circuit Breaker Activated
+                  </h2>
+                  <p className="text-[11px] text-text-muted mt-1 uppercase tracking-wider">
+                    Pipeline Dihentikan Otomatis
+                  </p>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className="bg-red-950/40 border border-red-500/30 rounded-lg p-3 mb-5">
+                <div className="flex items-start gap-2">
+                  <TriangleAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                  <p className="text-[12px] text-red-300 font-mono leading-relaxed">{circuitBreakerAlert}</p>
+                </div>
+              </div>
+
+              {/* Info box */}
+              <div className="bg-black/50 border border-accent-gold/20 rounded-lg p-3 mb-5 text-center">
+                <p className="text-[10px] text-accent-gold-dim uppercase tracking-widest mb-1">Tindakan Yang Diperlukan</p>
+                <p className="text-[12px] text-text-muted leading-relaxed">
+                  Tambahkan <span className="text-accent-gold font-bold">saldo / deposit</span> ke akun trading Anda untuk mengembalikan kapasitas risk, kemudian jalankan ulang pipeline.
+                </p>
+              </div>
+
+              {/* Balance / equity display */}
+              {accountInfo && (
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="bg-black/60 rounded-lg p-2.5 text-center border border-white/5">
+                    <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
+                    <p className="text-[13px] font-bold font-mono text-text-primary">${accountInfo.balance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="bg-black/60 rounded-lg p-2.5 text-center border border-white/5">
+                    <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">Equity</p>
+                    <p className={`text-[13px] font-bold font-mono ${(accountInfo.equity || 0) < (accountInfo.balance || 0) ? 'text-red-400' : 'text-neon-green'}`}>
+                      ${accountInfo.equity?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setCircuitBreakerAlert(null)}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-text-muted text-[11px] font-bold uppercase tracking-wider transition-all"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => {
+                    setCircuitBreakerAlert(null);
+                    handleStart();
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-neon-green/10 hover:bg-neon-green/20 border border-neon-green/40 text-neon-green text-[11px] font-bold uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(57,255,136,0.2)] hover:shadow-[0_0_20px_rgba(57,255,136,0.4)]"
+                >
+                  🔄 Jalankan Ulang
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between border-b border-accent-gold/20 pb-3 relative">
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent-gold/50 to-transparent"></div>

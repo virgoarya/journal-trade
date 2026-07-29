@@ -11,6 +11,7 @@ export interface RiskCheck {
   allowed: boolean;
   reason?: string;
   warnings: string[];
+  circuitBreaker?: boolean;
 }
 
 export interface RiskMetrics {
@@ -39,6 +40,7 @@ class RiskManagerService {
       maxOpenPositions: number;
       maxDailyRisk: number;
       maxRiskPerTrade: number;
+      smartRisk?: any;
     },
   ): Promise<RiskCheck> {
     const warnings: string[] = [];
@@ -101,6 +103,7 @@ class RiskManagerService {
             allowed: false,
             reason: `Daily loss limit reached: ${todayMetrics.dailyPnL.toFixed(2)} (max: -${dailyMaxLoss.toFixed(2)})`,
             warnings,
+            circuitBreaker: true,
           };
         }
 
@@ -109,6 +112,23 @@ class RiskManagerService {
           warnings.push(
             `Approaching daily loss limit: ${todayMetrics.dailyPnL.toFixed(2)} / -${dailyMaxLoss.toFixed(2)}`,
           );
+        }
+      }
+
+      // ── 6. Check Global Max Drawdown Limit ───────────────────────────
+      const globalDrawdownPct = accountInfo.balance > 0 
+        ? ((accountInfo.balance - accountInfo.equity) / accountInfo.balance) * 100 
+        : 0;
+      
+      const smartRisk: any = (pipelineConfig as any).smartRisk; // Cast to access smartRisk
+      if (smartRisk?.globalDrawdownLimit?.enabled && smartRisk.globalDrawdownLimit.maxDrawdownPct > 0) {
+        if (globalDrawdownPct >= smartRisk.globalDrawdownLimit.maxDrawdownPct) {
+          return {
+            allowed: false,
+            reason: `Global Max Drawdown limit reached: ${globalDrawdownPct.toFixed(2)}% (Limit: ${smartRisk.globalDrawdownLimit.maxDrawdownPct}%)`,
+            warnings,
+            circuitBreaker: true,
+          };
         }
       }
 

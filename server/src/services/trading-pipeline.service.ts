@@ -90,6 +90,8 @@ export interface PipelineStatus {
   // Circuit breaker states
   mt5CircuitState?: string;
   llmCircuitStates?: Record<string, string>;
+  /** If pipeline was auto-stopped by a circuit breaker, this is the reason shown to the user */
+  circuitBreakerReason?: string;
 }
 
 export interface PipelineLog {
@@ -154,6 +156,8 @@ class TradingPipelineService {
       currentDrawdownPct?: number;
       currentGrowthPct?: number;
       currentRiskMultiplier?: number;
+      /** Circuit breaker auto-stop reason, if any */
+      circuitBreakerReason?: string;
       cachedMetrics?: {
         totalTrades: number;
         winningTrades: number;
@@ -174,6 +178,9 @@ class TradingPipelineService {
   // ─── Cache ────────────────────────────────────────────────────────────
   private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
   private readonly REGIME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+  /** Temporary store for circuit breaker reasons after pipeline stops (max 60s) */
+  private circuitBreakerCache = new Map<string, { reason: string; at: number }>();
 
   private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
     const cached = this.regimeCache.get(key);
@@ -326,7 +333,7 @@ const pipeline = {
     silentLogger.info(`[PIPELINE] Started for user ${userId} on ${merged.timeframe} with ${merged.activeMethodologies!.length} methodologies (isRecovery=${isRecovery})`);
   }
 
-  async stopPipeline(userId: string): Promise<void> {
+  async stopPipeline(userId: string, circuitBreakerReason?: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
     if (pipeline?.intervals) {
       for (const interval of pipeline.intervals.values()) {
@@ -339,14 +346,20 @@ const pipeline = {
     }
 
     if (pipeline) {
-      this.addLog(userId, "INFO", "Pipeline stopped");
+      this.addLog(userId, "INFO", circuitBreakerReason ? `Pipeline auto-stopped: ${circuitBreakerReason}` : "Pipeline stopped");
+      // Keep circuitBreakerReason accessible for a brief window so frontend can pick it up
+      if (circuitBreakerReason) {
+        pipeline.circuitBreakerReason = circuitBreakerReason;
+        // After deletion below, we store it in a temporary map for 60 seconds
+        this.circuitBreakerCache.set(userId, { reason: circuitBreakerReason, at: Date.now() });
+      }
     }
 
     this.activePipelines.delete(userId);
 
     await AITradingSession.findOneAndUpdate(
       { userId, status: "RUNNING" },
-      { status: "STOPPED", stoppedAt: new Date() },
+      { status: "STOPPED", stoppedAt: new Date(), lastError: circuitBreakerReason },
     );
   }
 
@@ -453,6 +466,12 @@ const pipeline = {
   async getPipelineStatus(userId: string): Promise<PipelineStatus> {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) {
+      // Check if a circuit breaker recently fired for this user (last 60s)
+      const cbCache = this.circuitBreakerCache.get(userId);
+      const circuitBreakerReason = cbCache && (Date.now() - cbCache.at < 60_000)
+        ? cbCache.reason
+        : undefined;
+
       return {
         running: false,
         paused: false,
@@ -471,6 +490,7 @@ const pipeline = {
         lastAnalysis: null,
         allAnalyses: [],
         lastError: null,
+        circuitBreakerReason,
       };
     }
 
@@ -1126,6 +1146,7 @@ const pipeline = {
             maxOpenPositions: pipeline.config.maxOpenPositions,
             maxDailyRisk: pipeline.config.maxDailyRisk,
             maxRiskPerTrade: pipeline.config.maxRiskPerTrade,
+            smartRisk: pipeline.config.smartRisk,
           },
         );
 
@@ -1133,6 +1154,11 @@ const pipeline = {
           this.addLog(userId, "ERROR",
             `[3/4] [${signal.symbol}] REJECTED (RISK): ${riskCheck.reason} (Open: ${currentPosCount}/${pipeline.config.maxOpenPositions})`,
           );
+          
+          if (riskCheck.circuitBreaker) {
+            await this.stopPipeline(userId, riskCheck.reason);
+            this.addLog(userId, "ERROR", `[CIRCUIT BREAKER] Pipeline automatically STOPPED due to: ${riskCheck.reason}`);
+          }
           continue;
         }
 
