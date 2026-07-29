@@ -1138,9 +1138,64 @@ class BacktestService {
       if (currentEquity > peakEquity) peakEquity = currentEquity;
       const drawdown = peakEquity - currentEquity;
       const currentDrawdownPct = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
+
+      // ── EARLY Circuit Breaker Check (BEFORE recording maxDD) ──────
+      // Must run here so maxDrawdownPctGlobal is never recorded above the limit
+      const smartEarly = merged.smartRisk;
+      if (smartEarly?.enabled && smartEarly.globalDrawdownLimit?.enabled && !globalTradingBlocked) {
+        if (currentDrawdownPct >= smartEarly.globalDrawdownLimit.maxDrawdownPct) {
+          globalTradingBlocked = true;
+          // Cap the recorded max DD at the circuit breaker limit
+          if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = smartEarly.globalDrawdownLimit.maxDrawdownPct;
+          if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+
+          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit (${currentDrawdownPct.toFixed(2)}%). Force-closing all trades and halting.`);
+
+          // ── Force-close ALL open trades at current price ──────────────
+          for (const [key, trade] of openTrades.entries()) {
+            const symState = symbolStates.get(trade.symbol);
+            const symIdx = symbolCandleIdx.get(trade.symbol) ?? 0;
+            const symRates = symState?.rates ?? [];
+            const closeCandle = symRates[Math.min(symIdx, symRates.length - 1)];
+            const closePrice = closeCandle?.close ?? trade.entryPrice;
+            const closeTime = closeCandle?.time ?? 0;
+
+            const isJpy = trade.symbol.toLowerCase().includes("jpy");
+            const isCrypto = /btc|eth|ltc|xrp/i.test(trade.symbol);
+            const pointValue = isCrypto ? 1 : isJpy ? 0.01 : 0.0001;
+            const contractSize = symState?.contractSize ?? (isCrypto ? 1 : isJpy ? 1000 : 100000);
+            const rawPnl = trade.direction === "BUY"
+              ? (closePrice - trade.entryPrice) / pointValue * trade.volume * pointValue * contractSize
+              : (trade.entryPrice - closePrice) / pointValue * trade.volume * pointValue * contractSize;
+
+            const pnl = Math.round(rawPnl * 100) / 100;
+            equity += pnl;
+            totalTrades++;
+            if (pnl > 0) winningTrades++;
+            else if (pnl < 0) losingTrades++;
+            else breakEvenTrades++;
+
+            allTrades.push({ ...trade, closePrice, closeTime, pnl, closeReason: "CIRCUIT_BREAKER", barsHeld: trade.barsHeld });
+            openTrades.delete(key);
+            emit({ type: "trade_close", data: { symbol: trade.symbol, direction: trade.direction, closePrice, pnl, closeReason: "CIRCUIT_BREAKER" } });
+          }
+
+          emit({
+            type: "progress",
+            data: {
+              currentStep: timelineStep, totalSteps: totalTimelineSteps,
+              equity: Math.round(equity * 100) / 100,
+              message: `⛔ Circuit Breaker: Global Max Drawdown (${smartEarly.globalDrawdownLimit.maxDrawdownPct}%) reached. Backtest halted.`,
+            }
+          });
+          break; // Stop the entire backtest loop immediately
+        }
+      }
+
+      // Record max drawdown AFTER circuit breaker (won't exceed limit)
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
       if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = currentDrawdownPct;
-      
+
       // ── Pipeline Native Risk Check ──
       if (merged.maxDailyRisk !== undefined && merged.maxDailyRisk > 0 && !dailyTradingBlocked && !globalTradingBlocked) {
         const dailyMaxLossAmt = startOfDayEquity * (merged.maxDailyRisk / 100);
@@ -1155,62 +1210,8 @@ class BacktestService {
       currentRiskMultiplier = 1;
       const smart = merged.smartRisk;
       if (smart?.enabled) {
-        // 0. Global Max Drawdown (Priority 0 - Permanent Halt)
-        if (smart.globalDrawdownLimit?.enabled && currentDrawdownPct >= smart.globalDrawdownLimit.maxDrawdownPct) {
-          if (!globalTradingBlocked) {
-            globalTradingBlocked = true;
-            silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit (${currentDrawdownPct.toFixed(2)}%). Force-closing all trades and halting.`);
-
-            // ── Force-close ALL open trades at current price ──────────────
-            for (const [key, trade] of openTrades.entries()) {
-              // Get current price from the latest candle of this symbol via symbolStates
-              const symState = symbolStates.get(trade.symbol);
-              const symIdx = symbolCandleIdx.get(trade.symbol) ?? 0;
-              const symRates = symState?.rates ?? [];
-              const closeCandle = symRates[Math.min(symIdx, symRates.length - 1)];
-              const closePrice = closeCandle?.close ?? trade.entryPrice;
-              const closeTime = closeCandle?.time ?? 0;
-
-              const isJpy = trade.symbol.toLowerCase().includes("jpy");
-              const isCrypto = /btc|eth|ltc|xrp/i.test(trade.symbol);
-              const pointValue = isCrypto ? 1 : isJpy ? 0.01 : 0.0001;
-              const contractSize = symState?.contractSize ?? (isCrypto ? 1 : isJpy ? 1000 : 100000);
-              const rawPnl = trade.direction === "BUY"
-                ? (closePrice - trade.entryPrice) / pointValue * trade.volume * pointValue * contractSize
-                : (trade.entryPrice - closePrice) / pointValue * trade.volume * pointValue * contractSize;
-
-              const pnl = Math.round(rawPnl * 100) / 100;
-              equity += pnl;
-              totalTrades++;
-              if (pnl > 0) winningTrades++;
-              else if (pnl < 0) losingTrades++;
-              else breakEvenTrades++;
-
-              allTrades.push({
-                ...trade,
-                closePrice,
-                closeTime,
-                pnl,
-                closeReason: "CIRCUIT_BREAKER",
-                barsHeld: trade.barsHeld,
-              });
-
-              openTrades.delete(key);
-              emit({ type: "trade_close", data: { symbol: trade.symbol, direction: trade.direction, closePrice, pnl, closeReason: "CIRCUIT_BREAKER" } });
-            }
-
-            emit({
-              type: "progress",
-              data: {
-                currentStep: timelineStep,
-                totalSteps: totalTimelineSteps,
-                equity: Math.round(equity * 100) / 100,
-                message: `⛔ Circuit Breaker: Global Max Drawdown (${smart.globalDrawdownLimit.maxDrawdownPct}%) reached. Backtest halted at step ${timelineStep}/${totalTimelineSteps}.`,
-              }
-            });
-            break; // Stop the entire backtest loop immediately
-          }
-        }
+        // Note: Global Max Drawdown (circuit breaker) is handled BEFORE this block
+        // to ensure maxDrawdownPctGlobal is capped at the limit.
         
         // 1. Drawdown Recovery (Priority 1 - Safety First)
         if (smart.drawdownRecovery?.enabled && currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
