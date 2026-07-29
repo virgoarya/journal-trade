@@ -1344,44 +1344,55 @@ class MarketStructureService {
     const minTargetDist = risk * minRR;
     const minTargetPrice = direction === "BUY" ? entryPrice + minTargetDist : entryPrice - minTargetDist;
 
-    const isCandidate = (price: number): boolean => {
-      if (direction === "BUY") return price > entryPrice && price >= minTargetPrice;
-      return price < entryPrice && price <= minTargetPrice;
+    const isInDirection = (price: number): boolean => {
+      if (direction === "BUY") return price > entryPrice;
+      return price < entryPrice;
     };
 
     // 1. Liquidity Zones — highest priority: target liquidity pools (BSL for BUY, SSL for SELL)
-    // Sort by density (more swing points = stronger liquidity) descending so the most liquid pool wins ties
-    const sortedLiquidity = htfStr.liquidityZones
+    // Pick nearest unswept liquidity in trade direction, regardless of min RR
+    const liquidityCandidates = htfStr.liquidityZones
       .filter(lz => !lz.swept)
       .filter(lz => direction === "BUY" ? lz.type === "BUY_SIDE" : lz.type === "SELL_SIDE")
-      .filter(lz => isCandidate(lz.price))
+      .filter(lz => isInDirection(lz.price))
       .sort((a, b) => b.density - a.density);
 
-    // Among liquidity zones that satisfy min RR, pick the closest one (within the strongest density group)
-    const bestLiquidity = sortedLiquidity.length > 0
-      ? sortedLiquidity.reduce((best, lz) => {
-          const dist = Math.abs(lz.price - entryPrice);
-          const bestDist = Math.abs(best.price - entryPrice);
-          return dist < bestDist ? lz : best;
-        })
-      : null;
-
-    if (bestLiquidity) return bestLiquidity.price;
+    if (liquidityCandidates.length > 0) {
+      const bestDensity = liquidityCandidates[0].density;
+      const strongest = liquidityCandidates.filter(lz => lz.density === bestDensity);
+      const closest = strongest.reduce((best, lz) => {
+        const dist = Math.abs(lz.price - entryPrice);
+        const bestDist = Math.abs(best.price - entryPrice);
+        return dist < bestDist ? lz : best;
+      });
+      // Only use if it satisfies min RR; otherwise still prefer liquidity over swing
+      const closestPrice = closest.price;
+      const distToLiq = Math.abs(closestPrice - entryPrice);
+      if (distToLiq >= minTargetDist) return closestPrice;
+      // If even the strongest liquidity doesn't meet min RR, use it anyway — liquidity is more important
+      return closestPrice;
+    }
 
     // 2. Swing Points — next priority: structural liquidity from raw swing highs/lows
     const swingCandidates = (direction === "BUY" ? htfStr.swingHighs : htfStr.swingLows)
       .map(s => s.price)
-      .filter(isCandidate)
+      .filter(isInDirection)
       .sort((a, b) => direction === "BUY" ? a - b : b - a);
 
-    if (swingCandidates.length > 0) return swingCandidates[0];
+    if (swingCandidates.length > 0) {
+      // Prefer swing that meets min RR, but fall back to nearest if none do
+      const minRrSwing = swingCandidates.find(p =>
+        direction === "BUY" ? p >= minTargetPrice : p <= minTargetPrice
+      );
+      return minRrSwing ?? swingCandidates[0];
+    }
 
     // 3. Order Blocks (opposite direction — where liquidity sits beyond the OB)
     const obCandidates = htfStr.orderBlocks
       .filter(ob => !ob.mitigated)
       .filter(ob => direction === "BUY" ? ob.type === "BEARISH" : ob.type === "BULLISH")
       .map(ob => direction === "BUY" ? ob.bottom : ob.top)
-      .filter(isCandidate)
+      .filter(isInDirection)
       .sort((a, b) => direction === "BUY" ? a - b : b - a);
 
     if (obCandidates.length > 0) return obCandidates[0];
@@ -1391,7 +1402,7 @@ class MarketStructureService {
       .filter(fvg => !fvg.mitigated)
       .filter(fvg => direction === "BUY" ? fvg.type === "BEARISH" : fvg.type === "BULLISH")
       .map(fvg => direction === "BUY" ? fvg.bottom : fvg.top)
-      .filter(isCandidate)
+      .filter(isInDirection)
       .sort((a, b) => direction === "BUY" ? a - b : b - a);
 
     if (fvgCandidates.length > 0) return fvgCandidates[0];
