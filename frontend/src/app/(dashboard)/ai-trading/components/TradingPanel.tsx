@@ -273,6 +273,24 @@ export function TradingPanel({
                     </div>
                   )}
 
+                  {displayConfig.maxDailyRisk && (
+                    <div className="bg-black/50 rounded p-2 border border-accent-gold/20">
+                      <p className="text-[9px] tracking-wider text-text-muted mb-1">Max Daily Risk</p>
+                      <p className="text-[11px] font-bold text-red-400 font-mono">
+                        Stop at: -{displayConfig.maxDailyRisk}%
+                      </p>
+                    </div>
+                  )}
+
+                  {displayConfig.smartRisk?.globalDrawdownLimit?.enabled && (
+                    <div className="bg-black/50 rounded p-2 border border-accent-gold/20">
+                      <p className="text-[9px] tracking-wider text-text-muted mb-1">Global Max DD</p>
+                      <p className="text-[11px] font-bold text-red-500 font-mono">
+                        Hard Stop at: -{displayConfig.smartRisk.globalDrawdownLimit.maxDrawdownPct}%
+                      </p>
+                    </div>
+                  )}
+
                   {displayConfig.smartRisk.dailyLimits?.enabled && (
                     <div className="col-span-2 bg-black/50 rounded p-2 border border-accent-gold/20 flex justify-between items-center">
                       <div>
