@@ -388,8 +388,9 @@ class MSNRStrategy {
         id: "msnr-zone",
         label: () => `① ${htfTfLabel} Key SNR Zone (${snrType}) — Level teridentifikasi`,
         timeframe: htfTfLabel,
-        condition: sig.confidence >= 50,
-        isFailable: true,
+        condition: sig.confidence > 0,
+        isIndependent: true,
+        details: () => `Confidence: ${sig.confidence}% | Level: ${sig.entry.toFixed(5)}`,
       },
       {
         id: "msnr-turtle",
