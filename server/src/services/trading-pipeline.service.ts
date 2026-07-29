@@ -1053,7 +1053,22 @@ const pipeline = {
           analysis.confluence.methodologyBreakdown,
         );
 
-        // ── STAGE 2: CONFLUENCE & LLM CONSENSUS VOTING ─────────────────────
+        // ── STAGE 2: POSITION GATE & LLM CONSENSUS VOTING ─────────────────────
+        // Cek posisi dulu sebelum LLM — buang2 token klo udah ada position
+        let symbolPosCount = 0;
+        let currentPosCount = 0;
+        try {
+          const positions = await mt5McpService.getPositions();
+          currentPosCount = positions.length;
+          symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
+        } catch {}
+        if (symbolPosCount > 0) {
+          this.addLog(userId, "CANDIDATE",
+            `[1/4] [${analysis.symbol}] SKIP LLM: Already open position on ${signal.symbol}. Waiting for close.`,
+          );
+          continue;
+        }
+
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
 
@@ -1131,14 +1146,6 @@ const pipeline = {
         }
 
         // ── STAGE 3: PRE-TRADE RISK CHECK & POSITION SIZING ─────────────────────
-        let currentPosCount = 0;
-        let symbolPosCount = 0;
-        try {
-          const positions = await mt5McpService.getPositions();
-          currentPosCount = positions.length;
-          symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
-        } catch {}
-
         const riskCheck = await riskManagerService.checkTradeAllowed(
           userId,
           signal,
