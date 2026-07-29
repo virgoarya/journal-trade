@@ -1469,8 +1469,16 @@ const pipeline = {
 
     try {
       const allPositions = await mt5McpService.getPositions();
-      // Hanya kelola posisi (Trailing/Breakeven) yang dibuka oleh AI
-      const aiPositions = allPositions.filter(p => p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")));
+
+      // Build AI ticket set dari AITradeLog (sumber kebenaran) karena broker bisa clear comment
+      const aiOpenLogs = await AITradeLog.find({ userId, closed: false, mt5Ticket: { $exists: true, $gt: 0 } }).lean();
+      const aiTickets = new Set(aiOpenLogs.map(t => t.mt5Ticket));
+
+      // Hanya kelola posisi yang dibuka AI: match via AITradeLog ticket, fallback ke comment
+      const aiPositions = allPositions.filter(p =>
+        aiTickets.has(p.ticket) ||
+        (p.comment && (p.comment.startsWith("AI-") || p.comment.toLowerCase().includes("ai-")))
+      );
 
       for (const pos of aiPositions) {
         // Cek cooldown market closed (30 menit)
