@@ -1344,68 +1344,60 @@ class MarketStructureService {
     const minTargetDist = risk * minRR;
     const minTargetPrice = direction === "BUY" ? entryPrice + minTargetDist : entryPrice - minTargetDist;
 
-    let structuralTarget: number | null = null;
-    let closestDist = Infinity;
-
-    // Helper to evaluate a potential target level
-    const evaluateLevel = (price: number) => {
-        if (direction === "BUY") {
-            if (price > entryPrice && price >= minTargetPrice) {
-                const dist = price - entryPrice;
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    structuralTarget = price;
-                }
-            }
-        } else {
-            if (price < entryPrice && price <= minTargetPrice) {
-                const dist = entryPrice - price;
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    structuralTarget = price;
-                }
-            }
-        }
+    const isCandidate = (price: number): boolean => {
+      if (direction === "BUY") return price > entryPrice && price >= minTargetPrice;
+      return price < entryPrice && price <= minTargetPrice;
     };
 
-    // 1. Check Swing Points (Liquidity Pools)
-    if (direction === "BUY") {
-        htfStr.swingHighs.forEach(sh => evaluateLevel(sh.price));
-    } else {
-        htfStr.swingLows.forEach(sl => evaluateLevel(sl.price));
-    }
+    // 1. Liquidity Zones — highest priority: target liquidity pools (BSL for BUY, SSL for SELL)
+    // Sort by density (more swing points = stronger liquidity) descending so the most liquid pool wins ties
+    const sortedLiquidity = htfStr.liquidityZones
+      .filter(lz => !lz.swept)
+      .filter(lz => direction === "BUY" ? lz.type === "BUY_SIDE" : lz.type === "SELL_SIDE")
+      .filter(lz => isCandidate(lz.price))
+      .sort((a, b) => b.density - a.density);
 
-    // 2. Check Order Blocks (opposite direction of our trade)
-    htfStr.orderBlocks.forEach(ob => {
-        if (!ob.mitigated) {
-            if (direction === "BUY" && ob.type === "BEARISH") evaluateLevel(ob.bottom);
-            if (direction === "SELL" && ob.type === "BULLISH") evaluateLevel(ob.top);
-        }
-    });
+    // Among liquidity zones that satisfy min RR, pick the closest one (within the strongest density group)
+    const bestLiquidity = sortedLiquidity.length > 0
+      ? sortedLiquidity.reduce((best, lz) => {
+          const dist = Math.abs(lz.price - entryPrice);
+          const bestDist = Math.abs(best.price - entryPrice);
+          return dist < bestDist ? lz : best;
+        })
+      : null;
 
-    // 3. Check FVGs (opposite direction)
-    htfStr.fairValueGaps.forEach(fvg => {
-        if (!fvg.mitigated) {
-            if (direction === "BUY" && fvg.type === "BEARISH") evaluateLevel(fvg.bottom);
-            if (direction === "SELL" && fvg.type === "BULLISH") evaluateLevel(fvg.top);
-        }
-    });
+    if (bestLiquidity) return bestLiquidity.price;
 
-    // 4. Check Liquidity Zones
-    htfStr.liquidityZones.forEach(lz => {
-        if (!lz.swept) {
-            if (direction === "BUY" && lz.type === "BUY_SIDE") evaluateLevel(lz.price);
-            if (direction === "SELL" && lz.type === "SELL_SIDE") evaluateLevel(lz.price);
-        }
-    });
+    // 2. Swing Points — next priority: structural liquidity from raw swing highs/lows
+    const swingCandidates = (direction === "BUY" ? htfStr.swingHighs : htfStr.swingLows)
+      .map(s => s.price)
+      .filter(isCandidate)
+      .sort((a, b) => direction === "BUY" ? a - b : b - a);
 
-    // Fallback: If no structural target found that satisfies Min RR, just use Min RR target.
-    // Also, if the structural target is TOO far (e.g. > 5 RR), we might want to cap it, but for now we let it ride.
-    if (structuralTarget !== null) {
-        return structuralTarget;
-    }
+    if (swingCandidates.length > 0) return swingCandidates[0];
 
-    return minTargetPrice; // Fallback to 1:minRR mathematically
+    // 3. Order Blocks (opposite direction — where liquidity sits beyond the OB)
+    const obCandidates = htfStr.orderBlocks
+      .filter(ob => !ob.mitigated)
+      .filter(ob => direction === "BUY" ? ob.type === "BEARISH" : ob.type === "BULLISH")
+      .map(ob => direction === "BUY" ? ob.bottom : ob.top)
+      .filter(isCandidate)
+      .sort((a, b) => direction === "BUY" ? a - b : b - a);
+
+    if (obCandidates.length > 0) return obCandidates[0];
+
+    // 4. FVGs (opposite direction)
+    const fvgCandidates = htfStr.fairValueGaps
+      .filter(fvg => !fvg.mitigated)
+      .filter(fvg => direction === "BUY" ? fvg.type === "BEARISH" : fvg.type === "BULLISH")
+      .map(fvg => direction === "BUY" ? fvg.bottom : fvg.top)
+      .filter(isCandidate)
+      .sort((a, b) => direction === "BUY" ? a - b : b - a);
+
+    if (fvgCandidates.length > 0) return fvgCandidates[0];
+
+    // Fallback: Min RR
+    return minTargetPrice;
   }
 }
 
