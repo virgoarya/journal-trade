@@ -909,8 +909,16 @@ class BacktestService {
             time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
           }));
 
-          // Build proper fractal context for multi-timeframe approximation
-          // Use cached market structure if available for this symbol at same index
+          // Simulate 3-layer fractal: 4× candles for direction (HTF), 2× for setup, 1× for entry (LTF)
+          // This approximates H1 → M15 → M5 from a single timeframe dataset
+          const totalCandles = strategyCandles.length;
+          const dirCandles  = strategyCandles; // Full window = "HTF direction"
+          const setupCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles * 3 / 4)));
+          const entryCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles / 4)));
+
+          // Daily context: use the first 20% of candles (oldest data = macro context)
+          const dailyCandles = strategyCandles.slice(0, Math.max(10, Math.floor(totalCandles * 0.2)));
+
           let dirMs: any, setupMs: any, entryMs: any, dailyMs: any, isAligned: boolean;
           const cached = msCache.get(tc.symbol);
           if (cached && cached.idx === idx) {
@@ -920,16 +928,6 @@ class BacktestService {
             dailyMs = cached.dailyMs;
             isAligned = cached.isAligned;
           } else {
-            // Simulate 3-layer fractal: 4× candles for direction (HTF), 2× for setup, 1× for entry (LTF)
-            // This approximates H1 → M15 → M5 from a single timeframe dataset
-            const totalCandles = strategyCandles.length;
-            const dirCandles  = strategyCandles; // Full window = "HTF direction"
-            const setupCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles * 3 / 4)));
-            const entryCandles = strategyCandles.slice(Math.max(0, totalCandles - Math.floor(totalCandles / 4)));
-
-            // Daily context: use the first 20% of candles (oldest data = macro context)
-            const dailyCandles = strategyCandles.slice(0, Math.max(10, Math.floor(totalCandles * 0.2)));
-
             dirMs   = marketStructureService.analyzeMarketStructure(dirCandles);
             setupMs = marketStructureService.analyzeMarketStructure(setupCandles);
             entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
