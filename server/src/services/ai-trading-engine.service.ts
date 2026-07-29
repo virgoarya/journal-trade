@@ -258,7 +258,7 @@ class AITradingEngine {
     let finalLot = parseFloat(rounded.toFixed(decimals));
     
     if (finalLot < volumeMin) {
-      return 0;
+      finalLot = volumeMin;
     }
     
     // HARD CAP: Max 1.0 lot per position for all forex & crypto pairs (User Rule)
