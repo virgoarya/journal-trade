@@ -73,6 +73,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [activationATR, setActivationATR] = useStickyState(1.0, "bt_activationATR");
   const [trailATR, setTrailATR] = useStickyState(0.5, "bt_trailATR");
   const [maxRisk, setMaxRisk] = useStickyState(1.0, "bt_maxRisk");
+  const [maxDailyRisk, setMaxDailyRisk] = useStickyState(3.0, "bt_maxDailyRisk");
   const [maxPositions, setMaxPositions] = useStickyState(3, "bt_maxPositions");
   const [leverage, setLeverage] = useStickyState(100, "bt_leverage");
   const [signalInterval, setSignalInterval] = useStickyState(3, "bt_signalInterval");
@@ -98,6 +99,8 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [drEnabled, setDrEnabled] = useStickyState(false, "bt_drEnabled");
   const [drActivationPct, setDrActivationPct] = useStickyState(10, "bt_drActivationPct");
   const [drRiskMult, setDrRiskMult] = useStickyState(0.5, "bt_drRiskMult");
+  const [glEnabled, setGlEnabled] = useStickyState(false, "bt_glEnabled");
+  const [glMaxDrawdownPct, setGlMaxDrawdownPct] = useStickyState(10, "bt_glMaxDrawdownPct");
   
   // Migration for older localStorage data: replace 'ictCrt' with 'ict' or remove
   useEffect(() => {
@@ -271,6 +274,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         breakEven: false,
       },
       maxRiskPerTrade: maxRisk,
+      maxDailyRisk: maxDailyRisk,
       maxOpenPositions: maxPositions,
       leverage,
       signalInterval,
@@ -292,6 +296,10 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           enabled: drEnabled,
           activationDrawdownPct: drActivationPct,
           riskReductionMultiplier: drRiskMult
+        },
+        globalDrawdownLimit: {
+          enabled: glEnabled,
+          maxDrawdownPct: glMaxDrawdownPct
         }
       },
     });
@@ -462,16 +470,23 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         </div>
 
         {/* Risk Settings */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Risk/Trade (%)</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" title="Risk per trade">Risk (%)</label>
             <input
               type="text" inputMode="decimal" value={maxRisk} onChange={(e) => setMaxRisk(parseFloat(e.target.value) || 0)}
               className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Max Positions</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" title="Max Daily Loss Risk">Daily Risk (%)</label>
+            <input
+              type="text" inputMode="decimal" value={maxDailyRisk} onChange={(e) => setMaxDailyRisk(parseFloat(e.target.value) || 0)}
+              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Max Pos</label>
             <input
               type="text" inputMode="numeric" value={maxPositions} onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
               className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
@@ -563,6 +578,21 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                       <span className="text-[10px] text-text-muted">%</span>
                       <span className="text-[10px] text-red-500 ml-2">Loss:</span>
                       <input type="number" value={dlLossPct} onChange={(e) => setDlLossPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Daily Loss Limit %" />
+                      <span className="text-[10px] text-text-muted">%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Global Max Drawdown */}
+              <div className="flex items-start gap-3 border-t border-border-subtle pt-2">
+                <input type="checkbox" id="glEnabled" checked={glEnabled} onChange={(e) => setGlEnabled(e.target.checked)} className="mt-1 rounded bg-bg-input border-gray-600" />
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="glEnabled" className="text-xs font-medium text-text-secondary block">Global Max Drawdown (Circuit Breaker)</label>
+                  {glEnabled && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-red-500">Hard Stop at:</span>
+                      <input type="number" step="0.1" value={glMaxDrawdownPct} onChange={(e) => setGlMaxDrawdownPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Max Drawdown %" />
                       <span className="text-[10px] text-text-muted">%</span>
                     </div>
                   )}

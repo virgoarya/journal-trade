@@ -38,6 +38,7 @@ export interface BacktestConfig {
   };
   maxRiskPerTrade: number;
   maxOpenPositions: number;
+  maxDailyRisk?: number;
   leverage: number;
   /** Delay in ms between candle processing in streaming mode. 0 = as fast as possible. */
   speedMs?: number;
@@ -71,6 +72,10 @@ export interface BacktestConfig {
       enabled: boolean;
       activationDrawdownPct: number;
       riskReductionMultiplier: number;
+    };
+    globalDrawdownLimit?: {
+      enabled: boolean;
+      maxDrawdownPct: number;
     };
   };
 }
@@ -686,6 +691,7 @@ class BacktestService {
     let startOfDayEquity = merged.initialBalance;
     let currentDayStr = "";
     let dailyTradingBlocked = false;
+    let globalTradingBlocked = false;
     let currentRiskMultiplier = 1;
 
     // ── Iterate by timeline ───────────────────────────────────────
@@ -900,7 +906,7 @@ class BacktestService {
         const doEval = signalCounter % merged.signalInterval === 0;
         signalCounters.set(tc.symbol, (signalCounter + 1) % merged.signalInterval);
 
-        if (doEval && openTrades.size < merged.maxOpenPositions && !dailyTradingBlocked) {
+        if (doEval && openTrades.size < merged.maxOpenPositions && !dailyTradingBlocked && !globalTradingBlocked) {
           let newTrade: OpenSimTrade | null = null;
           const hasSymbolOpen = Array.from(openTrades.values()).some(t => t.symbol === tc.symbol);
           const volumeBuy = !hasSymbolOpen;
@@ -1135,10 +1141,28 @@ class BacktestService {
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
       if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = currentDrawdownPct;
       
+      // ── Pipeline Native Risk Check ──
+      if (merged.maxDailyRisk !== undefined && merged.maxDailyRisk > 0 && !dailyTradingBlocked && !globalTradingBlocked) {
+        const dailyMaxLossAmt = startOfDayEquity * (merged.maxDailyRisk / 100);
+        const dailyPnLAmt = currentEquity - startOfDayEquity;
+        if (dailyPnLAmt <= -dailyMaxLossAmt) {
+          dailyTradingBlocked = true;
+          silentLogger.info(`[BACKTEST] [${currentDayStr}] Daily Max Loss Limit hit (${dailyPnLAmt.toFixed(2)} / -${dailyMaxLossAmt.toFixed(2)}). Trading suspended for the day.`);
+        }
+      }
+
       // ── Smart Risk Management Check ──
       currentRiskMultiplier = 1;
       const smart = merged.smartRisk;
       if (smart?.enabled) {
+        // 0. Global Max Drawdown (Priority 0 - Permanent Halt)
+        if (smart.globalDrawdownLimit?.enabled && currentDrawdownPct >= smart.globalDrawdownLimit.maxDrawdownPct) {
+          if (!globalTradingBlocked) {
+            globalTradingBlocked = true;
+            silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit (${currentDrawdownPct.toFixed(2)}%). Trading permanently suspended.`);
+          }
+        }
+        
         // 1. Drawdown Recovery (Priority 1 - Safety First)
         if (smart.drawdownRecovery?.enabled && currentDrawdownPct >= smart.drawdownRecovery.activationDrawdownPct) {
           currentRiskMultiplier = smart.drawdownRecovery.riskReductionMultiplier;
@@ -1152,7 +1176,7 @@ class BacktestService {
         }
         
         // 3. Daily Limits
-        if (smart.dailyLimits?.enabled && !dailyTradingBlocked) {
+        if (smart.dailyLimits?.enabled && !dailyTradingBlocked && !globalTradingBlocked) {
           const dailyPnLPct = ((currentEquity - startOfDayEquity) / startOfDayEquity) * 100;
           if (dailyPnLPct >= smart.dailyLimits.profitTargetPct) {
             dailyTradingBlocked = true;
