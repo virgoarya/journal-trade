@@ -138,21 +138,69 @@ export function TradingPanel({
                 </div>
               </div>
 
-              {/* Reason */}
-              <div className="bg-red-950/40 border border-red-500/30 rounded-lg p-3 mb-5">
-                <div className="flex items-start gap-2">
-                  <TriangleAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                  <p className="text-[12px] text-red-300 font-mono leading-relaxed">{circuitBreakerAlert}</p>
-                </div>
-              </div>
+              {/* Reason — parse attribution */}
+              {(() => {
+                // Parse: "... | AI: $X | Manual Trade: $Y"
+                const aiMatch = circuitBreakerAlert.match(/AI:\s*\$([\-+]?[\d.]+)/);
+                const manualMatch = circuitBreakerAlert.match(/Manual Trade:\s*\$([\-+]?[\d.]+)/);
+                const baseReason = circuitBreakerAlert.split('|')[0].trim();
+                const aiPnL = aiMatch ? parseFloat(aiMatch[1]) : null;
+                const manualPnL = manualMatch ? parseFloat(manualMatch[1]) : null;
+                const manualCaused = manualPnL !== null && aiPnL !== null && Math.abs(manualPnL) > Math.abs(aiPnL);
 
-              {/* Info box */}
-              <div className="bg-black/50 border border-accent-gold/20 rounded-lg p-3 mb-5 text-center">
-                <p className="text-[10px] text-accent-gold-dim uppercase tracking-widest mb-1">Tindakan Yang Diperlukan</p>
-                <p className="text-[12px] text-text-muted leading-relaxed">
-                  Tambahkan <span className="text-accent-gold font-bold">saldo / deposit</span> ke akun trading Anda untuk mengembalikan kapasitas risk, kemudian jalankan ulang pipeline.
-                </p>
-              </div>
+                return (
+                  <>
+                    {/* Base reason */}
+                    <div className="bg-red-950/40 border border-red-500/30 rounded-lg p-3 mb-4">
+                      <div className="flex items-start gap-2">
+                        <TriangleAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                        <p className="text-[12px] text-red-300 font-mono leading-relaxed">{baseReason}</p>
+                      </div>
+                    </div>
+
+                    {/* Trade Attribution Breakdown */}
+                    {aiPnL !== null && manualPnL !== null && (
+                      <div className="mb-4">
+                        <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2 text-center">
+                          📊 Kontribusi Kerugian Hari Ini
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* AI */}
+                          <div className={`rounded-lg p-2.5 text-center border ${aiPnL < 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-neon-green/5 border-neon-green/20'}`}>
+                            <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">🤖 AI Trading</p>
+                            <p className={`text-[14px] font-bold font-mono ${aiPnL < 0 ? 'text-red-400' : 'text-neon-green'}`}>
+                              {aiPnL >= 0 ? '+' : ''}${aiPnL.toFixed(2)}
+                            </p>
+                          </div>
+                          {/* Manual */}
+                          <div className={`rounded-lg p-2.5 text-center border ${manualPnL < 0 ? 'bg-orange-950/30 border-orange-500/40' : 'bg-neon-green/5 border-neon-green/20'}`}>
+                            <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">👤 Manual Trade</p>
+                            <p className={`text-[14px] font-bold font-mono ${manualPnL < 0 ? 'text-orange-400' : 'text-neon-green'}`}>
+                              {manualPnL >= 0 ? '+' : ''}${manualPnL.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Culprit banner */}
+                        {manualCaused && (
+                          <div className="mt-2 bg-orange-950/40 border border-orange-500/40 rounded-lg p-2 text-center">
+                            <p className="text-[10px] text-orange-400 font-bold">
+                              ⚠️ Manual trade melebihi kontribusi AI — Pipeline AI bukan penyebab utama
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Info box */}
+                    <div className="bg-black/50 border border-accent-gold/20 rounded-lg p-3 mb-4 text-center">
+                      <p className="text-[10px] text-accent-gold-dim uppercase tracking-widest mb-1">Tindakan Yang Diperlukan</p>
+                      <p className="text-[12px] text-text-muted leading-relaxed">
+                        Tambahkan <span className="text-accent-gold font-bold">saldo / deposit</span> ke akun trading Anda untuk mengembalikan kapasitas risk, kemudian jalankan ulang pipeline.
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Balance / equity display */}
               {accountInfo && (

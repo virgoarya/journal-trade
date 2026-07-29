@@ -99,9 +99,14 @@ class RiskManagerService {
       if (todayMetrics) {
         const dailyMaxLoss = accountInfo.balance * (pipelineConfig.maxDailyRisk / 100);
         if (todayMetrics.dailyPnL <= -dailyMaxLoss) {
+          // ── Trade Attribution: who caused the loss? ──────────────────
+          const attribution = await this.getDailyPnLAttribution(userId);
+          const aiLoss = attribution.aiPnL < 0 ? attribution.aiPnL.toFixed(2) : `+${attribution.aiPnL.toFixed(2)}`;
+          const manualLoss = attribution.manualPnL < 0 ? attribution.manualPnL.toFixed(2) : `+${attribution.manualPnL.toFixed(2)}`;
+          const reason = `Daily loss limit reached: ${todayMetrics.dailyPnL.toFixed(2)} / -${dailyMaxLoss.toFixed(2)} | AI: $${aiLoss} | Manual Trade: $${manualLoss}`;
           return {
             allowed: false,
-            reason: `Daily loss limit reached: ${todayMetrics.dailyPnL.toFixed(2)} (max: -${dailyMaxLoss.toFixed(2)})`,
+            reason,
             warnings,
             circuitBreaker: true,
           };
@@ -336,6 +341,55 @@ class RiskManagerService {
     } catch (err: any) {
       silentLogger.error(`[RISK] getDailyMetrics failed: ${err.message}`, err);
       return null;
+    }
+  }
+  /**
+   * Attribute daily PnL to AI trades vs manual trades.
+   * AI trades have a comment starting with "AI-" in MT5.
+   */
+  async getDailyPnLAttribution(userId: string): Promise<{ aiPnL: number; manualPnL: number }> {
+    try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayTs = Math.floor(todayStart.getTime() / 1000);
+
+      const deals = await mt5McpService.getHistory(0);
+      const positions = await mt5McpService.getPositions();
+
+      let aiPnL = 0;
+      let manualPnL = 0;
+
+      for (const d of deals) {
+        if (d.type !== "BUY" && d.type !== "SELL") continue;
+        if (d.time < todayTs) continue;
+
+        const netProfit = (d.profit || 0) + (d.swap || 0) + (d.commission || 0);
+        const comment: string = (d.comment || "").toLowerCase();
+        const isAi = comment.startsWith("ai-") || comment.includes("ai-");
+        if (isAi) {
+          aiPnL += netProfit;
+        } else {
+          manualPnL += netProfit;
+        }
+      }
+
+      // Add floating PnL — attribute by position comment
+      for (const pos of positions) {
+        const comment: string = (pos.comment || "").toLowerCase();
+        const isAi = comment.startsWith("ai-") || comment.includes("ai-");
+        if (isAi) {
+          aiPnL += pos.profit;
+        } else {
+          manualPnL += pos.profit;
+        }
+      }
+
+      return {
+        aiPnL: parseFloat(aiPnL.toFixed(2)),
+        manualPnL: parseFloat(manualPnL.toFixed(2)),
+      };
+    } catch {
+      return { aiPnL: 0, manualPnL: 0 };
     }
   }
 }
