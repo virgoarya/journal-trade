@@ -581,7 +581,7 @@ class MarketStructureService {
         const hasSweep = recentLow ? (current.low < recentLow.price || (i > 0 && candles[i - 1].low < recentLow.price)) : false;
 
         const obTop = Math.max(current.open, current.close);
-        const obBottom = current.low; // Includes full SSL sweep wick
+        const obBottom = Math.min(current.open, current.close);
 
         blocks.push({
           index: i,
@@ -610,7 +610,7 @@ class MarketStructureService {
         const recentHigh = priorHighs.length > 0 ? priorHighs[priorHighs.length - 1] : null;
         const hasSweep = recentHigh ? (current.high > recentHigh.price || (i > 0 && candles[i - 1].high > recentHigh.price)) : false;
 
-        const obTop = current.high; // Includes full BSL sweep wick
+        const obTop = Math.max(current.open, current.close);
         const obBottom = Math.min(current.open, current.close);
 
         blocks.push({
