@@ -1288,6 +1288,13 @@ const pipeline = {
         this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
 
         // ── STAGE 3 EXECUTION: ORDER EXECUTION ───────────────────────────────
+        // Offset SL by broker spread: BUY SL in BID, SELL SL in ASK.
+        // Without offset, spread eats into SL distance — SL triggers too early.
+        const spreadPrice = symbolInfo.spread * symbolInfo.point;
+        const adjustedSl = signal.sl > 0
+          ? (finalAction.startsWith("BUY") ? signal.sl - spreadPrice : signal.sl + spreadPrice)
+          : 0;
+
         let orderResult: any;
         try {
           orderResult = await mt5McpService.openOrder({
@@ -1295,7 +1302,7 @@ const pipeline = {
             action: finalAction,
             volume,
             price: orderPrice,
-            sl: signal.sl,
+            sl: adjustedSl,
             tp: signal.tp,
             comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
           });
