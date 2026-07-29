@@ -602,7 +602,7 @@ class BacktestService {
     const ATR_PERIOD = 14;
     const warmupCandles = Math.max(RSI_PERIOD, ATR_PERIOD) + 2;
     /** Limit strategy analysis to last N candles for performance */
-    const MAX_STRATEGY_CANDLES = 100;
+    const MAX_STRATEGY_CANDLES = 2000;
 
     let allTimelineCandles: TimelineCandle[] = [];
     for (const [sym, state] of symbolStates) {

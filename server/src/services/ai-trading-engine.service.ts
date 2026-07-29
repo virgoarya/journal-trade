@@ -63,7 +63,7 @@ class AITradingEngine {
       case "H1": return { direction: "H1", setup: "M15", entry: "M5" };
       case "M30": return { direction: "H4", setup: "H1", entry: "M5" };
       case "M15": return { direction: "H1", setup: "M15", entry: "M5" };
-      case "M5": return { direction: "H1", setup: "M5", entry: "M5" };
+      case "M5": return { direction: "H1", setup: "M15", entry: "M5" };
       default: return { direction: "D1", setup: "H4", entry: "M15" };
     }
   }
@@ -78,9 +78,9 @@ class AITradingEngine {
     const fractals = this.getFractalTimeframes(timeframe);
     const [dailyRates, directionRates, setupRates, entryRates] = await Promise.all([
       mt5McpService.getRates(symbol, "D1", 100),
-      mt5McpService.getRates(symbol, fractals.direction, 100),
-      mt5McpService.getRates(symbol, fractals.setup, 100),
-      mt5McpService.getRates(symbol, fractals.entry, 100)
+      mt5McpService.getRates(symbol, fractals.direction, 500),
+      mt5McpService.getRates(symbol, fractals.setup, 500),
+      mt5McpService.getRates(symbol, fractals.entry, 500)
     ]);
 
     if (directionRates.length < 10 || setupRates.length < 10 || entryRates.length < 10) {
