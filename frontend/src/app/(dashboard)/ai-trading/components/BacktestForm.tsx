@@ -73,9 +73,6 @@ export function BacktestForm({ onRun, isRunning }: Props) {
   const [activationATR, setActivationATR] = useStickyState(1.0, "bt_activationATR");
   const [trailATR, setTrailATR] = useStickyState(0.5, "bt_trailATR");
   const [maxRisk, setMaxRisk] = useStickyState(1.0, "bt_maxRisk");
-  const [maxDailyRisk, setMaxDailyRisk] = useStickyState(3.0, "bt_maxDailyRisk");
-  const [maxPositions, setMaxPositions] = useStickyState(3, "bt_maxPositions");
-  const [leverage, setLeverage] = useStickyState(100, "bt_leverage");
   const [signalInterval, setSignalInterval] = useStickyState(3, "bt_signalInterval");
   const [speedMs, setSpeedMs] = useStickyState(0, "bt_speedMs");
 
@@ -274,9 +271,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         breakEven: false,
       },
       maxRiskPerTrade: maxRisk,
-      maxDailyRisk: maxDailyRisk,
-      maxOpenPositions: maxPositions,
-      leverage,
+      maxDailyRisk: undefined,
+      maxOpenPositions: 1, // Diamankan dari logic awal
+      leverage: accountInfo?.leverage || 500,
       signalInterval,
       speedMs,
       activeMethodologies,
@@ -427,7 +424,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
           </div>
         </div>
 
-        {/* Balance + Leverage */}
+        {/* Balance & Risk */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-text-muted uppercase tracking-wider flex items-center gap-1.5">
@@ -442,53 +439,11 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             />
           </div>
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Leverage</label>
-              {accountInfo?.leverage && (
-                <button
-                  type="button"
-                  onClick={() => setLeverage(accountInfo.leverage)}
-                  className="flex items-center gap-1 text-[10px] text-accent-gold hover:text-yellow-400 transition"
-                >
-                  <RefreshCcw className="w-3 h-3" />
-                  Sync ({accountInfo.leverage})
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <input
-                type="number"
-                value={leverage}
-                onChange={(e) => setLeverage(Number(e.target.value))}
-                min={1}
-                step={1}
-                className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 pl-6 text-sm text-text-primary focus:border-accent-gold outline-none"
-              />
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-text-muted">1:</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Risk Settings */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" title="Risk per trade">Risk (%)</label>
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" title="Risk per trade">
+              Risk/Trade (%)
+            </label>
             <input
               type="text" inputMode="decimal" value={maxRisk} onChange={(e) => setMaxRisk(parseFloat(e.target.value) || 0)}
-              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider" title="Max Daily Loss Risk">Daily Risk (%)</label>
-            <input
-              type="text" inputMode="decimal" value={maxDailyRisk} onChange={(e) => setMaxDailyRisk(parseFloat(e.target.value) || 0)}
-              className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Max Pos</label>
-            <input
-              type="text" inputMode="numeric" value={maxPositions} onChange={(e) => setMaxPositions(parseInt(e.target.value) || 1)}
               className="w-full bg-bg-elevated border border-border-subtle rounded-xl p-2.5 text-sm text-text-primary focus:border-accent-gold outline-none"
             />
           </div>
