@@ -193,10 +193,12 @@ class ICTStrategy {
       );
     });
 
+    // TP targets H1 external structure (BSL/SSL) for liquidity take profit
+    const h1Str = fractal.setupStr || fractal.directionStr;
     const validSignals = nonInvalidatedSignals.filter(sig => {
 
       // Find dynamic target
-      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, htfStr, 2.0);
+      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0);
       
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
