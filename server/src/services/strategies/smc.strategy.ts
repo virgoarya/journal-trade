@@ -154,6 +154,12 @@ class SMCStrategy {
 
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
+    // Check recent liquidity inducement (sweep before POI)
+    const setupMs = fractal.setupStr;
+    const setupCandles = fractal.setup;
+    const lastSetupIdx = setupCandles.length - 1;
+    const hasRecentSweep = this.wasLiquidityRecentlySwept(setupMs, setupCandles, sig.direction, lastSetupIdx);
+
     const obSweepPrice = sig.orderBlock?.sweepPrice ? sig.orderBlock.sweepPrice.toFixed(5) : relLow;
     const obChochPrice = sig.orderBlock?.chochPrice ? sig.orderBlock.chochPrice.toFixed(5) : relHigh;
     const pdArrayType = isBuy ? "Discount PD Array" : "Premium PD Array";
@@ -178,8 +184,8 @@ class SMCStrategy {
         id: "smc-liq",
         label: () => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
         timeframe: setupTfLabel,
-        condition: (fractal.directionStr.liquidityZones?.length ?? 0) > 0 || (sig.orderBlock?.hasSweep ?? false),
-        details: () => `Liquidity sweep confirmed at ${obSweepPrice}`,
+        condition: hasRecentSweep || (sig.orderBlock?.hasSweep ?? false),
+        details: () => hasRecentSweep ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
       },
       {
         id: "smc-ob",
@@ -649,6 +655,44 @@ class SMCStrategy {
     const recent = candles.slice(-period);
     if (recent.length === 0) return 0;
     return recent.reduce((s, c) => s + (c.high - c.low), 0) / recent.length;
+  }
+
+  /**
+   * Checks if a relevant liquidity zone was recently swept on the given timeframe,
+   * with the candle closing on the 'reversal' side (away from the swept liquidity).
+   * This signifies a liquidity inducement or trap.
+   */
+  private wasLiquidityRecentlySwept(
+    ms: MarketStructure,
+    candles: Candle[],
+    direction: "BUY" | "SELL",
+    lastCandleIndex: number // Index of the latest candle in `candles`
+  ): boolean {
+    if (!ms.liquidityZones || ms.liquidityZones.length === 0) return false;
+
+    const lzTypeToSweep = direction === "BUY" ? "SELL_SIDE" : "BUY_SIDE"; // BUY needs SSL sweep, SELL needs BSL sweep
+
+    // Consider recent candles (e.g., last 3-5 candles)
+    const lookbackPeriod = 5; // Look back last 5 candles
+    const startCheckIndex = Math.max(0, lastCandleIndex - lookbackPeriod);
+
+    for (let i = startCheckIndex; i <= lastCandleIndex; i++) {
+      const candle = candles[i];
+      if (!candle) continue;
+
+      for (const lz of ms.liquidityZones) {
+        if (lz.type === lzTypeToSweep) {
+          // Check if this candle's wick swept the liquidity zone and closed on the other side
+          if (direction === "BUY" && candle.low < lz.price && candle.close > lz.price) {
+            return true; // Bullish sweep of SSL
+          }
+          if (direction === "SELL" && candle.high > lz.price && candle.close < lz.price) {
+            return true; // Bearish sweep of BSL
+          }
+        }
+      }
+    }
+    return false;
   }
 }
 
