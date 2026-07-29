@@ -952,6 +952,7 @@ const pipeline = {
         else pipeline.allAnalyses.push(a);
       }
 
+      let currentSymbol: string | undefined;
       for (const analysis of analyses) {
         const latestTime = latestCandleTimes.get(analysis.symbol);
         if (latestTime !== undefined) {
@@ -960,6 +961,7 @@ const pipeline = {
 
         try {
           const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
+          currentSymbol = analysis.symbol;
           const skill = await aiBacktestSkillService.getSkill(userId);
           if (skill) {
             const symRanking = skill.symbolRankings?.find((s: any) => s.symbol === analysis.symbol);
@@ -1379,12 +1381,10 @@ const pipeline = {
       pipeline.lastError = null;
       } catch (error: any) {
         pipeline.lastError = error.message;
-        this.addLog(userId, "ERROR", `Pipeline error: ${error.message}`);
+        this.addLog(userId, "ERROR", `Pipeline error: ${error.message} [symbol: ${currentSymbol}]`);
         silentLogger.error(`[PIPELINE] Error for ${userId}: ${error.message}`);
       } finally {
-        // Release per-symbol lock regardless of outcome
-        const relSymbol = analysis?.symbol;
-        if (relSymbol) pipeline.busySymbols.delete(relSymbol);
+        if (currentSymbol) pipeline.busySymbols.delete(currentSymbol);
       }
     }
   private marketClosedCache = new Map<string, number>();
