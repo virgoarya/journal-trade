@@ -683,25 +683,7 @@ const pipeline = {
         // Hitung minimum distance dalam unit HARGA (bukan point!)
         // spread dari MT5 sudah dalam unit point, kalikan dengan point untuk dapat satuan harga
         const spreadPrice = symbolInfo.spread * symbolInfo.point;
-
-        // ATR-based minimum: ambil rates recent buat kalkulasi volatilitas
-        let atrMin = 0;
-        try {
-          const rates = await mt5McpService.getRates(symbol, "M15", 14);
-          if (rates.length >= 2) {
-            let trSum = 0;
-            for (let i = 1; i < rates.length; i++) {
-              trSum += Math.max(
-                rates[i].high - rates[i].low,
-                Math.abs(rates[i].high - rates[i - 1].close),
-                Math.abs(rates[i].low - rates[i - 1].close),
-              );
-            }
-            atrMin = (trSum / (rates.length - 1)) * 0.5;
-          }
-        } catch {}
-
-        const minSlDistance = Math.max(spreadPrice * 2, atrMin, symbolInfo.point * 10);
+        const minSlDistance = Math.max(spreadPrice, symbolInfo.point * 10);
 
         if (slDistance < minSlDistance) {
           return {
