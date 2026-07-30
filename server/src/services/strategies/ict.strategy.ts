@@ -187,7 +187,7 @@ class ICTStrategy {
     // TP targets H1 external structure (BSL/SSL) for liquidity take profit,
     // with HTF (H4/D1) priority for bigger liquidity pools
     const h1Str = fractal.setupStr || fractal.directionStr;
-    const htfStr = fractal.directionStr || fractal.dailyStr;
+    const htfStr = fractal.dailyStr;
     const validSignals = nonInvalidatedSignals.filter(sig => {
 
       // Find dynamic target
