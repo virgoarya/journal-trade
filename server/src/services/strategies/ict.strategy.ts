@@ -172,14 +172,6 @@ class ICTStrategy {
     // Filter out signals with R:R < 1:2 (RR < 2.0)
     // Recalculate dynamic TP based on HTF structure to maximize R:R
 
-    // ── Offset SL by broker spread so SL distance isn't eaten by spread ──
-    const spreadPrice = (fractal.spread || 0) * (fractal.point || 0.00001);
-    if (spreadPrice > 0) {
-      for (const sig of signals) {
-        sig.sl = sig.direction === "BUY" ? sig.sl - spreadPrice : sig.sl + spreadPrice;
-      }
-    }
-
     // ── Invalidation: remove setups where TP was hit before entry ────
     const nonInvalidatedSignals = signals.filter(sig => {
       const setupIdx = entryCandles.length - 1; // Approximate: setup is the latest candle

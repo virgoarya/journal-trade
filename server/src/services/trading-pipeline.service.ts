@@ -681,9 +681,8 @@ const pipeline = {
         const tpDistance = Math.abs(tp - entryPrice);
 
         // Hitung minimum distance dalam unit HARGA (bukan point!)
-        // spread dari MT5 sudah dalam unit point, kalikan dengan point untuk dapat satuan harga
-        const spreadPrice = symbolInfo.spread * symbolInfo.point;
-        const minSlDistance = Math.max(spreadPrice, symbolInfo.point * 10);
+        // SL at wick — cukup cek SL != entry, spread offset di pipeline level
+        const minSlDistance = symbolInfo.point * 10;
 
         if (slDistance < minSlDistance) {
           return {
@@ -1304,6 +1303,14 @@ const pipeline = {
         this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
 
         // ── STAGE 3 EXECUTION: ORDER EXECUTION ───────────────────────────────
+        // Offset SL by broker spread: BUY SL in BID, SELL SL in ASK
+        // SL di-offset supaya spread tidak eat SL distance saat entry
+        const sym = symbolInfo;
+        const spreadPrice = sym ? sym.spread * sym.point : 0;
+        const adjustedSl = spreadPrice > 0 && signal.sl > 0
+          ? (finalAction.startsWith("BUY") ? signal.sl - spreadPrice : signal.sl + spreadPrice)
+          : signal.sl;
+
         let orderResult: any;
         try {
           orderResult = await mt5McpService.openOrder({
@@ -1311,7 +1318,7 @@ const pipeline = {
             action: finalAction,
             volume,
             price: orderPrice,
-            sl: signal.sl,
+            sl: adjustedSl,
             tp: signal.tp,
             comment: `AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`,
           });
