@@ -260,7 +260,8 @@ class MSNRStrategy {
 
   private buildSignal(direction: "BUY"|"SELL", limitPrice: number, slPrice: number, type: any, reason: string, config: any, fractal: import("./market-structure.service").FractalContext, confBoost = 0): MSNRSignal {
       const h1Str = fractal.setupStr || fractal.directionStr;
-      const tp = marketStructureService.findDynamicTarget(direction, limitPrice, slPrice, h1Str, 2.5); // Minimum 1:2.5 RR
+      const htfStr = fractal.directionStr || fractal.dailyStr;
+      const tp = marketStructureService.findDynamicTarget(direction, limitPrice, slPrice, h1Str, 2.5, htfStr); // Minimum 1:2.5 RR
 
       const sig: MSNRSignal = {
           direction,

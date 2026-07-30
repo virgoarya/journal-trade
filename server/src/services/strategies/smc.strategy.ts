@@ -87,11 +87,12 @@ class SMCStrategy {
     }
 
     // Filter out signals with R:R < 1:2 (RR < 2.0)
-    // Recalculate dynamic TP based on H1 structure to maximize R:R
+    // Recalculate dynamic TP based on H1 structure + HTF liquidity priority
     const h1Str = fractal.setupStr || fractal.directionStr;
+    const htfStr = fractal.directionStr || fractal.dailyStr;
     const validSignals = signals.filter(sig => {
       // Find dynamic target
-      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0);
+      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0, htfStr);
       
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);

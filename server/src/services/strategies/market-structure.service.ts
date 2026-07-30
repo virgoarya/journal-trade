@@ -1337,8 +1337,9 @@ class MarketStructureService {
     direction: "BUY" | "SELL",
     entryPrice: number,
     slPrice: number,
-    htfStr: MarketStructure,
-    minRR: number = 2.0
+    h1Str: MarketStructure,
+    minRR: number = 2.0,
+    htfStr?: MarketStructure,
   ): number {
     const risk = Math.abs(entryPrice - slPrice);
     const minTargetDist = risk * minRR;
@@ -1349,63 +1350,84 @@ class MarketStructureService {
       return price < entryPrice;
     };
 
-    // 1. Liquidity Zones — highest priority: target liquidity pools (BSL for BUY, SSL for SELL)
-    // Pick nearest unswept liquidity in trade direction, regardless of min RR
-    const liquidityCandidates = htfStr.liquidityZones
-      .filter(lz => !lz.swept)
-      .filter(lz => direction === "BUY" ? lz.type === "BUY_SIDE" : lz.type === "SELL_SIDE")
-      .filter(lz => isInDirection(lz.price))
-      .sort((a, b) => b.density - a.density);
-
-    if (liquidityCandidates.length > 0) {
-      const bestDensity = liquidityCandidates[0].density;
-      const strongest = liquidityCandidates.filter(lz => lz.density === bestDensity);
+    // Helper: get best liquidity from a given MarketStructure
+    const getBestLiquidity = (ms: MarketStructure): number | null => {
+      const candidates = ms.liquidityZones
+        .filter(lz => !lz.swept)
+        .filter(lz => direction === "BUY" ? lz.type === "BUY_SIDE" : lz.type === "SELL_SIDE")
+        .filter(lz => isInDirection(lz.price))
+        .sort((a, b) => b.density - a.density);
+      if (candidates.length === 0) return null;
+      const bestDensity = candidates[0].density;
+      const strongest = candidates.filter(lz => lz.density === bestDensity);
       const closest = strongest.reduce((best, lz) => {
         const dist = Math.abs(lz.price - entryPrice);
         const bestDist = Math.abs(best.price - entryPrice);
         return dist < bestDist ? lz : best;
       });
-      // Only use if it satisfies min RR; otherwise still prefer liquidity over swing
-      const closestPrice = closest.price;
-      const distToLiq = Math.abs(closestPrice - entryPrice);
-      if (distToLiq >= minTargetDist) return closestPrice;
-      // If even the strongest liquidity doesn't meet min RR, use it anyway — liquidity is more important
-      return closestPrice;
+      return closest.price;
+    };
+
+    // Helper: get best swing point from a given MarketStructure
+    const getBestSwing = (ms: MarketStructure): number | null => {
+      const candidates = (direction === "BUY" ? ms.swingHighs : ms.swingLows)
+        .map(s => s.price)
+        .filter(isInDirection)
+        .sort((a, b) => direction === "BUY" ? a - b : b - a);
+      if (candidates.length === 0) return null;
+      const minRr = candidates.find(p => direction === "BUY" ? p >= minTargetPrice : p <= minTargetPrice);
+      return minRr ?? candidates[0];
+    };
+
+    // Helper: get best OB from a given MarketStructure
+    const getBestOB = (ms: MarketStructure): number | null => {
+      const candidates = ms.orderBlocks
+        .filter(ob => !ob.mitigated)
+        .filter(ob => direction === "BUY" ? ob.type === "BEARISH" : ob.type === "BULLISH")
+        .map(ob => direction === "BUY" ? ob.bottom : ob.top)
+        .filter(isInDirection)
+        .sort((a, b) => direction === "BUY" ? a - b : b - a);
+      return candidates.length > 0 ? candidates[0] : null;
+    };
+
+    // Helper: get best FVG from a given MarketStructure
+    const getBestFVG = (ms: MarketStructure): number | null => {
+      const candidates = ms.fairValueGaps
+        .filter(fvg => !fvg.mitigated)
+        .filter(fvg => direction === "BUY" ? fvg.type === "BEARISH" : fvg.type === "BULLISH")
+        .map(fvg => direction === "BUY" ? fvg.bottom : fvg.top)
+        .filter(isInDirection)
+        .sort((a, b) => direction === "BUY" ? a - b : b - a);
+      return candidates.length > 0 ? candidates[0] : null;
+    };
+
+    // Priority 1: HTF (D1/H4) liquidity zones — the big structural liquidity pools
+    if (htfStr) {
+      const htfLiq = getBestLiquidity(htfStr);
+      if (htfLiq !== null) return htfLiq;
+
+      const htfSwing = getBestSwing(htfStr);
+      if (htfSwing !== null) return htfSwing;
+
+      const htfOB = getBestOB(htfStr);
+      if (htfOB !== null) return htfOB;
+
+      const htfFVG = getBestFVG(htfStr);
+      if (htfFVG !== null) return htfFVG;
     }
 
-    // 2. Swing Points — next priority: structural liquidity from raw swing highs/lows
-    const swingCandidates = (direction === "BUY" ? htfStr.swingHighs : htfStr.swingLows)
-      .map(s => s.price)
-      .filter(isInDirection)
-      .sort((a, b) => direction === "BUY" ? a - b : b - a);
+    // Priority 2: H1/M15 liquidity zones — entry TF targets
+    const h1Liq = getBestLiquidity(h1Str);
+    if (h1Liq !== null) return h1Liq;
 
-    if (swingCandidates.length > 0) {
-      // Prefer swing that meets min RR, but fall back to nearest if none do
-      const minRrSwing = swingCandidates.find(p =>
-        direction === "BUY" ? p >= minTargetPrice : p <= minTargetPrice
-      );
-      return minRrSwing ?? swingCandidates[0];
-    }
+    const h1Swing = getBestSwing(h1Str);
+    if (h1Swing !== null) return h1Swing;
 
-    // 3. Order Blocks (opposite direction — where liquidity sits beyond the OB)
-    const obCandidates = htfStr.orderBlocks
-      .filter(ob => !ob.mitigated)
-      .filter(ob => direction === "BUY" ? ob.type === "BEARISH" : ob.type === "BULLISH")
-      .map(ob => direction === "BUY" ? ob.bottom : ob.top)
-      .filter(isInDirection)
-      .sort((a, b) => direction === "BUY" ? a - b : b - a);
+    const h1OB = getBestOB(h1Str);
+    if (h1OB !== null) return h1OB;
 
-    if (obCandidates.length > 0) return obCandidates[0];
-
-    // 4. FVGs (opposite direction)
-    const fvgCandidates = htfStr.fairValueGaps
-      .filter(fvg => !fvg.mitigated)
-      .filter(fvg => direction === "BUY" ? fvg.type === "BEARISH" : fvg.type === "BULLISH")
-      .map(fvg => direction === "BUY" ? fvg.bottom : fvg.top)
-      .filter(isInDirection)
-      .sort((a, b) => direction === "BUY" ? a - b : b - a);
-
-    if (fvgCandidates.length > 0) return fvgCandidates[0];
+    const h1FVG = getBestFVG(h1Str);
+    if (h1FVG !== null) return h1FVG;
 
     // Fallback: Min RR
     return minTargetPrice;
