@@ -84,7 +84,7 @@ class SMCStrategy {
     const htfStr = fractal.dailyStr;
     const validSignals = signals.filter(sig => {
       // Find dynamic target
-      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0, htfStr);
+      sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0, htfStr, fractal.daily);
       
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);

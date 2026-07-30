@@ -1340,6 +1340,7 @@ class MarketStructureService {
     h1Str: MarketStructure,
     minRR: number = 2.0,
     htfStr?: MarketStructure,
+    dailyCandles?: Candle[],
   ): number {
     const risk = Math.abs(entryPrice - slPrice);
     const minTargetDist = risk * minRR;
@@ -1349,6 +1350,13 @@ class MarketStructureService {
       if (direction === "BUY") return price > entryPrice;
       return price < entryPrice;
     };
+
+    // Priority 0: PDH/PDL — Previous Day High/Low dari candle D1 kemarin
+    if (dailyCandles && dailyCandles.length >= 2) {
+      const prevDay = dailyCandles[dailyCandles.length - 2];
+      if (direction === "BUY" && isInDirection(prevDay.high)) return prevDay.high;
+      if (direction === "SELL" && isInDirection(prevDay.low)) return prevDay.low;
+    }
 
     // Helper: get best liquidity from a given MarketStructure
     const getBestLiquidity = (ms: MarketStructure): number | null => {
