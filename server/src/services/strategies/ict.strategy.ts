@@ -423,7 +423,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: fvg.bottom,
-          sl: zoneLow - avgRange * 0.5, // SL below sweep swing low (zoneLow) with buffer
+          sl: zoneLow, // SL at AMD sweep low wick
           tp: Math.max(fvg.top + avgRange * 1.5, zoneHigh), // TP targeting AMD high
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.bottom,
@@ -445,7 +445,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: fvg.top,
-          sl: zoneHigh + avgRange * 0.5, // SL above sweep swing high (zoneHigh) with buffer
+          sl: zoneHigh, // SL at AMD sweep high wick
           tp: Math.min(fvg.bottom - avgRange * 1.5, zoneLow), // TP targeting AMD low
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.top,
@@ -488,7 +488,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: ote79,
-          sl: latestLow.price - avgRange * 0.2, // SL below the origin of the impulse leg
+          sl: latestLow.price, // SL at impulse origin swing low wick
           tp: latestHigh.price, // TP at the high of the impulse leg
           orderType: "PENDING_LIMIT",
           limitPrice: ote79,
@@ -509,7 +509,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: ote79,
-          sl: latestHigh.price + avgRange * 0.2, // SL above the origin of the impulse leg
+          sl: latestHigh.price, // SL at impulse origin swing high wick
           tp: latestLow.price, // TP at the low of the impulse leg
           orderType: "PENDING_LIMIT",
           limitPrice: ote79,
@@ -586,7 +586,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: fvg.bottom,
-          sl: swingSweepLow ? swingSweepLow : sweepLevel - avgRange * 0.5,
+          sl: swingSweepLow ? swingSweepLow : sweepLevel,
           tp: fvg.top + avgRange * 2.0,
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.bottom,
@@ -608,7 +608,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: fvg.top,
-          sl: swingSweepHigh ? swingSweepHigh : sweepLevel + avgRange * 0.5,
+          sl: swingSweepHigh ? swingSweepHigh : sweepLevel,
           tp: fvg.bottom - avgRange * 2.0,
           orderType: "PENDING_LIMIT",
           limitPrice: fvg.top,
@@ -653,7 +653,7 @@ class ICTStrategy {
           return {
             direction: "BUY",
             entry: last.close,
-            sl: prev.low - avgRange * 0.5,
+            sl: prev.low,
             tp: last.close + avgRange * 2.5,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",
@@ -675,7 +675,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: last.close,
-            sl: prev.high + avgRange * 0.5,
+            sl: prev.high,
             tp: last.close - avgRange * 2.5,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",
@@ -736,7 +736,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: ote79,
-          sl: ote79 - avgRange * 1.2,
+          sl: latestLow.price, // SL at swing low wick (impulse origin)
           tp,
           orderType: "PENDING_LIMIT",
           limitPrice: ote79,
@@ -768,7 +768,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: ote79,
-            sl: ote79 + avgRange * 1.2,
+            sl: latestHigh.price, // SL at swing high wick (impulse origin)
             tp,
             orderType: "PENDING_LIMIT",
             limitPrice: ote79,
@@ -808,7 +808,7 @@ class ICTStrategy {
           return {
             direction: "BUY",
             entry: fvg.bottom,
-            sl: fvg.bottom - avgRange * 0.5,
+            sl: fvg.bottom,
             tp: fvg.bottom + avgRange * 3,
             orderType: "PENDING_LIMIT",
             limitPrice: fvg.bottom,
@@ -827,7 +827,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: fvg.top,
-            sl: fvg.top + avgRange * 0.5,
+            sl: fvg.top,
             tp: fvg.top - avgRange * 3,
             orderType: "PENDING_LIMIT",
             limitPrice: fvg.top,

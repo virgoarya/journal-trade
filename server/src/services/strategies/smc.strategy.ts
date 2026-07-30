@@ -379,7 +379,7 @@ class SMCStrategy {
           // Swing-protected SL: nearest swing low below entry
           const slCandidates = ms.swingLows.filter(s => s.price < swing.price).sort((a, b) => b.price - a.price);
           const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : swing.price - buffer;
-          const sl = swingProtectedSl - avgRangeEntry * 0.5;
+          const sl = swingProtectedSl;
           const tp = swing.price + buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "BUY", tp, fractal)) continue;
 
@@ -405,7 +405,7 @@ class SMCStrategy {
           // Swing-protected SL: nearest swing high above entry
           const slCandidates = ms.swingHighs.filter(s => s.price > swing.price).sort((a, b) => a.price - b.price);
           const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : swing.price + buffer;
-          const sl = swingProtectedSl + avgRangeEntry * 0.5;
+          const sl = swingProtectedSl;
           const tp = swing.price - buffer * 3.0;
           if (marketStructureService.isTargetTakenBeforeEntry(entryCandles, swing.index, "SELL", tp, fractal)) continue;
 
@@ -452,7 +452,7 @@ class SMCStrategy {
         const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : ob.bottom;
         const obHeight = ob.top - ob.bottom;
         const tp = ob.top + obHeight * 3;
-        const sl = swingProtectedSl - buffer;
+        const sl = swingProtectedSl;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "BUY", tp, fractal)) continue;
 
         return {
@@ -476,7 +476,7 @@ class SMCStrategy {
         const swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : ob.top;
         const obHeight = ob.top - ob.bottom;
         const tp = ob.bottom - obHeight * 3;
-        const sl = swingProtectedSl + buffer;
+        const sl = swingProtectedSl;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, ob.index, "SELL", tp, fractal)) continue;
 
         return {
@@ -584,7 +584,7 @@ class SMCStrategy {
     for (const swing of recentHighs) {
       const grabbable = prev.high > swing.price && last.close < swing.price;
       if (grabbable) {
-        const sl = prev.high + avgRange * 0.5;
+        const sl = prev.high;
         const tp = last.close - avgRange * 2.0;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, swing.index, "SELL", tp, fractal)) continue;
 
@@ -605,7 +605,7 @@ class SMCStrategy {
     for (const swing of recentLows) {
       const grabbable = prev.low < swing.price && last.close > swing.price;
       if (grabbable) {
-        const sl = prev.low - avgRange * 0.5;
+        const sl = prev.low;
         const tp = last.close + avgRange * 2.0;
         if (marketStructureService.isTargetTakenBeforeEntry(candles, swing.index, "BUY", tp, fractal)) continue;
 

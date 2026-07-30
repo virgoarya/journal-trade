@@ -174,7 +174,7 @@ class MSNRStrategy {
           const slCandidates = ltfStr.swingHighs.filter(s => s.price > bestOB.top).sort((a, b) => a.price - b.price);
           swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : bestOB.top;
         }
-        const slPrice = isBuy ? swingProtectedSl - ltfAtr * 0.5 : swingProtectedSl + ltfAtr * 0.5;
+        const slPrice = swingProtectedSl;
         
         const lastLtf = ltfCandles[ltfCandles.length - 1];
         
