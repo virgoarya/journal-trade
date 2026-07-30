@@ -571,7 +571,8 @@ class MarketStructureService {
       );
 
       // Bullish OB: current candle is the last sell-to-buy candle before displacement
-      if (isBullishMove) {
+      // Must be a bearish candle, or small body candle.
+      if (isBullishMove && current.close < current.open) {
         const priorHighs = swingHighs.filter((h) => h.index < i);
         const recentHigh = priorHighs.length > 0 ? priorHighs[priorHighs.length - 1] : null;
         const hasCHOCH = recentHigh ? (next.close > recentHigh.price || next.high > recentHigh.price) : false;
@@ -601,7 +602,8 @@ class MarketStructureService {
       }
 
       // Bearish OB: current candle is the last buy-to-sell candle before displacement
-      if (isBearishMove) {
+      // Must be a bullish candle, or small body candle.
+      if (isBearishMove && current.close > current.open) {
         const priorLows = swingLows.filter((l) => l.index < i);
         const recentLow = priorLows.length > 0 ? priorLows[priorLows.length - 1] : null;
         const hasCHOCH = recentLow ? (next.close < recentLow.price || next.low < recentLow.price) : false;
