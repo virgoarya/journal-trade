@@ -1150,9 +1150,18 @@ return {
 
             const isTrade = llmResult.verdict === "GOOD";
             this.addLog(userId, "CONFLUENCE",
-              `[2/4] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}\nReasoning:\n${llmResult.details}`,
+              `[2/4] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}`,
               { llmConsensus: llmResult },
             );
+            this.addLog(userId, "CONFLUENCE",
+              `[2/4] [${signal.symbol}] Consensus Ratio: ${llmResult.goodVotes}/${llmResult.totalVotes} GOOD votes (Threshold: ${Math.round((pipeline.config.llmConsensus?.threshold ?? 0.5) * 100)}%)`,
+            );
+            for (const vote of (llmResult.votes || [])) {
+              if (vote.error) continue;
+              this.addLog(userId, "CONFLUENCE",
+                `[2/4] [${signal.symbol}] ${vote.provider}(${vote.modelLabel}): ${vote.verdict} — ${vote.reasoning}`,
+              );
+            }
 
             const llmProvidersAfter = llmConsensusService.getAvailableProviders();
             pipeline.llmCircuitOpen = llmProvidersAfter.filter(p => p.available).length === 0;
