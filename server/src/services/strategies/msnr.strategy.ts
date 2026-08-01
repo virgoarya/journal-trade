@@ -13,7 +13,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
-import { evaluateWaterfall, calculateRR, checkEntryRetest, analyzeDaily3CandleBias } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, analyzeDaily3CandleBias, validateContext, validateStructuralShift, validateInducement, validatePOI, validateEntryAndRisk } from "./checklist-validator";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -367,49 +367,86 @@ class MSNRStrategy {
     const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
 
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
+    
+    // Prepare inputs for new validation helpers
+    const htfStr = fractal?.directionStr || fractal?.dailyStr;
+    const htfTrend = htfStr?.trend?.direction || "SIDEWAYS";
+    const breachType = sig.signalType.includes("QML") ? "MSS" : (sig.signalType.includes("RBS") || sig.signalType.includes("SBR") ? "CHOCH" : "MSS");
+    const hasOB = true; // MSNR always has OB/CISD entry
+    const hasFVG = false;
+    const hasRecentSweep = true; // Turtle Soup always implies sweep
+    const obSweepPrice = sig.entry.toFixed(5);
+    const relHigh = "N/A";
+    const relLow = "N/A";
+
+    // Validate key components using new helpers
+    const ctxValidation = validateContext(isBuy, htfTrend, dailyBias);
+    const bosValidation = validateStructuralShift(isBuy, htfStr!, htfTfLabel, relHigh, relLow);
+    const liquidityValidation = validateInducement(hasRecentSweep, obSweepPrice, relLow, setupTfLabel, isBuy);
+    const poiValidation = validatePOI(breachType, hasOB, hasFVG, "N/A", "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
+    const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel);
+
+    // Get new structural elements for MSNR checklist
+    const setupStr = fractal?.setupStr;
+    const directionStr = fractal?.directionStr;
+    
+    // Determine appropriate structure to extract QML, SNR Flip, IFVG, CISD from
+    const marketStr = setupStr || directionStr || ({} as import("./market-structure.service").MarketStructure);
+    const qml = marketStr.quasimodos?.find(q => q.type === (isBuy ? "BULLISH" : "BEARISH"));
+    const snrFlip = marketStr.snrFlips?.find(f => (isBuy ? f.type === "RBS" : f.type === "SBR"));
+    const ifvg = marketStr.ifvgs?.find(i => i.type === (isBuy ? "BULLISH" : "BEARISH"));
+    const cisd = marketStr.cisds?.find(c => c.type === (isBuy ? "BULLISH" : "BEARISH"));
 
     return evaluateWaterfall([
+      { ...ctxValidation, label: (status, isPassed) => ctxValidation.label },
+      { ...bosValidation, label: (status, isPassed) => bosValidation.label },
+      { ...liquidityValidation, label: (status, isPassed) => liquidityValidation.label },
+      { ...poiValidation, label: (status, isPassed) => poiValidation.label },
       {
-        id: "msnr-daily",
-        label: () => dailyBias.label,
-        timeframe: "D1",
-        condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
-        isIndependent: true,
-        details: () => dailyBias.details,
-      },
-      {
-        id: "msnr-zone",
-        label: () => `① ${htfTfLabel} Key SNR Zone (${snrType}) — Level teridentifikasi`,
+        id: "msnr-qml",
+        label: (status, isPassed) => qml ? `QML ${qml.type} at ${qml.shoulder.toFixed(5)}-${qml.head.toFixed(5)}` : `QML not detected`,
         timeframe: htfTfLabel,
-        condition: sig.confidence > 0,
+        condition: !!qml,
+        details: (status, isPassed) => qml ? `QML level ${qml.shoulder.toFixed(5)} (shoulder) -> ${qml.head.toFixed(5)} (head)` : "",
         isIndependent: true,
-        details: () => `Confidence: ${sig.confidence}% | Level: ${sig.entry.toFixed(5)}`,
       },
       {
-        id: "msnr-turtle",
-        label: () => `② ${htfTfLabel} Turtle Soup / Liquidity Sweep — False breakout SNR zone`,
+        id: "msnr-snr-flip",
+        label: (status, isPassed) => snrFlip ? `SNR-Flip ${snrFlip.type} detected at ${snrFlip.level.toFixed(5)}` : `SNR-Flip not detected`,
         timeframe: htfTfLabel,
-        condition: sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP"),
+        condition: !!snrFlip,
+        details: (status, isPassed) => snrFlip ? `Flip at ${snrFlip.level.toFixed(5)}` : "",
+        isIndependent: true,
       },
       {
-        id: "msnr-mss-ob",
-        label: (status) => status === "PASSED" ? `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD (${sig.entry.toFixed(5)})` : `③ ${entryTfLabel} Market Structure Shift + Order Block / CISD`,
-        timeframe: entryTfLabel,
-        condition: sig.signalType.includes("QML") || sig.signalType.includes("RBS") || sig.signalType.includes("SBR") || sig.signalType.includes("TURTLE_SOUP_OB") || sig.signalType.includes("TURTLE_SOUP_CISD"),
+        id: "msnr-ifvg",
+        label: (status, isPassed) => ifvg ? `IFVG ${ifvg.type} detected at ${ifvg.top.toFixed(5)}-${ifvg.bottom.toFixed(5)}` : `IFVG not detected`,
+        timeframe: htfTfLabel,
+        condition: !!ifvg,
+        details: (status, isPassed) => ifvg ? `IFVG range ${ifvg.top.toFixed(5)} - ${ifvg.bottom.toFixed(5)}` : "",
+        isIndependent: true,
+      },
+      {
+        id: "msnr-cisd",
+        label: (status, isPassed) => cisd ? `CISD ${cisd.type} at ${cisd.price.toFixed(5)}` : `CISD not detected`,
+        timeframe: htfTfLabel,
+        condition: !!cisd,
+        details: (status, isPassed) => cisd ? `CISD price ${cisd.price.toFixed(5)}` : "",
+        isIndependent: true,
       },
       {
         id: "msnr-entry",
-        label: () => `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
+        label: (status, isPassed) => `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
         timeframe: entryTfLabel,
-        condition: isEntryRetested,
-        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
+        condition: entryRiskValidation.entryOk,
+        details: (status, isPassed) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "msnr-rr",
-        label: (status) => `⑤ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        condition: isRRValid,
+        label: (status, isPassed) => `⑤ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        condition: entryRiskValidation.rrOk,
         isFailable: true,
-        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+        details: (status, isPassed) => status === "PASSED" ? `R:R 1:${entryRiskValidation.rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
   }

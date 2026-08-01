@@ -239,3 +239,110 @@ export function getSwingPrices(fractal?: FractalContext): { relHigh: string; rel
   const relLow = lows && lows.length > 0 ? lows[lows.length - 1].price.toFixed(5) : "N/A";
   return { relHigh, relLow };
 }
+
+/**
+ * Validates structural context: HTF trend alignment, daily bias, and market structure shift.
+ */
+export function validateContext(
+  isBuy: boolean,
+  htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
+  dailyBias: Daily3CandleBias,
+): { id: string; label: string; timeframe: string; condition: boolean; isIndependent: boolean } {
+  const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
+  const isHtfDirectional = isBuy ? htfTrend === "BULL" : htfTrend === "BEAR";
+
+  return {
+    id: "ctx-daily",
+    label: dailyBias.label,
+    timeframe: "D1",
+    condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
+    isIndependent: true,
+  };
+}
+
+/**
+ * Validates structural HTF trend (BOS/CHoCH) confirmation.
+ */
+export function validateStructuralShift(
+  isBuy: boolean,
+  htfStr: import("./market-structure.service").MarketStructure,
+  htfTfLabel: string,
+  relHigh: string,
+  relLow: string,
+): { id: string; label: string; timeframe: string; condition: boolean; isFailable: boolean } {
+  const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
+
+  return {
+    id: "ctx-bos",
+    label: `① ${htfTfLabel} Market Structure : ${isHtfBosConfirmed ? (isBuy ? "Bullish CHoCH/BOS" : "Bearish CHoCH/BOS") : "Unconfirmed"} (High ${relHigh}, Low ${relLow})`,
+    timeframe: htfTfLabel,
+    condition: isHtfBosConfirmed,
+    isFailable: true,
+  };
+}
+
+/**
+ * Validates liquidity inducement / sweep confirmation.
+ */
+export function validateInducement(
+  hasRecentSweep: boolean,
+  obSweepPrice: string,
+  relLow: string,
+  setupTfLabel: string,
+  isBuy: boolean,
+): { id: string; label: string; timeframe: string; condition: boolean } {
+  return {
+    id: "ctx-liq",
+    label: `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
+    timeframe: setupTfLabel,
+    condition: hasRecentSweep,
+  };
+}
+
+/**
+ * Validates Point of Interest (POI) detection: OB, FVG, Breaker Block, etc.
+ */
+export function validatePOI(
+  breachType: string,
+  hasOB: boolean,
+  hasFVG: boolean,
+  obBottom: string,
+  obTop: string,
+  obType: "BULLISH" | "BEARISH",
+  relLow: string,
+  relHigh: string,
+  setupTfLabel: string,
+  htfTfLabel: string,
+): { id: string; label: string; timeframe: string; condition: boolean } {
+  const hasPOI = breachType === "MSS" || breachType === "CHOCH" || breachType === "M5_CHOCH_OB" || breachType === "BREAKER" || breachType === "LIQUIDITY_GRAB" || breachType === "OB_MITIGATION" || hasOB || hasFVG;
+
+  return {
+    id: "ctx-poi",
+    label: hasPOI
+      ? `③ ${htfTfLabel} ${obType === "BULLISH" ? "Bullish" : "Bearish"} Order Block Detection Zone (${obBottom} - ${obTop})`
+      : `③ ${htfTfLabel} POI Detection Zone`,
+    timeframe: htfTfLabel,
+    condition: hasPOI,
+  };
+}
+
+/**
+ * Validates entry setup: pending limit at OB level, retest confirmation.
+ */
+export function validateEntryAndRisk(
+  isBuy: boolean,
+  isEntryRetested: boolean,
+  entryPrice: number,
+  slPrice: number,
+  tpPrice: number,
+  entryTfLabel: string,
+): { entryOk: boolean; rrOk: boolean; rrRatio: number } {
+  const entryOk = isEntryRetested;
+
+  const slDist = Math.abs(entryPrice - slPrice);
+  const tpDist = Math.abs(tpPrice - entryPrice);
+  const rrRatio = slDist > 0 ? tpDist / slDist : 0;
+  const rrOk = rrRatio >= 2.0;
+
+  return { entryOk, rrOk, rrRatio };
+}

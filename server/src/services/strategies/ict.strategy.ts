@@ -21,7 +21,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { IPDAContext } from "./ipda-context";
 import type { ChecklistItem } from "./confluence-engine";
-import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analyzeDaily3CandleBias } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analyzeDaily3CandleBias, validateContext, validateStructuralShift, validateInducement, validatePOI, validateEntryAndRisk } from "./checklist-validator";
 
 export interface ICTSignal {
   direction: "BUY" | "SELL";
@@ -38,6 +38,7 @@ export interface ICTSignal {
     | "JUDAS_SWEEP"      // Judas Swing + Sweep context
     | "OTE_AMD"          // OTE Fibonacci + AMD range context
     | "IFVG_RETEST";     // Retest of inverted FVG (IFVG)
+  breachType?: "MSS" | "CHOCH" | "OB_MITIGATION" | "BREAKER" | "LIQUIDITY_GRAB" | "M5_CHOCH_OB" | "FVG" | "OTE" | "AMD" | "JUDAS";
   killzone?: KillzoneType;
   reason: string;
   checklistItems?: ChecklistItem[];
@@ -124,7 +125,7 @@ class ICTStrategy {
 
     // ─── PATH C: Judas Swing → validated by prior Sweep Context ────────────────
 
-    const judasSignal = this.detectJudasWithContext(entryCandles, entryStr, avgRange, htfTrend);
+    const judasSignal = this.detectJudasWithContext(entryCandles, entryStr, avgRange, htfTrend, fractal);
     if (judasSignal) signals.push(judasSignal);
 
     // ─── PATH D: OTE + AMD Range Context ────────────────────────────────────────
@@ -192,7 +193,7 @@ class ICTStrategy {
 
       // Find dynamic target
       sig.tp = marketStructureService.findDynamicTarget(sig.direction, sig.entry, sig.sl, h1Str, 2.0, htfStr, fractal.daily);
-      
+
       const slDist = Math.abs(sig.entry - sig.sl);
       const tpDist = Math.abs(sig.tp - sig.entry);
       if (slDist <= 0) return false;
@@ -205,7 +206,7 @@ class ICTStrategy {
       const sig = validSignals[i];
       const validation = this.buildICTChecklist(sig, currentKillzone, fractal);
       sig.checklistItems = validation.items;
-      
+
       // Strict Validation: Drop signal if core steps failed
       if (sig.confidence > 0 && !validation.passed) {
         validSignals.splice(i, 1);
@@ -213,7 +214,7 @@ class ICTStrategy {
     }
 
     if (validSignals.length === 0) {
-      const dummyDir = htfStr.trend.direction === "BULL" ? "BUY" : "SELL";
+      const dummyDir = (htfStr && htfStr.trend.direction === "BEAR") ? "SELL" : "BUY";
       const dummySig: ICTSignal = {
         direction: dummyDir,
         confidence: 0,
@@ -262,27 +263,50 @@ class ICTStrategy {
 
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
+    // Prepare inputs for new validation helpers
+    const htfTrend = htfStr ? htfStr.trend.direction : "SIDEWAYS";
+    const breachType = sig.breachType ?? "FVG";
+    const hasOB = breachType.includes("FVG") || hasOTE;
+    const hasFVGForPOI = hasFVG || hasOTE;
+    const hasRecentSweepICT = hasSweep || hasAMD;
+
+    // Validate key components using new helpers
+    const ctxValidation = validateContext(isBuy, htfTrend, dailyBias);
+    const bosValidation = htfStr ? validateStructuralShift(isBuy, htfStr, htfTfLabel, relHigh, relLow) : { id: "ctx-bos", label: "Unconfirmed", timeframe: htfTfLabel, condition: false, isFailable: true };
+    const liquidityValidation = validateInducement(hasRecentSweepICT, sig.entry.toFixed(5), relLow, setupTfLabel, isBuy);
+    const poiValidation = validatePOI(breachType, hasOB, hasFVGForPOI, "N/A", "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
+    const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel);
+
+    // Get new structural elements for ICT checklist
+    const ifvg = fractal?.ifvgs?.find(i => i.type === (isBuy ? "BULLISH" : "BEARISH"));
+    const cisd = fractal?.cisds?.find(c => c.type === (isBuy ? "BULLISH" : "BEARISH"));
+
     return evaluateWaterfall([
-      {
-        id: "ict-daily",
-        label: () => dailyBias.label,
-        timeframe: "D1",
-        condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
-        isIndependent: true,
-        details: () => dailyBias.details,
-      },
-      {
-        id: "ict-bias",
-        label: () => `① ${htfTfLabel} Directional Bias ${htfStr?.trend.direction === "BULL" ? "Bullish" : "Bearish"} (High ${relHigh}, Low ${relLow})`,
-        timeframe: htfTfLabel,
-        condition: isHtfDirectional,
-        isFailable: true,
-      },
+      { ...ctxValidation, label: (status, isPassed) => ctxValidation.label },
+      { ...bosValidation, label: (status, isPassed) => bosValidation.label },
+      { ...liquidityValidation, label: (status, isPassed) => liquidityValidation.label },
+      { ...poiValidation, label: (status, isPassed) => poiValidation.label },
       {
         id: "ict-kz",
         label: () => `② ${kzLabel} (Waktu & Volatilitas)`,
         timeframe: entryTfLabel,
         condition: killzone !== "NONE",
+        isIndependent: true,
+      },
+      {
+        id: "ict-ifvg",
+        label: () => `IFVG (${ifvg ? "ada" : "tidak"})`,
+        timeframe: htfTfLabel,
+        condition: !!ifvg,
+        details: (status) => ifvg ? `IFVG ${ifvg.type} @ ${ifvg.top.toFixed(5)}/${ifvg.bottom.toFixed(5)}` : "—",
+        isIndependent: true,
+      },
+      {
+        id: "ict-cisd",
+        label: () => `CISD (${cisd ? "ada" : "tidak"})`,
+        timeframe: htfTfLabel,
+        condition: !!cisd,
+        details: (status) => cisd ? `CISD ${cisd.type} @ ${cisd.price.toFixed(5)}` : "—",
         isIndependent: true,
       },
       {
@@ -301,15 +325,15 @@ class ICTStrategy {
         id: "ict-entry",
         label: () => `⑤ ${entryTfLabel} Entry retest FVG${hasOTE ? "/OTE" : ""} gap (pending order)`,
         timeframe: entryTfLabel,
-        condition: isEntryRetested,
+        condition: entryRiskValidation.entryOk,
         details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "ict-rr",
         label: (status) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
-        condition: isRRValid,
+        condition: entryRiskValidation.rrOk,
         isFailable: true,
-        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+        details: (status) => status === "PASSED" ? `R:R 1:${entryRiskValidation.rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
   }
@@ -349,7 +373,7 @@ class ICTStrategy {
         // Enforce structural sweep inducement (must sweep a Swing Low)
         const recentLows = ms.swingLows.filter(s => s.index >= candles.length - 15 && s.index < candles.length - 1);
         const sweptStructural = recentLows.some(s => c2.low < s.price);
-        
+
         if (sweptStructural) {
           return {
             direction: "BUY",
@@ -467,7 +491,15 @@ class ICTStrategy {
 
     const last = candles[candles.length - 1];
     const latestHigh = ms.swingHighs[ms.swingHighs.length - 1];
-    const latestLow  = ms.swingLows[ms.swingLows.length - 1];
+    const latestLow = ms.swingLows[ms.swingLows.length - 1];
+
+    // Entry Price Selection Logic:
+    // - For BUY signals, use swing low (OB Bottom) as entry
+    // - For SELL signals, use swing high (OB Top) as entry
+    // This ensures entry aligns with actual Order Block level rather than Fibonacci-based OTE
+    const entryPrice = direction === "BUY"
+      ? latestLow.price
+      : latestHigh.price;
 
     if (direction === "BUY" && latestLow.index < latestHigh.index) {
       const range = latestHigh.price - latestLow.price;
@@ -477,16 +509,23 @@ class ICTStrategy {
 
       // Price in OTE zone AND OTE zone overlaps AMD zone
       if (last.close >= ote79 && last.close <= ote618 && ote618 >= zoneLow && ote79 <= zoneHigh) {
+        // Enforce candle direction check - OTE entry should align with impulse direction
+        // For BUY OTE pattern, prior bar should be bearish (lower close than open)
+        const barIndex = candles.length - 1;
+        if (barIndex - 1 < 0) return null;
+        const priorBar = candles[barIndex - 1];
+        if (priorBar.close >= priorBar.open) return null; // Not bearish accumulation
+
         return {
           direction: "BUY",
-          entry: ote79,
-          sl: latestLow.price, // SL at impulse origin swing low wick
-          tp: latestHigh.price, // TP at the high of the impulse leg
+          entry: entryPrice, // Use actual swing low as entry (OB bottom)
+          sl: ote79 - avgRange * 0.5, // SL below OTE zone edge with buffer
+          tp: latestHigh.price, // TP at impulse high
           orderType: "PENDING_LIMIT",
-          limitPrice: ote79,
+          limitPrice: entryPrice, // Limit order at OB bottom
           signalType: "AMD_OTE",
-          confidence: Math.min(93, config.minConfidence + 18),
-          reason: `ICT AMD OTE BUY: 3-Candle sweep + OTE zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) inside AMD range`,
+          confidence: Math.min(93, config.minConfidence + 13),
+          reason: `ICT AMD OTE BUY: 3-Candle sweep + OTE zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) inside AMD range, Entry at ${entryPrice.toFixed(5)} (OB bottom)`,
         };
       }
     }
@@ -498,16 +537,23 @@ class ICTStrategy {
       const ote79  = latestLow.price + range * 0.79;
 
       if (last.close >= ote618 && last.close <= ote79 && ote79 <= zoneHigh && ote618 >= zoneLow) {
+        // Enforce candle direction check - OTE entry should align with impulse direction
+        // For SELL OTE pattern, prior bar should be bullish (higher close than open)
+        const barIndex = candles.length - 1;
+        if (barIndex - 1 < 0) return null;
+        const priorBar = candles[barIndex - 1];
+        if (priorBar.close <= priorBar.open) return null; // Not bullish accumulation
+
         return {
           direction: "SELL",
-          entry: ote79,
-          sl: latestHigh.price, // SL at impulse origin swing high wick
-          tp: latestLow.price, // TP at the low of the impulse leg
+          entry: entryPrice, // Use actual swing high as entry (OB top)
+          sl: ote79 + avgRange * 0.5, // SL above OTE zone edge with buffer
+          tp: latestLow.price, // TP at impulse low
           orderType: "PENDING_LIMIT",
-          limitPrice: ote79,
+          limitPrice: entryPrice, // Limit order at OB top
           signalType: "AMD_OTE",
-          confidence: Math.min(93, config.minConfidence + 18),
-          reason: `ICT AMD OTE SELL: 3-Candle sweep + OTE zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) inside AMD range`,
+          confidence: Math.min(93, config.minConfidence + 13),
+          reason: `ICT AMD OTE SELL: 3-Candle sweep + OTE zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) inside AMD range, Entry at ${entryPrice.toFixed(5)} (OB top)`,
         };
       }
     }
@@ -622,6 +668,7 @@ class ICTStrategy {
     ms: MarketStructure,
     avgRange: number,
     htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
+    fractal: import("./market-structure.service").FractalContext,
   ): ICTSignal | null {
     if (candles.length < 3) return null;
 
@@ -642,11 +689,17 @@ class ICTStrategy {
           const contextSweep = prev.low < rangeLow;
           const conf = contextSweep ? 82 : 72;
 
+          // Entry at last close (market order), SL at sweep low wick
+          const sl = prev.low;
+          const h1Str = fractal.setupStr || fractal.directionStr;
+          const htfStr = fractal.dailyStr;
+          const tp = marketStructureService.findDynamicTarget("BUY", last.close, sl, h1Str, 2.0, htfStr, fractal.daily);
+
           return {
             direction: "BUY",
             entry: last.close,
-            sl: prev.low,
-            tp: last.close + avgRange * 2.5,
+            sl,
+            tp,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",
             confidence: conf,
@@ -664,11 +717,16 @@ class ICTStrategy {
           const contextSweep = prev.high > rangeHigh;
           const conf = contextSweep ? 82 : 72;
 
+          const sl = prev.high;
+          const h1Str = fractal.setupStr || fractal.directionStr;
+          const htfStr = fractal.dailyStr;
+          const tp = marketStructureService.findDynamicTarget("SELL", last.close, sl, h1Str, 2.0, htfStr, fractal.daily);
+
           return {
             direction: "SELL",
             entry: last.close,
-            sl: prev.high,
-            tp: last.close - avgRange * 2.5,
+            sl,
+            tp,
             orderType: "MARKET",
             signalType: "JUDAS_SWEEP",
             confidence: conf,
@@ -720,23 +778,23 @@ class ICTStrategy {
         const htf = fractal.directionStr || fractal.dailyStr;
         const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BULLISH" && Math.max(ote79, ob.bottom) <= Math.min(ote618, ob.top)) ||
                              htf.fairValueGaps.some(fvg => fvg.type === "BULLISH" && Math.max(ote79, fvg.bottom) <= Math.min(ote618, fvg.top));
-        
-        if (insideHTFPOI) {
-        const prevHigh = ms.swingHighs.length > 1 ? ms.swingHighs[ms.swingHighs.length - 2] : null;
-        const tp = prevHigh ? prevHigh.price : latestHigh.price + avgRange * 2;
 
-        return {
-          direction: "BUY",
-          entry: ote79,
-          sl: latestLow.price, // SL at swing low wick (impulse origin)
-          tp,
-          orderType: "PENDING_LIMIT",
-          limitPrice: ote79,
-          signalType: "OTE_AMD",
-          confidence: Math.min(88, config.minConfidence + 13),
-          reason: `ICT OTE BUY: Fib zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
-        };
-      }
+        if (insideHTFPOI) {
+          const prevHigh = ms.swingHighs.length > 1 ? ms.swingHighs[ms.swingHighs.length - 2] : null;
+          const tp = prevHigh ? prevHigh.price : latestHigh.price + avgRange * 2;
+
+          return {
+            direction: "BUY",
+            entry: ote79,
+            sl: latestLow.price, // SL at swing low wick (impulse origin)
+            tp,
+            orderType: "PENDING_LIMIT",
+            limitPrice: ote79,
+            signalType: "OTE_AMD",
+            confidence: Math.min(88, config.minConfidence + 13),
+            reason: `ICT OTE BUY: Fib zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
+          };
+        }
       }
     }
 
@@ -752,7 +810,7 @@ class ICTStrategy {
         const htf = fractal.directionStr || fractal.dailyStr;
         const insideHTFPOI = htf.orderBlocks.some(ob => ob.type === "BEARISH" && Math.max(ote618, ob.bottom) <= Math.min(ote79, ob.top)) ||
                              htf.fairValueGaps.some(fvg => fvg.type === "BEARISH" && Math.max(ote618, fvg.bottom) <= Math.min(ote79, fvg.top));
-        
+
         if (insideHTFPOI) {
           const prevLow = ms.swingLows.length > 1 ? ms.swingLows[ms.swingLows.length - 2] : null;
           const tp = prevLow ? prevLow.price : latestLow.price - avgRange * 2;
@@ -787,7 +845,7 @@ class ICTStrategy {
     if (htfTrend === "SIDEWAYS") return null;
 
     const last = candles[candles.length - 1];
-    
+
     // Look for IFVGs (Inverted FVGs) that were recently inverted
     for (const fvg of ms.fairValueGaps) {
       if (!fvg.inverted) continue;

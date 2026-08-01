@@ -144,85 +144,85 @@ class SMCStrategy {
 
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
+    const obChochPrice = sig.orderBlock?.chochPrice?.toFixed(5) || relHigh;
+    const obSweepPrice = sig.orderBlock?.sweepPrice?.toFixed(5) || relLow;
 
-    const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
-
-    // Check recent liquidity inducement (sweep before POI)
-    const setupMs = fractal.setupStr;
-    const setupCandles = fractal.setup;
-    const lastSetupIdx = setupCandles.length - 1;
-    const hasRecentSweep = this.wasLiquidityRecentlySwept(setupMs, setupCandles, sig.direction, lastSetupIdx);
-
-    const obSweepPrice = sig.orderBlock?.sweepPrice ? sig.orderBlock.sweepPrice.toFixed(5) : relLow;
-    const obChochPrice = sig.orderBlock?.chochPrice ? sig.orderBlock.chochPrice.toFixed(5) : relHigh;
     const pdArrayType = isBuy ? "Discount PD Array" : "Premium PD Array";
+    const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
 
     return evaluateWaterfall([
       {
         id: "smc-daily",
-        label: () => dailyBias.label,
+        label: (status, isPassed) => dailyBias.label,
         timeframe: "D1",
         condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
         isIndependent: true,
-        details: () => dailyBias.details,
+        details: (status, isPassed) => dailyBias.details,
       },
       {
         id: "smc-bos",
-        label: () => `① ${htfTfLabel} Market Structure : ${isHtfBosConfirmed ? (isBuy ? "Bullish CHoCH/BOS" : "Bearish CHoCH/BOS") : "Unconfirmed"} (High ${relHigh}, Low ${relLow})`,
+        label: (status, isPassed) => `① ${htfTfLabel} Market Structure : ${isHtfBosConfirmed ? (isBuy ? "Bullish CHoCH/BOS" : "Bearish CHoCH/BOS") : "Unconfirmed"} (High ${relHigh}, Low ${relLow})`,
         timeframe: htfTfLabel,
         condition: isHtfBosConfirmed,
         isFailable: true,
       },
       {
         id: "smc-liq",
-        label: () => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
+        label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
         timeframe: setupTfLabel,
-        condition: hasRecentSweep || (sig.orderBlock?.hasSweep ?? false),
-        details: () => hasRecentSweep ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
+        condition: sig.orderBlock?.hasSweep ?? false,
+        details: (status, isPassed) => sig.orderBlock?.hasSweep ?? false ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
       },
       {
         id: "smc-ob",
-        label: (status) => {
+        label: (status, isPassed) => {
           if (sig.h1OrderBlock) {
-            return `③ Retest H1 ${sig.direction === "BUY" ? "Bullish" : "Bearish"} Order Block (H1 POI : ${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)})`;
-          }
+            return `③ Retest H1 ${sig.direction === "BUY" ? "Bullish" : "Bearish"} Order Block (H1 POI : ${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)})`;          }
           return status === "PASSED" && sig.orderBlock
             ? `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} : ${obBottom} - ${obTop}) [Displacement + CHoCH]`
             : `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} Order Block (${pdArrayType} detection zone)`;
         },
         timeframe: htfTfLabel,
         condition: sig.breachType === "MSS" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || !!(sig.orderBlock || sig.h1OrderBlock || sig.breachType === "OB_MITIGATION"),
-        value: (status) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
-        details: (status) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
+        value: (status, isPassed) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
+        details: (status, isPassed) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
       },
       {
         id: "smc-mss",
-        label: (status) => {
-          if (sig.breachType === "M5_CHOCH_OB" && sig.orderBlock) {
-            return `④ ${entryTfLabel} CHoCH Confirmation & M5 OB Zone (Refinement : ${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)})`;
+        label: (status, isPassed) => {
+          if (sig.breachType === "M5_CHOCH_OB") {
+            if (sig.orderBlock) {
+              return `④ ${entryTfLabel} CHoCH Confirmation & M5 OB Zone (Refinement : ${sig.orderBlock.bottom.toFixed(5)} - ${sig.orderBlock.top.toFixed(5)})`;
+            }
+            return status === "PASSED"
+              ? `④ ${entryTfLabel} CHoCH Confirmation (Breakout above Swing Level ${obChochPrice})`
+              : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`;
+          }
+          if (sig.orderBlock?.hasCHOCH) {
+            return `④ ${entryTfLabel} CHoCH Confirmation (OB CHoCH at ${obChochPrice})`;
           }
           return status === "PASSED"
-            ? `④ ${entryTfLabel} CHoCH Confirmation (Breakout above Swing Level ${obChochPrice})`
-            : `④ ${entryTfLabel} CHoCH Confirmation after PD Array mitigation`;
+            ? `④ ${entryTfLabel} MSS Confirmation (above Swing Level ${obChochPrice})`
+            : "④ MSS Confirmation not met";
         },
         timeframe: entryTfLabel,
         condition: sig.breachType === "MSS" || sig.breachType === "CHOCH" || sig.breachType === "M5_CHOCH_OB" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || sig.breachType === "OB_MITIGATION" || (sig.orderBlock?.hasCHOCH ?? false),
       },
       {
         id: "smc-entry-rejection",
-        label: () => sig.breachType === "M5_CHOCH_OB"
+        label: (status, isPassed) => sig.breachType === "M5_CHOCH_OB"
           ? `⑤ Pending ${sig.direction} Limit Order @ M5 OB ${sig.direction === "BUY" ? "Top" : "Bottom"} (${sig.entry.toFixed(5)}) — Target ${sig.direction === "BUY" ? "PDH" : "PDL"} (${sig.tp.toFixed(5)})`
           : `⑤ Retest ${pdArrayType} Zone (Pending ${sig.direction} Limit Order @ ${sig.entry.toFixed(5)})`,
         timeframe: entryTfLabel,
         condition: sig.breachType === "M5_CHOCH_OB" ? true : isEntryRetested,
-        details: (status) => `Pending ${sig.direction} Limit Order at ${sig.entry.toFixed(5)} (Target: ${sig.tp.toFixed(5)})`,
+        details: (status, isPassed) => `Pending ${sig.direction} Limit Order at ${sig.entry.toFixed(5)} (Target: ${sig.tp.toFixed(5)})`,
       },
       {
         id: "smc-rr",
-        label: (status) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
+        label: (status, isPassed) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         condition: isRRValid,
         isFailable: true,
-        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+        details: (status, isPassed) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
   }

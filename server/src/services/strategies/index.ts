@@ -14,6 +14,10 @@ export type {
   Trend,
   CandleRangeAnalysis,
   KillzoneType,
+  Quasimodo,
+  SNRFlip,
+  IFVG,
+  CISD,
 } from "./market-structure.service";
 
 export { smcStrategy } from "./smc.strategy";

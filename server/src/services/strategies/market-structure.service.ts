@@ -29,6 +29,10 @@ export interface FractalContext {
   entryTimeframeStr?: string;
   spread?: number;
   point?: number;
+  quasimodos?: Quasimodo[];
+  snrFlips?: SNRFlip[];
+  ifvgs?: IFVG[];
+  cisds?: CISD[];
 }
 
 export interface SwingHigh {
@@ -70,6 +74,19 @@ export interface BreakerBlock {
   time: number;
 }
 
+export interface Quasimodo {
+  type: "BULLISH" | "BEARISH";
+  shoulder: number;
+  head: number;
+  time: number;
+}
+
+export interface SNRFlip {
+  type: "SBR" | "RBS";
+  level: number;
+  time: number;
+}
+
 export interface FVG {
   index: number;
   type: "BULLISH" | "BEARISH";
@@ -81,6 +98,21 @@ export interface FVG {
   time: number;
   inverted?: boolean;
   invertedTime?: number;
+}
+
+export interface IFVG {
+  index: number;
+  type: "BULLISH" | "BEARISH";
+  top: number;
+  bottom: number;
+  time: number;
+}
+
+export interface CISD {
+  index: number;
+  type: "BULLISH" | "BEARISH";
+  price: number;
+  time: number;
 }
 
 export interface KeyLevel {
@@ -153,6 +185,10 @@ export interface MarketStructure {
   malaysianSNRs: MalaysianSNR[];
   malaysianEngulfings: MalaysianEngulfing[];
   malaysianTrendlines: MalaysianTrendline[];
+  quasimodos: Quasimodo[];
+  snrFlips: SNRFlip[];
+  ifvgs: IFVG[];
+  cisds: CISD[];
 
   recentPriceAction: "RANGING" | "EXPANSION_BULL" | "EXPANSION_BEAR" | "CONTRACTION";
 }
@@ -226,6 +262,10 @@ class MarketStructureService {
     const malaysianSNRs = this.detectMalaysianSNRs(candles);
     const malaysianEngulfings = this.detectMalaysianEngulfings(candles);
     const malaysianTrendlines = this.detectMalaysianTrendlines(malaysianSNRs);
+    const quasimodos = this.detectQML(candles, swingHighs, swingLows, trend);
+    const snrFlips = this.detectSNRFlip(candles, swingHighs, swingLows, malaysianSNRs);
+    const ifvgs = this.detectIFVG(candles, fairValueGaps);
+    const cisds = this.detectCISD(candles, orderBlocks, fairValueGaps);
 
     return {
       swingHighs,
@@ -240,6 +280,10 @@ class MarketStructureService {
       malaysianSNRs,
       malaysianEngulfings,
       malaysianTrendlines,
+      quasimodos,
+      snrFlips,
+      ifvgs,
+      cisds,
 
       recentPriceAction,
     };
@@ -1332,6 +1376,139 @@ class MarketStructureService {
   }
 
   /**
+   * QML = Quasimodo Levels (Shoulder-Head pattern).
+   * Used in MSNR and ICT to identify potential quality SNRs.
+   * Steps:
+   * 1. Find the recent swing high (Head) and swing low (LeftShoulder) within 5-10 candles.
+   * 2. For bullish QML: require Head > LeftShoulder + 10 pips AND left shoulder index is within last 5-10 candles.
+   * 3. For bearish QML: inverse.
+   */
+  detectQML(candles: Candle[], swingHighs: SwingHigh[], swingLows: SwingLow[], trend: Trend): Quasimodo[] {
+    const quasimodos: Quasimodo[] = [];
+    const recentCandles = candles.slice(-15); // limit to last 15
+
+    // Filter swing highs/lows to recent area
+    const recentHighs = swingHighs.filter(s => candles[s.index] && recentCandles.includes(candles[s.index]));
+    const recentLows = swingLows.filter(s => candles[s.index] && recentCandles.includes(candles[s.index]));
+
+    if (trend.direction === "BULL") {
+      // Bullish QML (Shoulder-Head)
+      const shoulders = recentLows.slice(-4); // the most recent 4 swing lows
+      if (shoulders.length >= 2) {
+        const leftShoulder = shoulders[shoulders.length - 2]; // second-to-last low
+        const head = recentHighs[recentHighs.length - 1]; // highest recent swing high
+        if (head.price > leftShoulder.price && (head.index - leftShoulder.index) <= 15) {
+          quasimodos.push({
+            type: "BULLISH",
+            shoulder: leftShoulder.price,
+            head: head.price,
+            time: candles[leftShoulder.index] ? candles[leftShoulder.index].time : 0,
+          });
+        }
+      }
+    } else if (trend.direction === "BEAR") {
+      // Bearish QML (Head-Shoulder)
+      const heads = recentHighs.slice(-4); // the most recent 4 swing highs
+      if (heads.length >= 2) {
+        const leftHead = heads[heads.length - 2]; // second-to-last high
+        const shoulder = recentLows[recentLows.length - 1]; // lowest recent swing low
+        if (shoulder.price < leftHead.price && (shoulder.index - leftHead.index) <= 15) {
+          quasimodos.push({
+            type: "BEARISH",
+            head: leftHead.price,
+            shoulder: shoulder.price,
+            time: candles[leftHead.index] ? candles[leftHead.index].time : 0,
+          });
+        }
+      }
+    }
+
+    return quasimodos;
+  }
+
+  detectSNRFlip(candles: Candle[], swingHighs: SwingHigh[], swingLows: SwingLow[], snrs: MalaysianSNR[]): SNRFlip[] {
+    const flips: SNRFlip[] = [];
+
+    for (const snr of snrs) {
+      // If SNR is a Resistance, check if price closed below it within last 5 candles => SBR
+      if (snr.type === "RESISTANCE") {
+        const recentCandle = candles[snr.index];
+        if (recentCandle && recentCandle.low <= snr.price) {
+          flips.push({
+            type: "RBS",
+            level: snr.price,
+            time: recentCandle.time,
+          });
+        }
+      }
+
+      // If SNR is a Support, check if price closed above it within last 5 candles => SBR
+      if (snr.type === "SUPPORT") {
+        const recentCandle = candles[snr.index];
+        if (recentCandle && recentCandle.high >= snr.price) {
+          flips.push({
+            type: "SBR",
+            level: snr.price,
+            time: recentCandle.time,
+          });
+        }
+      }
+    }
+
+    return flips;
+  }
+
+  detectIFVG(candles: Candle[], fvgs: FVG[]): IFVG[] {
+    const ifvgs: IFVG[] = [];
+
+    // IFVG: FVG yang sudah di-mitigate (terisi) oleh candle penutup di sisi yang berlawanan
+    // Contoh: Bullish FVG di bawah → harga close di bawah FVG = Inversion/IFVG
+    for (const fvg of fvgs) {
+      if (fvg.mitigated) {
+        ifvgs.push({
+          index: fvg.index,
+          type: fvg.type,
+          top: fvg.top,
+          bottom: fvg.bottom,
+          time: fvg.time,
+        });
+      }
+    }
+
+    return ifvgs;
+  }
+
+  detectCISD(candles: Candle[], obs: OrderBlock[], fvgs: FVG[]): CISD[] {
+    const cisds: CISD[] = [];
+
+    // CISD (Change in State of Delivery): candle terakhir yang menutup di luar OB terakhir
+    // Contoh: Bullish OB di bawah → harga close di atas OB = CISD Bullish
+    if (obs.length > 0) {
+      const lastOB = obs[obs.length - 1];
+      const lastCandle = candles[candles.length - 1];
+      if (lastCandle) {
+        if (lastOB.type === "BULLISH" && lastCandle.close > lastOB.top) {
+          cisds.push({
+            index: candles.length - 1,
+            type: "BULLISH",
+            price: lastCandle.close,
+            time: lastCandle.time,
+          });
+        } else if (lastOB.type === "BEARISH" && lastCandle.close < lastOB.bottom) {
+          cisds.push({
+            index: candles.length - 1,
+            type: "BEARISH",
+            price: lastCandle.close,
+            time: lastCandle.time,
+          });
+        }
+      }
+    }
+
+    return cisds;
+  }
+
+  /**
    * Determine a structural Take Profit (TP) based on HTF structure.
    * Finds the nearest major liquidity zone, unmitigated OB, unfilled FVG, or swing point.
    */
@@ -1353,11 +1530,11 @@ class MarketStructureService {
       return price < entryPrice;
     };
 
-    // Priority 0: PDH/PDL — Previous Day High/Low dari candle D1 kemarin
+    // Priority 0: PDH/PDL — Previous Day High/Low dari candle D1 kemarin (minRR filter)
     if (dailyCandles && dailyCandles.length >= 2) {
       const prevDay = dailyCandles[dailyCandles.length - 2];
-      if (direction === "BUY" && isInDirection(prevDay.high)) return prevDay.high;
-      if (direction === "SELL" && isInDirection(prevDay.low)) return prevDay.low;
+      if (direction === "BUY" && prevDay.high >= minTargetPrice) return prevDay.high;
+      if (direction === "SELL" && prevDay.low <= minTargetPrice) return prevDay.low;
     }
 
     // Helper: get best liquidity from a given MarketStructure

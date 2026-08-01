@@ -92,6 +92,7 @@ export interface PipelineStatus {
   llmCircuitStates?: Record<string, string>;
   /** If pipeline was auto-stopped by a circuit breaker, this is the reason shown to the user */
   circuitBreakerReason?: string;
+  busySymbols: Set<string>;
 }
 
 export interface PipelineLog {
@@ -263,7 +264,7 @@ const pipeline = {
       lastLlmSignalKey: null,
       lastLlmVerdictTime: 0,
       allAnalyses: [],
-      busySymbols: new Set(),
+      busySymbols: new Set<string>(),
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -475,27 +476,27 @@ const pipeline = {
         ? cbCache.reason
         : undefined;
 
-      return {
-        running: false,
-        paused: false,
-        startedAt: null,
-        config: null,
-        metrics: {
-          totalTrades: 0,
-          winningTrades: 0,
-          losingTrades: 0,
-          totalPnL: 0,
-          dailyPnL: 0,
-          openPositions: 0,
-          currentDrawdown: 0,
-        },
-        lastSignal: null,
-        lastAnalysis: null,
-        allAnalyses: [],
-        busySymbols: new Set(),
-        lastError: null,
-        circuitBreakerReason,
-      };
+return {
+         running: false,
+         paused: false,
+         startedAt: null,
+         config: null,
+         metrics: {
+           totalTrades: 0,
+           winningTrades: 0,
+           losingTrades: 0,
+           totalPnL: 0,
+           dailyPnL: 0,
+           openPositions: 0,
+           currentDrawdown: 0,
+         },
+         lastSignal: null,
+         lastAnalysis: null,
+         allAnalyses: [],
+         lastError: null,
+         circuitBreakerReason,
+         busySymbols: new Set<string>(),
+       };
     }
 
     // Query real metrics dari DB + MT5
@@ -523,13 +524,14 @@ const pipeline = {
             openPositions: 0,
             currentDrawdown: 0,
           },
-          lastSignal: pipeline.lastSignal,
-          lastAnalysis: pipeline.lastAnalysis,
-          allAnalyses: pipeline.allAnalyses || [],
-          lastError: pipeline.lastError,
-          mt5CircuitState: "DISCONNECTED",
-          llmCircuitStates: pipeline.llmCircuitStates,
-        };
+        lastSignal: pipeline.lastSignal,
+        lastAnalysis: pipeline.lastAnalysis,
+        allAnalyses: pipeline.allAnalyses || [],
+        lastError: pipeline.lastError,
+        mt5CircuitState: "CONNECTED",
+        llmCircuitStates: pipeline.llmCircuitStates,
+        busySymbols: pipeline.busySymbols,
+      };
       }
       // Get current MT5 account ID
       let accountId;
@@ -630,11 +632,12 @@ const pipeline = {
       },
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
-      allAnalyses: pipeline.allAnalyses || [],
-      lastError: pipeline.lastError,
-      mt5CircuitState: mt5McpService.circuitBreakerState,
-      llmCircuitStates: llmConsensusService.getCircuitStates(),
-    };
+          allAnalyses: pipeline.allAnalyses || [],
+          lastError: pipeline.lastError,
+          mt5CircuitState: mt5McpService.circuitBreakerState,
+          llmCircuitStates: llmConsensusService.getCircuitStates(),
+          busySymbols: pipeline.busySymbols,
+        };
   }
 
   getPipelineLogs(userId: string, limit = 100): PipelineLog[] {
