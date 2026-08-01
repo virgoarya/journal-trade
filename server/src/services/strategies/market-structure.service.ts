@@ -1396,8 +1396,8 @@ class MarketStructureService {
       const shoulders = recentLows.slice(-4); // the most recent 4 swing lows
       if (shoulders.length >= 2) {
         const leftShoulder = shoulders[shoulders.length - 2]; // second-to-last low
-        const head = recentHighs[recentHighs.length - 1]; // highest recent swing high
-        if (head.price > leftShoulder.price && (head.index - leftShoulder.index) <= 15) {
+        const head = recentHighs.length > 0 ? recentHighs[recentHighs.length - 1] : null; // highest recent swing high
+        if (head && head.price > leftShoulder.price && (head.index - leftShoulder.index) <= 15) {
           quasimodos.push({
             type: "BULLISH",
             shoulder: leftShoulder.price,
@@ -1411,8 +1411,8 @@ class MarketStructureService {
       const heads = recentHighs.slice(-4); // the most recent 4 swing highs
       if (heads.length >= 2) {
         const leftHead = heads[heads.length - 2]; // second-to-last high
-        const shoulder = recentLows[recentLows.length - 1]; // lowest recent swing low
-        if (shoulder.price < leftHead.price && (shoulder.index - leftHead.index) <= 15) {
+        const shoulder = recentLows.length > 0 ? recentLows[recentLows.length - 1] : null; // lowest recent swing low
+        if (shoulder && shoulder.price < leftHead.price && (shoulder.index - leftHead.index) <= 15) {
           quasimodos.push({
             type: "BEARISH",
             head: leftHead.price,
@@ -1483,7 +1483,7 @@ class MarketStructureService {
 
     // CISD (Change in State of Delivery): candle terakhir yang menutup di luar OB terakhir
     // Contoh: Bullish OB di bawah → harga close di atas OB = CISD Bullish
-    if (obs.length > 0) {
+    if (obs.length > 0 && candles.length > 0) {
       const lastOB = obs[obs.length - 1];
       const lastCandle = candles[candles.length - 1];
       if (lastCandle) {

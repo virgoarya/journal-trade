@@ -157,7 +157,7 @@ class SMCStrategy {
         timeframe: "D1",
         condition: isDailyAligned || dailyBias.direction === "SIDEWAYS",
         isIndependent: true,
-        details: (status, isPassed) => dailyBias.details,
+        details: (status) => dailyBias.details,
       },
       {
         id: "smc-bos",
@@ -171,7 +171,7 @@ class SMCStrategy {
         label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
         timeframe: setupTfLabel,
         condition: sig.orderBlock?.hasSweep ?? false,
-        details: (status, isPassed) => sig.orderBlock?.hasSweep ?? false ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
+        details: (status) => sig.orderBlock?.hasSweep ?? false ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
       },
       {
         id: "smc-ob",
@@ -184,8 +184,8 @@ class SMCStrategy {
         },
         timeframe: htfTfLabel,
         condition: sig.breachType === "MSS" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || !!(sig.orderBlock || sig.h1OrderBlock || sig.breachType === "OB_MITIGATION"),
-        value: (status, isPassed) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
-        details: (status, isPassed) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
+        value: (status) => status === "PASSED" && sig.h1OrderBlock ? `${sig.h1OrderBlock.bottom.toFixed(5)} - ${sig.h1OrderBlock.top.toFixed(5)}` : (status === "PASSED" && sig.orderBlock ? `${obBottom} - ${obTop}` : undefined),
+        details: (status) => status === "PASSED" && sig.orderBlock?.hasCHOCH ? `Displacement candle created CHoCH at ${obChochPrice}` : undefined,
       },
       {
         id: "smc-mss",
@@ -215,14 +215,14 @@ class SMCStrategy {
           : `⑤ Retest ${pdArrayType} Zone (Pending ${sig.direction} Limit Order @ ${sig.entry.toFixed(5)})`,
         timeframe: entryTfLabel,
         condition: sig.breachType === "M5_CHOCH_OB" ? true : isEntryRetested,
-        details: (status, isPassed) => `Pending ${sig.direction} Limit Order at ${sig.entry.toFixed(5)} (Target: ${sig.tp.toFixed(5)})`,
+        details: (status) => `Pending ${sig.direction} Limit Order at ${sig.entry.toFixed(5)} (Target: ${sig.tp.toFixed(5)})`,
       },
       {
         id: "smc-rr",
         label: (status, isPassed) => `⑥ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         condition: isRRValid,
         isFailable: true,
-        details: (status, isPassed) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+        details: (status) => status === "PASSED" ? `R:R 1:${rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
   }

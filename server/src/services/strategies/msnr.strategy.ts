@@ -407,7 +407,7 @@ class MSNRStrategy {
         label: (status, isPassed) => qml ? `QML ${qml.type} at ${qml.shoulder.toFixed(5)}-${qml.head.toFixed(5)}` : `QML not detected`,
         timeframe: htfTfLabel,
         condition: !!qml,
-        details: (status, isPassed) => qml ? `QML level ${qml.shoulder.toFixed(5)} (shoulder) -> ${qml.head.toFixed(5)} (head)` : "",
+        details: (status) => qml ? `QML level ${qml.shoulder.toFixed(5)} (shoulder) -> ${qml.head.toFixed(5)} (head)` : "",
         isIndependent: true,
       },
       {
@@ -415,7 +415,7 @@ class MSNRStrategy {
         label: (status, isPassed) => snrFlip ? `SNR-Flip ${snrFlip.type} detected at ${snrFlip.level.toFixed(5)}` : `SNR-Flip not detected`,
         timeframe: htfTfLabel,
         condition: !!snrFlip,
-        details: (status, isPassed) => snrFlip ? `Flip at ${snrFlip.level.toFixed(5)}` : "",
+        details: (status) => snrFlip ? `Flip at ${snrFlip.level.toFixed(5)}` : "",
         isIndependent: true,
       },
       {
@@ -423,7 +423,7 @@ class MSNRStrategy {
         label: (status, isPassed) => ifvg ? `IFVG ${ifvg.type} detected at ${ifvg.top.toFixed(5)}-${ifvg.bottom.toFixed(5)}` : `IFVG not detected`,
         timeframe: htfTfLabel,
         condition: !!ifvg,
-        details: (status, isPassed) => ifvg ? `IFVG range ${ifvg.top.toFixed(5)} - ${ifvg.bottom.toFixed(5)}` : "",
+        details: (status) => ifvg ? `IFVG range ${ifvg.top.toFixed(5)} - ${ifvg.bottom.toFixed(5)}` : "",
         isIndependent: true,
       },
       {
@@ -431,7 +431,7 @@ class MSNRStrategy {
         label: (status, isPassed) => cisd ? `CISD ${cisd.type} at ${cisd.price.toFixed(5)}` : `CISD not detected`,
         timeframe: htfTfLabel,
         condition: !!cisd,
-        details: (status, isPassed) => cisd ? `CISD price ${cisd.price.toFixed(5)}` : "",
+        details: (status) => cisd ? `CISD price ${cisd.price.toFixed(5)}` : "",
         isIndependent: true,
       },
       {
@@ -439,14 +439,14 @@ class MSNRStrategy {
         label: (status, isPassed) => `④ ${entryTfLabel} Entry retest OB/CISD (pending order ${sig.direction} Limit)`,
         timeframe: entryTfLabel,
         condition: entryRiskValidation.entryOk,
-        details: (status, isPassed) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
+        details: (status) => status === "PASSED" ? `Pending ${sig.direction} Limit at ${sig.entry.toFixed(5)}` : "Menunggu konfirmasi harga.",
       },
       {
         id: "msnr-rr",
         label: (status, isPassed) => `⑤ Minimum Risk-to-Reward 1:2 ${status === "PASSED" ? "terpenuhi" : "belum terpenuhi"}`,
         condition: entryRiskValidation.rrOk,
         isFailable: true,
-        details: (status, isPassed) => status === "PASSED" ? `R:R 1:${entryRiskValidation.rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
+        details: (status) => status === "PASSED" ? `R:R 1:${entryRiskValidation.rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
   }
