@@ -1150,7 +1150,7 @@ return {
 
             const isTrade = llmResult.verdict === "GOOD";
             this.addLog(userId, "CONFLUENCE",
-              `[2/4] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"} | Reasoning: ${llmResult.details}`,
+              `[2/4] [${signal.symbol}] LLM CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}\nReasoning:\n${llmResult.details}`,
               { llmConsensus: llmResult },
             );
 

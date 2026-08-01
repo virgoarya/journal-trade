@@ -638,8 +638,8 @@ class LLMConsensusService {
 
     const ratioPct = Math.round(approvalRatio * 100);
     const thresholdPct = Math.round(threshold * 100);
-    const details = `Consensus Ratio: ${ratioPct}% / Threshold: ${thresholdPct}% | ` + 
-      validVotes.map((v) => `${v.provider}(${v.modelLabel}): ${v.verdict} — ${v.reasoning}`).join(" | ");
+const details = `Consensus Ratio: ${ratioPct}% / Threshold: ${thresholdPct}%\n  - ` + 
+    validVotes.map((v) => `${v.provider}(${v.modelLabel}): ${v.verdict} — ${v.reasoning}`).join("\n  - ");
 
     silentLogger.info(
       `[LLM-CONSENSUS] ${finalVerdict} (G:${goodVotes}/B:${badVotes}/S:${skipVotes}/${totalVotes}) [Ratio: ${ratioPct}% vs Threshold: ${thresholdPct}%] ${signal.symbol} ${signal.direction}`,
