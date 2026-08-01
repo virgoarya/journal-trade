@@ -250,7 +250,7 @@ class MarketStructureService {
     let fairValueGaps = this.detectFVG(candles);
     const breakerBlocks = this.detectBreakerBlocks(orderBlocks, candles, swingHighs, swingLows);
     const keyLevels = this.identifyKeyLevels(candles, swingHighs, swingLows);
-    let liquidityZones = this.detectLiquidityZones(swingHighs, swingLows);
+      let liquidityZones = this.detectLiquidityZones(swingHighs, swingLows, candles);
     const candleRanges = this.analyzeCandleRanges(candles);
 
     fairValueGaps = this.updateMitigations(candles, fairValueGaps);
@@ -907,45 +907,105 @@ class MarketStructureService {
 
   // ── Liquidity Zone Detection (LIT Style) ───────────────────────────
 
-  /**
-   * Liquidity clusters form at swing highs (where buy‑side stops sit)
-   * and swing lows (where sell‑side stops sit). The more swing points
-   * within a price tolerance, the denser the liquidity.
-   */
-  detectLiquidityZones(swingHighs: SwingHigh[], swingLows: SwingLow[]): LiquidityZone[] {
+  detectLiquidityZones(swingHighs: SwingHigh[], swingLows: SwingLow[], candles: Candle[]): LiquidityZone[] {
     const zones: LiquidityZone[] = [];
     const tolerancePct = LEVEL_CLUSTER_TOLERANCE_PCT;
 
     // Process swing highs → buy‑side liquidity (stops above)
-    const highPrices = swingHighs.map((s) => s.price);
-    const highClusters = this.clusterPrices(highPrices, tolerancePct);
+    const highClusters = this.clusterSwingHighs(swingHighs, tolerancePct);
 
     for (const cluster of highClusters) {
       zones.push({
         price: cluster.avg,
         type: "BUY_SIDE",
-        density: cluster.indices.length,
-        swingIndices: cluster.indices,
-        swept: false,
+        density: cluster.points.length,
+        swingIndices: cluster.points.map(p => p.index),
+        swept: this.checkLiquiditySweep(cluster.avg, "BUY_SIDE", candles, cluster.points[0].index),
       });
     }
 
     // Process swing lows → sell‑side liquidity (stops below)
-    const lowPrices = swingLows.map((s) => s.price);
-    const lowClusters = this.clusterPrices(lowPrices, tolerancePct);
+    const lowClusters = this.clusterSwingLows(swingLows, tolerancePct);
 
     for (const cluster of lowClusters) {
       zones.push({
         price: cluster.avg,
         type: "SELL_SIDE",
-        density: cluster.indices.length,
-        swingIndices: cluster.indices,
-        swept: false,
+        density: cluster.points.length,
+        swingIndices: cluster.points.map(p => p.index),
+        swept: this.checkLiquiditySweep(cluster.avg, "SELL_SIDE", candles, cluster.points[0].index),
       });
     }
 
     // Sort by density desc, top 10
     return zones.sort((a, b) => b.density - a.density).slice(0, 10);
+  }
+
+  private clusterSwingHighs(swingHighs: SwingHigh[], tolerancePct: number): Array<{ avg: number; points: SwingHigh[] }> {
+    const sorted = [...swingHighs].sort((a, b) => a.price - b.price);
+    const clusters: Array<{ avg: number; points: SwingHigh[] }> = [];
+    const used = new Set<number>();
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (used.has(i)) continue;
+      const cluster: SwingHigh[] = [sorted[i]];
+      used.add(i);
+
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (used.has(j)) continue;
+        if (Math.abs(sorted[j].price - sorted[i].price) / sorted[i].price <= tolerancePct) {
+          cluster.push(sorted[j]);
+          used.add(j);
+        }
+      }
+
+      clusters.push({
+        avg: cluster.reduce((s, p) => s + p.price, 0) / cluster.length,
+        points: cluster,
+      });
+    }
+
+    return clusters;
+  }
+
+  private clusterSwingLows(swingLows: SwingLow[], tolerancePct: number): Array<{ avg: number; points: SwingLow[] }> {
+    const sorted = [...swingLows].sort((a, b) => a.price - b.price);
+    const clusters: Array<{ avg: number; points: SwingLow[] }> = [];
+    const used = new Set<number>();
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (used.has(i)) continue;
+      const cluster: SwingLow[] = [sorted[i]];
+      used.add(i);
+
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (used.has(j)) continue;
+        if (Math.abs(sorted[j].price - sorted[i].price) / sorted[i].price <= tolerancePct) {
+          cluster.push(sorted[j]);
+          used.add(j);
+        }
+      }
+
+      clusters.push({
+        avg: cluster.reduce((s, p) => s + p.price, 0) / cluster.length,
+        points: cluster,
+      });
+    }
+
+    return clusters;
+  }
+
+  /**
+   * Check if a liquidity zone has been swept by subsequent candles.
+   */
+  checkLiquiditySweep(zonePrice: number, type: "BUY_SIDE" | "SELL_SIDE", candles: Candle[], lastSwingIdx: number): boolean {
+    const subsequentCandles = candles.slice(lastSwingIdx + 1);
+
+    for (const c of subsequentCandles) {
+      if (type === "BUY_SIDE" && c.high >= zonePrice) return true;
+      if (type === "SELL_SIDE" && c.low <= zonePrice) return true;
+    }
+    return false;
   }
 
   // ── Candle Range Analysis (CRT Style) ──────────────────────────────

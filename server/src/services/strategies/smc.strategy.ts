@@ -145,7 +145,10 @@ class SMCStrategy {
     const obTop = sig.orderBlock ? sig.orderBlock.top.toFixed(5) : "N/A";
     const obBottom = sig.orderBlock ? sig.orderBlock.bottom.toFixed(5) : "N/A";
     const obChochPrice = sig.orderBlock?.chochPrice?.toFixed(5) || relHigh;
-    const obSweepPrice = sig.orderBlock?.sweepPrice?.toFixed(5) || relLow;
+    
+    const liquidityZone = fractal.directionStr?.liquidityZones?.find(lz => lz.swept && lz.type === (isBuy ? "SELL_SIDE" : "BUY_SIDE"));
+    const obSweepPrice = liquidityZone ? liquidityZone.price.toFixed(5) : (sig.orderBlock?.sweepPrice?.toFixed(5) || relLow);
+    const hasRecentSweep = (sig.orderBlock?.hasSweep ?? false) || !!liquidityZone;
 
     const pdArrayType = isBuy ? "Discount PD Array" : "Premium PD Array";
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
@@ -166,13 +169,13 @@ class SMCStrategy {
         condition: isHtfBosConfirmed,
         isFailable: true,
       },
-      {
-        id: "smc-liq",
-        label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
-        timeframe: setupTfLabel,
-        condition: sig.orderBlock?.hasSweep ?? false,
-        details: (status) => sig.orderBlock?.hasSweep ?? false ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Liquidity sweep confirmed at ${obSweepPrice}`,
-      },
+{
+            id: "smc-liq",
+            label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
+            timeframe: setupTfLabel,
+            condition: hasRecentSweep,
+            details: (status) => `Liquidity inducement swept recently on ${setupTfLabel}`,
+        },
       {
         id: "smc-ob",
         label: (status, isPassed) => {

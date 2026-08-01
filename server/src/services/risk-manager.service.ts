@@ -370,7 +370,7 @@ class RiskManagerService {
       const openAiPositionIds = new Set<number>();
       for (const pos of positions) {
         if (isAiComment(pos.comment)) {
-          openAiPositionIds.add(pos.ticket ?? pos.position_id ?? 0);
+          openAiPositionIds.add(pos.ticket ?? (pos as any).position_id ?? 0);
         }
       }
 
@@ -393,7 +393,7 @@ class RiskManagerService {
 
       // Floating PnL: attribute by position comment
       for (const pos of positions) {
-        const isAi = isAiComment(pos.comment) || openAiPositionIds.has(pos.ticket ?? pos.position_id ?? 0);
+        const isAi = isAiComment(pos.comment) || openAiPositionIds.has(pos.ticket ?? (pos as any).position_id ?? 0);
         if (isAi) {
           aiPnL += pos.profit;
         } else {
