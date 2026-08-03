@@ -1,0 +1,28 @@
+{
+  "name": "hunter-trades-desktop",
+  "version": "1.0.0",
+  "description": "Hunter Trades — AI Trading Journal & Server Manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../frontend && npm run build",
+    "build:server": "cd ../server && npx tsc",
+    "build:win": "electron-builder --win --publish never",
+    "build:all": "npm run build:frontend && npm run build:server && npm run build:win",
+    "release": "electron-builder --win --publish always",
+    "release:all": "npm run build:frontend && npm run build:server && npm run release"
+  },
+  "author": "Hunter Trades",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "allowScripts": {
+    "electron@35.7.5": true,
+    "electron-winstaller@5.4.0": true
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

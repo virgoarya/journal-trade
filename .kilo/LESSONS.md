@@ -198,8 +198,28 @@
 2. Memperbarui `getActiveChecklist()` pada [MethodologyConfluence.tsx](file:///d:/Journal%20Trade/frontend/src/app/%28dashboard%29/ai-trading/components/MethodologyConfluence.tsx) untuk melakukan fallback otomatis ke `confluence.checklistByMethodology` sehingga tab NET / SMC / ICT / MSNR selalu menampilkan item checklist secara utuh.
 **Hindari**: Jangan pernah melepas fallback checklist pada komponen UI konfluensi agar status pemindaian selalu transparan kepada user.
 
+### [20260802] Hardcoded Unix Path di registerAitrados Crash Windows
+**Area**: Backend / MCP Service
+**Root Cause**: Method `registerAitrados()` di `mcp.service.ts` hardcoded path Unix `/usr/local/bin/finance-trading-ai-agents-mcp`. Di `index.ts`, `mcpBinPath()` sudah resolve path per-OS dengan benar, tapi TIDAK mempassing path tersebut ke method. Selain itu, `child.on("error")` melakukan `throw` di dalam event listener yang menyebabkan uncaught exception crash.
+**Solusi**: Tambah parameter `commandPath: string` ke `registerAitrados()`. Fix error handler menggunakan Promise pattern untuk menangkap spawn error secara graceful.
+**Hindari**: Jangan hardcode path binary di dalam method yang dipanggil lintas platform. Jangan `throw` di dalam event listener `child.on("error")` — selalu gunakan Promise/callback pattern.
 
-
+### [20260802] Migrasi Railway ke Full Local Setup
+**Area**: Backend / Python Client / Frontend
+**Root Cause**: Semua komponen (Python EXE, Node.js backend, frontend) masih hardcode URL Railway (`wss://journal-trade-production.up.railway.app`). Saat tidak ada Railway, Python EXE gagal connect dan backend terus retry.
+**Solusi**: Ganti semua URL ke `ws://localhost:5000/ws/mt5-stream` (Python), deteksi otomatis dari `window.location` (frontend), dan hapus referensi "Railway" dari semua log/UI messages.
+### [20260803] Electron Desktop App Bundling (Next.js Standalone + Express Server)
+**Area**: Desktop / Electron / Next.js / Backend
+**Root Cause**: 
+1. `next.config.ts` memerlukan `output: 'standalone'` agar Next.js membundel runtime server minimal di `.next/standalone`. Namun, aset statis (`.next/static`) dan folder `public/` TIDAK otomatis disalin ke folder standalone oleh Next.js, sehingga electron-builder harus mengikutsertakan keduanya via `extraResources`.
+2. Pada Windows, `spawn("npx", ...)` tanpa `.cmd` atau tanpa shell execution gagal menemukan executable `npx`.
+3. Jika backend atau frontend sudah berjalan di terminal developer (port 5000 / 3000), spawning kedua kali akan memicu port collision.
+4. Pada packaged Electron app di Windows, `spawn(process.execPath, ...)` dengan `ELECTRON_RUN_AS_NODE: "1"` sering kali diabaikan oleh Electron 35 dan justru meluncurkan instance GUI baru (recursive GUI window).
+**Solusi**:
+1. Konfigurasikan `extraResources` di `electron-builder.yml` untuk memetakan `frontend/.next/standalone`, `frontend/.next/static`, `frontend/public`, `server/dist`, `server/node_modules`, dan `server/.env`.
+2. Pada `desktop/main.js`, tambahkan pengecekan HTTP health check sebelum spawn (`isPortResponding`). Jika port 5000 / 3000 sudah aktif, lewati spawn.
+3. Gunakan `utilityProcess.fork(scriptPath, args, options)` di production mode. `utilityProcess` adalah API resmi Electron untuk menjalankan background Node.js child processes tanpa membuka window atau memerlukan Node.js eksternal.
+**Hindari**: Jangan gunakan `spawn(process.execPath)` untuk child node script di packaged Electron; selalu gunakan `utilityProcess.fork()`. Hindari membundel virtualenv Python yang berisi puluhan file `.exe` yang memperlambat signtool.
 
 
 

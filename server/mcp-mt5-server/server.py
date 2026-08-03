@@ -980,8 +980,8 @@ import argparse
 import asyncio
 
 def run_ws_client(app_instance=None):
-    # URL WebSocket Railway (pastikan sesuai dengan environment production)
-    WS_URL = "wss://journal-trade-production.up.railway.app/ws/mt5-stream"
+    # URL WebSocket Server Lokal
+    WS_URL = "ws://localhost:5000/ws/mt5-stream"
     
     async def tick_streamer(ws):
         while True:
@@ -1057,7 +1057,7 @@ def run_ws_client(app_instance=None):
         while True:
             try:
                 async with websockets.connect(WS_URL) as ws:
-                    print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Railway: {WS_URL}")
+                    print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Server Lokal: {WS_URL}")
                     if app_instance:
                         app_instance.set_status(True)
                     

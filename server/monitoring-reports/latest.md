@@ -1,32 +1,56 @@
 # System Monitoring Report
 
-**Generated:** 20/7/2026, 01.19.29 WIB
-**Status:** 🟡 WARNING
+**Generated:** 3/8/2026, 08.31.59 WIB
+**Status:** 🔴 CRITICAL
 
 ---
 
 ## Executive Summary
 
-6 warning(s), no critical issues
+10 critical issue(s), 9 warning(s)
+
+## 🔴 Critical Issues
+
+- [mt5] MT5 connection lost
+-   -> MT5 tidak terhubung - pipeline auto-paused
+- [llm_consensus] All LLM providers unavailable
+-   -> 💤 DeepSeek V4 (deepseek): hibernasi
+-   -> 💤 GPT OSS 120B (gpt): hibernasi
+-   -> 💤 Gemini 2.5 Flash (gemini): hibernasi
+-   -> 💤 Mistral Large (mistral): hibernasi
+-   -> 💤 Nemotron 3 Ultra (nemotron): hibernasi
+-   -> 💤 Claude Opus 4.7 (claude-opus): hibernasi
+-   -> Semua LLM provider tidak tersedia - consensus akan fallback ke rule-based
 
 ## 🟡 Warnings
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 93.1% used (5.93GB total)
--   -> Uptime: 60.1h
+-   -> Memory: 90.5% used (5.93GB total)
+-   -> Uptime: 9.6h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 93.1% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 90.5% (threshold: 85%)
+- [data_quality] Data quality issues detected (2)
+-   -> [XAUUSD.l] MT5 not connected - cannot query rates
+-   -> [BTCUSD.l] MT5 not connected - cannot query rates
+
+## Recommended Actions
+
+| # | Action | Component |
+|---|--------|-----------|
+| 1 | Restart MT5 MCP service | - |
+| 2 | Verify MT5 terminal is running on broker VPS | - |
+| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
+| 4 | Rotate LLM providers via 9Router configuration | - |
+| 5 | Request quota increase for rate-limited providers | - |
+| 6 | Consider adding backup provider (e.g. Groq) | - |
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 1 |
+| connected | 0 |
 | circuitState | CLOSED |
-| balance | 47192.91 |
-| equity | 49940.91 |
-| marginLevel | 750.5047104808763 |
 | activePipelines | 1 |
 | 6a26146a9cad211ba0631027.running | 1 |
 | 6a26146a9cad211ba0631027.paused | 0 |
@@ -35,72 +59,75 @@
 | 6a26146a9cad211ba0631027.pnl | 0 |
 | 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 6 |
-| hibernasiProviders | 0 |
+| activeProviders | 0 |
+| hibernasiProviders | 6 |
 | circuitOpenProviders | 0 |
-| provider.deepseek | active |
-| provider.gpt | active |
-| provider.gemini | active |
-| provider.mistral | active |
-| provider.nemotron | active |
-| provider.claude-opus | active |
-| availableForConsensus | 6 |
+| provider.deepseek | hibernasi |
+| provider.gpt | hibernasi |
+| provider.gemini | hibernasi |
+| provider.mistral | hibernasi |
+| provider.nemotron | hibernasi |
+| provider.claude-opus | hibernasi |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 93.1 |
-| uptimeHours | 60.1 |
+| memoryUsagePercent | 90.5 |
+| uptimeHours | 9.6 |
 | checkedPipelines | 1 |
-| dataIssues | 0 |
+| dataIssues | 2 |
 
 ## Detailed Health Checks
 
-### 🟢 MT5
+### 🔴 MT5
 
-- **Severity:** healthy
-- **Summary:** MT5 connected and operational
-- **Time:** 2026-07-19T18:19:29.224Z
+- **Severity:** critical
+- **Summary:** MT5 connection lost
+- **Time:** 2026-08-03T01:31:59.383Z
 
-- Balance: $47192.91, Equity: $49940.91
+- MT5 tidak terhubung - pipeline auto-paused
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
 - **Summary:** 1 pipeline(s) running
-- **Time:** 2026-07-19T18:19:29.286Z
+- **Time:** 2026-08-03T01:31:59.424Z
 
 - Found 1 active pipeline(s)
 
-### 🟢 LLM_CONSENSUS
+### 🔴 LLM_CONSENSUS
 
-- **Severity:** healthy
-- **Summary:** 6 provider(s) available for consensus
-- **Time:** 2026-07-19T18:19:29.222Z
+- **Severity:** critical
+- **Summary:** All LLM providers unavailable
+- **Time:** 2026-08-03T01:31:59.384Z
 
-- ✅ DeepSeek V4 (deepseek): active
-- ✅ GPT OSS 120B (gpt): active
-- ✅ Gemini 2.5 Flash (gemini): active
-- ✅ Mistral Large (mistral): active
-- ✅ Nemotron 3 Ultra (nemotron): active
-- ✅ Claude Opus 4.7 (claude-opus): active
+- 💤 DeepSeek V4 (deepseek): hibernasi
+- 💤 GPT OSS 120B (gpt): hibernasi
+- 💤 Gemini 2.5 Flash (gemini): hibernasi
+- 💤 Mistral Large (mistral): hibernasi
+- 💤 Nemotron 3 Ultra (nemotron): hibernasi
+- 💤 Claude Opus 4.7 (claude-opus): hibernasi
+- Semua LLM provider tidak tersedia - consensus akan fallback ke rule-based
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-07-19T18:19:29.222Z
+- **Time:** 2026-08-03T01:31:59.384Z
 
 - CPU: 4 cores
-- Memory: 93.1% used (5.93GB total)
-- Uptime: 60.1h
+- Memory: 90.5% used (5.93GB total)
+- Uptime: 9.6h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 93.1% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 90.5% (threshold: 85%)
 
-### 🟢 DATA_QUALITY
+### 🟡 DATA_QUALITY
 
-- **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-07-19T18:19:29.268Z
+- **Severity:** warning
+- **Summary:** Data quality issues detected (2)
+- **Time:** 2026-08-03T01:31:59.424Z
+
+- [XAUUSD.l] MT5 not connected - cannot query rates
+- [BTCUSD.l] MT5 not connected - cannot query rates
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 20/7/2026, 02.19.47 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 3/8/2026, 09.31.59 WIB*

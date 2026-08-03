@@ -78,6 +78,7 @@ class MCPService {
   }
 
   async registerAitrados(
+    commandPath: string,
     port: number = 11999,
     host: string = "127.0.0.1",
     retries = 2,
@@ -92,7 +93,7 @@ class MCPService {
       let child: any = null;
       try {
         child = spawn(
-          "/usr/local/bin/finance-trading-ai-agents-mcp",
+          commandPath,
           ["serve", "--port", String(port), "--host", host],
           {
             env: {
@@ -104,7 +105,13 @@ class MCPService {
             stdio: ["pipe", "inherit", "inherit"],
           },
         );
-        child.on("error", (e: Error) => { throw e; });
+        // Capture spawn errors (e.g. ENOENT) and reject gracefully instead of crashing
+        const spawnError = await new Promise<Error | null>((resolve) => {
+          child.on("error", (e: Error) => resolve(e));
+          // If no error within 1s, the process spawned successfully
+          setTimeout(() => resolve(null), 1000);
+        });
+        if (spawnError) throw spawnError;
         this.processes.set(serverName, child);
 
         await new Promise(r => setTimeout(r, 3000));

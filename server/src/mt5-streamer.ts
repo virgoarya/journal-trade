@@ -16,7 +16,7 @@ export const mt5StreamCache = {
 
 export const executeMt5Command = async (action: string, payload: any = {}): Promise<any> => {
   if (!activeMt5Socket || activeMt5Socket.readyState !== WebSocket.OPEN) {
-    throw new Error("MT5 Streamer (Python .exe) is not connected to Railway.");
+    throw new Error("MT5 Streamer (Python .exe) is not connected.");
   }
 
   return new Promise((resolve, reject) => {

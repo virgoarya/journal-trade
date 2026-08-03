@@ -98,7 +98,7 @@ class App(ctk.CTk):
 
         self.start_btn = ctk.CTkButton(
             self.footer_frame, 
-            text="Connect to Railway", 
+            text="Connect to Server", 
             fg_color=GOLD, 
             text_color="black",
             hover_color="#B5952F",
@@ -122,7 +122,7 @@ class App(ctk.CTk):
         self.log("========================================")
         self.log(" Hunter Trades AI Trading Client")
         self.log("========================================")
-        self.log("Ready. Click 'Connect to Railway' to start.")
+        self.log("Ready. Click 'Connect to Server' to start.")
 
         # Redirect stdout and stderr to GUI
         sys.stdout = PrintRedirector(self.log)

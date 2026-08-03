@@ -144,7 +144,7 @@ connectDB()
           console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
         } else {
           console.log("Starting Aitrados MCP Server...");
-          mcpService.registerAitrados(11999, "127.0.0.1")
+          mcpService.registerAitrados(aitradosMcpPath, 11999, "127.0.0.1")
             .catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
         }
       }

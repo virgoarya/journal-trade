@@ -29,21 +29,16 @@ export function useMT5Stream(
     let reconnectTimeout: NodeJS.Timeout;
 
     const connect = () => {
-      // Determine backend WS URL
-      const host = window.location.host;
-      const isLocal = host.includes("localhost");
-      
-      // We connect directly to Railway WS backend in production
-      const wsUrl = isLocal 
-        ? "ws://localhost:5000" // Backend port is 5000 in dev
-        : "wss://journal-trade-production.up.railway.app";
-        
+      // Determine backend WS URL based on current page protocol/host
+      const proto = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${proto}://${window.location.hostname}:5000`;
+         
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setIsConnected(true);
-        console.log("[MT5 Stream] Connected to Railway backend.");
+        console.log("[MT5 Stream] Connected to backend WS server.");
         // Subscribe to MT5 channel? Wait, in ws-server.ts, we need to send a subscribe message?
         // Let's just listen. If we need to authenticate or subscribe, we can do it here.
         // But ws-server.ts in backend doesn't require explicit subscribe if we just broadcast to "mt5".

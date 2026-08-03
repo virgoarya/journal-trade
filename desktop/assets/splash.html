@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hunter Trades</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .splash-container {
+      width: 440px;
+      height: 320px;
+      background: linear-gradient(145deg, #0A0A0A 0%, #141414 50%, #0D0D0D 100%);
+      border: 1px solid rgba(212, 175, 55, 0.15);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      box-shadow:
+        0 0 60px rgba(0, 0, 0, 0.8),
+        0 0 30px rgba(212, 175, 55, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle gold shimmer effect */
+    .splash-container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(212, 175, 55, 0.03) 0%,
+        transparent 70%
+      );
+      animation: shimmer 4s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+    .logo-container {
+      position: relative;
+      z-index: 1;
+      width: 72px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-container img {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.2));
+    }
+
+    /* Fallback if no image */
+    .logo-fallback {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #D4AF37, #B5952F);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #0A0A0A;
+      letter-spacing: -1px;
+    }
+
+    .title {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .title h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #FFFFFF;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .title p {
+      font-size: 11px;
+      color: rgba(212, 175, 55, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      font-weight: 500;
+    }
+
+    .loading-section {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Minimal loading bar */
+    .loading-bar {
+      width: 200px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .loading-bar-fill {
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, transparent, #D4AF37, transparent);
+      border-radius: 1px;
+      animation: loading 1.5s ease-in-out infinite;
+    }
+
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    .status-text {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.3);
+      letter-spacing: 0.5px;
+    }
+
+    /* Version tag */
+    .version {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.1);
+      z-index: 1;
+      font-family: 'Consolas', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container">
+    <div class="logo-container">
+      <img src="icon.png" alt="Hunter Trades Logo" />
+    </div>
+
+    <div class="title">
+      <h1>Hunter Trades</h1>
+      <p>AI Trading Journal</p>
+    </div>
+
+    <div class="loading-section">
+      <div class="loading-bar">
+        <div class="loading-bar-fill"></div>
+      </div>
+      <span class="status-text">Starting servers...</span>
+    </div>
+
+    <span class="version">v1.0.0</span>
+  </div>
+</body>
+</html>

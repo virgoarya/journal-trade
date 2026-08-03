@@ -92,7 +92,7 @@ export interface SimulatedTrade {
   volume: number;
   pnl: number;
   pnlPercent: number;
-  closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT";
+  closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT" | "CIRCUIT_BREAKER";
   exitMethodology?: string;
   rr?: number;
   rsiAtEntry?: number;
@@ -1171,23 +1171,51 @@ class BacktestService {
               : (trade.entryPrice - closePrice) / pointValue * trade.volume * pointValue * contractSize;
 
             const pnl = Math.round(rawPnl * 100) / 100;
+            const pnlPercent = trade.volume > 0 ? (pnl / (trade.entryPrice * trade.volume)) * 100 : 0;
             equity += pnl;
-            totalTrades++;
-            if (pnl > 0) winningTrades++;
-            else if (pnl < 0) losingTrades++;
-            else breakEvenTrades++;
+            allReturns.push(pnlPercent);
+            if (pnl > 0) { winCount++; totalWin += pnl; if (pnl > largestWin) largestWin = pnl; }
+            else { lossCount++; totalLoss += Math.abs(pnl); if (Math.abs(pnl) > largestLoss) largestLoss = Math.abs(pnl); }
 
-            allTrades.push({ ...trade, closePrice, closeTime, pnl, closeReason: "CIRCUIT_BREAKER", barsHeld: trade.barsHeld });
+            tradeResults.push({
+              entryTime: trade.entryTime, exitTime: closeTime,
+              symbol: trade.symbol, direction: trade.direction,
+              entryPrice: trade.entryPrice, exitPrice: closePrice,
+              sl: trade.sl, tp: trade.tp, volume: trade.volume,
+              pnl, pnlPercent, closeReason: "CIRCUIT_BREAKER", exitMethodology: "Circuit Breaker",
+              trailingHistory: trade.trailingHistory,
+              primaryMethodology: trade.primaryMethodology,
+              methodologyConfidence: trade.methodologyConfidence,
+              methodologyCount: trade.methodologyCount,
+              confidence: trade.confidence,
+              rr: trade.direction === "BUY" 
+                ? (trade.entryPrice - trade.sl > 0 ? (closePrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
+                : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - closePrice) / (trade.sl - trade.entryPrice) : 0),
+            });
             openTrades.delete(key);
-            emit({ type: "trade_close", data: { symbol: trade.symbol, direction: trade.direction, closePrice, pnl, closeReason: "CIRCUIT_BREAKER" } });
+            emit({
+              type: "trade_close",
+              data: {
+                entryTime: trade.entryTime, exitTime: closeTime,
+                symbol: trade.symbol, direction: trade.direction,
+                entryPrice: trade.entryPrice, exitPrice: closePrice,
+                volume: trade.volume,
+                pnl, pnlPercent, reason: "CIRCUIT_BREAKER", confidence: trade.confidence,
+                primaryMethodology: trade.primaryMethodology,
+                rr: trade.direction === "BUY" 
+                  ? (trade.entryPrice - trade.sl > 0 ? (closePrice - trade.entryPrice) / (trade.entryPrice - trade.sl) : 0)
+                  : (trade.sl - trade.entryPrice > 0 ? (trade.entryPrice - closePrice) / (trade.sl - trade.entryPrice) : 0),
+                exitMethodology: "Circuit Breaker",
+              },
+            });
           }
 
           emit({
             type: "progress",
             data: {
-              currentStep: timelineStep, totalSteps: totalTimelineSteps,
-              equity: Math.round(equity * 100) / 100,
-              message: `⛔ Circuit Breaker: Equity dropped ${smartEarly.globalDrawdownLimit.maxDrawdownPct}% below initial balance. Backtest halted.`,
+              currentCandle: timelineStep,
+              totalCandles: totalTimelineSteps,
+              percent: Math.min(100, Math.round((timelineStep / totalTimelineSteps) * 100)),
             }
           });
           break; // Stop the entire backtest loop immediately

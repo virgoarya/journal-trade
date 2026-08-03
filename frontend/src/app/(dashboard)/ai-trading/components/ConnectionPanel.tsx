@@ -200,7 +200,7 @@ export function ConnectionPanel({
                 <div className="bg-accent-gold/20 text-accent-gold font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</div>
                 <div>
                   <p className="font-semibold text-white mb-1">Hubungkan ke MT5</p>
-                  <p className="text-text-muted leading-relaxed">Setelah layar hitam (CMD) muncul dan tertulis "Berhasil terhubung ke Railway", cukup isi Broker, Login MT5, dan Password Anda di form sebelah kiri, lalu klik <strong>Establish Connection</strong>.</p>
+                  <p className="text-text-muted leading-relaxed">Setelah layar hitam (CMD) muncul dan tertulis "Berhasil terhubung ke Server", cukup isi Broker, Login MT5, dan Password Anda di form sebelah kiri, lalu klik <strong>Establish Connection</strong>.</p>
                 </div>
               </div>
             </div>

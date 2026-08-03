@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { UpdateNotification } from "@/components/layout/UpdateNotification";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
@@ -160,6 +161,9 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* In-App Auto-Update Notification */}
+      <UpdateNotification />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import path from "node:path";
 
 const nextConfig: NextConfig = {
+  output: 'standalone', // Self-contained server for Electron desktop packaging
   devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
   // Set turbopack root to frontend directory to avoid workspace warning
   turbopack: {
