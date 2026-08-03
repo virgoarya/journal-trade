@@ -219,8 +219,14 @@
 1. Konfigurasikan `extraResources` di `electron-builder.yml` untuk memetakan `frontend/.next/standalone`, `frontend/.next/static`, `frontend/public`, `server/dist`, `server/node_modules`, dan `server/.env`.
 2. Pada `desktop/main.js`, tambahkan pengecekan HTTP health check sebelum spawn (`isPortResponding`). Jika port 5000 / 3000 sudah aktif, lewati spawn.
 3. Gunakan `utilityProcess.fork(scriptPath, args, options)` di production mode. `utilityProcess` adalah API resmi Electron untuk menjalankan background Node.js child processes tanpa membuka window atau memerlukan Node.js eksternal.
-**Hindari**: Jangan gunakan `spawn(process.execPath)` untuk child node script di packaged Electron; selalu gunakan `utilityProcess.fork()`. Hindari membundel virtualenv Python yang berisi puluhan file `.exe` yang memperlambat signtool.
+### [20260803] Global DNS Override (8.8.8.8) Hangs MongoDB Atlas Connection di Jaringan Tertentu
+**Area**: Backend / Network / MongoDB Atlas / Electron Desktop
+**Root Cause**: Pemanggilan `dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"])` di Node.js memaksa semua DNS resolver melewati port UDP 53 ke server publik Google. Pada beberapa provider/ISP Indonesia (IndiHome, Telkomsel), paket UDP port 53 ke DNS luar sering di-intercept, di-drop secara senyap (silent drop), atau diblokir. Hal ini menyebabkan driver MongoDB `mongodb+srv://` yang membutuhkan query SRV DNS menggantung (*hang*) tanpa henti, tidak melempar error, dan mencegah Express server listen ke port 5000 sehingga Electron menampilkan dialog timeout 60 detik.
+**Solusi**: Hapus total pemanggilan `dns.setServers()` dan biarkan Node.js menggunakan DNS default sistem operasi pengguna atau resolver lokal.
+**Hindari**: Jangan pernah meng-override global DNS resolver `dns.setServers()` di aplikasi produksi Node.js tanpa fallback atau izin eksplisit pengguna.
 
-
-
-
+### [20260803] Windows Desktop Shortcut Icon Blank / Kertas Putih
+**Area**: Desktop / Electron Builder / Branding
+**Root Cause**: File `icon.ico` yang dibuat hanya dengan merename `.png` menjadi `.ico` atau file ICO dengan header single-resolution tidak dikenali dengan baik oleh Windows Shell Explorer dan NSIS Installer, sehingga shortcut di Desktop muncul sebagai ikon kertas putih default.
+**Solusi**: Gunakan converter script (atau generator berbasis Jimp/png2icons) untuk membuat file `icon.ico` dengan multi-resolusi lengkap (16, 24, 32, 48, 64, 128, 256 px). Pastikan `electron-builder.yml` mereferensikan `build/icon.ico` pada opsi `win.icon`, `nsis.installerIcon`, dan `nsis.uninstallerIcon`.
+**Hindari**: Jangan merename file format `.png` langsung menjadi `.ico` tanpa encoding format binary ICO sesungguhnya.

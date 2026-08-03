@@ -1,8 +1,4 @@
-// Force Google DNS for SRV lookups (MongoDB Atlas requires SRV resolution)
-// Indonesian ISPs often block or don't support SRV DNS queries
-import dns from "node:dns";
-dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
-
+// Removed dns.setServers to prevent hanging on networks that block 8.8.8.8
 process.env.PYTHONIOENCODING = "utf-8";
 
 import express from "express";

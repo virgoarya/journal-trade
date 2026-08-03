@@ -1,6 +1,6 @@
 {
   "name": "hunter-trades-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Hunter Trades — AI Trading Journal & Server Manager",
   "main": "main.js",
   "scripts": {
