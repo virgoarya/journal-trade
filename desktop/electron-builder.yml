@@ -12,7 +12,7 @@ publish:
   provider: github
   owner: virgoarya
   repo: journal-trade
-  releaseType: release
+  releaseType: draft
 
 # Windows build
 win:
@@ -21,8 +21,7 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
-  requestedExecutionLevel: asInvoker
-  signAndEditExecutable: false
+  signExecutable: false
 
 # NSIS installer configuration
 nsis:
