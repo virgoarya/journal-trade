@@ -1,4 +1,11 @@
-// Removed dns.setServers to prevent hanging on networks that block 8.8.8.8
+import dns from "node:dns";
+// Set reliable DNS servers for Node.js c-ares resolver on Windows (prevents querySrv ECONNREFUSED on MongoDB Atlas)
+try {
+  dns.setServers(["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]);
+} catch (err) {
+  console.warn("Could not set custom DNS servers:", err);
+}
+
 process.env.PYTHONIOENCODING = "utf-8";
 
 import express from "express";
@@ -88,12 +95,60 @@ const syncMacroMarketStream = () => {
   }
 };
 
+let authHandler: any = null;
+
+app.use("/api/auth", authLimiter);
+
+app.use((req, res, next) => {
+  if (req.url.startsWith("/api/auth")) {
+    if (authHandler) {
+      authHandler(req, res).catch((err: any) => {
+        console.error("Auth error:", err);
+        next(err);
+      });
+    } else {
+      res.status(503).json({ error: "Database connecting, please retry in a moment" });
+    }
+  } else {
+    next();
+  }
+});
+
+// Apply general API rate limiter to all API routes
+app.use("/api", apiLimiter, apiRoutes);
+app.use(errorHandler);
+
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+wss.on("connection", (socket, req) => {
+  if (req.url === "/ws/mt5-stream") {
+    handleMt5StreamConnection(socket);
+    return;
+  }
+  
+  // Initialize normal client
+  const ws = socket as any;
+  ws.isAuthenticated = true; // Temporary bypass or fix later
+  ws.channels = new Set(["all", "mt5"]); // Auto subscribe to mt5
+  
+  socket.on("close", syncMacroMarketStream);
+  syncMacroMarketStream();
+});
+setWebSocketServer(wss);
+
+server.listen(PORT, () => {
+  console.log(`API running on port ${PORT}`);
+  console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
+  console.log(`WebSocket server running on port ${PORT}`);
+});
+
+// Connect to Database & initialize background services
 connectDB()
   .then(async () => {
     try {
       const auth = createAuth();
       setAuthInstance(auth);
-      const authHandler = toNodeHandler(auth);
+      authHandler = toNodeHandler(auth);
       startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
       initAutoBacktestCron();
 
@@ -115,22 +170,22 @@ connectDB()
         } else {
           console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
           mcpService.registerServer(
-          "FlowLLM-Finance",
-          financeMcpPath,
-          [
-            "config=default",
-            "mcp.transport=stdio",
-            "llm.default.model_name=qwen3-30b-a3b-thinking-2507"
-          ],
-          {
-            FLOW_LLM_API_KEY: env.FLOW_LLM_API_KEY || "",
-            TUSHARE_API_TOKEN: env.TUSHARE_API_TOKEN || "",
-            TAVILY_API_KEY: env.TAVILY_API_KEY || "",
-            DASHSCOPE_API_KEY: env.DASHSCOPE_API_KEY || "",
-            PYTHONIOENCODING: "utf-8",
-            PYTHONUNBUFFERED: "1",
-          }
-        ).catch(e => console.error("FlowLLM MCP error:", e));
+            "FlowLLM-Finance",
+            financeMcpPath,
+            [
+              "config=default",
+              "mcp.transport=stdio",
+              "llm.default.model_name=qwen3-30b-a3b-thinking-2507"
+            ],
+            {
+              FLOW_LLM_API_KEY: env.FLOW_LLM_API_KEY || "",
+              TUSHARE_API_TOKEN: env.TUSHARE_API_TOKEN || "",
+              TAVILY_API_KEY: env.TAVILY_API_KEY || "",
+              DASHSCOPE_API_KEY: env.DASHSCOPE_API_KEY || "",
+              PYTHONIOENCODING: "utf-8",
+              PYTHONUNBUFFERED: "1",
+            }
+          ).catch(e => console.error("FlowLLM MCP error:", e));
         }
       }
 
@@ -160,94 +215,49 @@ connectDB()
           tradingPipelineService.recoverPipelines().catch((err) => console.error("⚠️ Pipeline recovery failed:", err));
         });
 
-// LLM Health Check — test all 6 models, disable rate-limited ones
+      // LLM Health Check — test all 6 models, disable rate-limited ones
       llmConsensusService.startupHealthCheck?.();
 
       // System Monitor Agent — periodic health checks & hourly reports
       await systemMonitorAgent.start();
-
-
-
-app.use("/api/auth", authLimiter);
-
-      app.use((req, res, next) => {
-        if (req.url.startsWith("/api/auth")) {
-          authHandler(req, res).catch((err) => {
-            console.error("Auth error:", err);
-            next(err);
-          });
-        } else {
-          next();
-        }
-      });
-
-      // Apply general API rate limiter to all API routes
-      app.use("/api", apiLimiter, apiRoutes);
-      app.use(errorHandler);
-
-      const server = createServer(app);
-      const wss = new WebSocketServer({ server });
-      wss.on("connection", (socket, req) => {
-        if (req.url === "/ws/mt5-stream") {
-          handleMt5StreamConnection(socket);
-          return;
-        }
-        
-        // Initialize normal client
-        const ws = socket as any;
-        ws.isAuthenticated = true; // Temporary bypass or fix later
-        ws.channels = new Set(["all", "mt5"]); // Auto subscribe to mt5
-        
-        socket.on("close", syncMacroMarketStream);
-        syncMacroMarketStream();
-      });
-      setWebSocketServer(wss);
-
-      server.listen(PORT, () => {
-        console.log(`API running on port ${PORT}`);
-        console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
-        console.log(`WebSocket server running on port ${PORT}`);
-      });
-
-// Graceful shutdown handling to prevent EADDRINUSE
-      const gracefulShutdown = () => {
-        console.log("Shutting down gracefully...");
-
-        // Stop system monitor agent
-        systemMonitorAgent.stop().catch((e: any) => console.error("Monitor agent stop error:", e));
-
-        // Stop stream timers
-        stopMacroMarketStream();
-
-        // Close WebSocket Server
-        wss.close(() => {
-          console.log("WebSocket server closed.");
-
-          // Close HTTP Server
-          server.close(() => {
-            console.log("HTTP server closed.");
-            process.exit(0);
-          });
-        });
-
-        // Force exit after 5 seconds if not closed
-        setTimeout(() => {
-          console.error("Forcefully shutting down because connections took too long to close");
-          process.exit(1);
-        }, 5000);
-      };
-
-      process.on("SIGTERM", gracefulShutdown);
-      process.on("SIGINT", gracefulShutdown);
     } catch (e) {
       console.error("Init failed:", e);
-      process.exit(1);
     }
   })
   .catch((e) => {
     console.error("DB connection failed:", e);
-    process.exit(1);
   });
+
+// Graceful shutdown handling to prevent EADDRINUSE
+const gracefulShutdown = () => {
+  console.log("Shutting down gracefully...");
+
+  // Stop system monitor agent
+  systemMonitorAgent.stop().catch((e: any) => console.error("Monitor agent stop error:", e));
+
+  // Stop stream timers
+  stopMacroMarketStream();
+
+  // Close WebSocket Server
+  wss.close(() => {
+    console.log("WebSocket server closed.");
+
+    // Close HTTP Server
+    server.close(() => {
+      console.log("HTTP server closed.");
+      process.exit(0);
+    });
+  });
+
+  // Force exit after 5 seconds if not closed
+  setTimeout(() => {
+    console.error("Forcefully shutting down because connections took too long to close");
+    process.exit(1);
+  }, 5000);
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
 
 // Trigger tsx watch restart
 

@@ -4,7 +4,23 @@ Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikas
 
 ---
 
-## 🚀 [v1.0.2] — 2026-08-03 (Versi Terbaru)
+## 🚀 [v1.0.3] — 2026-08-03 (Versi Terbaru)
+
+### 🐛 Perbaikan Startup & Root Cause Port 5000 Timeout
+- **Instant HTTP/Health Server Startup**:
+  - Mengubah siklus inisialisasi Express & WebSocket di `server/src/index.ts` agar langsung membuka Port 5000 seketika (<100ms) saat aplikasi dibuka.
+  - Health check endpoint `/health` langsung merespons `200 OK`, mencegah Electron `waitForServer` mengalami timeout 60 detik.
+- **Node.js DNS SRV Record Resolution untuk Windows**:
+  - Menetapkan DNS resolver terpercaya (`1.1.1.1`, `8.8.8.8`) untuk Node.js c-ares resolver sehingga koneksi MongoDB Atlas (`mongodb+srv://...`) tidak mengalami `querySrv ECONNREFUSED` di lingkungan Windows.
+  - Inisialisasi Database MongoDB, Auth Handler, Auto-Sync MT5, dan MCP Agents berjalan asinkron di latar belakang (background) secara mulus tanpa memblokir pembukaan window aplikasi desktop.
+
+### 📦 Distribusi & Installer
+- Installer Windows NSIS: `Hunter Trades Setup 1.0.3.exe`
+- Auto-updater metadata: `latest.yml` terintegrasi dengan GitHub Releases.
+
+---
+
+## 🚀 [v1.0.2] — 2026-08-03
 
 ### 🐛 Perbaikan Bug & Stabilitas (Bug Fixes)
 - **Fix MongoDB Connection Hang & DNS Override**:

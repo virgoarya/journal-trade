@@ -1,3 +1,10 @@
+import dns from "node:dns";
+try {
+  dns.setServers(["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]);
+} catch (err) {
+  // Ignore if already set or not supported
+}
+
 import mongoose from "mongoose";
 import { env } from "../config/env";
 import { MongoClient } from "mongodb";
@@ -62,6 +69,6 @@ export const connectDB = async () => {
     }
   } catch (error) {
     console.error("🔥 Error connecting to MongoDB:", error);
-    process.exit(1);
+    // Do not call process.exit(1) so HTTP server stays up and allows diagnostics
   }
 };
