@@ -20,6 +20,12 @@
 
 ## Lessons Log
 
+### [20260805] MT5 MCP Python Server Tools Update Requirements
+**Area**: Python Client / MCP Server
+**Root Cause**: Node.js backend (MT5-MCP service) kept getting `MCP error -32602: tool not found` and caused LLMs to hibernate because the Python MCP server tools (e.g. `get_trading_open_positions` -> `mt5_positions_get`) were updated in `server.py`, but the Python executable was not rebuilt. The `MT5-MCP` service spawns the packaged executable `Hunter Trades AI Trading.exe`, not the raw Python script.
+**Solusi**: Ran `server/mcp-mt5-server/build.bat` to re-compile `Hunter Trades AI Trading.exe` with the new tool names so the Node backend can discover them.
+**Hindari**: JANGAN PERNAH lupa menjalankan `build.bat` setelah mengubah kode apapun di dalam `server/mcp-mt5-server` (termasuk mengganti nama tool MCP) karena perubahan tidak akan termuat di *production build* sampai executable-nya dikompilasi ulang.
+
 ### [20260805] MT5 Native MCP Missing Historical Data (copy_rates_range)
 **Area**: Backend / MT5 Integration / Backtest
 **Root Cause**: Native MT5 MCP (`http://127.0.0.1:22346/mcp`) tidak memiliki tool untuk mengambil data historis OHLCV (seperti `copy_rates_range` atau `copy_rates_from`). Ketika backtest meminta data candle, MCP merespon dengan `MCP error -32602: tool not found`.

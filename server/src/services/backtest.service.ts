@@ -1073,24 +1073,27 @@ class BacktestService {
       }
 
       // ── Limit live streaming events to prevent frontend lag ──
-      // If Max Speed (0ms), we only emit ~300 frames total so we don't choke the stream.
-      // If Visual Mode (>0ms), we emit EVERY SINGLE CANDLE for perfectly fluid PnL animation.
-      let emitInterval = 1;
-      if (!merged.speedMs || merged.speedMs === 0) {
-        emitInterval = Math.max(1, Math.floor(totalTimelineSteps / 300));
-      } else {
-        // Visual mode: emit every single candle for 100% smooth tick-by-tick feeling
-        emitInterval = 1;
+      const now = Date.now();
+      const timeSinceLastEmit = (this as any)._lastEmitTime ? now - (this as any)._lastEmitTime : 0;
+      
+      let shouldEmitLive = tradeStateChanged || timelineStep === totalTimelineSteps;
+      
+      if (!shouldEmitLive) {
+        if (!merged.speedMs || merged.speedMs === 0) {
+          // Max speed: emit ~300 frames total
+          const emitInterval = Math.max(1, Math.floor(totalTimelineSteps / 300));
+          shouldEmitLive = timelineStep % emitInterval === 0;
+        } else {
+          // Visual mode: cap at ~30 FPS (every 33ms) to prevent React stuttering
+          shouldEmitLive = timeSinceLastEmit >= 33;
+        }
       }
       
-      const now = Date.now();
-      const timeSinceLastEmit = now - (this as any)._lastEmitTime || 0;
-      let shouldEmitLive = tradeStateChanged || timelineStep % emitInterval === 0 || timelineStep === totalTimelineSteps;
-      
       if (timeSinceLastEmit > 1000) {
-        shouldEmitLive = true; // Force emit at least once per second to prevent SSE stream timeouts
-        (this as any)._lastEmitTime = now;
-      } else if (shouldEmitLive) {
+        shouldEmitLive = true; // Force emit at least once per second to prevent SSE timeouts
+      }
+      
+      if (shouldEmitLive) {
         (this as any)._lastEmitTime = now;
       }
       
@@ -1147,30 +1150,49 @@ class BacktestService {
       if (smartEarly?.enabled && smartEarly.globalDrawdownLimit?.enabled && !globalTradingBlocked) {
         if (currentDrawdownPct >= smartEarly.globalDrawdownLimit.maxDrawdownPct) {
           globalTradingBlocked = true;
+          
+          const limitPct = smartEarly.globalDrawdownLimit.maxDrawdownPct;
+          const targetEquity = peakEquity * (1 - limitPct / 100);
+          const targetFloatingPnL = targetEquity - equity;
+          const ratio = floatingPnL < 0 && targetFloatingPnL < 0 ? targetFloatingPnL / floatingPnL : 1;
+          
           // Cap the recorded max DD at the circuit breaker limit
-          if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = smartEarly.globalDrawdownLimit.maxDrawdownPct;
-          if (drawdownFromPeak > maxDrawdown) maxDrawdown = drawdownFromPeak;
+          if (currentDrawdownPct > maxDrawdownPctGlobal) maxDrawdownPctGlobal = limitPct;
+          if (drawdownFromPeak > maxDrawdown) maxDrawdown = peakEquity - targetEquity;
 
-          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit: equity ${currentEquity.toFixed(2)} is ${currentDrawdownPct.toFixed(2)}% below peak ${peakEquity.toFixed(2)}. Halting.`);
+          silentLogger.info(`[BACKTEST] Global Max Drawdown Limit hit: equity ${currentEquity.toFixed(2)} is ${currentDrawdownPct.toFixed(2)}% below peak. Enforcing hard stop at ${targetEquity.toFixed(2)} (${limitPct}%).`);
 
-          // ── Force-close ALL open trades at current price ──────────────
+          // ── Force-close ALL open trades at exact circuit breaker price ──────────────
           for (const [key, trade] of openTrades.entries()) {
             const symState = symbolStates.get(trade.symbol);
             const symIdx = symbolCandleIdx.get(trade.symbol) ?? 0;
             const symRates = symState?.rates ?? [];
             const closeCandle = symRates[Math.min(symIdx, symRates.length - 1)];
-            const closePrice = closeCandle?.close ?? trade.entryPrice;
             const closeTime = closeCandle?.time ?? 0;
 
             const isJpy = trade.symbol.toLowerCase().includes("jpy");
             const isCrypto = /btc|eth|ltc|xrp/i.test(trade.symbol);
-            const pointValue = isCrypto ? 1 : isJpy ? 0.01 : 0.0001;
             const contractSize = symState?.contractSize ?? (isCrypto ? 1 : isJpy ? 1000 : 100000);
+            
+            // Calculate original raw PnL at close candle
             const rawPnl = trade.direction === "BUY"
-              ? (closePrice - trade.entryPrice) / pointValue * trade.volume * pointValue * contractSize
-              : (trade.entryPrice - closePrice) / pointValue * trade.volume * pointValue * contractSize;
+              ? (closeCandle.close - trade.entryPrice) * trade.volume * contractSize
+              : (trade.entryPrice - closeCandle.close) * trade.volume * contractSize;
 
-            const pnl = Math.round(rawPnl * 100) / 100;
+            // Apply the ratio to get the exact PnL that hits the limit
+            const adjustedPnl = rawPnl * ratio;
+            
+            // Reverse-engineer the exact execution price
+            let closePrice = closeCandle.close;
+            if (trade.volume > 0 && contractSize > 0) {
+              if (trade.direction === "BUY") {
+                closePrice = trade.entryPrice + adjustedPnl / (trade.volume * contractSize);
+              } else {
+                closePrice = trade.entryPrice - adjustedPnl / (trade.volume * contractSize);
+              }
+            }
+
+            const pnl = Math.round(adjustedPnl * 100) / 100;
             const pnlPercent = trade.volume > 0 ? (pnl / (trade.entryPrice * trade.volume)) * 100 : 0;
             equity += pnl;
             allReturns.push(pnlPercent);

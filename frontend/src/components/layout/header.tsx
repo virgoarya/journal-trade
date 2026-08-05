@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
 import NotificationDropdown from "@/components/layout/NotificationDropdown";
-import pkg from "../../../../package.json";
+import pkg from "../../../package.json";
 
 interface HeaderProps {
   onMenuClick?: () => void;

@@ -2,8 +2,18 @@
 
 Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikasi desktop **Hunter Trades** dicatat di dokumen ini.
 
-## 🚀 [v1.0.6] — 2026-08-05 (Versi Terbaru)
+## 🚀 [v1.0.8] — 2026-08-05 (Versi Terbaru)
 
+### 🐛 Perbaikan Sistem MT5 MCP & OTA Fix
+- **Native MT5 MCP Python Server Rebuild**: 
+  - Memperbaiki bug "hibernasi" massal pada model AI akibat kegagalan sinkronisasi metode MCP (`tool not found`).
+  - Pembaruan nama-nama *tool* (seperti `mt5_positions_get` dan `mt5_account_info`) kini sudah dikompilasi ulang secara benar ke dalam executable Python (`Hunter Trades AI Trading.exe`) sehingga dapat dibaca dengan baik oleh *Node backend*.
+- **9Router Auto-Start (Tray Mode)**:
+  - 9Router kini berjalan secara *silent* di latar belakang (tanpa interupsi UI terminal) bersamaan dengan peluncuran Hunter Trades berkat integrasi parameter `--tray`.
+
+---
+
+## 🚀 [v1.0.6] — 2026-08-05
 ### 🛡️ Sistem Pembaruan OTA (Over-The-Air) & Keamanan Lanjut
 - **Auto-Patch Update Tanpa Installer**: 
   - Mengganti `electron-updater` dengan custom OTA Updater. Kini pengguna akan menerima pembaruan patch (bug fixes/fitur baru) secara instan tanpa perlu men-download ulang seluruh file installer `.exe`.
