@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
 import NotificationDropdown from "@/components/layout/NotificationDropdown";
+import pkg from "../../../../package.json";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -51,6 +52,13 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center space-x-4 md:space-x-6 relative">
+        {/* App Version Tag */}
+        <div className="hidden md:flex items-center">
+          <span className="px-2.5 py-1 rounded-full border border-accent-gold/30 bg-accent-gold/10 text-accent-gold font-bold text-[10px] font-mono tracking-widest shadow-[0_0_10px_rgba(255,215,0,0.1)]">
+            v{pkg.version}
+          </span>
+        </div>
+
         {/* Notifications Dropdown */}
         <NotificationDropdown />
 
