@@ -10,7 +10,7 @@ console.log('======================================================\n');
 const projectRoot = path.resolve(__dirname, '../..');
 const desktopDir = path.resolve(projectRoot, 'desktop');
 const resourcesDir = path.resolve(desktopDir, 'dist-app', 'win-unpacked', 'resources');
-const patchDir = path.resolve(desktopDir, 'dist-patch');
+const patchDir = path.resolve(projectRoot, 'update');
 
 if (!fs.existsSync(resourcesDir)) {
     console.error(`❌ Resources directory not found: ${resourcesDir}`);

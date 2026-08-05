@@ -1,7 +1,7 @@
 {
   "name": "hunter-trades-desktop",
-  "version": "1.0.6",
-  "description": "Hunter Trades — AI Trading Journal & Server Manager",
+  "version": "1.0.7",
+  "description": "Hunter Trades Elite Ledger Desktop App",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
