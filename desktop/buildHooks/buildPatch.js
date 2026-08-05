@@ -37,14 +37,33 @@ if (fs.existsSync(patchPath)) {
 }
 
 try {
-    // We use tar.exe built-in on Windows 10+ to create a zip file (-a auto-detects from .zip extension)
-    // We exclude node_modules to keep the OTA patch small (< 100MB for GitHub)
-    execSync(`tar.exe -a -c -f "${patchPath}" --exclude=node_modules app server frontend`, {
-        cwd: resourcesDir,
-        stdio: 'inherit'
-    });
+    const zip = new AdmZip();
+    
+    // Helper to add local folder recursively excluding node_modules
+    function addDirToZip(dirPath, zipPath) {
+        if (!fs.existsSync(dirPath)) return;
+        const items = fs.readdirSync(dirPath);
+        for (const item of items) {
+            if (item === 'node_modules') continue;
+            
+            const fullPath = path.join(dirPath, item);
+            const relativePath = zipPath ? `${zipPath}/${item}` : item;
+            
+            if (fs.statSync(fullPath).isDirectory()) {
+                addDirToZip(fullPath, relativePath);
+            } else {
+                zip.addLocalFile(fullPath, zipPath);
+            }
+        }
+    }
+
+    addDirToZip(path.join(resourcesDir, 'app'), 'app');
+    addDirToZip(path.join(resourcesDir, 'server'), 'server');
+    addDirToZip(path.join(resourcesDir, 'frontend'), 'frontend');
+
+    zip.writeZip(patchPath);
 } catch (error) {
-    console.error(`❌ Failed to create zip file using tar.exe:`, error.message);
+    console.error(`❌ Failed to create zip file using adm-zip:`, error.message);
     process.exit(1);
 }
 

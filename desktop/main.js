@@ -629,10 +629,10 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     // 4. Create Backup (Auto-Rollback Layer)
     console.log(`[OTA-SAFETY] Creating backup of current resources...`);
     if (fs.existsSync(backupPath)) {
-      fs.rmSync(backupPath, { recursive: true, force: true });
+      await fs.promises.rm(backupPath, { recursive: true, force: true });
     }
-    // Using fs.cpSync for recursive copy
-    fs.cpSync(process.resourcesPath, backupPath, { recursive: true });
+    // Using fs.promises.cp for non-blocking recursive copy
+    await fs.promises.cp(process.resourcesPath, backupPath, { recursive: true });
     
     // 5. Write safety flag
     fs.writeFileSync(otaFlagPath, "updating");
@@ -640,7 +640,12 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     // 6. Extract over resourcesPath
     console.log(`[OTA-UPDATER] Extracting patch to: ${process.resourcesPath}`);
     const zip = new AdmZip(tempZipPath);
-    zip.extractAllTo(process.resourcesPath, true);
+    await new Promise((resolve, reject) => {
+      zip.extractAllToAsync(process.resourcesPath, true, false, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
 
     // 7. Clean up and restart
     console.log(`[OTA-UPDATER] Patch applied successfully. Restarting for health check...`);
