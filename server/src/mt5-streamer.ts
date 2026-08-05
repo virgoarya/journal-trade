@@ -1,8 +1,5 @@
-import EventSource from "eventsource";
-(globalThis as any).EventSource = EventSource;
-
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { broadcast } from "./ws-server";
 import { silentLogger } from "./utils/silent-logger";
 import { env } from "./config/env";
@@ -113,7 +110,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
   switch (action) {
     case "mt5_account_info":
     case "get_trading_account_info": {
-      const res = await callTool("mt5_account_info", {});
+      const res = await callTool("get_trading_account_info", {});
       const normalized = normalizeAccountInfo(res);
       if (normalized) cachedAccountInfo = normalized;
       return normalized;
@@ -121,7 +118,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_positions_get":
     case "get_trading_open_positions": {
-      const res = await callTool("mt5_positions_get", payload.symbol ? { symbol: payload.symbol } : {});
+      const res = await callTool("get_trading_open_positions", payload.symbol ? { symbol: payload.symbol } : {});
       const rawPositions = Array.isArray(res) ? res : (res?.positions ?? []);
       const normalized = rawPositions.map(normalizePosition);
       cachedPositions = normalized;
@@ -130,25 +127,24 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_symbols_get":
     case "get_marketwatch_symbols": {
-      const res = await callTool("mt5_symbols_get", {
-        group: payload.symbol || payload.group || undefined
-      });
+      const res = await callTool("get_marketwatch_symbols", {});
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
-      const symbols = rawSymbols.map((s: any) => ({
-        name: s.symbol,
-        description: s.description || "",
+      const filtered = payload.symbol
+        ? rawSymbols.filter((s: any) => String(s.name ?? s.symbol ?? "").toLowerCase().includes(String(payload.symbol ?? "").toLowerCase()))
+        : rawSymbols;
+      const symbols = filtered.map((s: any) => ({
+        name: s.name ?? s.symbol ?? "",
+        description: s.description ?? "",
         bid: Number(s.bid ?? 0),
         ask: Number(s.ask ?? 0),
-        spread: (Number(s.ask) > 0 && Number(s.bid) > 0 && Number(s.point ?? 0) > 0)
-          ? Math.round((Number(s.ask) - Number(s.bid)) / Number(s.point))
-          : (Number(s.spread) || 0),
+        spread: Number(s.spread ?? 0),
         point: Number(s.point ?? 0.00001),
         digits: Number(s.digits ?? 5),
-        tradeContractSize: Number(s.contract_size ?? 100000),
+        tradeContractSize: Number(s.trade_contract_size ?? s.contract_size ?? 100000),
         volumeMin: Number(s.volume_min ?? 0.01),
         volumeMax: Number(s.volume_max ?? 100),
         volumeStep: Number(s.volume_step ?? 0.01),
-        visible: Boolean(s.selected ?? true),
+        visible: true,
       }));
       return { symbols };
     }
@@ -221,10 +217,10 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.tp) orderArgs.tp = Number(payload.tp);
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
-        const res = await callTool("mt5_order_send", orderArgs);
+        const res = await callTool("trade_send_pending_order", orderArgs);
         return {
           success: !res?.error && !res?.isError,
-          ticket: res?.ticket ?? res?.order,
+          ticket: res?.ticket ?? res?.order ?? res?.order_ticket,
           price: res?.price ?? payload.price,
           volume: res?.volume ?? payload.volume,
           comment: res?.comment ?? payload.comment,
@@ -239,8 +235,10 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         const found = cachedPositions.find((p) => p.ticket === payload.ticket);
         if (found) targetSymbol = found.symbol;
       }
-      const res = await callTool("mt5_position_close", {
-        ticket: Number(payload.ticket),
+      // MT5 native tool: trade_close_single_position
+      const res = await callTool("trade_close_single_position", {
+        symbol: targetSymbol || "",
+        position_ticket: Number(payload.ticket),
       });
       return {
         success: !res?.error && !res?.isError,
@@ -392,7 +390,7 @@ async function connectToNativeMcp(): Promise<void> {
   const mcpUrl = activeMcpUrl;
   const apiKey = activeApiKey;
 
-  silentLogger.info(`[MT5-MCP] Connecting to native MT5 MCP at ${mcpUrl}...`);
+  silentLogger.info(`[MT5-MCP] Connecting to native MT5 MCP at ${mcpUrl} (Streamable HTTP)...`);
 
   try {
     const headers: Record<string, string> = {};
@@ -400,10 +398,10 @@ async function connectToNativeMcp(): Promise<void> {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const transport = new SSEClientTransport(new URL(mcpUrl), {
+    // MT5 built-in MCP uses the new 2025-06-18 Streamable HTTP protocol
+    const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
       requestInit: { headers },
-      eventSourceInit: { headers },
-    } as any);
+    });
 
     const client = new Client(
       { name: "hunter-trades-backend", version: "1.0.0" },
@@ -414,12 +412,12 @@ async function connectToNativeMcp(): Promise<void> {
     mcpClient = client;
     isConnected = true;
 
-    silentLogger.info("[MT5-MCP] ✅ Connected to native MT5 MCP server.");
+    silentLogger.info("[MT5-MCP] ✅ Connected to native MT5 MCP server (Streamable HTTP).");
     broadcast("mt5_status", { connected: true, reconnecting: false }, "mt5" as any);
 
     // Initial fetch of account info
     try {
-      const initialAcct = await callTool("get_trading_account_info", {});
+      const initialAcct = await callTool("mt5_account_info", {});
       cachedAccountInfo = normalizeAccountInfo(initialAcct);
     } catch {
       // ignore
