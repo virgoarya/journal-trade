@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Cpu,
-import { FlaskConical } from "lucide-react";
+  FlaskConical
+} from "lucide-react";
 import { useState } from "react";
 import pkg from "../../../../package.json";
 

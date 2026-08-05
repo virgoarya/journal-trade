@@ -53,6 +53,7 @@ let splashWindow = null;
 let tray = null;
 let backendProcess = null;
 let frontendProcess = null;
+let routerProcess = null;
 let isQuitting = false;
 
 // ─── .env Loader ─────────────────────────────────────────────
@@ -240,6 +241,50 @@ async function startBackend() {
       }
     });
   }
+}
+
+async function startRouter() {
+  const isUp = await isPortResponding(20128, "/");
+  if (isUp) {
+    console.log(`[MAIN] 9Router is already running on port 20128. Skipping spawn.`);
+    return;
+  }
+
+  const serverCwd = isDev
+    ? path.join(__dirname, "..", "server")
+    : path.join(process.resourcesPath, "server");
+  
+  const logStream = getLogStream("9router.log");
+
+  console.log(`[MAIN] Starting 9Router proxy on port 20128...`);
+  const command = process.platform === "win32" ? "npx.cmd" : "npx";
+  
+  routerProcess = spawn(command, ["9router", "--tray", "--skip-update", "-p", "20128"], {
+    cwd: serverCwd,
+    env: process.env,
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: process.platform === "win32",
+  });
+
+  routerProcess.stdout?.on("data", (d) => {
+    const msg = d.toString().trim();
+    if (msg) console.log(`[9ROUTER] ${msg}`);
+    if (logStream) logStream.write(`[${new Date().toISOString()}] ${d.toString()}`);
+  });
+  
+  routerProcess.stderr?.on("data", (d) => {
+    const msg = d.toString().trim();
+    if (msg) console.error(`[9ROUTER] ${msg}`);
+    if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${d.toString()}`);
+  });
+  
+  routerProcess.on("exit", (code) => {
+    console.log(`[MAIN] 9Router launcher exited with code ${code}`);
+    // With --tray, it spawns a detached bg process and exits with 0.
+    if (!isQuitting && code !== 0) {
+      setTimeout(startRouter, 3000);
+    }
+  });
 }
 
 async function startFrontend() {
@@ -698,6 +743,7 @@ app.whenReady().then(async () => {
 
   try {
     // Start backend & frontend (MT5 data via native MCP in MetaTrader 5)
+    await startRouter();
     await startBackend();
     await startFrontend();
 
@@ -790,5 +836,17 @@ app.on("before-quit", () => {
         frontendProcess.kill("SIGKILL");
       }
     }, 3000);
+  }
+
+  if (routerProcess && !routerProcess.killed) {
+    console.log("[MAIN] Killing 9Router process...");
+    routerProcess.kill("SIGTERM");
+  }
+
+  // Also kill the detached tray server on Windows
+  if (process.platform === "win32") {
+    try {
+      require("child_process").execSync("FOR /F \"tokens=5\" %a IN ('netstat -aon ^| findstr :20128') DO taskkill /F /PID %a", { stdio: 'ignore' });
+    } catch (e) {}
   }
 });

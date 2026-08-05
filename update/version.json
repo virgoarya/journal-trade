@@ -1,7 +1,7 @@
 {
-  "version": "1.0.7",
-  "releaseDate": "2026-08-05T08:44:06.942Z",
+  "version": "1.0.8",
+  "releaseDate": "2026-08-05T12:01:08.567Z",
   "patchUrl": "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/patch.zip",
-  "checksum": "5f040d3e6728b7ab6416e48169f8ee17304b17010fa78858a95b42de8eb990e8",
-  "notes": "Update patch for 1.0.7"
+  "checksum": "d9d3e681efd804fdc740730f47464089260671255a3e1f6a82a295b9f3874d51",
+  "notes": "Update patch for 1.0.8"
 }

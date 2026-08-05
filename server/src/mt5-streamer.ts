@@ -113,7 +113,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
   switch (action) {
     case "mt5_account_info":
     case "get_trading_account_info": {
-      const res = await callTool("get_trading_account_info", {});
+      const res = await callTool("mt5_account_info", {});
       const normalized = normalizeAccountInfo(res);
       if (normalized) cachedAccountInfo = normalized;
       return normalized;
@@ -121,7 +121,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_positions_get":
     case "get_trading_open_positions": {
-      const res = await callTool("get_trading_open_positions", payload.symbol ? { symbol: payload.symbol } : {});
+      const res = await callTool("mt5_positions_get", payload.symbol ? { symbol: payload.symbol } : {});
       const rawPositions = Array.isArray(res) ? res : (res?.positions ?? []);
       const normalized = rawPositions.map(normalizePosition);
       cachedPositions = normalized;
@@ -130,9 +130,8 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_symbols_get":
     case "get_marketwatch_symbols": {
-      const res = await callTool("get_marketwatch_symbols", {
-        symbol: payload.symbol || payload.group || undefined,
-        include_hidden: true,
+      const res = await callTool("mt5_symbols_get", {
+        group: payload.symbol || payload.group || undefined
       });
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
       const symbols = rawSymbols.map((s: any) => ({
@@ -155,7 +154,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     }
 
     case "mt5_symbol_info": {
-      const res = await callTool("get_marketwatch_symbols", { symbol: payload.symbol, include_hidden: true });
+      const res = await callTool("mt5_symbols_get", { group: payload.symbol });
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
       const s = rawSymbols.find((item: any) => item.symbol?.toLowerCase() === payload.symbol?.toLowerCase()) || rawSymbols[0];
       if (!s) return null;
@@ -178,7 +177,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     }
 
     case "mt5_symbol_tick": {
-      const res = await callTool("get_marketwatch_symbols", { symbol: payload.symbol, include_hidden: true });
+      const res = await callTool("mt5_symbols_get", { group: payload.symbol });
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
       const s = rawSymbols.find((item: any) => item.symbol?.toLowerCase() === payload.symbol?.toLowerCase()) || rawSymbols[0];
       if (!s) return null;
@@ -202,7 +201,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.tp) orderArgs.tp = Number(payload.tp);
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
-        const res = await callTool("trade_send_market_order", orderArgs);
+        const res = await callTool("mt5_order_send", orderArgs);
         return {
           success: !res?.error && !res?.isError,
           ticket: res?.ticket ?? res?.deal ?? res?.order,
@@ -222,7 +221,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.tp) orderArgs.tp = Number(payload.tp);
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
-        const res = await callTool("trade_send_pending_order", orderArgs);
+        const res = await callTool("mt5_order_send", orderArgs);
         return {
           success: !res?.error && !res?.isError,
           ticket: res?.ticket ?? res?.order,
@@ -240,9 +239,8 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         const found = cachedPositions.find((p) => p.ticket === payload.ticket);
         if (found) targetSymbol = found.symbol;
       }
-      const res = await callTool("trade_close_single_position", {
-        symbol: targetSymbol || "EURUSD",
-        position_ticket: Number(payload.ticket),
+      const res = await callTool("mt5_position_close", {
+        ticket: Number(payload.ticket),
       });
       return {
         success: !res?.error && !res?.isError,
