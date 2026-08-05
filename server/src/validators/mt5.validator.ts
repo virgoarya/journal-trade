@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 export const mt5ConnectSchema = z.object({
-  server: z.string().min(1, "Server MT5 wajib diisi"),
-  login: z.string().min(1, "Login MT5 wajib diisi"),
-  password: z.string().min(1, "Password MT5 wajib diisi"),
+  apiKey: z.string().optional(),
+  mcpUrl: z.string().optional(),
+  server: z.string().optional(),
+  login: z.union([z.string(), z.number()]).optional(),
+  password: z.string().optional(),
 });
 
 export const mt5UpdateSettingsSchema = z.object({

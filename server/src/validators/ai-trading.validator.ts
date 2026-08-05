@@ -22,10 +22,12 @@ export const methodologyConfigSchema = z.object({
 // ─── Connection ──────────────────────────────────────────────────────
 
 export const mt5ConnectSchema = z.object({
-  server: z.string().min(1, "Server required (e.g. ICMarkets-Demo)"),
-  login: z.string().min(1, "Login required"),
-  password: z.string().min(1, "Password required"),
-  tunnelUrl: z.string().url("Must be a valid URL").optional(),
+  apiKey: z.string().optional(),
+  mcpUrl: z.string().optional(),
+  server: z.string().optional(),
+  login: z.union([z.string(), z.number()]).optional(),
+  password: z.string().optional(),
+  tunnelUrl: z.string().optional(),
 });
 
 // ─── Trading ─────────────────────────────────────────────────────────

@@ -1,11 +1,3 @@
-import dns from "node:dns";
-// Set reliable DNS servers for Node.js c-ares resolver on Windows (prevents querySrv ECONNREFUSED on MongoDB Atlas)
-try {
-  dns.setServers(["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]);
-} catch (err) {
-  console.warn("Could not set custom DNS servers:", err);
-}
-
 process.env.PYTHONIOENCODING = "utf-8";
 
 import express from "express";
@@ -27,7 +19,7 @@ import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, getClientCount } from "./ws-server";
-import { handleMt5StreamConnection } from "./mt5-streamer";
+import { initMt5NativeMcp } from "./mt5-streamer";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import { initAutoBacktestCron } from "./cron/auto-backtest.cron";
@@ -121,11 +113,6 @@ app.use(errorHandler);
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 wss.on("connection", (socket, req) => {
-  if (req.url === "/ws/mt5-stream") {
-    handleMt5StreamConnection(socket);
-    return;
-  }
-  
   // Initialize normal client
   const ws = socket as any;
   ws.isAuthenticated = true; // Temporary bypass or fix later
@@ -136,10 +123,12 @@ wss.on("connection", (socket, req) => {
 });
 setWebSocketServer(wss);
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`API running on port ${PORT}`);
   console.log(`Auth ready at ${env.BETTER_AUTH_URL}/api/auth`);
   console.log(`WebSocket server running on port ${PORT}`);
+  // Connect to native MT5 MCP (replaces Python bridge)
+  initMt5NativeMcp();
 });
 
 // Connect to Database & initialize background services
@@ -200,8 +189,7 @@ connectDB()
         }
       }
 
-      // Initialize MT5 MCP Service (lazy - connects on first use)
-      mt5McpService.init().catch((e) => console.warn("MT5 MCP init delayed:", e.message));
+      // MT5 MCP Service is now driven by native MT5 MCP (no Python bridge needed)
 
       // Auto-reconnect MT5 with saved credentials if any and restore active pipelines
       mt5McpService.tryAutoReconnect()

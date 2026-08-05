@@ -66,6 +66,8 @@ export default function SettingsPage() {
   });
 
   const [mt5Form, setMt5Form] = useState({
+    apiKey: "",
+    mcpUrl: "http://127.0.0.1:22346/mcp",
     server: "",
     login: "",
     password: "",
@@ -338,8 +340,8 @@ export default function SettingsPage() {
   };
 
   const handleMt5Connect = async () => {
-    if (!mt5Form.server || !mt5Form.login || !mt5Form.password) {
-      setStatusMsg({ type: 'error', text: "Mohon isi semua field MT5" });
+    if (!mt5Form.apiKey && (!mt5Form.server || !mt5Form.login || !mt5Form.password)) {
+      setStatusMsg({ type: 'error', text: "Mohon isi API Key MT5 atau data login" });
       return;
     }
     setIsLoading(true);
@@ -368,7 +370,7 @@ export default function SettingsPage() {
       setStatusMsg({ type: 'success', text: "MT5 disconnect berhasil" });
       setMt5Status(prev => prev ? { ...prev, connected: false, config: null } : null);
       setIntegrationSettings(prev => ({ ...prev, metatraderConnect: false }));
-      setMt5Form(prev => ({ ...prev, server: "", login: "", password: "" }));
+      setMt5Form(prev => ({ ...prev, apiKey: "", server: "", login: "", password: "" }));
     } catch (e) {
       setStatusMsg({ type: 'error', text: "Gagal disconnect MT5" });
     } finally {
@@ -933,37 +935,18 @@ export default function SettingsPage() {
                           {item.key === 'metatraderConnect' ? (
                             <div className="space-y-4">
                               <div>
-                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">MT5 Server</label>
-                                <input 
-                                  type="text" 
-                                  value={mt5Form.server}
-                                  onChange={(e) => setMt5Form({...mt5Form, server: e.target.value})}
-                                  placeholder="Contoh: MetaQuotes-Demo"
-                                  disabled={mt5Status?.connected}
-                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">Login</label>
-                                <input 
-                                  type="text" 
-                                  value={mt5Form.login}
-                                  onChange={(e) => setMt5Form({...mt5Form, login: e.target.value})}
-                                  placeholder="Account number"
-                                  disabled={mt5Status?.connected}
-                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">Password</label>
+                                <label className="block text-[10px] text-text-muted uppercase tracking-wider mb-1">MT5 MCP API Key (Rekomendasi Native)</label>
                                 <input 
                                   type="password" 
-                                  value={mt5Form.password}
-                                  onChange={(e) => setMt5Form({...mt5Form, password: e.target.value})}
-                                  placeholder="Master password"
+                                  value={mt5Form.apiKey}
+                                  onChange={(e) => setMt5Form({...mt5Form, apiKey: e.target.value})}
+                                  placeholder="Tempel API Key dari MT5 -> Tools -> Options -> MCP"
                                   disabled={mt5Status?.connected}
-                                  className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-4 py-3 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50" 
+                                  className="w-full bg-bg-void/50 border border-accent-gold/30 rounded-lg px-4 py-2.5 text-xs text-text-primary focus:border-accent-gold outline-none disabled:opacity-50 font-mono" 
                                 />
+                                <p className="text-[10px] text-text-muted mt-1">
+                                  Dapatkan dari MetaTrader 5: <strong>Tools</strong> ➜ <strong>Options (Ctrl+O)</strong> ➜ tab <strong>MCP</strong> ➜ Centang <em>Enable internal server</em> ➜ Copy <em>API Key</em>.
+                                </p>
                               </div>
                               <div className="flex items-center justify-between pt-2">
                                 {mt5Status?.connected ? (

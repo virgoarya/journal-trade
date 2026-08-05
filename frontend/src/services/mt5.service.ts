@@ -13,9 +13,11 @@ export interface MT5Status {
 }
 
 export interface MT5ConnectPayload {
-  server: string;
-  login: string;
-  password: string;
+  apiKey?: string;
+  mcpUrl?: string;
+  server?: string;
+  login?: string;
+  password?: string;
 }
 
 export interface MT5SettingsPayload {

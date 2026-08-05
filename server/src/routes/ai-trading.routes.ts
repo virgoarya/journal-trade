@@ -68,9 +68,11 @@ router.post(
   validate({ body: mt5ConnectSchema }),
   async (req, res, next) => {
     try {
-      const { server, login, password, save, tunnelUrl } = req.body;
+      const { apiKey, mcpUrl, server, login, password, save, tunnelUrl } = req.body;
 
       const result = await mt5McpService.connectToMT5({
+        apiKey,
+        mcpUrl,
         server,
         login,
         password,
@@ -86,19 +88,21 @@ router.post(
         );
       }
 
-      // Securely save credentials to DB for auto-reconnect on restart
+      // Securely save credentials/apiKey to DB for auto-reconnect on restart
       try {
         const { MT5Connection } = require("../models/MT5Connection");
         await MT5Connection.findOneAndUpdate(
           { userId: req.user.id },
           {
-            server,
-            login: parseInt(login, 10) || login,
+            server: server || (result.accountInfo?.server ?? "MT5-Native"),
+            login: parseInt(String(login ?? result.accountInfo?.login ?? 0), 10) || 0,
+            mcpUrl: mcpUrl || "http://127.0.0.1:22346/mcp",
             enabled: true,
           },
           { upsert: true, returnDocument: "after" }
         ).then(async (doc: any) => {
-          doc.setPassword(password);
+          if (apiKey) doc.setApiKey(apiKey);
+          if (password) doc.setPassword(password);
           await doc.save();
         });
       } catch (dbErr: any) {

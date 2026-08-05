@@ -170,15 +170,32 @@ function AITradingPageContent() {
     <div className="min-h-screen p-4 pb-24 font-mono">
       {/* Reconnecting Overlay */}
       {isReconnecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 p-8 rounded-xl border border-accent-gold/20 bg-black/50">
-            <div className="w-12 h-12 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
-            <h2 className="text-xl font-bold text-accent-gold animate-pulse tracking-widest">
-              RECONNECTING TO MT5...
-            </h2>
-            <p className="text-sm text-text-muted text-center max-w-xs">
-              Connection to terminal was lost. Auto-recovering session...
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="flex flex-col items-center gap-4 p-6 sm:p-8 rounded-2xl border border-accent-gold/30 bg-surface/90 shadow-2xl max-w-sm w-full text-center">
+            <div className="w-12 h-12 border-4 border-accent-gold/20 border-t-accent-gold rounded-full animate-spin"></div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-accent-gold tracking-widest uppercase">
+                Menghubungkan ke MT5...
+              </h2>
+              <p className="text-xs text-text-muted">
+                Mencoba menyambungkan kembali sesi terminal MetaTrader 5 di latar belakang...
+              </p>
+            </div>
+            
+            <div className="flex flex-col w-full gap-2 pt-2">
+              <button
+                onClick={() => disconnectMT5()}
+                className="w-full py-2 px-4 rounded-lg bg-surface-light hover:bg-accent-gold/20 text-accent-gold border border-accent-gold/30 text-xs font-semibold tracking-wider transition-all duration-200"
+              >
+                Batalkan & Ganti Akun MT5
+              </button>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="w-full py-1.5 px-4 rounded-lg text-text-muted hover:text-text-primary text-xs transition"
+              >
+                Kembali ke Menu Utama
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -27,22 +27,28 @@ function decrypt(text: string): string {
 
 export interface IMT5Connection extends Document {
   userId: string;
-  server: string;
-  login: number;
-  passwordEncrypted: string;
+  server?: string;
+  login?: number;
+  passwordEncrypted?: string;
+  apiKeyEncrypted?: string;
+  mcpUrl?: string;
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   getPassword(): string;
   setPassword(password: string): void;
+  getApiKey(): string;
+  setApiKey(key: string): void;
 }
 
 const MT5ConnectionSchema = new Schema<IMT5Connection>(
   {
     userId: { type: String, required: true, unique: true, index: true },
-    server: { type: String, required: true },
-    login: { type: Number, required: true },
-    passwordEncrypted: { type: String, required: true },
+    server: { type: String, required: false },
+    login: { type: Number, required: false },
+    passwordEncrypted: { type: String, required: false },
+    apiKeyEncrypted: { type: String, required: false },
+    mcpUrl: { type: String, required: false, default: "http://127.0.0.1:22346/mcp" },
     enabled: { type: Boolean, default: true },
   },
   {
@@ -52,6 +58,7 @@ const MT5ConnectionSchema = new Schema<IMT5Connection>(
 );
 
 MT5ConnectionSchema.methods.getPassword = function(): string {
+  if (!this.passwordEncrypted) return "";
   try {
     return decrypt(this.passwordEncrypted);
   } catch {
@@ -60,7 +67,24 @@ MT5ConnectionSchema.methods.getPassword = function(): string {
 };
 
 MT5ConnectionSchema.methods.setPassword = function(password: string): void {
-  this.passwordEncrypted = encrypt(password);
+  if (password) {
+    this.passwordEncrypted = encrypt(password);
+  }
+};
+
+MT5ConnectionSchema.methods.getApiKey = function(): string {
+  if (!this.apiKeyEncrypted) return "";
+  try {
+    return decrypt(this.apiKeyEncrypted);
+  } catch {
+    return "";
+  }
+};
+
+MT5ConnectionSchema.methods.setApiKey = function(key: string): void {
+  if (key) {
+    this.apiKeyEncrypted = encrypt(key);
+  }
 };
 
 export const MT5Connection =

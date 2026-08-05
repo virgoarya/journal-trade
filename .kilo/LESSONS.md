@@ -20,6 +20,53 @@
 
 ## Lessons Log
 
+### [20260805] MT5 Native MCP Missing Historical Data (copy_rates_range)
+**Area**: Backend / MT5 Integration / Backtest
+**Root Cause**: Native MT5 MCP (`http://127.0.0.1:22346/mcp`) tidak memiliki tool untuk mengambil data historis OHLCV (seperti `copy_rates_range` atau `copy_rates_from`). Ketika backtest meminta data candle, MCP merespon dengan `MCP error -32602: tool not found`.
+**Solusi**:
+1. Buat script python lightweight (`server/fetch_rates.py`) yang menggunakan library `MetaTrader5` via direct memory (bukan via MCP) untuk mengambil data `copy_rates_range` dan `copy_rates_from_pos`.
+2. Pada `executeMt5Command` di `mt5-streamer.ts`, override case `mt5_copy_rates` dan `mt5_copy_rates_range` dengan melakukan spawn `execFileAsync` ke script python tersebut dan me-return datanya (bukan meneruskannya ke MCP Client).
+**Hindari**: Jangan mengasumsikan Native MCP support seluruh method yang ada di library python `MetaTrader5`. Untuk data historis, MT5 Python bridge (atau eksekusi CLI script) masih wajib digunakan.
+
+### [20260804] Per-User Native MT5 MCP API Key Architecture & User Onboarding
+**Area**: Frontend / Backend / Documentation / MT5 Integration
+**Root Cause**: 
+Dalam arsitektur multi-user, setiap trader/user menjalankan terminal MetaTrader 5 sendiri dengan API Key unik yang digenerate oleh internal MT5 (*Tools ➜ Options ➜ Tab MCP*). Jika sistem meminta password broker, user ragu karena masalah privasi dan risiko credential exposure.
+**Solusi**:
+1. Modifikasi model `MT5Connection` untuk menyimpan `apiKeyEncrypted` dan `mcpUrl` terenkripsi AES-256-CBC.
+2. Sederhanakan UI `ConnectionPanel.tsx` dan halaman Settings: Input utama adalah **MT5 MCP API Key** (dengan tombol *Paste Clipboard* dan petunjuk visual).
+3. Bangun modal User Guide interaktif di dalam UI dan dokumentasi lengkap di `docs/USER_GUIDE_MT5.md` untuk memandu user cara mengaktifkan internal server di MT5 dan menyalin API Key tanpa perlu memasukkan password broker.
+4. Dukung auto-reconnect saat backend restart menggunakan token API Key tersimpan.
+**Hindari**: Jangan pernah memaksa user menginput password master broker jika koneksi native MCP token-based sudah tersedia.
+
+### [20260804] Native MT5 MCP Tool Names & Response Normalization
+**Area**: Backend / MT5 Integration / Native MCP
+**Root Cause**: Native MT5 MCP Server (`http://127.0.0.1:22346/mcp`) memiliki skema nama tool spesifik bawaan MetaQuotes:
+- `get_trading_account_info` (bukan `get_account_info` atau `mt5_account_info`)
+- `get_trading_open_positions` (bukan `get_positions` atau `mt5_positions_get`)
+- `get_marketwatch_symbols` (bukan `get_symbols` atau `mt5_symbols_get`)
+- `trade_send_market_order` / `trade_send_pending_order` (bukan `mt5_order_send`)
+- `trade_close_single_position` (bukan `mt5_position_close`)
+- `trade_modify_sl_tp` (bukan `mt5_position_modify`)
+Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
+**Solusi**:
+1. Buat mapping router di `executeMt5Command` dan `startPolling` di `server/src/mt5-streamer.ts` yang menerjemahkan action internal ke nama tool native MT5 MCP resmi.
+2. Normalisasi field payload (seperti `account.margin_free` -> `freeMargin`, `marginLevel`, safe floating spread).
+**Hindari**: Jangan mengasumsikan nama tool MCP standar — selalu inspect langsung via `client.listTools()`.
+
+
+### [20260804] Native MT5 MCP Migration & Client Capabilities Config
+**Area**: Backend / MT5 Integration / MCP
+**Root Cause**: 
+1. MT5 Desktop terbaru memiliki fitur Native MCP Server internal (`http://127.0.0.1:22346/mcp`), sehingga Python client bridge (`Hunter Trades AI Trading.exe`) menjadi usang/redundant.
+2. Inisialisasi `@modelcontextprotocol/sdk` `Client` hanya boleh mendeklarasikan *client capabilities* (seperti `roots`, `sampling`), bukan tool/resource capabilities server (yang menyebabkan TypeScript compilation error `TS2353`).
+**Solusi**:
+1. Gunakan `eventsource` polyfill bersama `SSEClientTransport` untuk koneksi lokal direct loopback ke port 22346 dengan API Key.
+2. Set capabilities client ke `{}`.
+3. Hapus dependency spawning binary Python dari `desktop/main.js` dan `electron-builder.yml`.
+**Hindari**: Jangan mendefinisikan tools/resources di opsi Client MCP SDK karena tools disediakan oleh Server, bukan Client.
+
+
 ### [20260729] Checklist 0/0 valid and Confidence Mismatch on Backtest
 **Area**: Backend / Backtest / Confluence
 **Root Cause**: 
@@ -229,9 +276,14 @@
 2. Selalu jalankan `server.listen(PORT)` seketika di awal script Express, sehingga endpoint `/health` langsung merespons `200 OK` dalam hitungan milidetik, sementara koneksi Database MongoDB dan background workers berjalan asinkron tanpa memblokir startup window aplikasi.
 **Hindari**: Jangan menunda pembukaan HTTP listener di belakang koneksi database eksternal yang rentan terhadap latensi jaringan.
 
-### [20260803] Windows Desktop Shortcut Icon Blank / Kertas Putih
-**Area**: Desktop / Electron Builder / Branding
-**Root Cause**: File `icon.ico` yang dibuat hanya dengan merename `.png` menjadi `.ico` atau file ICO dengan header single-resolution tidak dikenali dengan baik oleh Windows Shell Explorer dan NSIS Installer, sehingga shortcut di Desktop muncul sebagai ikon kertas putih default.
-**Solusi**: Gunakan converter script (atau generator berbasis Jimp/png2icons) untuk membuat file `icon.ico` dengan multi-resolusi lengkap (16, 24, 32, 48, 64, 128, 256 px). Pastikan `electron-builder.yml` mereferensikan `build/icon.ico` pada opsi `win.icon`, `nsis.installerIcon`, dan `nsis.uninstallerIcon`.
-**Hindari**: Jangan merename file format `.png` langsung menjadi `.ico` tanpa encoding format binary ICO sesungguhnya.
+### [20260803] Electron-Builder node_modules Pruning & utilityProcess Bad Option Crash
+**Area**: Desktop / Electron Builder / Backend Packaging
+**Root Cause**: 
+1. `electron-builder` secara otomatis melakukan pruning (menghapus) dependencies `node_modules` backend di folder `resources/server/node_modules` jika root package.json tidak mendefinisikannya, yang mengakibatkan error fatal `Cannot find module 'express'`.
+2. Jika `utilityProcess.fork()` dijalankan dengan environment variable `ELECTRON_RUN_AS_NODE: "1"`, Chromium IPC flags internal (seperti `--type=utility`, `--user-data-dir`, `--service-sandbox-type`) akan diperlakukan sebagai Node CLI flags, sehingga Node.js melempar error `bad option: --type=utility` dan langsung terminate seketika.
+**Solusi**:
+1. Buat build hook `desktop/buildHooks/afterPack.js` yang dijalankan di konfigurasi `afterPack` `electron-builder.yml` untuk menyalin folder `server/node_modules` langsung ke folder output `release/win-unpacked/resources/server/node_modules` setelah proses packaging electron-builder selesai.
+2. Gunakan `utilityProcess.fork(serverScript, [], { stdio: 'pipe' })` **tanpa** menyertakan `ELECTRON_RUN_AS_NODE` dan `ELECTRON_NO_ASAR`. `utilityProcess` sudah secara native berjalan di lingkungan Node tanpa flag tersebut.
+**Hindari**: Jangan mengandalkan `extraResources` semata untuk direktori `node_modules` yang besar tanpa afterPack hook jika ada mekanisme dependency pruning dari electron-builder. Jangan pernah menyetel `ELECTRON_RUN_AS_NODE: "1"` saat memanggil `utilityProcess.fork()`.
+
 

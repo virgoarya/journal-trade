@@ -15,6 +15,16 @@ import websockets
 from datetime import datetime, timedelta
 from typing import Any
 
+# Ensure UTF-8 output on Windows to prevent UnicodeEncodeError on cp1252
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import MetaTrader5 as mt5
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -979,9 +989,25 @@ import os
 import argparse
 import asyncio
 
-def run_ws_client(app_instance=None):
+def run_ws_client(app_instance=None, ws_url=None):
+    global mt5_connected, mt5_config
+    
+    # 0. Cek apakah MetaTrader 5 terminal sudah aktif di sistem
+    try:
+        if not mt5_connected and mt5.initialize():
+            acc = mt5.account_info()
+            if acc:
+                mt5_connected = True
+                mt5_config = {"server": acc.server, "login": acc.login}
+                print(f"[MT5] 🟢 Terdeteksi sesi terminal MT5 aktif: Akun #{acc.login} ({acc.server})")
+            else:
+                mt5.shutdown()
+    except Exception as e:
+        print(f"[MT5] Inisialisasi awal terminal: {e}")
+
     # URL WebSocket Server Lokal
-    WS_URL = "ws://localhost:5000/ws/mt5-stream"
+    WS_URL = ws_url or os.environ.get("MT5_WS_URL") or "ws://localhost:5000/ws/mt5-stream"
+    print(f"[WS-STREAM] Menghubungkan ke: {WS_URL}")
     
     async def tick_streamer(ws):
         while True:
@@ -1057,7 +1083,7 @@ def run_ws_client(app_instance=None):
         while True:
             try:
                 async with websockets.connect(WS_URL) as ws:
-                    print(f"\n[WS-STREAM] 🟢 Berhasil terhubung ke Server Lokal: {WS_URL}")
+                    print(f"\n[WS-STREAM] [OK] Berhasil terhubung ke Server Lokal: {WS_URL}")
                     if app_instance:
                         app_instance.set_status(True)
                     
@@ -1074,7 +1100,7 @@ def run_ws_client(app_instance=None):
                         p.cancel()
                         
             except Exception as e:
-                print(f"\n[WS-STREAM] 🔴 Koneksi terputus ({e}). Mencoba lagi dalam 3 detik...")
+                print(f"\n[WS-STREAM] [WAIT] Menunggu server lokal ({e}). Mencoba lagi dalam 3 detik...")
                 if app_instance:
                     app_instance.set_status(False)
                 await asyncio.sleep(3)
@@ -1087,13 +1113,23 @@ def run_ws_client(app_instance=None):
         print("\nExiting...")
 
 if __name__ == "__main__":
-    try:
-        from gui import launch_gui
-        
-        def on_start(app_instance):
-            run_ws_client(app_instance)
+    parser = argparse.ArgumentParser(description="Hunter Trades MT5 Bridge")
+    parser.add_argument("--headless", "--background", "-b", action="store_true", help="Run in background mode without GUI")
+    parser.add_argument("--ws-url", type=str, default=None, help="WebSocket URL of Hunter Trades backend")
+    args, unknown = parser.parse_known_args()
+
+    if args.headless:
+        print("[MT5-BRIDGE] Running in headless background mode...")
+        run_ws_client(ws_url=args.ws_url)
+    else:
+        try:
+            from gui import launch_gui
             
-        launch_gui(on_start)
-    except ImportError as e:
-        print(f"GUI not available: {e}, falling back to CLI")
-        run_ws_client()
+            def on_start(app_instance):
+                run_ws_client(app_instance, ws_url=args.ws_url)
+                
+            launch_gui(on_start)
+        except ImportError as e:
+            print(f"GUI not available ({e}), falling back to background CLI mode")
+            run_ws_client(ws_url=args.ws_url)
+

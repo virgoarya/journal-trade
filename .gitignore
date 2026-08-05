@@ -96,3 +96,7 @@ server/schema_dump.json
 
 # Miscellaneous
 *.local
+
+# Desktop builds
+desktop/dist-app/
+desktop/dist-build/

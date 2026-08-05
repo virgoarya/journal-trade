@@ -5,9 +5,12 @@ import { aiTradingService } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
 interface MT5Credentials {
-  server: string;
-  login: string;
-  password: string;
+  apiKey?: string;
+  mcpUrl?: string;
+  server?: string;
+  login?: string;
+  password?: string;
+  tunnelUrl?: string;
 }
 
 export function useMT5Connection() {

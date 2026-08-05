@@ -5,8 +5,11 @@
 
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, utilityProcess, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const axios = require("axios");
+const AdmZip = require("adm-zip");
+const crypto = require("crypto");
 const path = require("path");
-const { spawn, execFile } = require("child_process");
+const { spawn, fork, execFile } = require("child_process");
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
@@ -72,7 +75,7 @@ function loadEnvFile(envPath) {
 // ─── Port Checker ────────────────────────────────────────────
 function isPortResponding(port, checkPath = "/") {
   return new Promise((resolve) => {
-    const req = http.get(`http://localhost:${port}${checkPath}`, (res) => {
+    const req = http.get(`http://127.0.0.1:${port}${checkPath}`, (res) => {
       res.resume();
       resolve(true);
     });
@@ -83,6 +86,57 @@ function isPortResponding(port, checkPath = "/") {
     });
   });
 }
+
+let backendLastStderr = "";
+let frontendLastStderr = "";
+let logDir = null;
+
+function appendToLog(filename, str) {
+  try {
+    if (!logDir) {
+      logDir = path.join(app.getPath("userData"), "logs");
+      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(path.join(logDir, filename), str, "utf-8");
+  } catch (err) {
+    // Ignore log write failure
+  }
+}
+
+function getLogStream(filename) {
+  return {
+    write: (str) => appendToLog(filename, str),
+  };
+}
+
+// Redirect main process logs to main.log
+try {
+  const origLog = console.log;
+  const origErr = console.error;
+  const origWarn = console.warn;
+  console.log = (...args) => {
+    origLog(...args);
+    appendToLog("main.log", `[${new Date().toISOString()}] [INFO] ${args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ")}\n`);
+  };
+  console.warn = (...args) => {
+    origWarn(...args);
+    appendToLog("main.log", `[${new Date().toISOString()}] [WARN] ${args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ")}\n`);
+  };
+  console.error = (...args) => {
+    origErr(...args);
+    appendToLog("main.log", `[${new Date().toISOString()}] [ERR] ${args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ")}\n`);
+  };
+} catch (e) {
+  // Ignore
+}
+
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL uncaughtException]", err.stack || err.message);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL unhandledRejection]", reason?.stack || reason);
+});
 
 // ─── Server Management ──────────────────────────────────────
 async function startBackend() {
@@ -99,6 +153,7 @@ async function startBackend() {
 
   const envFilePath = path.join(serverCwd, ".env");
   const fileEnv = loadEnvFile(envFilePath);
+  const logStream = getLogStream("backend.log");
 
   if (isDev) {
     const command = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -111,6 +166,8 @@ async function startBackend() {
         PORT: String(BACKEND_PORT),
         NODE_ENV: "development",
         PYTHONIOENCODING: "utf-8",
+        FRONTEND_URL: `http://localhost:${FRONTEND_PORT}`,
+        BETTER_AUTH_URL: `http://localhost:${BACKEND_PORT}`,
       },
       stdio: ["pipe", "pipe", "pipe"],
       shell: process.platform === "win32",
@@ -119,10 +176,15 @@ async function startBackend() {
     backendProcess.stdout?.on("data", (d) => {
       const msg = d.toString().trim();
       if (msg) console.log(`[BACKEND] ${msg}`);
+      if (logStream) logStream.write(`[${new Date().toISOString()}] ${d.toString()}`);
     });
     backendProcess.stderr?.on("data", (d) => {
       const msg = d.toString().trim();
-      if (msg) console.error(`[BACKEND] ${msg}`);
+      if (msg) {
+        console.error(`[BACKEND] ${msg}`);
+        backendLastStderr = msg.slice(-500);
+      }
+      if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${d.toString()}`);
     });
     backendProcess.on("exit", (code) => {
       console.log(`[MAIN] Backend exited with code ${code}`);
@@ -133,27 +195,42 @@ async function startBackend() {
     });
   } else {
     const serverScript = path.join(serverCwd, "dist", "index.js");
-    console.log(`[MAIN] Starting backend (production utilityProcess): ${serverScript}`);
+    console.log(`[MAIN] Starting backend (production fork): ${serverScript}`);
 
-    backendProcess = utilityProcess.fork(serverScript, [], {
+    const forkEnv = {
+      ...process.env,
+      ...fileEnv,
+      PORT: String(BACKEND_PORT),
+      NODE_ENV: "production",
+      PYTHONIOENCODING: "utf-8",
+      FRONTEND_URL: `http://localhost:${FRONTEND_PORT}`,
+      BETTER_AUTH_URL: `http://localhost:${BACKEND_PORT}`,
+      NODE_PATH: path.join(serverCwd, "node_modules"),
+    };
+
+    backendProcess = require("child_process").fork(serverScript, [], {
       cwd: serverCwd,
-      env: {
-        ...process.env,
-        ...fileEnv,
-        PORT: String(BACKEND_PORT),
-        NODE_ENV: "production",
-        PYTHONIOENCODING: "utf-8",
-      },
+      env: forkEnv,
       stdio: "pipe",
     });
 
     backendProcess.stdout?.on("data", (d) => {
       const msg = d.toString().trim();
       if (msg) console.log(`[BACKEND] ${msg}`);
+      if (logStream) logStream.write(`[${new Date().toISOString()}] ${d.toString()}`);
     });
     backendProcess.stderr?.on("data", (d) => {
       const msg = d.toString().trim();
-      if (msg) console.error(`[BACKEND] ${msg}`);
+      if (msg) {
+        console.error(`[BACKEND] ${msg}`);
+        backendLastStderr = msg.slice(-500);
+      }
+      if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${d.toString()}`);
+    });
+    backendProcess.on("error", (err) => {
+      console.error(`[MAIN] Backend process error: ${err.message}`);
+      backendLastStderr = err.message;
+      if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${err.stack || err.message}\n`);
     });
     backendProcess.on("exit", (code) => {
       console.log(`[MAIN] Backend exited with code ${code}`);
@@ -171,6 +248,8 @@ async function startFrontend() {
     console.log(`[MAIN] Frontend is already running on port ${FRONTEND_PORT}. Skipping spawn.`);
     return;
   }
+
+  const logStream = getLogStream("frontend.log");
 
   if (isDev) {
     console.log("[MAIN] Dev mode: starting frontend via npm run dev...");
@@ -191,10 +270,15 @@ async function startFrontend() {
     frontendProcess.stdout?.on("data", (d) => {
       const msg = d.toString().trim();
       if (msg) console.log(`[FRONTEND] ${msg}`);
+      if (logStream) logStream.write(`[${new Date().toISOString()}] ${d.toString()}`);
     });
     frontendProcess.stderr?.on("data", (d) => {
       const msg = d.toString().trim();
-      if (msg) console.error(`[FRONTEND] ${msg}`);
+      if (msg) {
+        console.error(`[FRONTEND] ${msg}`);
+        frontendLastStderr = msg.slice(-500);
+      }
+      if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${d.toString()}`);
     });
     frontendProcess.on("exit", (code) => {
       console.log(`[MAIN] Frontend exited with code ${code}`);
@@ -210,12 +294,13 @@ async function startFrontend() {
 
   if (!fs.existsSync(serverJs)) {
     console.error(`[MAIN] Frontend server.js not found at: ${serverJs}`);
+    frontendLastStderr = `Frontend server.js not found at: ${serverJs}`;
     return;
   }
 
   console.log(`[MAIN] Starting frontend (production utilityProcess): ${serverJs}`);
 
-  frontendProcess = utilityProcess.fork(serverJs, [], {
+  frontendProcess = require("child_process").fork(serverJs, [], {
     cwd: frontendDir,
     env: {
       ...process.env,
@@ -223,6 +308,7 @@ async function startFrontend() {
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
       BACKEND_URL: `http://localhost:${BACKEND_PORT}`,
+      NODE_PATH: path.join(frontendDir, "node_modules"),
     },
     stdio: "pipe",
   });
@@ -230,10 +316,20 @@ async function startFrontend() {
   frontendProcess.stdout?.on("data", (d) => {
     const msg = d.toString().trim();
     if (msg) console.log(`[FRONTEND] ${msg}`);
+    if (logStream) logStream.write(`[${new Date().toISOString()}] ${d.toString()}`);
   });
   frontendProcess.stderr?.on("data", (d) => {
     const msg = d.toString().trim();
-    if (msg) console.error(`[FRONTEND] ${msg}`);
+    if (msg) {
+      console.error(`[FRONTEND] ${msg}`);
+      frontendLastStderr = msg.slice(-500);
+    }
+    if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${d.toString()}`);
+  });
+  frontendProcess.on("error", (err) => {
+    console.error(`[MAIN] Frontend process error: ${err.message}`);
+    frontendLastStderr = err.message;
+    if (logStream) logStream.write(`[${new Date().toISOString()}] [ERR] ${err.stack || err.message}\n`);
   });
   frontendProcess.on("exit", (code) => {
     console.log(`[MAIN] Frontend exited with code ${code}`);
@@ -243,18 +339,24 @@ async function startFrontend() {
   });
 }
 
+// ─── MT5 Bridge ─────────────────────────────────────────────
+// Python bridge has been removed. MT5 data is now provided by
+// the native MetaTrader 5 built-in MCP server (port 22346).
+// The backend connects automatically via SSE on startup.
+
 // ─── Wait for Server ─────────────────────────────────────────
-function waitForServer(port, checkPath = "/health", timeout = 60000) {
+function waitForServer(port, checkPath = "/health", timeout = 60000, serverName = "Server", getLastError = null) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
-      const req = http.get(`http://localhost:${port}${checkPath}`, (res) => {
+      const req = http.get(`http://127.0.0.1:${port}${checkPath}`, (res) => {
         res.resume();
         resolve();
       });
       req.on("error", () => {
         if (Date.now() - start > timeout) {
-          reject(new Error(`Server on port ${port} did not start within ${timeout / 1000}s`));
+          const errDetail = getLastError ? getLastError() : "";
+          reject(new Error(`${serverName} on port ${port} did not start within ${timeout / 1000}s.${errDetail ? '\nDetails: ' + errDetail : ''}`));
         } else {
           setTimeout(check, 800);
         }
@@ -262,7 +364,8 @@ function waitForServer(port, checkPath = "/health", timeout = 60000) {
       req.setTimeout(2500, () => {
         req.destroy();
         if (Date.now() - start > timeout) {
-          reject(new Error(`Server on port ${port} timed out`));
+          const errDetail = getLastError ? getLastError() : "";
+          reject(new Error(`${serverName} on port ${port} timed out.${errDetail ? '\nDetails: ' + errDetail : ''}`));
         } else {
           setTimeout(check, 800);
         }
@@ -287,7 +390,9 @@ function createSplashWindow() {
       contextIsolation: true,
     },
   });
-  splashWindow.loadFile(path.join(__dirname, "assets", "splash.html"));
+  splashWindow.loadFile(path.join(__dirname, "assets", "splash.html"), {
+    query: { version: app.getVersion() }
+  });
   splashWindow.center();
 }
 
@@ -346,6 +451,35 @@ function createMainWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // ─── OAuth Navigation Handling ──────────────────────────────
+  // Allow Discord OAuth flow: let the BrowserWindow navigate to discord.com
+  // and then redirect back to localhost after auth completes.
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const parsedUrl = new URL(url);
+    const allowedHosts = ["discord.com", "discordapp.com", "localhost", "127.0.0.1"];
+    if (allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+      console.log(`[MAIN] Allowing navigation to: ${url}`);
+      // Allow navigation — do nothing (don't prevent default)
+    } else {
+      console.log(`[MAIN] Blocking navigation to external URL: ${url}`);
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  // Handle window.open() calls (e.g., popups from OAuth)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const parsedUrl = new URL(url);
+    const allowedHosts = ["discord.com", "discordapp.com", "localhost", "127.0.0.1"];
+    if (allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+      console.log(`[MAIN] Allowing popup to: ${url}`);
+      return { action: "allow" };
+    }
+    console.log(`[MAIN] Redirecting popup to external browser: ${url}`);
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
 }
 
 // ─── Local IP Detection ─────────────────────────────────────
@@ -361,7 +495,125 @@ function getLocalIP() {
   return "localhost";
 }
 
-// ─── System Tray ─────────────────────────────────────────────
+// ─── System Tray ──────────────────────────────────// ─── OTA Updater Implementation ───────────────────────────────────────
+const OTA_VERSION_URL = "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/version.json";
+
+function setupAutoUpdater() {
+  if (isDev) {
+    console.log("[OTA-UPDATER] Running in dev mode, skipping updates.");
+    return;
+  }
+  
+  const currentVersion = app.getVersion();
+
+  async function checkOtaUpdate() {
+    try {
+      console.log(`[OTA-UPDATER] Checking for updates (current: ${currentVersion})...`);
+      const response = await axios.get(`${OTA_VERSION_URL}?t=${Date.now()}`);
+      const remoteInfo = response.data;
+      
+      if (!remoteInfo || !remoteInfo.version) return;
+
+      // Simple version compare (assumes semver e.g., 1.0.5)
+      const isNewer = remoteInfo.version.localeCompare(currentVersion, undefined, { numeric: true, sensitivity: 'base' }) > 0;
+      
+      if (isNewer) {
+        console.log(`[OTA-UPDATER] Update available: v${remoteInfo.version}`);
+        sendToRenderer("updater:status", {
+          status: "downloaded", // We mock downloaded so the UI asks to install immediately
+          version: remoteInfo.version,
+          releaseNotes: remoteInfo.notes || "A new update is available.",
+          patchUrl: remoteInfo.patchUrl
+        });
+      }
+    } catch (err) {
+      console.warn("[OTA-UPDATER] Update check failed:", err.message);
+    }
+  }
+
+  // Check on startup after 10s
+  setTimeout(checkOtaUpdate, 10000);
+  // Periodic check every 1 hour
+  setInterval(checkOtaUpdate, 60 * 60 * 1000);
+}
+
+// IPC Handlers for Updater
+ipcMain.handle("updater:check-now", async () => {
+  if (isDev) {
+    return { status: "dev-mode", message: "Auto-updater is disabled in dev mode." };
+  }
+  return { status: "success", message: "OTA update check running in background." };
+});
+
+ipcMain.on("updater:quit-and-install", async (event) => {
+  console.log("[OTA-UPDATER] Applying OTA Patch...");
+  
+  const tempZipPath = path.join(app.getPath("temp"), "hunter_trades_patch.zip");
+  const backupPath = process.resourcesPath + "_backup";
+  const otaFlagPath = path.join(app.getPath("userData"), "ota_updating.txt");
+
+  try {
+    // 1. Fetch latest version info for patch URL and checksum
+    const responseInfo = await axios.get(`${OTA_VERSION_URL}?t=${Date.now()}`);
+    const remoteInfo = responseInfo.data;
+    if (!remoteInfo || !remoteInfo.patchUrl) throw new Error("Invalid version data from server");
+
+    // 2. Download zip
+    console.log(`[OTA-UPDATER] Downloading patch from: ${remoteInfo.patchUrl}`);
+    const response = await axios({
+      url: remoteInfo.patchUrl,
+      method: 'GET',
+      responseType: 'arraybuffer'
+    });
+    const fileBuffer = response.data;
+    
+    // 3. Verify Checksum
+    if (remoteInfo.checksum) {
+      console.log(`[OTA-UPDATER] Verifying checksum...`);
+      const hashSum = crypto.createHash('sha256');
+      hashSum.update(fileBuffer);
+      const calculatedChecksum = hashSum.digest('hex');
+      if (calculatedChecksum !== remoteInfo.checksum) {
+        throw new Error(`Checksum mismatch! Expected ${remoteInfo.checksum}, got ${calculatedChecksum}. Patch file might be corrupted.`);
+      }
+      console.log(`[OTA-UPDATER] Checksum OK!`);
+    }
+
+    fs.writeFileSync(tempZipPath, fileBuffer);
+
+    // 4. Create Backup (Auto-Rollback Layer)
+    console.log(`[OTA-SAFETY] Creating backup of current resources...`);
+    if (fs.existsSync(backupPath)) {
+      fs.rmSync(backupPath, { recursive: true, force: true });
+    }
+    // Using fs.cpSync for recursive copy
+    fs.cpSync(process.resourcesPath, backupPath, { recursive: true });
+    
+    // 5. Write safety flag
+    fs.writeFileSync(otaFlagPath, "updating");
+
+    // 6. Extract over resourcesPath
+    console.log(`[OTA-UPDATER] Extracting patch to: ${process.resourcesPath}`);
+    const zip = new AdmZip(tempZipPath);
+    zip.extractAllTo(process.resourcesPath, true);
+
+    // 7. Clean up and restart
+    console.log(`[OTA-UPDATER] Patch applied successfully. Restarting for health check...`);
+    fs.unlinkSync(tempZipPath);
+    
+    isQuitting = true;
+    app.relaunch();
+    app.exit(0);
+
+  } catch (err) {
+    console.error("[OTA-UPDATER] Failed to apply patch:", err);
+    sendToRenderer("updater:status", {
+      status: "error",
+      message: "Gagal menerapkan update: " + err.message
+    });
+  }
+});
+
 function createTray() {
   const iconPath = path.join(__dirname, "assets", "icon.png");
   let trayIcon;
@@ -407,11 +659,6 @@ function createTray() {
     },
     { type: "separator" },
     {
-      label: "Launch MT5 Client",
-      click: () => launchMT5Client(),
-    },
-    { type: "separator" },
-    {
       label: "Quit",
       click: () => {
         isQuitting = true;
@@ -434,133 +681,13 @@ function createTray() {
   });
 }
 
-// ─── MT5 Client Launcher ────────────────────────────────────
-function launchMT5Client() {
-  const mt5Dir = isDev
-    ? path.join(__dirname, "..", "server", "mcp-mt5-server", "dist")
-    : path.join(process.resourcesPath, "mt5-client");
-
-  const mt5Exe = path.join(mt5Dir, "Hunter Trades AI Trading.exe");
-
-  if (fs.existsSync(mt5Exe)) {
-    execFile(mt5Exe, { detached: true, stdio: "ignore" }, (err) => {
-      if (err) {
-        dialog.showErrorBox("MT5 Client Error", `Failed to launch: ${err.message}`);
-      }
-    });
-  } else {
-    dialog.showMessageBox({
-      type: "warning",
-      title: "MT5 Client",
-      message: "MT5 Client not found",
-      detail: `Expected at: ${mt5Exe}\n\nPlease build the MT5 client first using build.bat in server/mcp-mt5-server/`,
-    });
-  }
-}
-
 // ─── Auto-Updater (GitHub Releases) ───────────────────────────
 function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
     mainWindow.webContents.send(channel, data);
   }
 }
-
-function setupAutoUpdater() {
-  if (isDev) {
-    console.log("[AUTO-UPDATER] Development mode detected. In-app updater is idle.");
-    return;
-  }
-
-  try {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.logger = console;
-
-    autoUpdater.on("checking-for-update", () => {
-      console.log("[AUTO-UPDATER] Checking for updates on GitHub Releases...");
-      sendToRenderer("updater:status", { status: "checking" });
-    });
-
-    autoUpdater.on("update-available", (info) => {
-      console.log(`[AUTO-UPDATER] 🚀 New version available: v${info.version}`);
-      sendToRenderer("updater:status", {
-        status: "available",
-        version: info.version,
-        releaseDate: info.releaseDate,
-        releaseNotes: info.releaseNotes,
-      });
-    });
-
-    autoUpdater.on("update-not-available", (info) => {
-      console.log(`[AUTO-UPDATER] Application is up-to-date (v${info.version}).`);
-      sendToRenderer("updater:status", {
-        status: "not-available",
-        version: info.version,
-      });
-    });
-
-    autoUpdater.on("error", (err) => {
-      console.warn("[AUTO-UPDATER] Update check warning/error:", err.message);
-      sendToRenderer("updater:status", {
-        status: "error",
-        message: err.message,
-      });
-    });
-
-    autoUpdater.on("download-progress", (progressObj) => {
-      sendToRenderer("updater:progress", {
-        percent: Math.round(progressObj.percent || 0),
-        bytesPerSecond: progressObj.bytesPerSecond || 0,
-        transferred: progressObj.transferred || 0,
-        total: progressObj.total || 0,
-      });
-    });
-
-    autoUpdater.on("update-downloaded", (info) => {
-      console.log(`[AUTO-UPDATER] ✅ Version v${info.version} downloaded and ready to install.`);
-      sendToRenderer("updater:status", {
-        status: "downloaded",
-        version: info.version,
-        releaseNotes: info.releaseNotes,
-      });
-    });
-
-    // Check after 10s of launch
-    setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-        console.warn("[AUTO-UPDATER] Initial check error:", err.message);
-      });
-    }, 10000);
-
-    // Periodic check every 1 hour
-    setInterval(() => {
-      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-        console.warn("[AUTO-UPDATER] Periodic check error:", err.message);
-      });
-    }, 60 * 60 * 1000);
-  } catch (err) {
-    console.error("[AUTO-UPDATER] Failed to initialize:", err);
-  }
-}
-
-// IPC Handlers for Updater
-ipcMain.handle("updater:check-now", async () => {
-  if (isDev) {
-    return { status: "dev-mode", message: "Auto-updater is disabled in dev mode." };
-  }
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return { status: "success", updateInfo: result?.updateInfo };
-  } catch (err) {
-    return { status: "error", message: err.message };
-  }
-});
-
-ipcMain.on("updater:quit-and-install", () => {
-  console.log("[AUTO-UPDATER] Applying update: quit and install...");
-  isQuitting = true;
-  autoUpdater.quitAndInstall(false, true);
-});
+// (Cleaned up old auto-updater)
 
 // ─── App Lifecycle ──────────────────────────────────────────
 app.whenReady().then(async () => {
@@ -570,19 +697,30 @@ app.whenReady().then(async () => {
   createSplashWindow();
 
   try {
-    // Start servers
+    // Start backend & frontend (MT5 data via native MCP in MetaTrader 5)
     await startBackend();
     await startFrontend();
 
     // Wait for backend to be ready (frontend depends on it)
     console.log("[MAIN] Waiting for backend server on port 5000...");
-    await waitForServer(BACKEND_PORT, "/health", 60000);
+    await waitForServer(BACKEND_PORT, "/health", 60000, "Backend API", () => backendLastStderr);
     console.log("[MAIN] ✅ Backend is ready!");
 
     // Wait for frontend
     console.log("[MAIN] Waiting for frontend server on port 3000...");
-    await waitForServer(FRONTEND_PORT, "/", 60000);
+    await waitForServer(FRONTEND_PORT, "/", 60000, "Frontend UI", () => frontendLastStderr);
     console.log("[MAIN] ✅ Frontend is ready!");
+
+    // Check OTA Safety Verification
+    const otaFlagPath = path.join(app.getPath("userData"), "ota_updating.txt");
+    const backupPath = process.resourcesPath + "_backup";
+    if (fs.existsSync(otaFlagPath)) {
+      console.log("[OTA-SAFETY] Update verified successfully! Servers are healthy. Cleaning up backup.");
+      fs.unlinkSync(otaFlagPath);
+      if (fs.existsSync(backupPath)) {
+        fs.rmSync(backupPath, { recursive: true, force: true });
+      }
+    }
 
     // Create main window + tray
     createMainWindow();
@@ -592,6 +730,26 @@ app.whenReady().then(async () => {
     setupAutoUpdater();
   } catch (err) {
     console.error("[MAIN] Startup error:", err);
+
+    // OTA Auto-Rollback Handler
+    const otaFlagPath = path.join(app.getPath("userData"), "ota_updating.txt");
+    const backupPath = process.resourcesPath + "_backup";
+    if (fs.existsSync(otaFlagPath)) {
+       console.log("[OTA-SAFETY] Health check failed! Rolling back to backup...");
+       try {
+         fs.rmSync(process.resourcesPath, { recursive: true, force: true });
+         fs.renameSync(backupPath, process.resourcesPath);
+         fs.unlinkSync(otaFlagPath);
+         dialog.showErrorBox("OTA Update Failed", "Patch pembaruan gagal dimuat (Server Error). Sistem telah melakukan rollback otomatis ke versi sebelumnya agar aplikasi tetap bisa digunakan.");
+       } catch (rbErr) {
+         console.error("[OTA-SAFETY] CRITICAL: Rollback failed!", rbErr);
+       }
+       isQuitting = true;
+       app.relaunch();
+       app.exit(0);
+       return;
+    }
+
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close();
     }

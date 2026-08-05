@@ -104,6 +104,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const liveTradesBufferRef = useRef<any[]>([]);
   const [liveTrades, setLiveTrades] = useState<any[]>([]);
 
+  // Buffers for UI updates to avoid state-thrashing (lag)
+  const logsBufferRef = useRef<LogEntry[]>([]);
+  const statsDirtyRef = useRef(false);
+  const tradesDirtyRef = useRef(false);
+  const sessionStatsDirtyRef = useRef(false);
+
   // Config change detection — ensures proper reset on re-run
   const newKey = `${config.symbols.join(",")}|${config.timeframe}|${config.fromDate}|${config.toDate}|${config.initialBalance}|${config.maxRiskPerTrade}|${config.maxOpenPositions}|${config.leverage}|${config.signalInterval}|${config.entrySettings.rsiOversold}|${config.entrySettings.rsiOverbought}|${config.entrySettings.atrMultiplierSL}|${config.entrySettings.atrMultiplierTP}|${config.trailingStop.enabled}|${config.trailingStop.activationATR}|${config.trailingStop.trailATR}`;
 
@@ -146,6 +152,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       accumulatedTradesRef.current = [];
       accumulatedEquityRef.current = [];
       liveTradesBufferRef.current = [];
+      logsBufferRef.current = [];
+      statsDirtyRef.current = false;
+      tradesDirtyRef.current = false;
+      sessionStatsDirtyRef.current = false;
       setLiveTrades([]);
     }
     configKeyRef.current = newKey;
@@ -203,6 +213,35 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       // Flush drawdown only (wins/losses now direct in trade_close)
       setMaxDrawdownPct(maxDrawdownPctRef.current);
 
+      // Flush Logs
+      if (logsBufferRef.current.length > 0) {
+        const bufferedLogs = [...logsBufferRef.current];
+        logsBufferRef.current = [];
+        setLogs(prev => [...prev, ...bufferedLogs].slice(-50));
+      }
+
+      // Flush Stats
+      if (statsDirtyRef.current) {
+        statsDirtyRef.current = false;
+        setLiveSymbolStats(Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades));
+        setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
+        setGlobalWins(globalWinsRef.current);
+        setGlobalLosses(globalLossesRef.current);
+      }
+
+      if (sessionStatsDirtyRef.current) {
+        sessionStatsDirtyRef.current = false;
+        setLiveSessionStats(Array.from(sessionStatsRef.current.values()));
+      }
+
+      // Flush Active Trades
+      if (tradesDirtyRef.current) {
+        tradesDirtyRef.current = false;
+        const currActive = Array.from(activeTradesRef.current.values());
+        setActiveTradeCount(currActive.length);
+        setLiveTrades(currActive);
+      }
+
       rafRef.current = requestAnimationFrame(flush);
     };
     rafRef.current = requestAnimationFrame(flush);
@@ -231,12 +270,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           const candleTime = candleTimestamp
             ? new Date(candleTimestamp * 1000).toLocaleDateString("en-GB") + " " + new Date(candleTimestamp * 1000).toLocaleTimeString([], { hour12: false })
             : undefined;
-          setLogs(prev => [...prev.slice(-49), {
+          logsBufferRef.current.push({
             id: Math.random().toString(36).substr(2, 9),
             time: new Date().toLocaleTimeString([], { hour12: false }),
             candleTime,
             type, message, details,
-          }]);
+          });
         };
 
         if (!initLoggedRef.current) {
@@ -313,19 +352,16 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               symbolStatsRef.current.set(sym, { symbol: sym, totalTrades: 0, wins: 0, losses: 0, totalPnL: 0 });
             }
             symbolStatsRef.current.get(sym)!.totalTrades++;
-            setLiveSymbolStats(Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades));
+            statsDirtyRef.current = true;
             const meth = data.primaryMethodology || "unknown";
             if (!methStatsRef.current.has(meth)) {
               methStatsRef.current.set(meth, { count: 0, pnl: 0 });
             }
             methStatsRef.current.get(meth)!.count++;
-            setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
             
             // Track open position locally
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
-            const currActive = Array.from(activeTradesRef.current.values());
-            setActiveTradeCount(currActive.length);
-            setLiveTrades(currActive);
+            tradesDirtyRef.current = true;
           } catch {}
         });
 
@@ -347,12 +383,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               const s = symbolStatsRef.current.get(sym)!;
               if (data.pnl >= 0) s.wins++; else s.losses++;
               s.totalPnL += data.pnl;
-              setLiveSymbolStats(Array.from(symbolStatsRef.current.values()).sort((a, b) => b.totalTrades - a.totalTrades));
+              statsDirtyRef.current = true;
             }
             const meth = data.primaryMethodology || "unknown";
             if (methStatsRef.current.has(meth)) {
               methStatsRef.current.get(meth)!.pnl += data.pnl;
-              setLiveMethStats(Array.from(methStatsRef.current.entries()).filter(([m]) => m !== "unknown").map(([methodology, m]) => ({ methodology, count: m.count, pnl: Math.round(m.pnl * 100) / 100 })).sort((a, b) => b.count - a.count));
+              statsDirtyRef.current = true;
             }
 
             // Market Session Stats tracking (by Entry Time)

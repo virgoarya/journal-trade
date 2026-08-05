@@ -7,7 +7,10 @@
   - **Desktop App**: Electron (server manager + full UI window + system tray).
   - **Frontend**: Next.js 16 (App Router, standalone output), Tailwind CSS, Lightweight Charts, React.
   - **Backend**: Node.js (Express API + WebSocket server), Mongoose, Better Auth (Discord).
-  - **AI Trading Client**: Python (CustomTkinter GUI, websockets, asyncio, MetaTrader5).
+  - **Desktop App**: Electron (server manager + full UI window + system tray).
+  - **Frontend**: Next.js 16 (App Router, standalone output), Tailwind CSS, Lightweight Charts, React.
+  - **Backend**: Node.js (Express API + WebSocket server), Mongoose, Better Auth (Discord).
+  - **MT5 Integration**: Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via SSEClientTransport & EventSource polyfill.
 - **Design Philosophy**: Terminal Noir (Dark theme dengan Gold accent, premium UI/UX, responsive, micro-animations).
 
 ## Current Architecture State
@@ -18,10 +21,10 @@
   - Installer .exe via `electron-builder` + NSIS.
 - **Backend**: Express server (port 5000) + WebSocket server. MongoDB Atlas (cloud).
 - **Frontend**: Next.js standalone (port 3000). API proxy ke backend via rewrites.
-- **AI Trading Integration**: 
-  - Python client (`Hunter Trades AI Trading.exe`) menggunakan **Two-Way WebSocket RPC** ke `ws://localhost:5000/ws/mt5-stream`.
-  - Push data real-time `mt5_tick` setiap 1 detik.
-  - Bundled dalam installer desktop.
+- **MT5 Integration**:
+  - Backend Node.js langsung terhubung ke Native MCP Server yang berjalan langsung di dalam aplikasi MetaTrader 5 (`http://127.0.0.1:22346/mcp`).
+  - Menggunakan API Key untuk otentikasi.
+  - Polling real-time data tick / chart / order langsung via Model Context Protocol (MCP) tanpa membutuhkan Python client atau bridge terpisah.
 - **Auth**: Better Auth + Discord OAuth (hanya member komunitas Discord yang bisa akses).
 - **Payment**: Midtrans (planned untuk versi berbayar).
 
@@ -33,11 +36,9 @@
 - **Accessibility**: Web UI harus bisa diakses dari browser + mobile (server desktop harus nyala).
 
 ## Recent Refactors
+- **Native MT5 MCP Migration**: Mengganti Python bridge (`Hunter Trades AI Trading.exe`) dengan koneksi langsung ke fitur Native MCP Server yang sudah terintegrasi di MetaTrader 5 desktop (`http://127.0.0.1:22346/mcp`). Mengurangi overhead memory, latency, dan kompleksitas packaging.
 - **GitHub Releases Auto-Update**: Integrasi `electron-updater` dan `UpdateNotification` UI component di Next.js layout. Aplikasi otomatis memeriksa pembaruan di latar belakang, mengunduh patch, dan menyediakan tombol "Restart & Perbarui" tanpa perlu re-install manual.
-- **Electron Desktop App**: Membungkus seluruh stack (backend + frontend + MT5 client) dalam Electron installer .exe via NSIS.
-- **Railway Removal**: Migrasi dari Railway ke full local setup. Semua WebSocket URL mengarah ke `localhost:5000`.
-- **Ngrok Removal**: Menghapus sistem Ngrok karena sering isu jaringan. Beralih ke WebSocket langsung.
-- **GUI Update**: Mengubah aplikasi console menjadi Desktop GUI berbasis `CustomTkinter` dengan logo Hunter Trades.
+- **Electron Desktop App**: Membungkus seluruh stack (backend + frontend) dalam Electron installer .exe via NSIS.
 
 ## Project Structure
 ```
@@ -47,9 +48,6 @@ D:\Journal Trade\
 │   ├── src/app/       → Pages dan API routes
 │   └── public/        → Static assets
 ├── server/            → Express backend
-│   ├── src/           → TypeScript source
-│   ├── .venv-mcp/     → Python MCP binaries
-│   └── mcp-mt5-server/ → Python MT5 client
-│       └── dist/      → Built .exe
+│   └── src/           → TypeScript source (mt5-streamer.ts connects to MT5 MCP)
 └── .kilo/             → Agent config, memory, skills
 ```

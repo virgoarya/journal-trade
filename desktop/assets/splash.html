@@ -184,7 +184,17 @@
       <span class="status-text">Starting servers...</span>
     </div>
 
-    <span class="version">v1.0.0</span>
+    <span class="version" id="app-version">v1.0.5</span>
   </div>
+
+  <script>
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ver = params.get('version');
+      if (ver) {
+        document.getElementById('app-version').textContent = 'v' + ver;
+      }
+    } catch (e) {}
+  </script>
 </body>
 </html>

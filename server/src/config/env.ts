@@ -1,6 +1,22 @@
 import { z } from "zod";
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
 import { silentLogger } from "../utils/silent-logger";
+
+// Try multiple candidate paths for .env
+const envCandidates = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, ".env"),
+];
+for (const cand of envCandidates) {
+  if (fs.existsSync(cand)) {
+    dotenv.config({ path: cand });
+    break;
+  }
+}
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -84,13 +100,19 @@ const envSchema = z.object({
 
   // Dev whitelist emails (comma-separated) — skip broker registration
   DEV_WHITELIST_EMAILS: z.string().optional().default(""),
+
+  // Native MT5 MCP Server (built-in MetaTrader 5)
+  MT5_MCP_URL: z.string().url().optional().default("http://127.0.0.1:22346/mcp"),
+  MT5_MCP_API_KEY: z.string().optional().default(""),
 });
 
 const _env = envSchema.safeParse(process.env);
 
 if (!_env.success) {
+  console.error("❌ Invalid environment variables:", JSON.stringify(_env.error.format(), null, 2));
   silentLogger.error("❌ Invalid environment variables:", _env.error.format());
-  throw new Error("Invalid environment variables");
+  throw new Error("Invalid environment variables: " + JSON.stringify(_env.error.format()));
 }
 
 export const env = _env.data;
+

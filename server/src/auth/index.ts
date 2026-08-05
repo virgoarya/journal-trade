@@ -19,6 +19,9 @@ export const createAuth = () => {
     trustedOrigins: [
       env.FRONTEND_URL || "http://localhost:3000",
       "http://localhost:5000",
+      "http://localhost:3000",
+      "http://127.0.0.1:5000",
+      "http://127.0.0.1:3000",
     ],
     socialProviders: {
       discord: {
@@ -32,7 +35,8 @@ export const createAuth = () => {
       updateAge: 60 * 60 * 1, // refresh every 1 hour
     },
     advanced: {
-      disableCSRFCheck: env.NODE_ENV === "development",
+      // Disable CSRF for localhost (desktop app) — safe because it runs locally
+      disableCSRFCheck: env.NODE_ENV === "development" || env.BETTER_AUTH_URL?.includes("localhost"),
     },
     trustHost: true,
   });

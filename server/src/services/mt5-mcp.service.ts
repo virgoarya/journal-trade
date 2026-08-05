@@ -1,7 +1,7 @@
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
-import { mt5StreamCache, executeMt5Command } from "../mt5-streamer";
+import { mt5StreamCache, executeMt5Command, connectWithMcpConfig, disconnectMcp } from "../mt5-streamer";
 import { execSync } from 'child_process';
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
@@ -145,9 +145,11 @@ export function logErrorStructured(
 // ─── Types ───────────────────────────────────────────────────────────
 
 export interface MT5Config {
-  server: string;
-  login: string;
-  password: string;
+  apiKey?: string;
+  mcpUrl?: string;
+  server?: string;
+  login?: string | number;
+  password?: string;
   tunnelUrl?: string;
 }
 
@@ -335,15 +337,30 @@ class MT5MCPService {
     silentLogger.info("[MT5-MCP] RPC interface ready");
   }
 
-  /** Connect to MT5 terminal with broker credentials. */
+  /** Connect to MT5 terminal with broker credentials or native MCP apiKey. */
   async connectToMT5(config: MT5Config): Promise<{ success: boolean; accountInfo?: MT5AccountInfo; error?: string }> {
     this.lastConfig = config;
 
     try {
+      if (config.apiKey !== undefined || config.mcpUrl) {
+        const res = await connectWithMcpConfig({ mcpUrl: config.mcpUrl, apiKey: config.apiKey });
+        if (!res.success) {
+          return { success: false, error: res.error || "Gagal terhubung ke MT5 Native MCP" };
+        }
+        if (res.accountInfo) {
+          this.accountInfo = res.accountInfo as MT5AccountInfo;
+        }
+        this.connected = true;
+        this._circuitBreaker.reset();
+        this.stopAutoReconnect();
+        this.startKeepAlive();
+        return { success: true, accountInfo: this.accountInfo ?? undefined };
+      }
+
       const result = await withRetry(
         () => executeMt5Command("mt5_connect", {
           server: config.server,
-          login: String(config.login),
+          login: String(config.login ?? ""),
           password: config.password,
         }),
         3, // max retries
@@ -379,7 +396,7 @@ class MT5MCPService {
     if (!this.connected) return;
 
     try {
-      await executeMt5Command("mt5_disconnect", {});
+      await disconnectMcp();
     } catch {
       // ignore
     }
@@ -617,11 +634,15 @@ class MT5MCPService {
       for (const conn of connections as any[]) {
         const doc = await MT5Connection.findById(conn._id);
         if (!doc) continue;
-        const password = doc.getPassword();
-        if (!password || !conn.server || !conn.login) continue;
+        const apiKey = doc.getApiKey ? doc.getApiKey() : "";
+        const password = doc.getPassword ? doc.getPassword() : "";
+        
+        if (!apiKey && (!password || !conn.server || !conn.login)) continue;
 
-        silentLogger.info(`[MT5-MCP] Auto-reconnecting for user ${conn.userId} (${conn.server}/${conn.login})...`);
+        silentLogger.info(`[MT5-MCP] Auto-reconnecting for user ${conn.userId}...`);
         const result = await this.connectToMT5({
+          apiKey: apiKey || undefined,
+          mcpUrl: conn.mcpUrl || undefined,
           server: conn.server,
           login: String(conn.login),
           password,

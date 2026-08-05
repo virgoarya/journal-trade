@@ -17,9 +17,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Cpu,
-  FlaskConical
-} from "lucide-react";
+import { FlaskConical } from "lucide-react";
 import { useState } from "react";
+import pkg from "../../../../package.json";
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -159,6 +159,16 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
             )}
           </Link>
         ))}
+        
+        {/* App Version Tag */}
+        <div className="pt-2 pb-2 text-center">
+          <p className={cn(
+            "text-text-secondary/50 font-mono tracking-widest",
+            isCollapsed ? "text-[8px]" : "text-[10px]"
+          )}>
+            v{pkg.version}
+          </p>
+        </div>
       </div>
     </aside>
   );

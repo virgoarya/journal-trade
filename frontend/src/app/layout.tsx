@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { OtaUpdaterModal } from "@/components/OtaUpdaterModal";
 import "./globals.css";
 
 const inter = Inter({
@@ -49,6 +50,7 @@ export default function RootLayout({
         <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/5 blur-[100px] pointer-events-none -z-10"></div>
 
         {children}
+        <OtaUpdaterModal />
         <Toaster position="top-right" richColors />
       </body>
     </html>

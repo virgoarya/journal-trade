@@ -2,87 +2,53 @@ appId: com.huntertrades.app
 productName: Hunter Trades
 copyright: Copyright © 2026 Hunter Trades
 
-# Directories
 directories:
-  output: release
+  output: dist-build
   buildResources: assets
 
-# GitHub Releases Auto-Update Configuration
 publish:
   provider: github
   owner: virgoarya
   repo: journal-trade
   releaseType: draft
 
-# Windows build
 win:
   target:
     - target: nsis
       arch:
         - x64
+    - target: dir
+      arch:
+        - x64
   icon: assets/icon.ico
   signExecutable: false
 
-# NSIS installer configuration
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  differentialPackage: false
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Hunter Trades
-  # Hardware requirements shown in installer
   installerSidebar: null
   license: null
   warningsAsErrors: false
 
-# Files to include in the app
 files:
   - main.js
   - preload.js
   - assets/**/*
   - node_modules/**/*
 
-# Extra resources bundled alongside the app (not in asar)
 extraResources:
-  # Next.js standalone build
-  - from: ../frontend/.next/standalone
-    to: frontend
-    filter:
-      - "**/*"
-      - "!node_modules/.cache/**"
-  # Next.js static assets (must be copied manually into standalone)
-  - from: ../frontend/.next/static
-    to: frontend/.next/static
-  # Next.js public assets
-  - from: ../frontend/public
-    to: frontend/public
-  # Backend compiled output
   - from: ../server/dist
     to: server/dist
-  # Backend node_modules (production only)
-  - from: ../server/node_modules
-    to: server/node_modules
-    filter:
-      - "**/*"
-      - "!.cache/**"
-      - "!**/test/**"
-      - "!**/tests/**"
-      - "!**/*.md"
-      - "!**/*.ts"
-      - "!**/tsconfig.json"
-  # Backend .env file
+  - from: ../server/package.json
+    to: server/package.json
   - from: ../server/.env
     to: server/.env
-  # Python MT5 client executable
-  - from: ../server/mcp-mt5-server/dist
-    to: mt5-client
-    filter:
-      - "*.exe"
-      - "*.dll"
-      - "**/*"
 
-# Compression
-compression: normal
+compression: store
