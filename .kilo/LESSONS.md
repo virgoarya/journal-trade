@@ -20,6 +20,15 @@
 
 ## Lessons Log
 
+### [20260806] Floating PnL not displaying in AccountOverview
+**Area**: Frontend / MT5 Integration
+**Root Cause**: `AccountOverview` component was using `accountInfo.profit` for "Floating P&L". In native MT5 MCP, `accountInfo.profit` represents the cumulative profit/loss from *closed* trades (or total account profit), not the floating PnL of *open* positions. The actual floating PnL needs to be calculated by summing the `profit` field from all active `positions`.
+**Solusi**:
+1. Modified `AccountOverview.tsx` to accept a `positions` prop.
+2. Calculated `floatingPnL` by `positions.reduce((sum, pos) => sum + (pos.profit ?? 0), 0)`.
+3. Passed the `positions` prop from `page.tsx` to `AccountOverview.tsx`.
+**Hindari**: Selalu pastikan metric di UI sesuai dengan definisi bisnisnya. "Floating P&L" secara spesifik merujuk pada profit/loss posisi yang masih terbuka.
+
 ### [20260805] MT5 Native MCP Field Name Normalization for Positions
 **Area**: Backend / MT5 Integration / Native MCP
 **Root Cause**: Native MT5 MCP `get_trading_open_positions` returns positions with different field names than the legacy Python bridge:

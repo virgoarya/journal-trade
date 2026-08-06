@@ -1,6 +1,7 @@
 "use client";
 
 import { type ACCOUNTInfo } from "@/services/ai-trading.service";
+import { type Position } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
 import { Activity, TrendingUp, TrendingDown, Shield, Server } from "lucide-react";
@@ -8,11 +9,13 @@ import { Activity, TrendingUp, TrendingDown, Shield, Server } from "lucide-react
 interface AccountOverviewProps {
   accountInfo: ACCOUNTInfo | null;
   isLoading: boolean;
+  positions?: Position[];
 }
 
 export function AccountOverview({
   accountInfo,
   isLoading,
+  positions = [],
 }: AccountOverviewProps) {
   if (isLoading) {
     return <SkeletonLoader type="card" />;
@@ -28,8 +31,11 @@ export function AccountOverview({
     );
   }
 
-  const pnlColor = (accountInfo.profit ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
-  const pnlBg = (accountInfo.profit ?? 0) >= 0 ? "bg-neon-green/10 border-neon-green/20" : "bg-neon-red/10 border-neon-red/20";
+  // Fix: Floating PnL calculated from active positions, not account profit
+  const floatingPnL = positions.reduce((sum, pos) => sum + (pos.profit ?? 0), 0);
+
+  const pnlColor = floatingPnL >= 0 ? "text-neon-green" : "text-neon-red";
+  const pnlBg = floatingPnL >= 0 ? "bg-neon-green/10 border-neon-green/20" : "bg-neon-red/10 border-neon-red/20";
   const dailyColor = (accountInfo.dailyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
   const weeklyColor = (accountInfo.weeklyPnL ?? 0) >= 0 ? "text-neon-green" : "text-neon-red";
 
@@ -109,7 +115,7 @@ export function AccountOverview({
             <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Floating P&L</span>
             <div className="flex items-baseline gap-2">
               <span className={`text-lg font-mono font-bold ${pnlColor} drop-shadow-[0_0_10px_currentColor]`}>
-                {accountInfo.profit >= 0 ? "+" : ""}{formatMoney(accountInfo.profit, accountInfo.currency)}
+                {floatingPnL >= 0 ? "+" : ""}{formatMoney(floatingPnL, accountInfo.currency)}
               </span>
             </div>
           </div>

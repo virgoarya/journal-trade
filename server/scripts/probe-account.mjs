@@ -1,0 +1,13 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+const URL = 'http://127.0.0.1:22346/mcp';
+const API_KEY = '1oBaWtEsZuqVsfzLoHlALKBtNcTQuFHt5AHGrRS9Zw';
+const transport = new StreamableHTTPClientTransport(URL, { requestInit: { headers: { Authorization: `Bearer ${API_KEY}` } } });
+const client = new Client({ name: 'probe', version: '1.0.0' }, { capabilities: {} });
+await client.connect(transport);
+const res = await client.callTool({ name: 'get_trading_account_info', arguments: {} });
+const text = res.content?.find(c => c.type === 'text')?.text;
+const json = JSON.parse(text);
+console.log('Keys:', Object.keys(json));
+console.log('Account:', JSON.stringify(json, null, 2));
+await client.close();
