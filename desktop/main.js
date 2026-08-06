@@ -778,13 +778,13 @@ app.whenReady().then(async () => {
     await startFrontend();
 
     // Wait for backend to be ready (frontend depends on it)
-    console.log("[MAIN] Waiting for backend server on port 5000...");
-    await waitForServer(BACKEND_PORT, "/health", 60000, "Backend API", () => backendLastStderr);
+    console.log("[MAIN] Waiting for backend server on port 5000 (max 120s)...");
+    await waitForServer(BACKEND_PORT, "/health", 120000, "Backend API", () => backendLastStderr);
     console.log("[MAIN] ✅ Backend is ready!");
 
     // Wait for frontend
-    console.log("[MAIN] Waiting for frontend server on port 3000...");
-    await waitForServer(FRONTEND_PORT, "/", 60000, "Frontend UI", () => frontendLastStderr);
+    console.log("[MAIN] Waiting for frontend server on port 3000 (max 120s)...");
+    await waitForServer(FRONTEND_PORT, "/", 120000, "Frontend UI", () => frontendLastStderr);
     console.log("[MAIN] ✅ Frontend is ready!");
 
     // Check OTA Safety Verification
