@@ -21,61 +21,64 @@ const RECONNECT_DELAY_MS = 5000; // Retry connection every 5s
 
 // ─── Normalizers ────────────────────────────────────────────────────────────
 function normalizeAccountInfo(raw: any): any {
-  if (!raw) return null;
-  const acct = raw.account || raw;
-  const balance = Number(acct.balance ?? 0);
-  const equity = Number(acct.equity ?? balance);
-  const margin = Number(acct.margin ?? 0);
-  const freeMargin = Number(acct.margin_free ?? acct.freeMargin ?? balance);
-  const marginLevel = acct.margin_level ?? (margin > 0 ? (equity / margin) * 100 : 0);
+   if (!raw) return null;
+   // Native MCP sends account info nested under 'account' key
+   const acct = raw.account || raw;
+   const balance = Number(acct.balance ?? 0);
+   const equity = Number(acct.equity ?? balance);
+   const margin = Number(acct.margin ?? 0);
+   const freeMargin = Number(acct.margin_free ?? acct.freeMargin ?? balance);
+   const marginLevel = acct.margin_level ?? (margin > 0 ? (equity / margin) * 100 : 0);
 
-  return {
-    login: Number(acct.login ?? 0),
-    server: String(acct.server ?? ""),
-    broker: String(acct.broker ?? ""),
-    name: String(acct.name ?? ""),
-    currency: String(acct.currency ?? "USD"),
-    balance,
-    equity,
-    margin,
-    freeMargin,
-    marginFree: freeMargin,
-    marginLevel,
-    leverage: Number(acct.leverage ?? 100),
-    profit: Number(acct.profit ?? 0),
-    type: String(acct.type ?? "demo"),
-    read_only: Boolean(acct.read_only ?? false),
-  };
-}
+   return {
+     login: Number(acct.login ?? 0),
+     server: String(acct.server ?? ""),
+     broker: String(acct.broker ?? ""),
+     name: String(acct.name ?? ""),
+     currency: String(acct.currency ?? "USD"),
+     balance,
+     equity,
+     margin,
+     freeMargin,
+     marginFree: freeMargin,
+     marginLevel,
+     leverage: Number(acct.leverage ?? 100),
+     profit: Number(acct.profit ?? 0),
+     type: String(acct.type ?? "demo"),
+     read_only: Boolean(acct.read_only ?? false),
+   };
+ }
 
 function normalizePosition(p: any): any {
-  let timeVal = 0;
-  if (typeof p.time === "string") {
-    timeVal = Math.floor(new Date(p.time.replace(/\./g, "-")).getTime() / 1000);
-  } else if (typeof p.time === "number") {
-    timeVal = p.time;
-  }
+   let timeVal = 0;
+   const timeStr = p.create_time ?? p.update_time ?? p.time;
+   if (typeof timeStr === "string") {
+     // Native MCP: "2026.08.05 14:00:22"
+     timeVal = Math.floor(new Date(timeStr.replace(/\./g, "-")).getTime() / 1000);
+   } else if (typeof timeStr === "number") {
+     timeVal = timeStr;
+   }
 
-  const pType = String(p.type ?? "").toUpperCase();
-  const normalizedType = (pType === "BUY" || pType === "0" || p.type === 0) ? "BUY" : "SELL";
+   const pType = String(p.action ?? p.type ?? "").toLowerCase();
+   const normalizedType = (pType === "buy" || pType === "0" || p.type === 0) ? "BUY" : "SELL";
 
-  return {
-    ticket: Number(p.ticket ?? p.id ?? 0),
-    symbol: String(p.symbol ?? ""),
-    type: normalizedType,
-    volume: Number(p.volume ?? p.lots ?? 0),
-    priceOpen: Number(p.price_open ?? p.priceOpen ?? p.open_price ?? 0),
-    priceCurrent: Number(p.price_current ?? p.priceCurrent ?? p.price ?? 0),
-    sl: Number(p.sl ?? 0),
-    tp: Number(p.tp ?? 0),
-    profit: Number(p.profit ?? 0),
-    swap: Number(p.swap ?? p.swaps ?? 0),
-    commission: Number(p.commission ?? p.commissions ?? 0),
-    comment: String(p.comment ?? ""),
-    time: timeVal,
-    magic: Number(p.magic ?? 0),
-  };
-}
+   return {
+     ticket: Number(p.position_id ?? p.ticket ?? p.id ?? 0),
+     symbol: String(p.symbol ?? ""),
+     type: normalizedType,
+     volume: Number(p.volume ?? p.lots ?? 0),
+     priceOpen: Number(p.price_open ?? p.priceOpen ?? p.open_price ?? 0),
+     priceCurrent: Number(p.price_last ?? p.price_current ?? p.priceCurrent ?? p.price ?? 0),
+     sl: Number(p.stop_loss ?? p.sl ?? 0),
+     tp: Number(p.take_profit ?? p.tp ?? 0),
+     profit: Number(p.profit ?? 0),
+     swap: Number(p.swap ?? p.swaps ?? 0),
+     commission: Number(p.commission ?? p.commissions ?? 0),
+     comment: String(p.comment ?? ""),
+     time: timeVal,
+     magic: Number(p.magic ?? 0),
+   };
+ }
 
 // ─── Public Cache API ───────────────────────────────────────────────────────
 export const mt5StreamCache = {
@@ -150,12 +153,12 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     }
 
     case "mt5_symbol_info": {
-      const res = await callTool("mt5_symbols_get", { group: payload.symbol });
+      const res = await callTool("get_marketwatch_symbols", {}); // Call native MCP tool
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
-      const s = rawSymbols.find((item: any) => item.symbol?.toLowerCase() === payload.symbol?.toLowerCase()) || rawSymbols[0];
+      const s = rawSymbols.find((item: any) => item.name?.toLowerCase() === payload.symbol?.toLowerCase() || item.symbol?.toLowerCase() === payload.symbol?.toLowerCase());
       if (!s) return null;
       return {
-        name: s.symbol,
+        name: s.name ?? s.symbol ?? "",
         description: s.description || "",
         bid: Number(s.bid ?? 0),
         ask: Number(s.ask ?? 0),
@@ -164,7 +167,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           : (Number(s.spread) || 0),
         point: Number(s.point ?? 0.00001),
         digits: Number(s.digits ?? 5),
-        tradeContractSize: Number(s.contract_size ?? 100000),
+        tradeContractSize: Number(s.trade_contract_size ?? s.contract_size ?? 100000), // Ensure contract size is correct
         volumeMin: Number(s.volume_min ?? 0.01),
         volumeMax: Number(s.volume_max ?? 100),
         volumeStep: Number(s.volume_step ?? 0.01),
@@ -173,9 +176,9 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     }
 
     case "mt5_symbol_tick": {
-      const res = await callTool("mt5_symbols_get", { group: payload.symbol });
+      const res = await callTool("get_marketwatch_symbols", {}); // Use native MCP tool
       const rawSymbols = Array.isArray(res) ? res : (res?.symbols ?? []);
-      const s = rawSymbols.find((item: any) => item.symbol?.toLowerCase() === payload.symbol?.toLowerCase()) || rawSymbols[0];
+      const s = rawSymbols.find((item: any) => item.name?.toLowerCase() === payload.symbol?.toLowerCase() || item.symbol?.toLowerCase() === payload.symbol?.toLowerCase());
       if (!s) return null;
       return {
         bid: Number(s.bid ?? 0),
@@ -197,10 +200,10 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.tp) orderArgs.tp = Number(payload.tp);
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
-        const res = await callTool("mt5_order_send", orderArgs);
+        const res = await callTool("trade_send_market_order", orderArgs);
         return {
           success: !res?.error && !res?.isError,
-          ticket: res?.ticket ?? res?.deal ?? res?.order,
+          ticket: res?.order ?? res?.ticket ?? res?.deal ?? 0,
           price: res?.price,
           volume: res?.volume ?? payload.volume,
           comment: res?.comment ?? payload.comment,
@@ -220,7 +223,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         const res = await callTool("trade_send_pending_order", orderArgs);
         return {
           success: !res?.error && !res?.isError,
-          ticket: res?.ticket ?? res?.order ?? res?.order_ticket,
+          ticket: res?.order ?? res?.ticket ?? res?.order_ticket ?? 0,
           price: res?.price ?? payload.price,
           volume: res?.volume ?? payload.volume,
           comment: res?.comment ?? payload.comment,

@@ -20,6 +20,18 @@
 
 ## Lessons Log
 
+### [20260805] MT5 Native MCP Field Name Normalization for Positions
+**Area**: Backend / MT5 Integration / Native MCP
+**Root Cause**: Native MT5 MCP `get_trading_open_positions` returns positions with different field names than the legacy Python bridge:
+- `position_id` (not `ticket`/`id`)
+- `price_last` (not `price_current`)
+- `stop_loss` / `take_profit` (not `sl` / `tp`)
+- `create_time`/`update_time` as datetime string (not unix timestamp)
+- `action` with values "buy"/"sell" (lowercase)
+- No `swap`, `commission`, `magic` fields in response
+**Solusi**: Updated `normalizePosition()` in `mt5-streamer.ts` to map native field names to internal format. Position profit and contract size are correctly transmitted in native MCP response.
+**Hindari**: Jangan mengasumsikan field names sama di semua MCP tool. Selalu verifikasi struktur response lewat `client.callTool()`.
+
 ### [20260805] MT5 MCP Python Server Tools Update Requirements
 **Area**: Python Client / MCP Server
 **Root Cause**: Node.js backend (MT5-MCP service) kept getting `MCP error -32602: tool not found` and caused LLMs to hibernate because the Python MCP server tools (e.g. `get_trading_open_positions` -> `mt5_positions_get`) were updated in `server.py`, but the Python executable was not rebuilt. The `MT5-MCP` service spawns the packaged executable `Hunter Trades AI Trading.exe`, not the raw Python script.
