@@ -282,13 +282,13 @@ async function startRouter() {
   const logStream = getLogStream("9router.log");
 
   console.log(`[MAIN] Starting 9Router proxy on port 20128...`);
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
+  const nineRouterBinPath = path.join(serverCwd, "node_modules", ".bin", "9router.cmd");
   
-  routerProcess = spawn(command, ["9router", "--tray", "--skip-update", "-p", "20128"], {
+  routerProcess = spawn(nineRouterBinPath, ["--tray", "--skip-update", "-p", "20128"], {
     cwd: serverCwd,
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
-    shell: process.platform === "win32",
+    shell: false, // Don't use shell for direct binary execution
   });
 
   routerProcess.stdout?.on("data", (d) => {

@@ -18,6 +18,15 @@ Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikas
 
 ---
 
+## 🚀 [v1.0.12] — 2026-08-07
+
+### 🐛 Perbaikan 9router Startup & LLM Hibernation
+- **Fix 9router Binary Path**: Ganti `npx 9router` ke path langsung `node_modules/.bin/9router.cmd`. Sebelumnya `npx` tidak bisa locates `node_modules` di resource packaged app, menyebabkan 9router tidak start → LLM semua hibernasi.
+- **Shell spawn=false**: Gunakan `shell: false` untuk eksekusi binary langsung, menghindari permission issues Windows.
+- **Fix Module Dependencies**: Ganti `robocopy node_modules` dengan `npm install --production` di build process, memastikan semua module (dotenv, mongoose, dll.) tersedia di `resources/server/node_modules`.
+
+---
+
 ## 🚀 [v1.0.11] — 2026-08-06 (Versi Terbaru)
 
 ### 🐛 Perbaikan Proses Zombie & Stabilitas Startup
