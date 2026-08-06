@@ -240,6 +240,18 @@ export interface MT5Deal {
   entry?: number;
 }
 
+export interface MT5Order {
+  ticket: number;
+  symbol: string;
+  type: "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP" | "BUY_STOP_LIMIT" | "SELL_STOP_LIMIT";
+  volume: number;
+  price: number;
+  sl?: number;
+  tp?: number;
+  comment?: string;
+  time: number;
+}
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 class MT5MCPService {

@@ -201,13 +201,15 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
         const res = await callTool("trade_send_market_order", orderArgs);
+        silentLogger.info(`[MT5-Streamer] trade_send_market_order res=${JSON.stringify(res)}`);
+        const isErr = typeof res === "string" || res?.error || res?.isError;
         return {
-          success: !res?.error && !res?.isError,
+          success: !isErr,
           ticket: res?.order ?? res?.ticket ?? res?.deal ?? 0,
           price: res?.price,
           volume: res?.volume ?? payload.volume,
           comment: res?.comment ?? payload.comment,
-          error: res?.error || (res?.isError ? JSON.stringify(res) : undefined),
+          error: typeof res === "string" ? res : (res?.error || (res?.isError ? JSON.stringify(res) : undefined)),
         };
       } else {
         const orderArgs: any = {
@@ -221,13 +223,15 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         if (payload.comment) orderArgs.comment = String(payload.comment).slice(0, 31);
 
         const res = await callTool("trade_send_pending_order", orderArgs);
+        silentLogger.info(`[MT5-Streamer] trade_send_pending_order res=${JSON.stringify(res)}`);
+        const isErr = typeof res === "string" || res?.error || res?.isError;
         return {
-          success: !res?.error && !res?.isError,
+          success: !isErr,
           ticket: res?.order ?? res?.ticket ?? res?.order_ticket ?? 0,
           price: res?.price ?? payload.price,
           volume: res?.volume ?? payload.volume,
           comment: res?.comment ?? payload.comment,
-          error: res?.error || (res?.isError ? JSON.stringify(res) : undefined),
+          error: typeof res === "string" ? res : (res?.error || (res?.isError ? JSON.stringify(res) : undefined)),
         };
       }
     }

@@ -1267,7 +1267,7 @@ return {
         let orderPrice: number | undefined = undefined;
 
         try {
-          const tickData = await mt5McpService.call("mt5_symbol_tick", { symbol: signal.symbol });
+          const tickData = await mt5McpService.getTick(signal.symbol);
           const currentPrice = signal.direction === "BUY" ? tickData.ask : tickData.bid;
           const pointDist = Math.abs(currentPrice - signal.entry);
           
