@@ -97,7 +97,7 @@ export interface PipelineStatus {
 
 export interface PipelineLog {
   time: string;
-  type: "INFO" | "SIGNAL" | "CANDIDATE" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE" | "IPDA";
+  type: "INFO" | "SIGNAL" | "CANDIDATE" | "TRADE" | "ERROR" | "WARN" | "TRAILING" | "CONFLUENCE" | "IPDA";
   message: string;
   data?: any;
 }
@@ -1268,6 +1268,9 @@ return {
 
         try {
           const tickData = await mt5McpService.getTick(signal.symbol);
+          if (!tickData) {
+            throw new Error("No tick data available");
+          }
           const currentPrice = signal.direction === "BUY" ? tickData.ask : tickData.bid;
           const pointDist = Math.abs(currentPrice - signal.entry);
           
@@ -1285,7 +1288,7 @@ return {
             orderPrice = signal.entry;
           }
         } catch (e: any) {
-          silentLogger.warn(`[Pipeline] Failed tick for ${signal.symbol}, fallback to Market Order. Error: ${e.message}`);
+          this.addLog(userId, "WARN", `[3/4] [${signal.symbol}] Failed to get tick or determine order type, fallback to Market Order. Error: ${e.message}`);
         }
 
         const isPending = finalAction !== signal.direction;
@@ -1343,8 +1346,8 @@ return {
             const slDist = Math.abs(signal.entry - signal.sl);
             const tpDist = Math.abs(signal.tp - signal.entry);
             const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
-            const methodologyStr = analysis.confluence.finalSignal.primaryMethodology.toUpperCase();
-            const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
+            const primaryMethodology = analysis.confluence?.finalSignal?.primaryMethodology?.toUpperCase() || "UNKNOWN";
+            const patternStr = analysis.confluence?.finalSignal?.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
 
             // For pending orders, if we got ticket=0, we need to poll for the actual ticket
             let finalTicket = orderResult.ticket;
@@ -1352,12 +1355,17 @@ return {
                 // Small delay then check positions for the newly created pending order
                 await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
                 const positions = await mt5McpService.getPositions();
-                const newPosition = positions.find(pos => 
-                    pos.symbol === signal.symbol && 
-                    pos.type === finalAction && 
-                    Math.abs(pos.volume - volume) < 0.001 &&
-                    pos.comment.includes(`AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`)
-                );
+                const newPosition = positions.find(pos => {
+                    if (!pos) return false;
+                    if (pos.symbol !== signal.symbol) return false;
+                    if (pos.type !== finalAction) return false;
+                    if (Math.abs(pos.volume - volume) >= 0.001) return false;
+                    // Safely check comment including
+                    const comment = pos.comment || '';
+                    const expectedCommentPrefix = `AI-${analysis.confluence?.finalSignal?.primaryMethodology?.toUpperCase() || 'UNKNOWN'}-C${signal.confidence}`;
+                    if (!comment.includes(expectedCommentPrefix)) return false;
+                    return true;
+                });
                 if (newPosition) {
                     finalTicket = newPosition.ticket;
                     this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] Found pending ticket via polling: #${finalTicket}`);
@@ -1367,7 +1375,7 @@ return {
             }
 
             this.addLog(userId, "TRADE",
-                `[3/4] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${finalTicket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
+                `[3/4] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${finalTicket} | R:R 1:${rrRatio.toFixed(2)} [${primaryMethodology}]${patternStr}`,
                 { signal, orderResult: {...orderResult, ticket: finalTicket}, confluence: analysis.confluence },
             );
 

@@ -1,6 +1,6 @@
 {
   "name": "hunter-trades-desktop",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Hunter Trades Elite Ledger Desktop App",
   "main": "main.js",
   "scripts": {

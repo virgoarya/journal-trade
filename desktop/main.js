@@ -139,7 +139,32 @@ process.on("unhandledRejection", (reason) => {
   console.error("[FATAL unhandledRejection]", reason?.stack || reason);
 });
 
-// ─── Server Management ──────────────────────────────────────
+// Kill leftover processes on backend and frontend ports
+function killProcessOnPort(port) {
+  try {
+    const output = execSync(`netstat -ano | findstr :${port}`).toString();
+    const lines = output.trim().split('\n');
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && pid !== '' && !isNaN(pid)) {
+        try {
+          execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' });
+          console.log(`[MAIN] Killed leftover process PID ${pid} on port ${port}`);
+        } catch {
+          // Ignore if already dead or access denied
+        }
+      }
+    }
+  } catch (err) {
+    // No process found on port
+  }
+}
+
+// Clean up any leftover processes on our ports before starting
+killProcessOnPort(BACKEND_PORT);
+killProcessOnPort(FRONTEND_PORT);
+
 async function startBackend() {
   // Check if backend is already responding on port 5000
   const isUp = await isPortResponding(BACKEND_PORT, "/health");
