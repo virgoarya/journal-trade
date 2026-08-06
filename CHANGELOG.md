@@ -18,6 +18,17 @@ Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikas
 
 ---
 
+## 🚀 [v1.0.11] — 2026-08-06 (Versi Terbaru)
+
+### 🐛 Perbaikan Proses Zombie & Stabilitas Startup
+- **Kill Proses Port Tertinggal Otomatis**:
+  - Menambahkan fungsi `killProcessOnPort` di `desktop/main.js` yang mematikan proses zombie di port 5000 (backend) & 3000 (frontend) otomatis setiap kali `Hunter Trades.exe` dibuka.
+  - Memperbaiki error *"port masih berjalan di latar belakang"* dan *"port 5000 not available"* setelah aplikasi ditutup paksa.
+- **Perpanjang Timeout Startup Server**:
+  - Meningkatkan timeout backend & frontend dari **60 detik → 120 detik** (`waitForServer` di `main.js`) untuk menangani sistem yang lambat tanpa false error startup.
+
+---
+
 ## 🚀 [v1.0.10] — 2026-08-06
 
 ### 🐛 Perbaikan Sinkronisasi Native MT5 MCP (Lanjutan)
