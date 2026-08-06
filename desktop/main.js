@@ -628,12 +628,26 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     const remoteInfo = responseInfo.data;
     if (!remoteInfo || !remoteInfo.patchUrl) throw new Error("Invalid version data from server");
 
-    // 2. Download zip
+    // 2. Download zip with progress tracking & timeout
     console.log(`[OTA-UPDATER] Downloading patch from: ${remoteInfo.patchUrl}`);
-    const response = await axios({
+    const response = await axios.request({
       url: remoteInfo.patchUrl,
       method: 'GET',
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
+      timeout: 30000, // 30 second timeout
+      onDownloadProgress: (progressEvent) => {
+        const percentCompleted = Math.round(
+          (progressEvent.loaded * 100) / (progressEvent.total || 1)
+        );
+        console.log(`[OTA-UPDATER] Download progress: ${percentCompleted}% (${(progressEvent.loaded / 1024 / 1024).toFixed(2)} MB / ${(progressEvent.total / 1024 / 1024).toFixed(2)} MB)`);
+        // Send progress to renderer UI
+        sendToRenderer("updater:status", {
+          status: "downloading",
+          version: remoteInfo.version,
+          progress: percentCompleted,
+          message: `Mendownload patch... ${percentCompleted}% (${(progressEvent.loaded / 1024 / 1024).toFixed(2)} MB / ${(progressEvent.total / 1024 / 1024).toFixed(2)} MB)`
+        });
+      }
     });
     const fileBuffer = response.data;
     

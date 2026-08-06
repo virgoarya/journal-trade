@@ -93,7 +93,16 @@ if (fs.existsSync(path.join(projectRoot, 'server', 'fetch_rates.py'))) {
     fs.copyFileSync(path.join(projectRoot, 'server', 'fetch_rates.py'), path.join(targetServer, 'fetch_rates.py'));
 }
 runRobocopy(path.join(projectRoot, 'server', 'dist'), path.join(targetServer, 'dist'));
-runRobocopy(path.join(projectRoot, 'server', 'node_modules'), path.join(targetServer, 'node_modules'));
+
+// Use production install instead of robocopy for server node_modules to ensure completeness
+console.log(`[4.1/6] Installing production dependencies for backend server...`);
+try {
+    execSync('npm install --production', { cwd: targetServer, stdio: 'inherit' });
+} catch (e) {
+    console.warn(`[buildApp] npm install failed for server: ${e.message}`);
+    // Fallback to robocopy if npm install fails
+    runRobocopy(path.join(projectRoot, 'server', 'node_modules'), path.join(targetServer, 'node_modules'));
+}
 
 // 6. Copy Frontend Files -> resources/frontend
 const targetFrontend = path.join(resourcesDir, 'frontend');

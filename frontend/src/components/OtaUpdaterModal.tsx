@@ -8,6 +8,8 @@ export function OtaUpdaterModal() {
     version: string;
     releaseNotes: string;
     patchUrl: string;
+    progress?: number;
+    message?: string;
   } | null>(null);
 
   const [isUpdating, setIsUpdating] = useState(false);
@@ -22,6 +24,14 @@ export function OtaUpdaterModal() {
           releaseNotes: data.releaseNotes || "A new patch update is available.",
           patchUrl: data.patchUrl,
         });
+      } else if (data.status === "downloading") {
+        // Update progress during download
+        setUpdateInfo(prev => ({
+          ...prev,
+          version: data.version || updateInfo?.version,
+          progress: data.progress,
+          message: data.message || `Mendownload patch... ${data.progress}%`,
+        }));
       } else if (data.status === "error") {
         setIsUpdating(false);
         toast.error(data.message || "Gagal menerapkan update.");
@@ -59,10 +69,13 @@ export function OtaUpdaterModal() {
         {isUpdating ? (
           <div className="w-full flex flex-col items-center">
             <div className="h-1.5 w-full bg-surface rounded-full overflow-hidden mb-2">
-              <div className="h-full bg-accent-gold w-1/2 animate-[progress_1s_ease-in-out_infinite]" />
+              <div 
+                className="h-full bg-accent-gold transition-all duration-300" 
+                style={{ width: `${updateInfo?.progress || 0}%` }}
+              />
             </div>
-            <span className="text-xs text-text-muted animate-pulse">
-              Mendownload & Menerapkan Patch...
+            <span className="text-xs text-text-muted">
+              {updateInfo?.message || "Mendownload & Menerapkan Patch..."}
             </span>
           </div>
         ) : (
