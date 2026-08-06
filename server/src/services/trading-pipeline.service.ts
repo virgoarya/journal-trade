@@ -1340,29 +1340,49 @@ return {
         }
 
         if (orderResult.success) {
-          const slDist = Math.abs(signal.entry - signal.sl);
-          const tpDist = Math.abs(signal.tp - signal.entry);
-          const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
-          const methodologyStr = analysis.confluence.finalSignal.primaryMethodology.toUpperCase();
-          const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
+            const slDist = Math.abs(signal.entry - signal.sl);
+            const tpDist = Math.abs(signal.tp - signal.entry);
+            const rrRatio = slDist > 0 ? (tpDist / slDist) : 0;
+            const methodologyStr = analysis.confluence.finalSignal.primaryMethodology.toUpperCase();
+            const patternStr = analysis.confluence.finalSignal.pattern ? ` (${analysis.confluence.finalSignal.pattern})` : '';
 
-          this.addLog(userId, "TRADE",
-            `[3/4] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${orderResult.ticket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
-            { signal, orderResult, confluence: analysis.confluence },
-          );
+            // For pending orders, if we got ticket=0, we need to poll for the actual ticket
+            let finalTicket = orderResult.ticket;
+            if (isPending && finalTicket === 0) {
+                // Small delay then check positions for the newly created pending order
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+                const positions = await mt5McpService.getPositions();
+                const newPosition = positions.find(pos => 
+                    pos.symbol === signal.symbol && 
+                    pos.type === finalAction && 
+                    Math.abs(pos.volume - volume) < 0.001 &&
+                    pos.comment.includes(`AI-${analysis.confluence.finalSignal.primaryMethodology.toUpperCase()}-C${signal.confidence}`)
+                );
+                if (newPosition) {
+                    finalTicket = newPosition.ticket;
+                    this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] Found pending ticket via polling: #${finalTicket}`);
+                } else {
+                    this.addLog(userId, "WARN", `[3/4] [${signal.symbol}] Could not find pending order via polling after placement`);
+                }
+            }
 
-          if (isPending && orderResult.ticket) {
-            const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60;
-            pipeline.pendingOrders.set(orderResult.ticket, {
-              symbol: signal.symbol,
-              direction: signal.direction,
-              entry: signal.entry,
-              tp: signal.tp,
-              sl: signal.sl,
-              placedAt: Date.now(),
-              expiryAt: Date.now() + expiryMs,
-            });
-          }
+            this.addLog(userId, "TRADE",
+                `[3/4] [${signal.symbol}] EXECUTION SUCCESS: ${isPending ? "Placed pending" : "Opened"} ${finalAction} vol=${volume} ticket=#${finalTicket} | R:R 1:${rrRatio.toFixed(2)} [${methodologyStr}]${patternStr}`,
+                { signal, orderResult: {...orderResult, ticket: finalTicket}, confluence: analysis.confluence },
+            );
+
+            if (isPending && finalTicket) {
+                const expiryMs = this.getIntervalMs(pipeline.config.timeframe) * 2 * 60;
+                pipeline.pendingOrders.set(finalTicket, {
+                    symbol: signal.symbol,
+                    direction: signal.direction,
+                    entry: signal.entry,
+                    tp: signal.tp,
+                    sl: signal.sl,
+                    placedAt: Date.now(),
+                    expiryAt: Date.now() + expiryMs,
+                });
+            }
 
           const accInfo = await mt5McpService.getAccountInfo();
           
