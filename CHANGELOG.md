@@ -2,7 +2,51 @@
 
 Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikasi desktop **Hunter Trades** dicatat di dokumen ini.
 
-## 🚀 [v1.0.8] — 2026-08-05 (Versi Terbaru)
+## 🚀 [v1.0.11] — 2026-08-06 (Versi Terbaru)
+
+### 🐛 Perbaikan Proses Zombie & Stabilitas Startup
+- **Kill Proses Port Tertinggal Otomatis**:
+  - Menambahkan fungsi `killProcessOnPort` di `desktop/main.js` yang membunuh proses zombie di port 5000 (backend) & 3000 (frontend) setiap kali aplikasi `Hunter Trades.exe` diluncurkan.
+  - Mengatasi error *"port masih berjalan di latar belakang"* yang menyebabkan aplikasi gagal digunakan setelah ditutup paksa.
+
+### 🐛 Perbaikan Pipeline Trading & Null Safety
+- **Fallback Ticket Pending Order**:
+  - Jika native MCP mengembalikan `ticket=#0` saat placement pending order, pipeline sekarang melakukan polling `getPositions()` setelah 1 detik untuk mencari ticket asli berdasarkan simbol, volume, dan comment.
+- **Null Safety di Trading Pipeline**:
+  - Menambahkan guard untuk `tickData`, `analysis.confluence.finalSignal`, dan `methodologyStr` agar tidak crash saat data tidak tersedia.
+  - Menambahkan tipe log `"WARN"` ke dalam union type log pipeline.
+
+---
+
+## 🚀 [v1.0.10] — 2026-08-06
+
+### 🐛 Perbaikan Sinkronisasi Native MT5 MCP (Lanjutan)
+- **Full Native MCP Tool Mapping**:
+  - Memastikan seluruh fungsi AI trading pipeline memanggil native MT5 MCP tool dengan nama yang benar (`get_trading_account_info`, `get_trading_open_positions`, `get_marketwatch_symbols`, dll).
+- **Deteksi Error Response**:
+  - Memperbaiki bug di mana response string error dari MCP (misal *"trading is not permitted"*) dilaporkan sebagai eksekusi SUCCESS karena `res?.error` undefined pada string.
+  - Kini response string non-JSON dideteksi sebagai error dan direport dengan benar.
+- **Logging Response Order**:
+  - Menambahkan logging raw response dari `trade_send_market_order` & `trade_send_pending_order` untuk mempermudah debugging.
+
+---
+
+## 🚀 [v1.0.9] — 2026-08-05
+
+### 🐛 Perbaikan Integrasi Native MT5 MCP & Kalkulasi Profit
+- **Fix Mapping Field Posisi Native MCP**:
+  - Memperbaiki `normalizePosition()` di `mt5-streamer.ts` untuk membaca field native MCP: `position_id` (ticket), `price_last` (harga terkini), `stop_loss`/`take_profit` (SL/TP), `action` (buy/sell), `create_time`/`update_time` (waktu).
+- **Fix Kalkulasi Contract Size**:
+  - Memperbaiki `mt5_symbol_info` agar menggunakan tool native `get_marketwatch_symbols` (sebelumnya memanggil tool lama yang tidak ada, menyebabkan `contractSize` selalu fallback ke `100000`).
+  - **Efek**: Profit/volume kini akurat untuk semua simbol (XAUUSD contract size 100, EURUSD 100000, dll). Sebelumnya lot 0.01 XAUUSD bisa terhitung puluhan ribu dollar.
+- **Fix Floating P&L di UI**:
+  - `AccountOverview` kini menghitung Floating P&L dari jumlah profit posisi terbuka (`positions.reduce`), bukan dari `accountInfo.profit` (profit kumulatif akun) sehingga tampil akurat.
+- **Fix Tool `mt5_symbol_tick` & `mt5_symbol_info`**:
+  - Keduanya kini memanggil `get_marketwatch_symbols` native dan difilter berdasarkan simbol yang diminta.
+
+---
+
+## 🚀 [v1.0.8] — 2026-08-05
 
 ### 🐛 Perbaikan Sistem MT5 MCP & OTA Fix
 - **Native MT5 MCP Python Server Rebuild**: 
