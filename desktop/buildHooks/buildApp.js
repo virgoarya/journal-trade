@@ -94,15 +94,16 @@ if (fs.existsSync(path.join(projectRoot, 'server', 'fetch_rates.py'))) {
 }
 runRobocopy(path.join(projectRoot, 'server', 'dist'), path.join(targetServer, 'dist'));
 
-// Use production install instead of robocopy for server node_modules to ensure completeness
-console.log(`[4.1/6] Installing production dependencies for backend server...`);
-try {
-    execSync('npm install --production', { cwd: targetServer, stdio: 'inherit' });
-} catch (e) {
-    console.warn(`[buildApp] npm install failed for server: ${e.message}`);
-    // Fallback to robocopy if npm install fails
-    runRobocopy(path.join(projectRoot, 'server', 'node_modules'), path.join(targetServer, 'node_modules'));
-}
+    // Use regular install instead of production to ensure devDependencies like 9router CLI are available
+    console.log(`[4.1/6] Installing dependencies for backend server...`);
+    try {
+        execSync('npm install', { cwd: targetServer, stdio: 'inherit' });
+    } catch (e) {
+        console.warn(`[buildApp] npm install failed for server: ${e.message}`);
+        // Fallback to robocopy
+        runRobocopy(path.join(projectRoot, 'server', 'node_modules'), path.join(targetServer, 'node_modules'));
+    }
+
 
 // 6. Copy Frontend Files -> resources/frontend
 const targetFrontend = path.join(resourcesDir, 'frontend');
