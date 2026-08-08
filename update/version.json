@@ -1,7 +1,7 @@
 {
   "version": "1.0.13",
-  "releaseDate": "2026-08-08T11:21:33.001Z",
+  "releaseDate": "2026-08-08T15:39:42.804Z",
   "patchUrl": "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/patch.zip",
-  "checksum": "5c92ba6e37c6eeac0cf4b74dfad0f54dcf3c3bb19f69e4704d7a87367d2b2afa",
+  "checksum": "8e00c66230a69a3985aaecb454e61ea8d8127287b32d4e5e0fa1681fd0b31ea1",
   "notes": "Update patch for 1.0.13"
 }
