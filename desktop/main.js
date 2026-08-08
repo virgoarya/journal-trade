@@ -687,12 +687,26 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     });
 
     // 7. Clean up and restart
-    console.log(`[OTA-UPDATER] Patch applied successfully. Restarting for health check...`);
-    fs.unlinkSync(tempZipPath);
-    
+    console.log(`[OTA-UPDATER] Patch applied successfully. Spawning new instance & exiting...`);
+    try {
+      fs.unlinkSync(tempZipPath);
+    } catch (e) {}
+
     isQuitting = true;
-    app.relaunch();
-    app.exit(0);
+    // Spawn ulang lewat detach supaya tidak kehilangan proses saat exit
+    const { spawn } = require("child_process");
+    const newProcess = spawn(process.execPath, process.argv.slice(1), {
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+      cwd: process.cwd(),
+    });
+    newProcess.unref();
+
+    // Delay supaya proses baru sempat spawn sebelum exit
+    setTimeout(() => {
+      app.exit(0);
+    }, 500);
 
   } catch (err) {
     console.error("[OTA-UPDATER] Failed to apply patch:", err);
