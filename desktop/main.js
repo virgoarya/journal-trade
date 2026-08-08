@@ -288,7 +288,7 @@ async function startRouter() {
     cwd: serverCwd,
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
-    shell: false, // Don't use shell for direct binary execution
+    shell: true, // Use shell for .cmd files on Windows
   });
 
   routerProcess.stdout?.on("data", (d) => {
