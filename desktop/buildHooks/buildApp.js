@@ -56,32 +56,20 @@ if (fs.existsSync(defaultAppAsar)) {
 const legacyAppAsar = path.join(resourcesDir, 'app.asar');
 if (fs.existsSync(legacyAppAsar)) {
     try { fs.unlinkSync(legacyAppAsar); } catch (e) {}
-}
+        }
+        // 4. Copy Desktop App Files (main.js, preload.js, package.json, assets) -> resources/app
+        const targetApp = path.join(resourcesDir, 'app');
+        console.log(`[3/6] Bundling Desktop App to ${targetApp}...`);
+        fs.mkdirSync(targetApp, { recursive: true });
+        fs.copyFileSync(path.join(desktopDir, 'package.json'), path.join(targetApp, 'package.json'));
+        fs.copyFileSync(path.join(desktopDir, 'main.js'), path.join(targetApp, 'main.js'));
+        fs.copyFileSync(path.join(desktopDir, 'preload.js'), path.join(targetApp, 'preload.js'));
+        if (fs.existsSync(path.join(desktopDir, 'assets'))) {
+            runRobocopy(path.join(desktopDir, 'assets'), path.join(targetApp, 'assets'));
+        }
+        // Copy entire node_modules for desktop app to ensure all dependencies are present
+        runRobocopy(path.join(desktopDir, 'node_modules'), path.join(targetApp, 'node_modules'));
 
-// 4. Copy Desktop App Files (main.js, preload.js, package.json, assets) -> resources/app
-const targetApp = path.join(resourcesDir, 'app');
-console.log(`[3/6] Bundling Desktop App to ${targetApp}...`);
-fs.mkdirSync(targetApp, { recursive: true });
-fs.copyFileSync(path.join(desktopDir, 'package.json'), path.join(targetApp, 'package.json'));
-fs.copyFileSync(path.join(desktopDir, 'main.js'), path.join(targetApp, 'main.js'));
-fs.copyFileSync(path.join(desktopDir, 'preload.js'), path.join(targetApp, 'preload.js'));
-if (fs.existsSync(path.join(desktopDir, 'assets'))) {
-    runRobocopy(path.join(desktopDir, 'assets'), path.join(targetApp, 'assets'));
-}
-const prodDeps = [
-    'electron-updater', 'builder-util-runtime', 'debug', 'fs-extra', 
-    'js-yaml', 'lazy-val', 'lodash.escaperegexp', 'lodash.isequal', 
-    'semver', 'typed-emitter', 'ms', 'graceful-fs', 'jsonfile', 
-    'universalify', 'argparse',
-    'axios', 'adm-zip', 'follow-redirects', 'form-data', 'proxy-from-env',
-    'asynckit', 'combined-stream', 'mime-types', 'mime-db', 'delayed-stream'
-];
-for (const dep of prodDeps) {
-    const src = path.join(desktopDir, 'node_modules', dep);
-    if (fs.existsSync(src)) {
-        runRobocopy(src, path.join(targetApp, 'node_modules', dep));
-    }
-}
 
 // 5. Copy Server Files -> resources/server
 const targetServer = path.join(resourcesDir, 'server');
