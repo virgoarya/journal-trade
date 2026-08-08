@@ -118,282 +118,286 @@ export function PositionsTable({
   }
 
   return (
-    <div className="space-y-4">
-      {/* ── OPEN POSITIONS CARD ── */}
-      {marketPositions.length > 0 && (
-        <div className="glass overflow-hidden">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
-            <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
-              Open Positions
-              <span className="ml-2 text-accent-gold-dim">
-                [{marketPositions.length}]
-              </span>
-            </h3>
-            {marketPositions.length > 0 && (
-              <button
-                onClick={handleCloseAll}
-                disabled={isClosingAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition text-xs font-medium disabled:opacity-50"
-              >
-                {isClosingAll ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <XCircle className="w-3.5 h-3.5" />
+    <>
+      <div className="space-y-4">
+        {/* ── OPEN POSITIONS CARD ── */}
+        {marketPositions.length > 0 && (
+          <div className="glass overflow-hidden">
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
+              <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+                Open Positions
+                <span className="ml-2 text-accent-gold-dim">
+                  [{marketPositions.length}]
+                </span>
+              </h3>
+              {marketPositions.length > 0 && (
+                <button
+                  onClick={handleCloseAll}
+                  disabled={isClosingAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition text-xs font-medium disabled:opacity-50"
+                >
+                  {isClosingAll ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5" />
+                  )}
+                  Close All
+                </button>
+              )}
+            </div>
+
+            {error && (
+              <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
+                <span>⚠ {error}</span>
+                {onRetry && (
+                  <button onClick={onRetry} className="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition text-xs">
+                    <RefreshCw className="w-3.5 h-3.5" /> Retry
+                  </button>
                 )}
-                Close All
-              </button>
+              </div>
+            )}
+
+            {marketPositions.length === 0 && !error ? (
+              <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                No open positions
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
+                      <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
+                      <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
+                      <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Time</th>
+                      <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Open</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Current</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Swap</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Profit</th>
+                      <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketPositions.map((pos) => (
+                      <tr
+                        key={pos.ticket}
+                        className="border-b border-accent-gold/10 hover:bg-accent-gold/5 transition group"
+                      >
+                        <td className="px-3 py-2.5 font-mono text-text-primary">
+                          <span className="inline-flex items-center gap-2 bg-black/50 border border-accent-gold/20 px-2 py-0.5 rounded shadow-[inset_0_0_8px_rgba(212,175,55,0.1)]">
+                            <span className={`w-2 h-2 rounded-full animate-pulse shadow-[0_0_4px_currentColor] ${pos.type.toLowerCase() === 'buy' ? 'bg-neon-green text-neon-green' : 'bg-neon-red text-neon-red'}`} />
+                            {pos.symbol.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
+                          #{pos.ticket}
+                        </td>
+                        <td className="px-3 py-2.5 text-text-muted text-[10px] tabular-nums whitespace-nowrap font-mono">
+                          {(() => {
+                            const d = new Date(pos.time * 1000);
+                            const pad = (n: number) => n.toString().padStart(2, "0");
+                            return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                          })()}
+                        </td>
+                        <td className={`px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider ${pos.type.toLowerCase() === 'buy' ? 'text-neon-green' : 'text-neon-red'}`}>
+                          {pos.type.toUpperCase()}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
+                          {pos.volume.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums whitespace-nowrap">
+                          {formatPrice(pos.priceOpen)}
+                        </td>
+
+                        {/* S / L column (editable) */}
+                        <td className="px-3 py-2.5 text-right tabular-nums font-mono">
+                          {editingId === pos.ticket ? (
+                            <input
+                              type="number"
+                              step="0.00001"
+                              value={editSL}
+                              onChange={(e) => setEditSL(e.target.value)}
+                              className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
+                            />
+                          ) : (
+                            <span
+                              className={`${pos.sl ? getSLTPColor(pos) : "text-text-muted/50"}`}
+                            >
+                              {pos.sl ? formatPrice(pos.sl) : "-"}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* T / P column (editable) */}
+                        <td className="px-3 py-2.5 text-right tabular-nums font-mono">
+                          {editingId === pos.ticket ? (
+                            <input
+                              type="number"
+                              step="0.00001"
+                              value={editTP}
+                              onChange={(e) => setEditTP(e.target.value)}
+                              className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
+                            />
+                          ) : (
+                            <span
+                              className={`${pos.tp ? getSLTPColor(pos) : "text-text-muted/50"}`}
+                            >
+                              {pos.tp ? formatPrice(pos.tp) : "-"}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums whitespace-nowrap drop-shadow-[0_0_2px_rgba(212,175,55,0.4)]">
+                          {formatPrice(pos.priceCurrent)}
+                        </td>
+
+                        {/* Swap */}
+                        <td className="px-3 py-2.5 text-right tabular-nums text-text-muted font-mono text-xs">
+                          {pos.swap ? pos.swap.toFixed(2) : "-"}
+                        </td>
+
+                        {/* Profit */}
+                        <td
+                          className={`px-3 py-2.5 text-right font-bold tabular-nums whitespace-nowrap font-mono text-[15px] ${
+                            pos.profit >= 0 ? "text-neon-green drop-shadow-[0_0_6px_rgba(57,255,136,0.5)]" : "text-neon-red drop-shadow-[0_0_6px_rgba(255,56,100,0.5)]"
+                          }`}
+                        >
+                          {pos.profit >= 0 ? "+" : ""}{pos.profit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                        </td>
+
+                        {/* Comment */}
+                        <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
+                          {pos.comment || ""}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-2 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {editingId === pos.ticket ? (
+                              <button
+                                onClick={() => saveEdit(pos)}
+                                className="p-1.5 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 transition"
+                                title="Save"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => startEdit(pos)}
+                                className="p-1.5 bg-gray-800 text-gray-400 rounded hover:text-white transition"
+                                title="Modify SL/TP"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleClose(pos.ticket)}
+                              disabled={closingId === pos.ticket}
+                              className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition disabled:opacity-50"
+                              title="Close position"
+                            >
+                              {closingId === pos.ticket ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
+        )}
 
-      {error && (
-        <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
-          <span>⚠ {error}</span>
-          {onRetry && (
-            <button onClick={onRetry} className="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition text-xs">
-              <RefreshCw className="w-3.5 h-3.5" /> Retry
-            </button>
-          )}
-        </div>
-      )}
-
-      {positions.length === 0 && !error ? (
-        <div className="px-4 py-8 text-center text-gray-500 text-sm">
-          No open positions
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
-                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
-                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
-                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Time</th>
-                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Open</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Current</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Swap</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Profit</th>
-                <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
-                <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {marketPositions.map((pos) => (
-                <tr
-                  key={pos.ticket}
-                  className="border-b border-accent-gold/10 hover:bg-accent-gold/5 transition group"
-                >
-                  <td className="px-3 py-2.5 font-mono text-text-primary">
-                    <span className="inline-flex items-center gap-2 bg-black/50 border border-accent-gold/20 px-2 py-0.5 rounded shadow-[inset_0_0_8px_rgba(212,175,55,0.1)]">
-                      <span className={`w-2 h-2 rounded-full animate-pulse shadow-[0_0_4px_currentColor] ${pos.type.toLowerCase() === 'buy' ? 'bg-neon-green text-neon-green' : 'bg-neon-red text-neon-red'}`} />
-                      {pos.symbol.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
-                    #{pos.ticket}
-                  </td>
-                  <td className="px-3 py-2.5 text-text-muted text-[10px] tabular-nums whitespace-nowrap font-mono">
-                    {(() => {
-                      const d = new Date(pos.time * 1000);
-                      const pad = (n: number) => n.toString().padStart(2, "0");
-                      return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-                    })()}
-                  </td>
-                  <td className={`px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider ${pos.type.toLowerCase() === 'buy' ? 'text-neon-green' : 'text-neon-red'}`}>
-                    {pos.type.toUpperCase()}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
-                    {pos.volume.toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums whitespace-nowrap">
-                    {formatPrice(pos.priceOpen)}
-                  </td>
-
-                  {/* S / L column (editable) */}
-                  <td className="px-3 py-2.5 text-right tabular-nums font-mono">
-                    {editingId === pos.ticket ? (
-                      <input
-                        type="number"
-                        step="0.00001"
-                        value={editSL}
-                        onChange={(e) => setEditSL(e.target.value)}
-                        className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
-                      />
-                    ) : (
-                      <span
-                        className={`${pos.sl ? getSLTPColor(pos) : "text-text-muted/50"}`}
-                      >
-                        {pos.sl ? formatPrice(pos.sl) : "-"}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* T / P column (editable) */}
-                  <td className="px-3 py-2.5 text-right tabular-nums font-mono">
-                    {editingId === pos.ticket ? (
-                      <input
-                        type="number"
-                        step="0.00001"
-                        value={editTP}
-                        onChange={(e) => setEditTP(e.target.value)}
-                        className="w-[72px] px-1 py-0.5 bg-black/60 border border-accent-gold/40 rounded text-right text-xs text-text-primary focus:outline-none focus:border-accent-gold focus:shadow-[0_0_4px_rgba(212,175,55,0.6)]"
-                      />
-                    ) : (
-                      <span
-                        className={`${pos.tp ? getSLTPColor(pos) : "text-text-muted/50"}`}
-                      >
-                        {pos.tp ? formatPrice(pos.tp) : "-"}
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums whitespace-nowrap drop-shadow-[0_0_2px_rgba(212,175,55,0.4)]">
-                    {formatPrice(pos.priceCurrent)}
-                  </td>
-
-                  {/* Swap */}
-                  <td className="px-3 py-2.5 text-right tabular-nums text-text-muted font-mono text-xs">
-                    {pos.swap ? pos.swap.toFixed(2) : "-"}
-                  </td>
-
-                  {/* Profit */}
-                  <td
-                    className={`px-3 py-2.5 text-right font-bold tabular-nums whitespace-nowrap font-mono text-[15px] ${
-                      pos.profit >= 0 ? "text-neon-green drop-shadow-[0_0_6px_rgba(57,255,136,0.5)]" : "text-neon-red drop-shadow-[0_0_6px_rgba(255,56,100,0.5)]"
-                    }`}
-                  >
-                    {pos.profit >= 0 ? "+" : ""}{pos.profit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                  </td>
-
-                  {/* Comment */}
-                  <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
-                    {pos.comment || ""}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-2 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {editingId === pos.ticket ? (
-                        <button
-                          onClick={() => saveEdit(pos)}
-                          className="p-1.5 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 transition"
-                          title="Save"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(pos)}
-                          className="p-1.5 bg-gray-800 text-gray-400 rounded hover:text-white transition"
-                          title="Modify SL/TP"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleClose(pos.ticket)}
-                        disabled={closingId === pos.ticket}
-                        className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition disabled:opacity-50"
-                        title="Close position"
-                      >
-                        {closingId === pos.ticket ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ── PENDING ORDERS CARD (DIBAWAH OPEN POSITION CARD) ── */}
-      {allPendingOrders.length > 0 && (
-        <div className="glass overflow-hidden">
-          <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/30">
-            <h3 className="text-[11px] font-bold tracking-widest uppercase text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.4)] flex items-center gap-2">
-              <span>⏳</span> Pending Orders
-              <span className="ml-1 text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                [{allPendingOrders.length}]
-              </span>
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Target Entry</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allPendingOrders.map((pos, idx) => (
-                  <tr key={pos.ticket || idx} className="border-b border-accent-gold/10 hover:bg-amber-500/5 transition">
-                    <td className="px-3 py-2.5 font-mono text-text-primary">
-                      <span className="inline-flex items-center gap-2 bg-black/50 border border-amber-500/30 px-2 py-0.5 rounded">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                        {pos.symbol?.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
-                      #{pos.ticket || "PENDING"}
-                    </td>
-                    <td className="px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider text-amber-400">
-                      {pos.type?.toUpperCase() || "PENDING_LIMIT"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
-                      {pos.volume ? pos.volume.toFixed(2) : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums">
-                      {formatPrice(pos.priceOpen || pos.priceCurrent)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-text-muted">
-                      {pos.sl ? formatPrice(pos.sl) : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-text-muted">
-                      {pos.tp ? formatPrice(pos.tp) : "-"}
-                    </td>
-                    <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
-                      {pos.comment || "AI Pending Limit"}
-                    </td>
-                    <td className="px-2 py-2.5 text-right">
-                      {pos.ticket ? (
-                        <button
-                          onClick={() => handleClose(pos.ticket)}
-                          disabled={closingId === pos.ticket}
-                          className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition disabled:opacity-50"
-                          title="Cancel order"
-                        >
-                          {closingId === pos.ticket ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <XCircle className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      ) : null}
-                    </td>
+        {/* ── PENDING ORDERS CARD (DIBAWAH OPEN POSITION CARD) ── */}
+        {allPendingOrders.length > 0 && (
+          <div className="glass overflow-hidden">
+            <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/30">
+              <h3 className="text-[11px] font-bold tracking-widest uppercase text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.4)] flex items-center gap-2">
+                <span>⏳</span> Pending Orders
+                <span className="ml-1 text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  [{allPendingOrders.length}]
+                </span>
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
+                    <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
+                    <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
+                    <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
+                    <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
+                    <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Target Entry</th>
+                    <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
+                    <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
+                    <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
+                    <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {allPendingOrders.map((pos, idx) => (
+                    <tr key={pos.ticket || idx} className="border-b border-accent-gold/10 hover:bg-amber-500/5 transition">
+                      <td className="px-3 py-2.5 font-mono text-text-primary">
+                        <span className="inline-flex items-center gap-2 bg-black/50 border border-amber-500/30 px-2 py-0.5 rounded">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                          {pos.symbol?.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
+                        #{pos.ticket || "PENDING"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider text-amber-400">
+                        {pos.type?.toUpperCase() || "PENDING_LIMIT"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
+                        {pos.volume ? pos.volume.toFixed(2) : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums">
+                        {formatPrice(pos.priceOpen || pos.priceCurrent)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono text-text-muted">
+                        {pos.sl ? formatPrice(pos.sl) : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono text-text-muted">
+                        {pos.tp ? formatPrice(pos.tp) : "-"}
+                      </td>
+                      <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
+                        {pos.comment || "AI Pending Limit"}
+                      </td>
+                      <td className="px-2 py-2.5 text-right">
+                        {pos.ticket ? (
+                          <button
+                            onClick={() => handleClose(pos.ticket)}
+                            disabled={closingId === pos.ticket}
+                            className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition disabled:opacity-50"
+                            title="Cancel order"
+                          >
+                            {closingId === pos.ticket ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <XCircle className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
