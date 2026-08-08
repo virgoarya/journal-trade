@@ -284,8 +284,13 @@ async function startRouter() {
   console.log(`[MAIN] Starting 9Router proxy on port 20128...`);
   const nineRouterBinPath = path.join(serverCwd, "node_modules", ".bin", "9router.cmd");
   const nineRouterCwd = path.dirname(nineRouterBinPath); // CWD to .bin folder
-  
-  routerProcess = spawn(nineRouterBinPath, ["--tray", "--skip-update", "-p", "20128"], {
+
+  if (!fs.existsSync(nineRouterBinPath)) {
+    console.error(`[MAIN] 9Router binary not found at: ${nineRouterBinPath}`);
+    return;
+  }
+
+  routerProcess = spawn(`"${nineRouterBinPath}"`, ["--tray", "--skip-update", "-p", "20128"], {
     cwd: nineRouterCwd, // Use the directory of the binary as CWD
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
