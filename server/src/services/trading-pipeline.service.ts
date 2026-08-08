@@ -107,8 +107,8 @@ const DEFAULT_CONFIG: PipelineConfig = {
   timeframe: "M15",
   strategy: "MULTI_METHODOLOGY",
   maxOpenPositions: 3,
-  maxRiskPerTrade: 1.0,
-  maxDailyRisk: 3.0,
+  maxRiskPerTrade: 0.5,
+  maxDailyRisk: 1.5,
   trailingStop: {
     enabled: true,
     activationATR: 1.0,

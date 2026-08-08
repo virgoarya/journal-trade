@@ -57,6 +57,22 @@ export interface MultiStrategySymbolAnalysis {
 // ─── Service ─────────────────────────────────────────────────────────
 
 class AITradingEngine {
+  private candleCache = new Map<string, { rates: MT5Rate[]; timestamp: number }>();
+  private readonly CACHE_TTL_MS = 5000;
+
+  private async getCachedRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
+    const key = `${symbol}_${timeframe}_${count}`;
+    const cached = this.candleCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      return cached.rates;
+    }
+    const rates = await mt5McpService.getRates(symbol, timeframe, count);
+    if (rates && rates.length > 0) {
+      this.candleCache.set(key, { rates, timestamp: Date.now() });
+    }
+    return rates || [];
+  }
+
   getFractalTimeframes(baseTf: Timeframe): { direction: Timeframe; setup: Timeframe; entry: Timeframe } {
     switch (baseTf) {
       case "H4": return { direction: "H4", setup: "H1", entry: "M15" };
@@ -77,10 +93,10 @@ class AITradingEngine {
   ): Promise<MultiStrategySymbolAnalysis> {
     const fractals = this.getFractalTimeframes(timeframe);
     const [dailyRates, directionRates, setupRates, entryRates] = await Promise.all([
-      mt5McpService.getRates(symbol, "D1", 100),
-      mt5McpService.getRates(symbol, fractals.direction, 500),
-      mt5McpService.getRates(symbol, fractals.setup, 500),
-      mt5McpService.getRates(symbol, fractals.entry, 500)
+      this.getCachedRates(symbol, "D1", 100),
+      this.getCachedRates(symbol, fractals.direction, 500),
+      this.getCachedRates(symbol, fractals.setup, 500),
+      this.getCachedRates(symbol, fractals.entry, 500)
     ]);
 
     if (directionRates.length < 10 || setupRates.length < 10 || entryRates.length < 10) {

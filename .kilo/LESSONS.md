@@ -312,5 +312,15 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 1. Buat build hook `desktop/buildHooks/afterPack.js` yang dijalankan di konfigurasi `afterPack` `electron-builder.yml` untuk menyalin folder `server/node_modules` langsung ke folder output `release/win-unpacked/resources/server/node_modules` setelah proses packaging electron-builder selesai.
 2. Gunakan `utilityProcess.fork(serverScript, [], { stdio: 'pipe' })` **tanpa** menyertakan `ELECTRON_RUN_AS_NODE` dan `ELECTRON_NO_ASAR`. `utilityProcess` sudah secara native berjalan di lingkungan Node tanpa flag tersebut.
 **Hindari**: Jangan mengandalkan `extraResources` semata untuk direktori `node_modules` yang besar tanpa afterPack hook jika ada mekanisme dependency pruning dari electron-builder. Jangan pernah menyetel `ELECTRON_RUN_AS_NODE: "1"` saat memanggil `utilityProcess.fork()`.
-
-
+### [20260808] AI Trading Pure AI Order Execution, Confluence Priority & UI Pending Orders Card
+**Area**: Frontend / Backend / Risk Management / LLM Consensus
+**Root Cause**: 
+1. Penentuan order type (Market vs Pending) sebelumnya membutuhkan toggle UI manual yang membingungkan alih-alih diserahkan sepenuhnya ke keputusan algoritma AI.
+2. Tab NET Confluence sempat menggabungkan checklist dari semua metodologi sehingga checklist dari metodologi non-prioritas bisa membingungkan user.
+3. Posisi pending orders sebelumnya belum terpisah dari open market positions pada tampilan UI `PositionsTable`.
+**Solusi**:
+1. Hapus toggle manual; biarkan engine menentukan `BUY_LIMIT`/`SELL_LIMIT` vs `BUY`/`SELL` otomatis berdasarkan `minPendingDist` terhadap `currentPrice`.
+2. Sediakan property `priorityChecklist` di `confluenceEngine` yang hanya memuat checklist dari metodologi ber-confidence tertinggi untuk tab NET.
+3. Pisahkan tampilan Pending Orders ke dalam card khusus di bawah Open Positions card pada `PositionsTable.tsx`.
+4. Render hasil LLM Consensus dalam card/embed terpisah per model di `PipelineLogs.tsx`.
+**Hindari**: Jangan mencampur checklist antar metodologi di tab NET. Selalu utamakan prioritas dari primary methodology.

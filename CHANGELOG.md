@@ -2,7 +2,27 @@
 
 Semua catatan perubahan, pembaruan fitur, perbaikan bug, dan rilis versi aplikasi desktop **Hunter Trades** dicatat di dokumen ini.
 
-## 🚀 [v1.0.11] — 2026-08-06 (Versi Terbaru)
+## 🚀 [v1.0.13] — 2026-08-08 (Versi Terbaru)
+
+### 🤖 Perbaikan & Refactoring Total AI Trading Engine
+- **Pure AI Execution Mode**:
+  - Keputusan *Market Order* vs *Pending Limit Order* 100% otomatis diambil oleh AI engine berdasarkan jarak harga real-time vs entry zone (`minPendingDist`). Tanpa toggle manual.
+- **Risk Management & Circuit Breaker**:
+  - Default risk per trade disesuaikan ke **0.5%** (dengan hard cap 1.0 lot per order).
+  - Circuit Breaker dihentikan murni berdasarkan **Minimum Daily Loss %** (`maxDailyRisk: 1.5%`), menghapus aturan consecutive loss count.
+- **Kartu Pending Orders Terpisah**:
+  - Tampilan UI `PositionsTable.tsx` memisahkan **Pending Orders ke dalam card tersendiri tepat di bawah Open Positions card**.
+- **NET Tab Confluence Filter**:
+  - Tab `NET` pada `MethodologyConfluence.tsx` kini **hanya menampilkan checklist dari metodologi prioritas** (confidence tertinggi), bukan gabungan dari semua metodologi.
+- **LLM Consensus Cards Per Model**:
+  - Log AI Consensus di `PipelineLogs.tsx` merender hasil voting **terpisah per model** (DeepSeek, Gemini, Claude, Mistral, dll) lengkap dengan status badge, latency, dan poin reasoning Bahasa Indonesia.
+- **Performa & Caching**:
+  - In-memory candle cache (5s) pada `ai-trading-engine.service.ts` untuk menghemat panggilan API MT5 MCP berulang.
+  - Multi-broker isolation per broker server di `UserSettings` dan `ai-backtest-skill.service.ts` tetap terisolasi sempurna.
+
+---
+
+## 🚀 [v1.0.12] — 2026-08-07
 
 ### 🐛 Perbaikan Proses Zombie & Stabilitas Startup
 - **Kill Proses Port Tertinggal Otomatis**:

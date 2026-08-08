@@ -8,12 +8,5 @@
     "dev:server": "npm run dev --prefix server",
     "dev:frontend": "npm run dev --prefix frontend"
   },
-  "devDependencies": {
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/react-hooks": "^8.0.1",
-    "@types/jsdom": "^28.0.3",
-    "jsdom": "^29.1.1",
-    "vitest": "^4.1.9"
-  },
-  "version": "1.0.9"
+  "version": "1.0.13"
 }

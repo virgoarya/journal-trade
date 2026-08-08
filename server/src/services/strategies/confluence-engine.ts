@@ -81,6 +81,8 @@ export interface ConfluenceResult {
   reason: string;
   checklistByMethodology?: Record<string, ChecklistItem[]>;
   checklistItems?: ChecklistItem[];
+  /** Checklist from the primary (highest confidence) methodology only — used by NET tab */
+  priorityChecklist?: ChecklistItem[];
 }
 
 // Each methodology's signal type
@@ -274,6 +276,11 @@ class ConfluenceEngine {
       mergedChecklist.push(...primary.checklistItems.filter(item => !item.id.endsWith("-rr")));
     }
 
+    // Build priorityChecklist from primary methodology only (for NET tab)
+    const priorityChecklist = primary?.checklistItems?.length
+      ? [...primary.checklistItems]
+      : checklistByMethodology[primary?.methodology] || [];
+
     return {
       finalSignal: {
         direction: winningDirection,
@@ -293,6 +300,7 @@ class ConfluenceEngine {
       methodologyBreakdown: breakdown,
       checklistByMethodology,
       checklistItems: mergedChecklist,
+      priorityChecklist,
       conflictDetected,
       reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})${conflictDetected ? " [CONFLICT PENALTY APPLIED]" : ""}`,
     };

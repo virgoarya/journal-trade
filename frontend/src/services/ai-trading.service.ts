@@ -270,6 +270,7 @@ export interface ConfluenceResult {
   conflictDetected: boolean;
   reason: string;
   checklistItems?: ChecklistItem[];
+  priorityChecklist?: ChecklistItem[];
 }
 
 export interface MarketStructureSummary {

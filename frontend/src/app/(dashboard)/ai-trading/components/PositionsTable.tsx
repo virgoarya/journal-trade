@@ -14,6 +14,7 @@ import {
 
 interface PositionsTableProps {
   positions: Position[];
+  pendingOrders?: Position[];
   onClose: (ticket: number) => void;
   onModify: (ticket: number, sl?: number, tp?: number) => void;
   isLoading: boolean;
@@ -23,6 +24,7 @@ interface PositionsTableProps {
 
 export function PositionsTable({
   positions,
+  pendingOrders = [],
   onClose,
   onModify,
   isLoading,
@@ -50,6 +52,16 @@ export function PositionsTable({
   const [editTP, setEditTP] = useState("");
   const [closingId, setClosingId] = useState<number | null>(null);
 
+  // Separate market open positions vs pending limit/stop orders
+  const isPendingType = (type: string) => {
+    const t = (type || "").toUpperCase();
+    return t.includes("LIMIT") || t.includes("STOP");
+  };
+
+  const marketPositions = positions.filter((p) => !isPendingType(p.type));
+  const embeddedPending = positions.filter((p) => isPendingType(p.type));
+  const allPendingOrders = [...embeddedPending, ...pendingOrders];
+
   const startEdit = (pos: Position) => {
     setEditingId(pos.ticket);
     setEditSL(String(pos.sl || 0));
@@ -60,7 +72,6 @@ export function PositionsTable({
     const parsedSL = editSL !== "" ? parseFloat(editSL) : 0;
     const parsedTP = editTP !== "" ? parseFloat(editTP) : 0;
 
-    // Prevent calling API if values haven't changed (MT5 retcode 10025)
     if (parsedSL === (pos.sl || 0) && parsedTP === (pos.tp || 0)) {
       setEditingId(null);
       return;
@@ -74,8 +85,7 @@ export function PositionsTable({
   const handleCloseAll = async () => {
     if (!window.confirm("Are you sure you want to close ALL open positions?")) return;
     setIsClosingAll(true);
-    // Execute sequentially to avoid overloading the bridge
-    for (const pos of positions) {
+    for (const pos of marketPositions) {
       await onClose(pos.ticket);
     }
     setIsClosingAll(false);
@@ -103,35 +113,38 @@ export function PositionsTable({
     );
   }
 
-  if (positions.length === 0) {
+  if (marketPositions.length === 0 && allPendingOrders.length === 0) {
     return null;
   }
 
   return (
-    <div className="glass overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
-        <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
-          Open Positions
-          <span className="ml-2 text-accent-gold-dim">
-            [{positions.length}]
-          </span>
-        </h3>
-        {positions.length > 0 && (
-          <button
-            onClick={handleCloseAll}
-            disabled={isClosingAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition text-xs font-medium disabled:opacity-50"
-          >
-            {isClosingAll ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <XCircle className="w-3.5 h-3.5" />
+    <div className="space-y-4">
+      {/* ── OPEN POSITIONS CARD ── */}
+      {marketPositions.length > 0 && (
+        <div className="glass overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/20">
+            <h3 className="text-[11px] font-bold tracking-widest uppercase text-accent-gold drop-shadow-[0_0_4px_rgba(212,175,55,0.4)]">
+              Open Positions
+              <span className="ml-2 text-accent-gold-dim">
+                [{marketPositions.length}]
+              </span>
+            </h3>
+            {marketPositions.length > 0 && (
+              <button
+                onClick={handleCloseAll}
+                disabled={isClosingAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition text-xs font-medium disabled:opacity-50"
+              >
+                {isClosingAll ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <XCircle className="w-3.5 h-3.5" />
+                )}
+                Close All
+              </button>
             )}
-            Close All
-          </button>
-        )}
-      </div>
+          </div>
 
       {error && (
         <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
@@ -169,7 +182,7 @@ export function PositionsTable({
               </tr>
             </thead>
             <tbody>
-              {positions.map((pos) => (
+              {marketPositions.map((pos) => (
                 <tr
                   key={pos.ticket}
                   className="border-b border-accent-gold/10 hover:bg-accent-gold/5 transition group"
@@ -299,6 +312,86 @@ export function PositionsTable({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── PENDING ORDERS CARD (DIBAWAH OPEN POSITION CARD) ── */}
+      {allPendingOrders.length > 0 && (
+        <div className="glass overflow-hidden">
+          <div className="px-4 py-3 border-b border-accent-gold/20 flex justify-between items-center bg-black/30">
+            <h3 className="text-[11px] font-bold tracking-widest uppercase text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.4)] flex items-center gap-2">
+              <span>⏳</span> Pending Orders
+              <span className="ml-1 text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                [{allPendingOrders.length}]
+              </span>
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-accent-gold/10 text-accent-gold-dim text-[10px] uppercase tracking-wider bg-black/40">
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Symbol</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Ticket</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Type</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Volume</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Target Entry</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">S / L</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">T / P</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Comment</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allPendingOrders.map((pos, idx) => (
+                  <tr key={pos.ticket || idx} className="border-b border-accent-gold/10 hover:bg-amber-500/5 transition">
+                    <td className="px-3 py-2.5 font-mono text-text-primary">
+                      <span className="inline-flex items-center gap-2 bg-black/50 border border-amber-500/30 px-2 py-0.5 rounded">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                        {pos.symbol?.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-text-muted text-[10px] font-mono">
+                      #{pos.ticket || "PENDING"}
+                    </td>
+                    <td className="px-3 py-2.5 text-[10px] font-bold font-mono tracking-wider text-amber-400">
+                      {pos.type?.toUpperCase() || "PENDING_LIMIT"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-text-primary font-mono tabular-nums">
+                      {pos.volume ? pos.volume.toFixed(2) : "-"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-accent-gold font-mono font-bold tabular-nums">
+                      {formatPrice(pos.priceOpen || pos.priceCurrent)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-text-muted">
+                      {pos.sl ? formatPrice(pos.sl) : "-"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-text-muted">
+                      {pos.tp ? formatPrice(pos.tp) : "-"}
+                    </td>
+                    <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
+                      {pos.comment || "AI Pending Limit"}
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      {pos.ticket ? (
+                        <button
+                          onClick={() => handleClose(pos.ticket)}
+                          disabled={closingId === pos.ticket}
+                          className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition disabled:opacity-50"
+                          title="Cancel order"
+                        >
+                          {closingId === pos.ticket ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

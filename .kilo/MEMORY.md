@@ -36,6 +36,7 @@
 - **Accessibility**: Web UI harus bisa diakses dari browser + mobile (server desktop harus nyala).
 
 ## Recent Refactors
+- **AI Trading Engine & UI Overhaul (v1.0.13)**: Refactoring total pipeline trading dengan Pure AI order decision (tanpa toggle manual), default risk 0.5% & daily loss % circuit breaker, NET tab confluence filtering priority methodology, LLM reasoning cards per model, serta pembagian tampilan Pending Orders card di bawah Open Positions card.
 - **Native MT5 MCP Migration**: Mengganti Python bridge (`Hunter Trades AI Trading.exe`) dengan koneksi langsung ke fitur Native MCP Server yang sudah terintegrasi di MetaTrader 5 desktop (`http://127.0.0.1:22346/mcp`). Mengurangi overhead memory, latency, dan kompleksitas packaging.
 - **GitHub Releases Auto-Update**: Integrasi `electron-updater` dan `UpdateNotification` UI component di Next.js layout. Aplikasi otomatis memeriksa pembaruan di latar belakang, mengunduh patch, dan menyediakan tombol "Restart & Perbarui" tanpa perlu re-install manual.
 - **Electron Desktop App**: Membungkus seluruh stack (backend + frontend) dalam Electron installer .exe via NSIS.
