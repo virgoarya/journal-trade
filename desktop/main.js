@@ -283,9 +283,10 @@ async function startRouter() {
 
   console.log(`[MAIN] Starting 9Router proxy on port 20128...`);
   const nineRouterBinPath = path.join(serverCwd, "node_modules", ".bin", "9router.cmd");
+  const nineRouterCwd = path.dirname(nineRouterBinPath); // CWD to .bin folder
   
   routerProcess = spawn(nineRouterBinPath, ["--tray", "--skip-update", "-p", "20128"], {
-    cwd: serverCwd,
+    cwd: nineRouterCwd, // Use the directory of the binary as CWD
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
     shell: true, // Use shell for .cmd files on Windows
