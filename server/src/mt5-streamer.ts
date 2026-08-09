@@ -264,6 +264,30 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         const found = cachedPositions.find((p) => p.ticket === payload.ticket);
         if (found) targetSymbol = found.symbol;
       }
+
+      // Check if this ticket is a pending (limit/stop) order - cancel it instead of closing a position
+      const isPendingOrder = cachedOrders.some((o) => o.ticket === Number(payload.ticket));
+      if (isPendingOrder) {
+        // MT5 native tool: trade_delete_order (for pending orders)
+        const res = await callTool("trade_delete_order", {
+          symbol: targetSymbol || "",
+          order_ticket: Number(payload.ticket),
+        });
+        let errorMsg: string | undefined;
+        if (typeof res === "string") {
+          errorMsg = res;
+        } else if (res?.error) {
+          errorMsg = String(res.error);
+        } else if (res?.isError) {
+          errorMsg = JSON.stringify(res);
+        }
+        return {
+          success: !errorMsg,
+          ticket: payload.ticket,
+          error: errorMsg,
+        };
+      }
+
       // MT5 native tool: trade_close_single_position
       const res = await callTool("trade_close_single_position", {
         symbol: targetSymbol || "",
@@ -273,6 +297,33 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         success: !res?.error && !res?.isError,
         ticket: payload.ticket,
         error: res?.error || (res?.isError ? JSON.stringify(res) : undefined),
+      };
+    }
+
+    case "mt5_order_cancel":
+    case "mt5_order_delete": {
+      // Cancel a pending (limit/stop) order via the native MCP tool
+      let targetSymbol = payload.symbol;
+      if (!targetSymbol) {
+        const found = cachedOrders.find((o) => o.ticket === payload.ticket);
+        if (found) targetSymbol = found.symbol;
+      }
+      const res = await callTool("trade_delete_order", {
+        symbol: targetSymbol || "",
+        order_ticket: Number(payload.ticket),
+      });
+      let errorMsg: string | undefined;
+      if (typeof res === "string") {
+        errorMsg = res;
+      } else if (res?.error) {
+        errorMsg = String(res.error);
+      } else if (res?.isError) {
+        errorMsg = JSON.stringify(res);
+      }
+      return {
+        success: !errorMsg,
+        ticket: payload.ticket,
+        error: errorMsg,
       };
     }
 
@@ -288,7 +339,6 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       };
       if (payload.sl !== undefined) modifyArgs.sl = Number(payload.sl);
       if (payload.tp !== undefined) modifyArgs.tp = Number(payload.tp);
-
       const res = await callTool("trade_modify_sl_tp", modifyArgs);
       return {
         success: !res?.error && !res?.isError,

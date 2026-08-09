@@ -1,7 +1,7 @@
 {
   "version": "1.0.14",
-  "releaseDate": "2026-08-09T03:07:36.499Z",
+  "releaseDate": "2026-08-09T03:19:37.345Z",
   "patchUrl": "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/patch.zip",
-  "checksum": "4204eb444f568c30a846944e5c4e6265c8afa20329507e4bb01be51147ab4c30",
+  "checksum": "76e9966c036547b79ea2fa6a7df77a1581b57fad4ac52bab051b31a261c02cce",
   "notes": "Update patch for 1.0.14"
 }
