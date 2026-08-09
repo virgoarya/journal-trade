@@ -19,6 +19,7 @@ import nexusRoutes from "./nexus.routes";
 import aiCoachRoutes from "./ai-coach.routes";
 import aiTradingRoutes from "./ai-trading.routes";
 import backtestRoutes from "./backtest.routes";
+import devTestRoutes from "./dev-test.routes";
 import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
@@ -47,6 +48,7 @@ router.use("/v1/nexus", nexusRoutes);
 router.use("/v1/ai-coach", aiLimiter, aiCoachRoutes);
 router.use("/v1/ai-trading", aiTradingRoutes);
 router.use("/v1/backtest", backtestRoutes);
+router.use("/v1/dev", devTestRoutes);
 router.use("/v1/broker-registration", brokerRegistrationRoutes);
 
 export default router;

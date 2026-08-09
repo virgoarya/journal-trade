@@ -348,12 +348,13 @@ router.post(
         );
       }
 
-      const { symbol, type, volume, sl, tp, comment } = req.body;
+      const { symbol, type, volume, price, sl, tp, comment } = req.body;
 
       const result = await mt5McpService.openOrder({
         symbol,
         action: type,
         volume,
+        price,
         sl,
         tp,
         comment: comment || "AI-Manual",

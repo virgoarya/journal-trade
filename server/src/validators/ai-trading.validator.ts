@@ -34,8 +34,9 @@ export const mt5ConnectSchema = z.object({
 
 export const openPositionSchema = z.object({
   symbol: z.string().min(1, "Symbol required"),
-  type: z.enum(["BUY", "SELL"]),
+  type: z.enum(["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"]),
   volume: z.number().positive("Volume must be positive"),
+  price: z.number().optional(),
   sl: z.number().optional(),
   tp: z.number().optional(),
   comment: z.string().max(32).optional(),

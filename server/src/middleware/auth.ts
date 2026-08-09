@@ -14,6 +14,17 @@ declare global {
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // DEV-ONLY: integration test bypass (never active in production)
+    if (process.env.NODE_ENV === "development" && req.headers["x-integration-test"] === "1") {
+      req.user = {
+        id: "test_user_integration",
+        name: "Integration Test",
+        email: "integration.test@journaltrade.local",
+      };
+      req.session = {};
+      return next();
+    }
+
     if (!authInstance) {
       return apiResponse.error(res, "Auth belum diinisialisasi", "SERVER_ERROR", 500);
     }

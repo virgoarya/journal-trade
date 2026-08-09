@@ -60,12 +60,12 @@ function normalizePosition(p: any): any {
      timeVal = timeStr;
    }
 
-   const pAction = String(p.action ?? p.type ?? "").toLowerCase();
+const pAction = String(p.action ?? p.type ?? "").toLowerCase();
    // Preserve pending order types (buy limit, buy stop, sell limit, sell stop)
    // Map only market orders (buy/sell) to BUY/SELL
    const isPending = pAction.includes("limit") || pAction.includes("stop");
    const normalizedType = isPending
-     ? pAction.toUpperCase()  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
+     ? pAction.toUpperCase().replace(/\s+/g, "_")  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
      : (pAction === "buy" || pAction === "0" || p.type === 0) ? "BUY" : "SELL";
 
    const priceOpen = p.price_order ?? p.price_open ?? p.priceOpen ?? p.open_price ?? 0;

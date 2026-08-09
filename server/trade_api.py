@@ -55,9 +55,24 @@ def order_to_dict(o):
         "state": "placed" if o.state == mt5.ORDER_STATE_PLACED else "other",
     }
 
+def ensure_mt5():
+    """Initialize MT5 with retries. -6 usually means another process holds the
+    terminal connection (only ONE python process can connect at a time), or the
+    terminal needs re-authorization. Retry + shutdown helps in both cases."""
+    for attempt in range(3):
+        mt5.shutdown()
+        if mt5.initialize():
+            return True
+        code = mt5.last_error()
+        import time as _t
+        _t.sleep(1)
+    return False
+
+
 def main():
-    if not mt5.initialize():
-        fail(f"initialize() failed, error code = {mt5.last_error()}")
+    if not ensure_mt5():
+        code = mt5.last_error()
+        fail(f"initialize() failed, error code = {code}. Pastikan MT5 terminal terbuka & authorized.")
 
     action = sys.argv[1]
     payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
@@ -160,6 +175,7 @@ def main():
             "action": mt5.TRADE_ACTION_MODIFY,
             "order": od.ticket,
             "symbol": od.symbol,
+            "price": od.price_open,  # MT5 requires the order trigger price on modify
         }
         if "price_open" in payload and payload.get("price_open") is not None:
             req["price"] = float(payload["price_open"])
@@ -177,13 +193,27 @@ def main():
         })
 
     elif action == "order_send":
+        symbol = payload.get("symbol", "")
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            fail(f"symbol not found: {symbol}")
+        # Pick a filling mode supported by this symbol
+        filling_flags = symbol_info.filling_mode
+        # SYMBOL_FILLING_FOK=1, SYMBOL_FILLING_IOC=2
+        if filling_flags & 1:  # FOK supported
+            filling = mt5.ORDER_FILLING_FOK
+        elif filling_flags & 2:  # IOC supported
+            filling = mt5.ORDER_FILLING_IOC
+        else:
+            filling = mt5.ORDER_FILLING_RETURN
+
         req = {
             "action": mt5.TRADE_ACTION_DEAL if payload.get("type") in ("BUY", "SELL") else mt5.TRADE_ACTION_PENDING,
-            "symbol": payload.get("symbol", ""),
+            "symbol": symbol,
             "volume": float(payload.get("volume", 0.01)),
             "comment": payload.get("comment", "")[:31],
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC if payload.get("type") in ("BUY", "SELL") else mt5.ORDER_FILLING_RETURN,
+            "type_filling": filling,
         }
         t = payload.get("type", "BUY").upper()
         if t == "BUY":

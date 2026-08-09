@@ -8,7 +8,7 @@ export interface IAITradeLog extends Document {
   // Signal info
   signal: {
     symbol: string;
-    direction: "BUY" | "SELL";
+    direction: "BUY" | "SELL" | "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP";
     confidence: number;
     entry: number;
     sl: number;
@@ -70,7 +70,7 @@ const AITradeLogSchema = new Schema<IAITradeLog>(
       symbol: { type: String, required: true },
       direction: {
         type: String,
-        enum: ["BUY", "SELL"],
+        enum: ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"],
         required: true,
       },
       confidence: { type: Number, min: 0, max: 100 },
