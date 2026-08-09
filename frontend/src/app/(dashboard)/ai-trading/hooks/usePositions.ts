@@ -45,7 +45,8 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
     // onTick
     if (data.positions) {
       setPositions(data.positions);
-      setTotal(data.positions.length + orders.length);
+      setOrders(Array.isArray(data.orders) ? data.orders : []);
+      setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (Array.isArray(data.orders) ? data.orders.length : 0));
     }
     if (data.accountInfo) {
       // Account info handled in useAccountInfo or Context

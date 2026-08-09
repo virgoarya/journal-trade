@@ -480,8 +480,18 @@ class MT5MCPService {
     }
     
     // Fallback if cache is completely empty or hasn't received ticks yet
-    const result = await this.callWithCircuit("mt5_positions_get", {});
+    const result = await this.callWithCircuit("mt5_positions_get", { includeOrders: true });
     return (result as any).positions ?? [];
+  }
+
+  /** Get all active pending (limit/stop) orders. */
+  async getOrders(): Promise<any[]> {
+    const cached = mt5StreamCache.getOrders();
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+    const result = await this.callWithCircuit("mt5_orders_get", { includeOrders: true });
+    return Array.isArray(result) ? result : [];
   }
 
   /** Debug — get raw MT5 diagnostic info about positions. */

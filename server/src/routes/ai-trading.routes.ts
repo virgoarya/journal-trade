@@ -248,12 +248,15 @@ router.get("/positions", async (req, res, next) => {
       return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
     }
 
-    const positions = await mt5McpService.getPositions().catch(() => [] as any[]);
+    const [positions, orders] = await Promise.all([
+      mt5McpService.getPositions().catch(() => [] as any[]),
+      mt5McpService.getOrders().catch(() => [] as any[]),
+    ]);
 
     return apiResponse.success(res, {
       positions,
-      orders: [],
-      total: positions.length,
+      orders,
+      total: positions.length + orders.length,
     });
   } catch (error: any) {
     if (error.message && error.message.includes("not connected")) {

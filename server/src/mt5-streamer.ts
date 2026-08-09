@@ -10,6 +10,7 @@ import path from "path";
 const execFileAsync = promisify(execFile);
 // ─── State ─────────────────────────────────────────────────────────────────
 let cachedPositions: any[] = [];
+let cachedOrders: any[] = [];
 let cachedAccountInfo: any = null;
 let mcpClient: Client | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
@@ -51,7 +52,7 @@ function normalizeAccountInfo(raw: any): any {
 
 function normalizePosition(p: any): any {
    let timeVal = 0;
-   const timeStr = p.create_time ?? p.update_time ?? p.time;
+   const timeStr = p.open_time ?? p.create_time ?? p.update_time ?? p.time;
    if (typeof timeStr === "string") {
      // Native MCP: "2026.08.05 14:00:22"
      timeVal = Math.floor(new Date(timeStr.replace(/\./g, "-")).getTime() / 1000);
@@ -60,20 +61,22 @@ function normalizePosition(p: any): any {
    }
 
    const pAction = String(p.action ?? p.type ?? "").toLowerCase();
-   // Preserve pending order types (buy_limit, sell_limit, buy_stop, sell_stop)
+   // Preserve pending order types (buy limit, buy stop, sell limit, sell stop)
    // Map only market orders (buy/sell) to BUY/SELL
    const isPending = pAction.includes("limit") || pAction.includes("stop");
    const normalizedType = isPending
      ? pAction.toUpperCase()  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
      : (pAction === "buy" || pAction === "0" || p.type === 0) ? "BUY" : "SELL";
 
+   const priceOpen = p.price_order ?? p.price_open ?? p.priceOpen ?? p.open_price ?? 0;
+
    return {
-     ticket: Number(p.position_id ?? p.ticket ?? p.id ?? 0),
+     ticket: Number(p.order_id ?? p.position_id ?? p.ticket ?? p.id ?? 0),
      symbol: String(p.symbol ?? ""),
      type: normalizedType,
-     volume: Number(p.volume ?? p.lots ?? 0),
-     priceOpen: Number(p.price_open ?? p.priceOpen ?? p.open_price ?? 0),
-     priceCurrent: Number(p.price_last ?? p.price_current ?? p.priceCurrent ?? p.price ?? 0),
+     volume: Number(p.volume_initial ?? p.volume ?? p.lots ?? 0),
+     priceOpen,
+     priceCurrent: Number(p.price_last ?? p.price_current ?? p.priceCurrent ?? p.price ?? priceOpen),
      sl: Number(p.stop_loss ?? p.sl ?? 0),
      tp: Number(p.take_profit ?? p.tp ?? 0),
      profit: Number(p.profit ?? 0),
@@ -82,12 +85,14 @@ function normalizePosition(p: any): any {
      comment: String(p.comment ?? ""),
      time: timeVal,
      magic: Number(p.magic ?? 0),
+     state: String(p.state ?? ""),
    };
  }
 
 // ─── Public Cache API ───────────────────────────────────────────────────────
 export const mt5StreamCache = {
   getPositions: () => cachedPositions,
+  getOrders: () => cachedOrders,
   getAccountInfo: () => cachedAccountInfo,
   isConnected: () => isConnected,
 };
@@ -126,19 +131,23 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_positions_get":
     case "get_trading_open_positions": {
-      const res = await callTool("get_trading_open_positions", payload.symbol ? { symbol: payload.symbol } : {});
-      const rawPositions = Array.isArray(res) ? res : (res?.positions ?? []);
+      const res = await callTool("get_trading_open_positions", { ...(payload.includeOrders ? { include_orders: true } : {}), ...(payload.symbol ? { symbol: payload.symbol } : {}) });
+      const raw = Array.isArray(res) ? { positions: res, orders: [] } : res;
+      const rawPositions = raw?.positions ?? [];
+      const rawOrders = raw?.orders ?? [];
       const normalized = rawPositions.map(normalizePosition);
+      const normalizedOrders = rawOrders.map(normalizePosition);
       cachedPositions = normalized;
-      return { positions: normalized };
+      return { positions: normalized, orders: normalizedOrders };
     }
 
     case "mt5_orders_get":
     case "get_trading_orders": {
-      const res = await callTool("get_trading_orders", payload.symbol ? { symbol: payload.symbol } : {});
-      const rawOrders = Array.isArray(res) ? res : (res?.orders ?? []);
-      const normalized = rawOrders.map(normalizePosition);
-      return normalized;
+      const res = await callTool("get_trading_open_positions", { include_orders: true, ...(payload.symbol ? { symbol: payload.symbol } : {}) });
+      const raw = Array.isArray(res) ? res : res;
+      const rawOrders = (raw?.orders ?? []).map(normalizePosition);
+      cachedOrders = rawOrders;
+      return rawOrders;
     }
 
     case "mt5_symbols_get":
@@ -487,7 +496,7 @@ function startPolling() {
     if (!isConnected || !mcpClient) return;
     try {
       const [posResult, acctResult] = await Promise.allSettled([
-        callTool("get_trading_open_positions"),
+        callTool("get_trading_open_positions", { include_orders: true }),
         callTool("get_trading_account_info"),
       ]);
 
@@ -495,6 +504,7 @@ function startPolling() {
         const raw = posResult.value;
         const rawPositions = Array.isArray(raw) ? raw : (raw?.positions ?? []);
         cachedPositions = rawPositions.map(normalizePosition);
+        cachedOrders = (raw?.orders ?? []).map(normalizePosition);
       }
       if (acctResult.status === "fulfilled") {
         const raw = acctResult.value;
@@ -504,6 +514,7 @@ function startPolling() {
       // Broadcast to all frontend clients
       broadcast("mt5_tick", {
         positions: cachedPositions,
+        orders: cachedOrders,
         accountInfo: cachedAccountInfo,
       }, "mt5" as any);
 
