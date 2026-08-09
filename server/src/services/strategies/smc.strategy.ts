@@ -147,8 +147,12 @@ class SMCStrategy {
     const obChochPrice = sig.orderBlock?.chochPrice?.toFixed(5) || relHigh;
     
     const liquidityZone = fractal.directionStr?.liquidityZones?.find(lz => lz.swept && lz.type === (isBuy ? "SELL_SIDE" : "BUY_SIDE"));
-    const obSweepPrice = liquidityZone ? liquidityZone.price.toFixed(5) : (sig.orderBlock?.sweepPrice?.toFixed(5) || relLow);
+    // Sweep price harus dari sumber nyata (liquidity zone / sweepPrice OB), bukan fallback relLow (bisa "N/A")
+    const obSweepPrice = liquidityZone
+      ? liquidityZone.price.toFixed(5)
+      : (sig.orderBlock?.sweepPrice ? sig.orderBlock.sweepPrice.toFixed(5) : null);
     const hasRecentSweep = (sig.orderBlock?.hasSweep ?? false) || !!liquidityZone;
+    const isSweepValid = hasRecentSweep && !!obSweepPrice;
 
     const pdArrayType = isBuy ? "Discount PD Array" : "Premium PD Array";
     const isDailyAligned = isBuy ? dailyBias.direction === "BULL" : dailyBias.direction === "BEAR";
@@ -171,10 +175,10 @@ class SMCStrategy {
       },
 {
             id: "smc-liq",
-            label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept @ ${obSweepPrice}`,
+            label: (status, isPassed) => `② ${isBuy ? "Sell-Side Liquidity (SSL)" : "Buy-Side Liquidity (BSL)"} Swept${obSweepPrice ? ` @ ${obSweepPrice}` : ""}`,
             timeframe: setupTfLabel,
-            condition: hasRecentSweep,
-            details: (status) => `Liquidity inducement swept recently on ${setupTfLabel}`,
+            condition: isSweepValid,
+            details: (status) => isSweepValid ? `Liquidity inducement swept recently on ${setupTfLabel}` : `Menunggu konfirmasi sweep level likuiditas`,
         },
       {
         id: "smc-ob",

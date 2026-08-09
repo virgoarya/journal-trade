@@ -1,3 +1,35 @@
+## 🚀 [v1.0.15] — 2026-08-10 (Versi Terbaru)
+
+### 🎯 Perbaikan Akurasi Level Methodology SMC/ICT/MSNR
+- **Fix Bug RBS/SBR Terbalik** (`market-structure.service.ts`):
+  - Sebelumnya: Resistance + harga turun → diklasifikasikan RBS (salah), Support + harga naik → SBR (salah).
+  - Sekarang: **RBS** = Resistance di-break ke ATAS (candle close di atas) → jadi support. **SBR** = Support di-break ke BAWAH (candle close di bawah) → jadi resistance.
+  - Ditambahkan `originalType` & `flipTime` di `MalaysianSNR` untuk deteksi flip yang akurat.
+- **Fix Deteksi SNR Flip**: Sekarang cek seluruh candle setelah level terbentuk (bukan hanya 1 candle di index SNR), dengan track `flipTime`.
+- **Fix Swing Detection Noise**: Swing valid hanya jika jarak dari swing sebelumnya > 0.5 × ATR — mengurangi swing noise palsu yang mengacaukan level.
+- **Fix KeyLevel Clustering**: Level hanya valid jika di-tap minimal 2× (cluster ≥ 2 swing points) — level sekali-sentuh tidak dianggap level kuat.
+- **Fix Checklist SMC**: Sweep price diambil dari sumber nyata (liquidity zone / sweepPrice OB), bukan fallback `relLow` yang bisa "N/A".
+- **Fix Checklist ICT**: FVG zone menampilkan range top-bottom aktual dari FVG terdekat, bukan hanya entry point.
+- **Verifikasi**: Unit test 21/21 lulus (RBS/SBR correctness, swing noise filter, fallback model config).
+
+### 🤖 LLM Voting: Model Baru + Fallback + Reasoning Bahasa Indonesia
+- **Model IDs baru + fallback otomatis** (6 provider):
+  - DeepSeek: `oc/deepseek-v4-flash-free` → fallback `oc/laguna-s-2.1-free`
+  - GPT: `groq/openai/gpt-oss-120b` → fallback `groq/llama-3.3-70b-versatile`
+  - Gemini: `gc/gemini-3.1-flash-lite-preview` → fallback `gc/gemini-2.5-pro`
+  - Mistral: `mistral/mistral-large-latest` → fallback `mistral/mistral-medium-latest`
+  - Nemotron: `oc/nemotron-3-ultra-free` → fallback `nvidia/minimaxai/minimax-m3`
+  - Claude Opus: `ag/claude-opus-4-6-thinking` → fallback `kr/claude-sonnet-4.5`
+- **Fallback retry**: Jika model utama gagal (network error / HTTP non-2xx / rate-limit), otomatis retry dengan `fallbackModel` + log peringatan.
+- **Reasoning DeepSeek Bahasa Indonesia**: Kamus `forceIndonesian` diperluas dengan istilah SMC/ICT/SNR (liquidity sweep, order block, displacement, manipulation, dll) + instruksi keras di SYSTEM_PROMPT untuk model thinking agar reasoning_content dalam Bahasa Indonesia.
+- **Config dipisah**: `NINE_ROUTER_MODELS` dipindah ke `src/config/llm-models.config.ts` — mudah di-test & maintain.
+
+### 📦 Build & Release
+- Semua package.json di-bump ke **v1.0.15**
+- Rebuild server, frontend, desktop app, dan patch OTA
+
+---
+
 ## 🚀 [v1.0.14] — 2026-08-09 (Versi Terbaru)
 
 ### ✅ Finalisasi Sinkronisasi & Stabilitas AI Trading

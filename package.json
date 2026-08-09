@@ -1,6 +1,5 @@
 {
   "scripts": {
-    "postinstall": "npm install --prefix server && npm install --prefix frontend",
     "build": "npm run build:server && npm run build:frontend",
     "build:server": "npm run build --prefix server",
     "build:frontend": "npm run build --prefix frontend",
@@ -8,5 +7,5 @@
     "dev:server": "npm run dev --prefix server",
     "dev:frontend": "npm run dev --prefix frontend"
   },
-  "version": "1.0.13"
+  "version": "1.0.15"
 }

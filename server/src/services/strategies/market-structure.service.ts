@@ -155,6 +155,10 @@ export interface MalaysianSNR {
   touchedByWick: boolean;
   brokenByBody: boolean;
   missed: boolean;
+  /** Type asli sebelum flip (untuk deteksi RBS/SBR yang benar) */
+  originalType?: "RESISTANCE" | "SUPPORT";
+  /** Waktu candle yang mem-break level (valid untuk flip) */
+  flipTime?: number;
 }
 
 export interface MalaysianEngulfing {
@@ -379,7 +383,18 @@ class MarketStructureService {
       });
     }
 
-    return swings;
+    // Filter noise: swing hanya valid jika jarak dari swing sebelumnya > 0.5 × ATR
+    const atr = this.averageRange(candles, 14);
+    const minGap = atr > 0 ? atr * 0.5 : 0;
+    const filtered: SwingHigh[] = [];
+    for (const s of swings) {
+      const last = filtered[filtered.length - 1];
+      if (!last || Math.abs(s.price - last.price) >= minGap) {
+        filtered.push(s);
+      }
+    }
+
+    return filtered;
   }
 
   /**
@@ -427,7 +442,18 @@ class MarketStructureService {
       });
     }
 
-    return swings;
+    // Filter noise: swing hanya valid jika jarak dari swing sebelumnya > 0.5 × ATR
+    const atr = this.averageRange(candles, 14);
+    const minGap = atr > 0 ? atr * 0.5 : 0;
+    const filtered: SwingLow[] = [];
+    for (const s of swings) {
+      const last = filtered[filtered.length - 1];
+      if (!last || Math.abs(s.price - last.price) >= minGap) {
+        filtered.push(s);
+      }
+    }
+
+    return filtered;
   }
 
   // ── Daily Price Action (Intraday Bias) ─────────────────────────────
@@ -873,7 +899,10 @@ class MarketStructureService {
       }
     }
 
-    const levels: KeyLevel[] = clusters.map((cluster) => {
+    // Validasi: level hanya valid jika di-tap minimal 2× (cluster punya ≥2 swing points)
+    const validClusters = clusters.filter((c) => c.length >= 2);
+
+    const levels: KeyLevel[] = validClusters.map((cluster) => {
       // Calculate weighted average price
       const avgPrice = cluster.reduce((sum, p) => sum + p.price, 0) / cluster.length;
 
@@ -1263,6 +1292,7 @@ class MarketStructureService {
         snrs.push({
           price: prev.close,
           type: "RESISTANCE",
+          originalType: "RESISTANCE",
           time: curr.time,
           index: i,
           isFresh: true,
@@ -1282,6 +1312,7 @@ class MarketStructureService {
         snrs.push({
           price: prev.close,
           type: "SUPPORT",
+          originalType: "SUPPORT",
           time: curr.time,
           index: i,
           isFresh: true,
@@ -1312,12 +1343,14 @@ class MarketStructureService {
             snr.brokenByBody = true;
             snr.isFresh = true; // Broken by body makes it fresh for support
             snr.type = "SUPPORT"; // Flipped SNR
+            if (!snr.flipTime) snr.flipTime = c.time;
             continue;
         }
         if (snr.type === "SUPPORT" && Math.max(c.open, c.close) < snr.price) {
             snr.brokenByBody = true;
             snr.isFresh = true;
             snr.type = "RESISTANCE"; // Flipped SNR
+            if (!snr.flipTime) snr.flipTime = c.time;
             continue;
         }
 
@@ -1490,28 +1523,28 @@ class MarketStructureService {
     const flips: SNRFlip[] = [];
 
     for (const snr of snrs) {
-      // If SNR is a Resistance, check if price closed below it within last 5 candles => SBR
-      if (snr.type === "RESISTANCE") {
-        const recentCandle = candles[snr.index];
-        if (recentCandle && recentCandle.low <= snr.price) {
-          flips.push({
-            type: "RBS",
-            level: snr.price,
-            time: recentCandle.time,
-          });
-        }
-      }
+      // Flip SUDAH terjadi di updateSNRFreshness:
+      //   - originalType RESISTANCE + brokenByBody → break ke ATAS → level jadi SUPPORT → RBS
+      //   - originalType SUPPORT + brokenByBody → break ke BAWAH → level jadi RESISTANCE → SBR
+      // Jika originalType tidak tersedia, infer dari arah break (type sekarang vs original).
+      const originalType = snr.originalType ?? (snr.type === "RESISTANCE" ? "SUPPORT" : "RESISTANCE");
 
-      // If SNR is a Support, check if price closed above it within last 5 candles => SBR
-      if (snr.type === "SUPPORT") {
-        const recentCandle = candles[snr.index];
-        if (recentCandle && recentCandle.high >= snr.price) {
-          flips.push({
-            type: "SBR",
-            level: snr.price,
-            time: recentCandle.time,
-          });
-        }
+      if (!snr.brokenByBody) continue;
+
+      if (originalType === "RESISTANCE") {
+        // Resistance di-break ke atas → jadi support → RBS
+        flips.push({
+          type: "RBS",
+          level: snr.price,
+          time: snr.flipTime ?? snr.time,
+        });
+      } else if (originalType === "SUPPORT") {
+        // Support di-break ke bawah → jadi resistance → SBR
+        flips.push({
+          type: "SBR",
+          level: snr.price,
+          time: snr.flipTime ?? snr.time,
+        });
       }
     }
 

@@ -56,19 +56,14 @@ interface LLMProvider {
   name: string;
   label: string;
   model: string;
+  /** Model cadangan jika model utama gagal/rate-limited */
+  fallbackModel?: string;
   baseUrl: string;
   apiKey: string;
   isDirect?: boolean;
 }
 
-const NINE_ROUTER_MODELS: Array<{ name: string; label: string; model: string }> = [
-  { name: "deepseek",   label: "DeepSeek V4",      model: "oc/deepseek-v4-flash-free" },
-  { name: "gpt",          label: "GPT OSS 120B",     model: "groq/openai/gpt-oss-120b" },
-  { name: "gemini",     label: "Gemini 2.5 Flash", model: "gc/gemini-2.5-flash" },
-  { name: "mistral",    label: "Mistral Large",    model: "mistral/mistral-large-latest" },
-  { name: "nemotron",   label: "Nemotron 3 Ultra", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b" },
-  { name: "claude-opus", label: "Claude Opus 4.7",    model: "kc/kilo-auto/free" },
-];
+import { NINE_ROUTER_MODELS } from "../config/llm-models.config";
 
 /** Additional providers requiring direct API keys */
 const DIRECT_MODELS: Array<{ name: string; label: string; model: string; baseURL: string; apiKeyEnv: string }> = [];
@@ -204,6 +199,7 @@ function getAvailableProviders(): LLMProvider[] {
         name: m.name,
         label: m.label,
         model: m.model,
+        fallbackModel: m.fallbackModel,
         baseUrl: nineRouterUrl!,
         apiKey: nineRouterApiKey,
       });
@@ -308,6 +304,7 @@ PENTING: Nilai "reasoning" WAJIB ditulis DALAM BAHASA INDONESIA dan HARUS menggu
   "reasoning": "- Tren besar searah sinyal.\n- Konfirmasi Orderblock SMC dan FVG ICT.\n- Risk/Reward 1:2 masuk akal."
 }
 ATURAN KERAS: JANGAN menulis analisis langkah-demi-langkah (step-by-step), JANGAN menerjemahkan ulang aturan prompt, dan JANGAN memberikan penjelasan panjang lebar di dalam nilai "reasoning". Langsung berikan 2-4 poin kesimpulan akhir yang padat dalam Bahasa Indonesia.
+PENTING UNTUK MODEL THINKING (DeepSeek/Qwen): Jika kamu mendukung mode reasoning (reasoning_content / think block), TULISKAN SEMUA PEMIKIRAN ANALISISMU DALAM BAHASA INDONESIA, bukan bahasa Inggris. Gunakan istilah teknikal asli (order block, fair value gap, liquidity sweep) tetapi rangkai kalimatnya dalam Bahasa Indonesia.
 
 Definisi Verdict (isi "verdict" hanya dengan salah satu dari ini):
 - GOOD: Sinyal kuat, ≥2 methodology berbobot setuju (terutama SMC/ICT), R:R >= 1:1.5, searah tren HTF atau konfirmasi Reversal H1/M15 (Sweep + CHOCH/MSS). Abaikan item 'Daily Direction WAITING' jika terjadi Reversal H1 yang matang.
@@ -750,30 +747,66 @@ isAvailable(): boolean {
     }
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      // ── Coba model utama, lalu fallback jika gagal ─────────────────────
+      const attemptModel = async (model: string): Promise<{ ok: boolean; res?: Response; error?: string }> => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      // Direct fetch to avoid @ai-sdk/openai parsing issues with non-standard endpoints
-      const res = await fetch(provider.baseUrl + "/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + provider.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 1500,
-          temperature: 0.1,
-          stream: false,
-        }),
-        signal: controller.signal,
-      });
+          // Direct fetch to avoid @ai-sdk/openai parsing issues with non-standard endpoints
+          const res = await fetch(provider.baseUrl + "/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + provider.apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "user", content: prompt },
+              ],
+              max_tokens: 1500,
+              temperature: 0.1,
+              stream: false,
+            }),
+            signal: controller.signal,
+          });
 
-      clearTimeout(timeout);
+          clearTimeout(timeout);
+          return { ok: true, res };
+        } catch (error: any) {
+          return { ok: false, error: error.name === "AbortError" ? `Timeout setelah ${timeoutMs}ms` : (error.message || "Error tak diketahui") };
+        }
+      };
+
+      // 1. Coba model utama
+      let attempt = await attemptModel(provider.model);
+
+      // 2. Jika gagal (network/HTTP error), coba fallbackModel
+      if (!attempt.ok || !attempt.res?.ok) {
+        if (provider.fallbackModel) {
+          silentLogger.warn(`[LLM-CONSENSUS] ${provider.name} model utama (${provider.model}) gagal, fallback ke ${provider.fallbackModel}`);
+          attempt = await attemptModel(provider.fallbackModel);
+        }
+      }
+
+      if (!attempt.ok) {
+        // Network error / timeout — termasuk setelah fallback
+        circuit.recordFailure();
+        updateProviderReliability(provider.name, false);
+        silentLogger.warn(`[LLM-CONSENSUS] ${provider.name}(${provider.label}) gagal: ${attempt.error}`);
+        return {
+          provider: provider.name,
+          modelLabel: provider.label,
+          verdict: "SKIP",
+          reasoning: `Error: ${attempt.error}`,
+          latencyMs: Date.now() - startTime,
+          error: attempt.error,
+        };
+      }
+
+      const res = attempt.res!;
 
       if (!res.ok) {
         const latency = Date.now() - startTime;
@@ -1087,10 +1120,17 @@ function forceIndonesian(text: string): string {
     "signal", "market", "trade", "order", "block", "break", "high", "low",
     "area", "zone", "point", "move", "look", "show", "confirm", "reject",
     "support", "resistance", "structure", "pattern",
+    // SMC/ICT/SNR terms
+    "liquidity", "sweep", "manipulation", "accumulation", "distribution",
+    "inducement", "displacement", "mitigation", "retest", "swing", "shift",
+    "confluence", "momentum", "impulse", "reversal", "breakout", "pullback",
+    "fair value gap", "order block", "killzone", "session",
   ];
   const idTradingWords = [
     "tren", "beli", "jual", "level", "sinyal", "pasar", "order", "blok",
     "tinggi", "rendah", "area", "titik", "konfirmasi",
+    "likuiditas", "manipulasi", "akumulasi", "distribusi",
+    "pergeseran", "pembalikan", "penembusan", "retest", "konfluensi",
   ];
   
   const textLower = text.toLowerCase();
@@ -1106,6 +1146,27 @@ function forceIndonesian(text: string): string {
       .replace(/\bprice action\b/gi, "aksi harga")
       .replace(/\bmarket structure\b/gi, "struktur pasar")
       .replace(/\bbreak of structure\b/gi, "breakdown struktur")
+      .replace(/\bchange of character\b/gi, "perubahan karakter (CHOCH)")
+      .replace(/\bmarket structure shift\b/gi, "pergeseran struktur pasar (MSS)")
+      .replace(/\bliquidity sweep\b/gi, "penyapuan likuiditas")
+      .replace(/\bliquidity inducement\b/gi, "inducement likuiditas")
+      .replace(/\bliquidity pool\b/gi, "kumpulan likuiditas")
+      .replace(/\bdisplacement\b/gi, "displacement")
+      .replace(/\bmanipulation\b/gi, "manipulasi")
+      .replace(/\baccumulation\b/gi, "akumulasi")
+      .replace(/\bdistribution\b/gi, "distribusi")
+      .replace(/\bmitigation\b/gi, "mitigasi")
+      .replace(/\bswing high\b/gi, "swing tinggi")
+      .replace(/\bswing low\b/gi, "swing rendah")
+      .replace(/\breversal\b/gi, "pembalikan")
+      .replace(/\bbreakout\b/gi, "penembusan")
+      .replace(/\bimpulse\b/gi, "impuls")
+      .replace(/\bconfluence\b/gi, "konfluensi")
+      .replace(/\bsession\b/gi, "sesi")
+      .replace(/\brisk reward\b/gi, "rasio risiko imbalan")
+      .replace(/\bprofit target\b/gi, "target profit")
+      .replace(/\bstop loss\b/gi, "stop loss")
+      .replace(/\btake profit\b/gi, "take profit")
       .replace(/\bsupport\b/gi, "support")
       .replace(/\bresistance\b/gi, "resistance")
       .replace(/\bconfirmation\b/gi, "konfirmasi")

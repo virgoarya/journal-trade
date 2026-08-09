@@ -317,7 +317,22 @@ class ICTStrategy {
       },
       {
         id: "ict-fvg",
-        label: (status) => status === "PASSED" ? `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${sig.entry.toFixed(5)})` : `④ ${entryTfLabel} Displacement + FVG/OTE creation`,
+        label: (status) => {
+          // Cari FVG aktual yang dekat dengan entry untuk tampilkan range (top-bottom) yang benar
+          const fvgs = fractal?.entryStr?.fairValueGaps ?? [];
+          const entryCandles = fractal?.entry ?? [];
+          const localAvg = entryCandles.length >= 5
+            ? entryCandles.slice(-5).reduce((s, c) => s + (c.high - c.low), 0) / Math.min(5, entryCandles.length)
+            : 0;
+          const nearFvg = fvgs.find(f => !f.mitigated && (
+            isBuy ? Math.abs(f.bottom - sig.entry) < Math.max(localAvg * 0.5, 1e-8) : Math.abs(f.top - sig.entry) < Math.max(localAvg * 0.5, 1e-8)
+          ));
+          if (status === "PASSED") {
+            const zone = nearFvg ? `${nearFvg.bottom.toFixed(5)}–${nearFvg.top.toFixed(5)}` : sig.entry.toFixed(5);
+            return `④ ${entryTfLabel} Displacement + FVG${hasOTE ? "/OTE" : ""} creation (${zone})`;
+          }
+          return `④ ${entryTfLabel} Displacement + FVG/OTE creation`;
+        },
         timeframe: entryTfLabel,
         condition: hasFVG || hasOTE || sig.signalType === "JUDAS_SWEEP",
       },
