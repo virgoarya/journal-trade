@@ -36,7 +36,7 @@ export interface ACCOUNTInfo {
 export interface Position {
   ticket: number;
   symbol: string;
-  type: "BUY" | "SELL";
+  type: "BUY" | "SELL" | "BUY_LIMIT" | "SELL_LIMIT" | "BUY_STOP" | "SELL_STOP";
   volume: number;
   priceOpen: number;
   priceCurrent: number;
@@ -46,8 +46,10 @@ export interface Position {
   swap: number;
   commission: number;
   comment: string;
+  source?: "AI" | "MANUAL";
   time: number;
   magic: number;
+  state?: string;
 }
 
 export interface SymbolInfo {

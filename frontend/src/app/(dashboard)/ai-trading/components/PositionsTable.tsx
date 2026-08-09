@@ -272,7 +272,20 @@ export function PositionsTable({
 
                         {/* Comment */}
                         <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
-                          {pos.comment || ""}
+                          {pos.source ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider border ${
+                                pos.source === "AI"
+                                  ? "bg-neon-green/10 border-neon-green/30 text-neon-green"
+                                  : "bg-gray-500/10 border-gray-500/30 text-gray-400"
+                              }`}>
+                                {pos.source === "AI" ? "AI" : "MANUAL"}
+                              </span>
+                              {pos.comment}
+                            </span>
+                          ) : (
+                            pos.comment || ""
+                          )}
                         </td>
 
                         {/* Actions */}
@@ -372,7 +385,16 @@ export function PositionsTable({
                         {pos.tp ? formatPrice(pos.tp) : "-"}
                       </td>
                       <td className="px-2 py-2.5 text-left text-gray-400 text-xs max-w-[80px] truncate" title={pos.comment}>
-                        {pos.comment || "AI Pending Limit"}
+                        <span className="inline-flex items-center gap-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider border ${
+                            pos.source === "AI"
+                              ? "bg-neon-green/10 border-neon-green/30 text-neon-green"
+                              : "bg-gray-500/10 border-gray-500/30 text-gray-400"
+                          }`}>
+                            {pos.source === "AI" ? "AI" : "MANUAL"}
+                          </span>
+                          {pos.comment || (pos.source === "AI" ? "AI Pending Limit" : "")}
+                        </span>
                       </td>
                       <td className="px-2 py-2.5 text-right">
                         {pos.ticket ? (

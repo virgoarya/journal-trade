@@ -70,6 +70,10 @@ function normalizePosition(p: any): any {
 
    const priceOpen = p.price_order ?? p.price_open ?? p.priceOpen ?? p.open_price ?? 0;
 
+   const comment = String(p.comment ?? "");
+   // Detect order source by comment: AI pipeline uses "AI-<METHOD>-C<conf>" prefix
+   const isAiOrder = /^AI-/i.test(comment.trim()) || /^HUNTER-/i.test(comment.trim());
+
    return {
      ticket: Number(p.order_id ?? p.position_id ?? p.ticket ?? p.id ?? 0),
      symbol: String(p.symbol ?? ""),
@@ -82,7 +86,8 @@ function normalizePosition(p: any): any {
      profit: Number(p.profit ?? 0),
      swap: Number(p.swap ?? p.swaps ?? 0),
      commission: Number(p.commission ?? p.commissions ?? 0),
-     comment: String(p.comment ?? ""),
+     comment,
+     source: isAiOrder ? "AI" : "MANUAL",
      time: timeVal,
      magic: Number(p.magic ?? 0),
      state: String(p.state ?? ""),
@@ -112,6 +117,23 @@ async function callTool(name: string, args: Record<string, any> = {}): Promise<a
     }
   }
   return result;
+}
+
+/** Detect MT5 "trading is not permitted" and return a clear user-facing message. */
+function mcpTradeError(res: any): string | undefined {
+  const text = typeof res === "string"
+    ? res
+    : (res?.message ?? res?.error ?? (typeof res?.text === "string" ? res.text : ""));
+  const s = String(text ?? "");
+  if (/not permitted|not allowed|trade.*disabl|disabled.*trade/i.test(s)) {
+    return "MT5 menolak transaksi (trading not permitted). Aktifkan 'Algo Trading' di toolbar MT5 (ikon robot) atau Tools > Options > Expert Advisors > centang 'Allow algorithmic trading', lalu coba lagi.";
+  }
+  return s || undefined;
+}
+
+function isMcpTradeBlocked(res: any): boolean {
+  const text = typeof res === "string" ? res : JSON.stringify(res ?? "");
+  return /not permitted|not allowed/i.test(text);
 }
 
 // ─── Public RPC Interface (Unified with native MT5 MCP tools) ────────────────
@@ -224,6 +246,9 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
         const res = await callTool("trade_send_market_order", orderArgs);
         silentLogger.info(`[MT5-Streamer] trade_send_market_order res=${JSON.stringify(res)}`);
+        if (isMcpTradeBlocked(res)) {
+          return { success: false, ticket: 0, error: mcpTradeError(res) };
+        }
         const isErr = typeof res === "string" || res?.error || res?.isError;
         return {
           success: !isErr,
@@ -246,6 +271,9 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
         const res = await callTool("trade_send_pending_order", orderArgs);
         silentLogger.info(`[MT5-Streamer] trade_send_pending_order res=${JSON.stringify(res)}`);
+        if (isMcpTradeBlocked(res)) {
+          return { success: false, ticket: 0, error: mcpTradeError(res) };
+        }
         const isErr = typeof res === "string" || res?.error || res?.isError;
         return {
           success: !isErr,
@@ -273,6 +301,9 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           symbol: targetSymbol || "",
           order_ticket: Number(payload.ticket),
         });
+        if (isMcpTradeBlocked(res)) {
+          return { success: false, ticket: payload.ticket, error: mcpTradeError(res) };
+        }
         let errorMsg: string | undefined;
         if (typeof res === "string") {
           errorMsg = res;
@@ -293,10 +324,13 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         symbol: targetSymbol || "",
         position_ticket: Number(payload.ticket),
       });
+      if (isMcpTradeBlocked(res)) {
+        return { success: false, ticket: payload.ticket, error: mcpTradeError(res) };
+      }
       return {
         success: !res?.error && !res?.isError,
         ticket: payload.ticket,
-        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined),
+        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined) || (typeof res === "string" ? mcpTradeError(res) : undefined),
       };
     }
 
@@ -312,6 +346,9 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         symbol: targetSymbol || "",
         order_ticket: Number(payload.ticket),
       });
+      if (isMcpTradeBlocked(res)) {
+        return { success: false, ticket: payload.ticket, error: mcpTradeError(res) };
+      }
       let errorMsg: string | undefined;
       if (typeof res === "string") {
         errorMsg = res;
@@ -333,17 +370,30 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         const found = cachedPositions.find((p) => p.ticket === payload.ticket);
         if (found) targetSymbol = found.symbol;
       }
+      // Check if this ticket is a pending (limit/stop) order - modify it via order_ticket
+      const isPendingOrder = cachedOrders.some((o) => o.ticket === Number(payload.ticket));
       const modifyArgs: any = {
         symbol: targetSymbol || "EURUSD",
-        position_ticket: Number(payload.ticket),
       };
+      if (isPendingOrder) {
+        modifyArgs.order_ticket = Number(payload.ticket);
+      } else {
+        modifyArgs.position_ticket = Number(payload.ticket);
+      }
       if (payload.sl !== undefined) modifyArgs.sl = Number(payload.sl);
       if (payload.tp !== undefined) modifyArgs.tp = Number(payload.tp);
       const res = await callTool("trade_modify_sl_tp", modifyArgs);
+      if (isMcpTradeBlocked(res)) {
+        return {
+          success: false,
+          ticket: payload.ticket,
+          error: mcpTradeError(res),
+        };
+      }
       return {
         success: !res?.error && !res?.isError,
         ticket: payload.ticket,
-        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined),
+        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined) || (typeof res === "string" ? mcpTradeError(res) : undefined),
       };
     }
 
