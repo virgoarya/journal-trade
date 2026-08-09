@@ -42,7 +42,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
 
   const { isConnected: wsConnected } = useMT5Stream(
     // onTick (realtime updates from WebSocket)
-    useCallback((data) => {
+    useCallback((data: { positions?: Position[]; orders?: any[]; accountInfo?: any }) => {
       if (data.positions) {
         setPositions(data.positions);
         setOrders(Array.isArray(data.orders) ? data.orders : []);
@@ -51,7 +51,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       // accountInfo handled in useAccountInfo
     }, []),
     // onStatus (connected/disconnected state from WebSocket)
-    useCallback((data) => {
+    useCallback((data: { connected?: boolean }) => {
       // We rely on this.isConnected for polling logic, which comes from useMT5Connection
       // This is primarily for updating local isConnected state if hook is used standalone
     }, [])

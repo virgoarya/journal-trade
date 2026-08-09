@@ -26,12 +26,12 @@ export function OtaUpdaterModal() {
         });
       } else if (data.status === "downloading") {
         // Update progress during download
-        setUpdateInfo(prev => ({
+        setUpdateInfo(prev => prev ? ({
           ...prev,
-          version: data.version || updateInfo?.version,
+          version: data.version || prev.version,
           progress: data.progress,
           message: data.message || `Mendownload patch... ${data.progress}%`,
-        }));
+        }) : prev);
       } else if (data.status === "error") {
         setIsUpdating(false);
         toast.error(data.message || "Gagal menerapkan update.");

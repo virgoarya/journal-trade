@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type PipelineLog } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";

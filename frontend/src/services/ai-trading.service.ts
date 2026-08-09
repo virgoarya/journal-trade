@@ -122,6 +122,10 @@ export interface PipelineConfig {
       activationDrawdownPct: number;
       riskReductionMultiplier: number;
     };
+    globalDrawdownLimit?: {
+      enabled: boolean;
+      maxDrawdownPct: number;
+    };
   };
 }
 
@@ -150,6 +154,8 @@ export interface PipelineStatus {
   paused: boolean;
   startedAt: string | null;
   config: PipelineConfig | null;
+  /** If pipeline was auto-stopped by a circuit breaker, this is the reason shown to the user */
+  circuitBreakerReason?: string;
   metrics: {
     totalTrades: number;
     winningTrades: number;

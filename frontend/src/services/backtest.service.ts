@@ -94,6 +94,7 @@ export interface BacktestConfig {
     breakEven: boolean;
   };
   maxRiskPerTrade: number;
+  maxDailyRisk?: number;
   maxOpenPositions: number;
   leverage: number;
   signalInterval: number;
@@ -116,6 +117,10 @@ export interface BacktestConfig {
       enabled: boolean;
       activationDrawdownPct: number;
       riskReductionMultiplier: number;
+    };
+    globalDrawdownLimit?: {
+      enabled: boolean;
+      maxDrawdownPct: number;
     };
   };
 }

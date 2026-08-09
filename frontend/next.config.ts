@@ -8,10 +8,7 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["lucide-react"],
   },
   typescript: {
-    ignoreBuildErrors: true, // Skip type checking during build for deployment
-    // !! WARN !! !! WARN !! !! WARN !! !! WARN !! !! WARN !! !! WARN !!
-    // !! Turning off type checking may cause serious bugs in production. !!
-    // !! WARN !! !! WARN !! !! WARN !! !! WARN !! !! WARN !! !! WARN !!
+    ignoreBuildErrors: false, // Type checking aktif: error TS akan gagalkan build, mencegah bug runtime
   },
   async rewrites() {
     return [

@@ -59,8 +59,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const symbolStatsRef = useRef<Map<string, LiveSymbolStat>>(new Map());
   const [liveMethStats, setLiveMethStats] = useState<Array<{ methodology: string; count: number; pnl: number }>>([]);
   const methStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
-  const [liveSessionStats, setLiveSessionStats] = useState<Array<{ session: string; count: number; pnl: number; color: string }>>([]);
-  const sessionStatsRef = useRef<Map<string, { count: number; pnl: number }>>(new Map());
+  const [liveSessionStats, setLiveSessionStats] = useState<Array<{ session: string; count: number; pnl: number; color: string; wins: number; losses: number; winRate: number }>>([]);
+  const sessionStatsRef = useRef<Map<string, { count: number; wins: number; losses: number; pnl: number }>>(new Map());
 
   const getSessionInfo = (timestamp?: number) => {
     if (!timestamp) return { name: "Off-Hours", color: "text-gray-400" };
@@ -231,7 +231,20 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
       if (sessionStatsDirtyRef.current) {
         sessionStatsDirtyRef.current = false;
-        setLiveSessionStats(Array.from(sessionStatsRef.current.values()));
+        const SESS_ORDER_FLUSH = ["Asian", "London", "New York", "Off-Hours"];
+        setLiveSessionStats(
+          Array.from(sessionStatsRef.current.entries())
+            .map(([session, s]) => ({
+              session,
+              count: s.count,
+              wins: s.wins,
+              losses: s.losses,
+              winRate: s.count > 0 ? Math.round((s.wins / s.count) * 100) : 0,
+              pnl: Math.round(s.pnl * 100) / 100,
+              color: session === "Asian" ? "text-yellow-400" : session === "London" ? "text-blue-400" : session === "New York" ? "text-red-400" : "text-gray-400",
+            }))
+            .sort((a, b) => SESS_ORDER_FLUSH.indexOf(a.session) - SESS_ORDER_FLUSH.indexOf(b.session))
+        );
       }
 
       // Flush Active Trades
