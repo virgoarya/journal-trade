@@ -46,7 +46,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       if (data.positions) {
         setPositions(data.positions);
         setOrders(Array.isArray(data.orders) ? data.orders : []);
-        setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (ArrayArray(data.orders) ? data.orders.length : 0));
+        setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (Array.isArray(data.orders) ? data.orders.length : 0));
       }
       // accountInfo handled in useAccountInfo
     }, []),
