@@ -113,7 +113,8 @@ if (fs.existsSync(nestedFrontendDir) && fs.existsSync(path.join(nestedFrontendDi
 }
 
 runRobocopy(actualSourceFrontendDir, targetFrontend);
-runRobocopy(path.join(projectRoot, 'frontend', '.next', 'static'), path.join(targetFrontend, '_next', 'static')); // Next.js static assets
+// Next.js standalone server reads static assets from .next/static relative to server.js
+runRobocopy(path.join(projectRoot, 'frontend', '.next', 'static'), path.join(targetFrontend, '.next', 'static'));
 runRobocopy(path.join(projectRoot, 'frontend', 'public'), path.join(targetFrontend, 'public')); // Public assets
 
 // 7. Verify All Requirements
