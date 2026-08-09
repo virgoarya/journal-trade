@@ -260,19 +260,17 @@ function AITradingPageContent() {
             positions={positions}
           />
 
-            <PositionsTable
-              positions={positions}
-              onClose={closePosition}
-              onModify={modifyPosition}
-              isLoading={positionsLoading}
-              error={positionsError}
-              onRetry={refetchPositions}
-            />
+             <PositionsTable
+               positions={positions}
+               pendingOrders={orders}
+               onClose={closePosition}
+               onModify={modifyPosition}
+               isLoading={positionsLoading}
+               error={positionsError}
+               onRetry={refetchPositions}
+             />
 
-            <PendingOrdersTable
-              orders={orders}
-              onCancel={closePosition}
-            />
+             {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
 
             <LLMConsensusViz
               votes={lastLlmVotes}

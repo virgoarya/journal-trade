@@ -59,8 +59,13 @@ function normalizePosition(p: any): any {
      timeVal = timeStr;
    }
 
-   const pType = String(p.action ?? p.type ?? "").toLowerCase();
-   const normalizedType = (pType === "buy" || pType === "0" || p.type === 0) ? "BUY" : "SELL";
+   const pAction = String(p.action ?? p.type ?? "").toLowerCase();
+   // Preserve pending order types (buy_limit, sell_limit, buy_stop, sell_stop)
+   // Map only market orders (buy/sell) to BUY/SELL
+   const isPending = pAction.includes("limit") || pAction.includes("stop");
+   const normalizedType = isPending
+     ? pAction.toUpperCase()  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
+     : (pAction === "buy" || pAction === "0" || p.type === 0) ? "BUY" : "SELL";
 
    return {
      ticket: Number(p.position_id ?? p.ticket ?? p.id ?? 0),
@@ -126,6 +131,14 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       const normalized = rawPositions.map(normalizePosition);
       cachedPositions = normalized;
       return { positions: normalized };
+    }
+
+    case "mt5_orders_get":
+    case "get_trading_orders": {
+      const res = await callTool("get_trading_orders", payload.symbol ? { symbol: payload.symbol } : {});
+      const rawOrders = Array.isArray(res) ? res : (res?.orders ?? []);
+      const normalized = rawOrders.map(normalizePosition);
+      return normalized;
     }
 
     case "mt5_symbols_get":
