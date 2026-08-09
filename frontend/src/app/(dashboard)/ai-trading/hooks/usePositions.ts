@@ -40,35 +40,41 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
     }
   }, []);
 
-  // Use the WebSocket stream for instant sub-millisecond updates
-  useMT5Stream((data) => {
-    // onTick
-    if (data.positions) {
-      setPositions(data.positions);
-      setOrders(Array.isArray(data.orders) ? data.orders : []);
-      setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (Array.isArray(data.orders) ? data.orders.length : 0));
-    }
-    if (data.accountInfo) {
-      // Account info handled in useAccountInfo or Context
-    }
-  });
+  const { isConnected: wsConnected } = useMT5Stream(
+    // onTick (realtime updates from WebSocket)
+    useCallback((data) => {
+      if (data.positions) {
+        setPositions(data.positions);
+        setOrders(Array.isArray(data.orders) ? data.orders : []);
+        setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (ArrayArray(data.orders) ? data.orders.length : 0));
+      }
+      // accountInfo handled in useAccountInfo
+    }, []),
+    // onStatus (connected/disconnected state from WebSocket)
+    useCallback((data) => {
+      // We rely on this.isConnected for polling logic, which comes from useMT5Connection
+      // This is primarily for updating local isConnected state if hook is used standalone
+    }, [])
+  );
 
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
 
     const tick = async () => {
-      if (!isConnected) {
-        timeoutId = setTimeout(tick, 5000);
+      if (!isConnected) { // Use useMT5Connection's isConnected for polling control
+        timeoutId = setTimeout(tick, 5000); // Retry polling if not connected via MT5Connection
         return;
       }
 
-      // We still fetch once to get initial data, but polling interval is backed off
-      // heavily since WebSocket handles the real-time updates.
-      const isSuccess = await fetchPositions();
+      // Initial fetch or if WebSocket is not connected/has no data yet
+      if (!wsConnected || (wsConnected && positions.length === 0 && orders.length === 0)) {
+         await fetchPositions();
+      }
+      
       if (isMounted) {
-        // Backoff polling to 60 seconds (WebSocket handles real-time)
-        timeoutId = setTimeout(tick, 60000);
+        // Backoff polling heavily since WebSocket handles real-time updates
+        timeoutId = setTimeout(tick, wsConnected ? 60000 : pollInterval); 
       }
     };
 
@@ -80,7 +86,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [fetchPositions, isConnected]);
+  }, [fetchPositions, isConnected, wsConnected, pollInterval, positions.length, orders.length]); // Add wsConnected and data lengths
 
   const closePosition = useCallback(
     async (ticket: number) => {

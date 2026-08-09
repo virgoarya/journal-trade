@@ -2,16 +2,72 @@ import MetaTrader5 as mt5
 import sys
 import json
 import time
+import signal
+import multiprocessing
+import queue
+from typing import Any, Callable, Tuple
 
-def respond(data):
-    print(json.dumps(data, default=str))
-    mt5.shutdown()
-    sys.exit(0)
+def run_with_timeout(func, args, kwargs, timeout=30):
+    """Run a function in a separate process with timeout."""
+    ctx = multiprocessing.get_context('spawn')
+    result_queue = multiprocessing.Queue()
+    
+    def worker(q, func, args, kwargs):
+        try:
+            result = func(*args, **kwargs)
+            q.put(('success', result))
+        except Exception as e:
+            q.put(('error', str(e)))
+    
+    process = multiprocessing.Process(target=worker, args=(result_queue, func, args, kwargs))
+    process.start()
+    process.join(timeout)
+    
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=2)
+        return {'error': f'Operation timed out after {timeout} seconds'}
+    
+    try:
+        status, result = result_queue.get_nowait()
+        if status == 'success':
+            return result
+        else:
+            return {'error': result}
+    except queue.Empty:
+        return {'error': 'No result returned from worker process'}
 
-def fail(msg):
-    print(json.dumps({"error": msg}))
-    mt5.shutdown()
-    sys.exit(1)
+# Timeout constants
+MT5_INIT_TIMEOUT = 30  # seconds
+MT5_ORDER_TIMEOUT = 10  # seconds
+MT5_QUERY_TIMEOUT = 15  # seconds
+
+def with_timeout(func: Callable, timeout: int = MT5_QUERY_TIMEOUT):
+    """Decorator to run MT5 calls with timeout."""
+    def wrapper(*args, **kwargs):
+        result = run_with_timeout(func, (), kwargs, timeout)
+        if isinstance(result, dict) and 'error' in result:
+            raise TimeoutError(result['error'])
+        return result
+    return wrapper
+
+def with_init_timeout(func: Callable, timeout: int = MT5_INIT_TIMEOUT):
+    """Decorator for MT5 initialization with longer timeout."""
+    def wrapper(*args, **kwargs):
+        result = run_with_timeout(func, (), {}, timeout)
+        if isinstance(result, dict) and 'error' in result:
+            raise TimeoutError(result['error'])
+        return result
+    return wrapper
+
+def with_order_timeout(func: Callable, timeout: int = MT5_ORDER_TIMEOUT):
+    """Decorator for order operations with longer timeout."""
+    def wrapper(*args, **kwargs):
+        result = run_with_timeout(func, (), kwargs, timeout)
+        if isinstance(result, dict) and 'error' in result:
+            raise TimeoutError(result['error'])
+        return result
+    return wrapper
 
 def pos_to_dict(p):
     return {
@@ -69,6 +125,10 @@ def ensure_mt5():
     return False
 
 
+@with_timeout
+def mt5_symbol_info_tick(symbol):
+    return mt5.symbol_info_tick(symbol)
+
 def main():
     if not ensure_mt5():
         code = mt5.last_error()
@@ -79,7 +139,7 @@ def main():
 
     if action == "orders_get":
         symbol = payload.get("symbol")
-        orders = mt5.orders_get(symbol=symbol) if symbol else mt5.orders_get()
+        orders = run_with_timeout(mt5.orders_get, (), {"symbol": symbol}) if symbol else run_with_timeout(mt5.orders_get, (), {})
         if orders is None:
             code = mt5.last_error()
             fail(f"orders_get failed: {code}")
@@ -87,7 +147,7 @@ def main():
 
     elif action == "positions_get":
         symbol = payload.get("symbol")
-        positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+        positions = run_with_timeout(mt5.positions_get, (), {"symbol": symbol}) if symbol else run_with_timeout(mt5.positions_get, (), {})
         if positions is None:
             code = mt5.last_error()
             fail(f"positions_get failed: {code}")
@@ -101,7 +161,7 @@ def main():
             "action": mt5.TRADE_ACTION_REMOVE,
             "order": ticket,
         }
-        result = mt5.order_send(req)
+        result = run_with_timeout(mt5.order_send, (), {"request": req}, MT5_ORDER_TIMEOUT)
         if result is None:
             fail(f"order_send(REMOVE) returned None: {mt5.last_error()}")
         respond({
@@ -114,12 +174,13 @@ def main():
         ticket = int(payload.get("ticket", 0))
         if ticket <= 0:
             fail("position_close requires ticket")
-        position = mt5.positions_get(ticket=ticket)
-        if not position:
+        position_result = run_with_timeout(mt5.positions_get, (), {"ticket": ticket})
+        if not position_result:
             fail(f"position not found ticket={ticket}")
-        pos = position[0]
+        pos = position_result[0]
         close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
-        price = mt5.symbol_info_tick(pos.symbol).bid if close_type == mt5.ORDER_TYPE_SELL else mt5.symbol_info_tick(pos.symbol).ask
+        symbol_tick_result = run_with_timeout(mt5_symbol_info_tick, (), {"symbol": pos.symbol})
+        price = symbol_tick_result.bid if close_type == mt5.ORDER_TYPE_SELL else symbol_tick_result.ask
         req = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": pos.symbol,
@@ -133,7 +194,7 @@ def main():
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        result = mt5.order_send(req)
+        result = run_with_timeout(mt5.order_send, (), {"request": req}, MT5_ORDER_TIMEOUT)
         if result is None:
             fail(f"order_send(CLOSE) returned None: {mt5.last_error()}")
         respond({
@@ -143,10 +204,10 @@ def main():
         })
 
     elif action == "position_modify":
-        p = mt5.positions_get(ticket=int(payload.get("ticket", 0)))
-        if not p:
+        position_result = run_with_timeout(mt5.positions_get, (), {"ticket": int(payload.get("ticket", 0))})
+        if not position_result:
             fail("position not found")
-        pos = p[0]
+        pos = position_result[0]
         req = {
             "action": mt5.TRADE_ACTION_SLTP,
             "symbol": pos.symbol,
@@ -156,7 +217,7 @@ def main():
             req["sl"] = float(payload["sl"])
         if "tp" in payload and payload.get("tp") is not None:
             req["tp"] = float(payload["tp"])
-        result = mt5.order_send(req)
+        result = run_with_timeout(mt5.order_send, (), {"request": req}, MT5_ORDER_TIMEOUT)
         if result is None:
             fail(f"order_send(SLTP) returned None: {mt5.last_error()}")
         respond({
@@ -167,10 +228,10 @@ def main():
 
     elif action == "pending_modify":
         ticket = int(payload.get("ticket", 0))
-        orders = mt5.orders_get(ticket=ticket)
-        if not orders:
+        orders_result = run_with_timeout(mt5.orders_get, (), {"ticket": ticket})
+        if not orders_result:
             fail(f"order not found ticket={ticket}")
-        od = orders[0]
+        od = orders_result[0]
         req = {
             "action": mt5.TRADE_ACTION_MODIFY,
             "order": od.ticket,
@@ -183,7 +244,7 @@ def main():
             req["sl"] = float(payload["sl"])
         if "tp" in payload and payload.get("tp") is not None:
             req["tp"] = float(payload["tp"])
-        result = mt5.order_send(req)
+        result = run_with_timeout(mt5.order_send, (), {"request": req}, MT5_ORDER_TIMEOUT)
         if result is None:
             fail(f"order_send(MODIFY) returned None: {mt5.last_error()}")
         respond({
@@ -194,11 +255,11 @@ def main():
 
     elif action == "order_send":
         symbol = payload.get("symbol", "")
-        symbol_info = mt5.symbol_info(symbol)
-        if symbol_info is None:
+        symbol_info_result = run_with_timeout(mt5.symbol_info, (), {"symbol": symbol})
+        if symbol_info_result is None:
             fail(f"symbol not found: {symbol}")
         # Pick a filling mode supported by this symbol
-        filling_flags = symbol_info.filling_mode
+        filling_flags = symbol_info_result.filling_mode
         # SYMBOL_FILLING_FOK=1, SYMBOL_FILLING_IOC=2
         if filling_flags & 1:  # FOK supported
             filling = mt5.ORDER_FILLING_FOK
@@ -218,10 +279,10 @@ def main():
         t = payload.get("type", "BUY").upper()
         if t == "BUY":
             req["type"] = mt5.ORDER_TYPE_BUY
-            req["price"] = float(mt5.symbol_info_tick(req["symbol"]).ask)
+            req["price"] = float(mt5_symbol_info_tick(req["symbol"]).ask)
         elif t == "SELL":
             req["type"] = mt5.ORDER_TYPE_SELL
-            req["price"] = float(mt5.symbol_info_tick(req["symbol"]).bid)
+            req["price"] = float(mt5_symbol_info_tick(req["symbol"]).bid)
         elif t == "BUY_LIMIT":
             req["type"] = mt5.ORDER_TYPE_BUY_LIMIT
             req["price"] = float(payload["price"])
@@ -240,7 +301,7 @@ def main():
         if "tp" in payload and payload.get("tp") is not None:
             req["tp"] = float(payload["tp"])
 
-        result = mt5.order_send(req)
+        result = run_with_timeout(mt5.order_send, (), {"request": req}, MT5_ORDER_TIMEOUT)
         if result is None:
             fail(f"order_send returned None: {mt5.last_error()}")
         respond({

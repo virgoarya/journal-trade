@@ -1,57 +1,63 @@
 "use client";
 
-import React, { type ReactNode } from "react";
+import React, { Component } from "react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
 
-interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  onReset?: () => void;
 }
 
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
 }
 
-/**
- * ErrorBoundary — catches render errors in child components (especially R3F / Three.js)
- * and displays a graceful fallback instead of crashing the entire page.
- */
-export class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
   }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
 
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
       }
+
       return (
-        <div className="glass p-6 flex flex-col items-center justify-center gap-3 min-h-[200px]">
-          <div className="w-12 h-12 rounded-full border-2 border-neon-red/50 flex items-center justify-center bg-neon-red/10">
-            <span className="text-neon-red text-lg">⚠</span>
+        <div className="glass p-6 rounded-lg border border-red-500/30 bg-red-500/5">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-300 font-medium">Something went wrong</p>
+              <p className="text-red-400/80 text-sm mt-1">{this.state.error?.message || "An unexpected error occurred"}</p>
+            </div>
           </div>
-          <p className="text-sm text-text-muted font-mono">
-            3D Visualization failed to load
-          </p>
           <button
-            onClick={() => this.setState({ hasError: false })}
-            className="px-3 py-1.5 text-xs font-mono text-accent-gold border border-accent-gold/30 rounded hover:bg-accent-gold/10 transition"
+            onClick={this.handleReset}
+            className="mt-4 px-4 py-2 text-sm font-medium text-white bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg transition-colors"
           >
-            Retry
+            Try Again
           </button>
         </div>
       );
     }
+
     return this.props.children;
   }
 }

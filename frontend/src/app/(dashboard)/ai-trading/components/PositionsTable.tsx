@@ -4,6 +4,7 @@ import { useState } from "react";
 import { type Position } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   XCircle,
   Pencil,
@@ -101,15 +102,29 @@ export function PositionsTable({
     return <SkeletonLoader type="table" count={5} />;
   }
 
-  if (error) {
+if (error) {
     return (
-      <EmptyState
-        type="error"
-        title="Error Loading Positions"
-        description={error}
-        actionText="Retry"
-        onAction={onRetry}
-      />
+      <ErrorBoundary
+        fallback={
+          <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
+            <span>⚠ Error loading positions</span>
+            {onRetry && (
+              <button onClick={onRetry} className="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition text-xs">
+                <RefreshCw className="w-3.5 h-3.5" /> Retry
+              </button>
+            )}
+          </div>
+        }
+        onReset={onRetry}
+      >
+        <EmptyState
+          type="error"
+          title="Error Loading Positions"
+          description={error}
+          actionText="Retry"
+          onAction={onRetry}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -118,7 +133,19 @@ export function PositionsTable({
   }
 
   return (
-    <>
+    <ErrorBoundary
+      fallback={
+        <div className="px-4 py-3 text-center text-sm text-red-400 bg-red-500/5 border-b border-red-500/10 flex items-center justify-center gap-2">
+          <span>⚠ Error rendering positions table</span>
+          {onRetry && (
+            <button onClick={onRetry} className="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition text-xs">
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </button>
+          )}
+        </div>
+      }
+      onReset={onRetry}
+    >
       <div className="space-y-4">
         {/* ── OPEN POSITIONS CARD ── */}
         {marketPositions.length > 0 && (
@@ -420,6 +447,6 @@ export function PositionsTable({
           </div>
         )}
       </div>
-    </>
+    </ErrorBoundary>
   );
 }

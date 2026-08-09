@@ -102,6 +102,37 @@ export interface PipelineLog {
   data?: any;
 }
 
+interface ActivePipeline {
+  config: PipelineConfig;
+  intervals: Map<string, NodeJS.Timeout>;
+  trailingInterval: NodeJS.Timeout | null;
+  logs: PipelineLog[];
+  lastSignal: TradingSignal | null;
+  lastAnalysis: MultiStrategySymbolAnalysis | null;
+  lastError: string | null;
+  lastAnalyzedCandleTimes: Map<string, number>;
+  waitingReconnect: boolean;
+  paused: boolean;
+  mt5CircuitOpen: boolean;
+  llmCircuitOpen: boolean;
+  llmCircuitStates: Record<string, string>;
+  pendingOrders: Map<number, { symbol: string; direction: string; entry: number; tp: number; sl: number; placedAt: number; expiryAt: number }>;
+  startOfDayEquity: number;
+  currentDayStr: string;
+  peakEquity: number;
+  initialBalance: number;
+  dailyTradingBlocked: boolean;
+  currentDrawdownPct: number;
+  currentGrowthPct: number;
+  currentRiskMultiplier: number;
+  lastLlmSignalKey: string | null;
+  lastLlmVerdictTime: number;
+  allAnalyses: MultiStrategySymbolAnalysis[];
+  busySymbols: Set<string>;
+  running: boolean;
+  circuitBreakerReason?: string;
+}
+
 const DEFAULT_CONFIG: PipelineConfig = {
   symbols: [],
   timeframe: "M15",
@@ -174,6 +205,7 @@ class TradingPipelineService {
       allAnalyses: MultiStrategySymbolAnalysis[];
       /** Per-symbol lock to prevent race condition: signals arriving between gate check and order placement */
       busySymbols: Set<string>;
+      running: boolean;
     }
   > = new Map();
 
@@ -265,6 +297,7 @@ const pipeline = {
       lastLlmVerdictTime: 0,
       allAnalyses: [],
       busySymbols: new Set<string>(),
+      running: false,
     };
 
     this.activePipelines.set(userId, pipeline);
@@ -495,9 +528,9 @@ return {
          allAnalyses: [],
          lastError: null,
          circuitBreakerReason,
-         busySymbols: new Set<string>(),
-       };
-    }
+busySymbols: new Set<string>(),
+    };
+  }
 
     // Query real metrics dari DB + MT5
     let openPositions = 0;
@@ -731,7 +764,7 @@ return {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
 
-    let currentSymbol: string | undefined; // Declared here
+    let currentSymbol: string | undefined = symbol; // Initialize with the symbol parameter
 
     try {
       // Handle MT5 disconnections by auto-pausing without killing the timer
@@ -1433,6 +1466,7 @@ return {
         silentLogger.error(`[PIPELINE] Error for ${userId}: ${error.message}`);
       } finally {
         if (currentSymbol) pipeline.busySymbols.delete(currentSymbol);
+        pipeline.running = false;
       }
     }
   private marketClosedCache = new Map<string, number>();
@@ -1440,6 +1474,12 @@ return {
   private async managePositions(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
+
+    // ── Concurrency Lock: Skip if pipelineLoop is processing orders for any symbol ──
+    if (pipeline.busySymbols.size > 0) {
+      silentLogger.debug(`[TRAILING] Skipped managePositions due to busySymbols: ${Array.from(pipeline.busySymbols).join(", ")}`);
+      return;
+    }
 
     // ── Pending Order Expiry Management ──────────────────────────────
     if (pipeline.pendingOrders.size > 0) {
