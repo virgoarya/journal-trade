@@ -80,6 +80,9 @@ fs.copyFileSync(path.join(projectRoot, 'server', '.env'), path.join(targetServer
 if (fs.existsSync(path.join(projectRoot, 'server', 'fetch_rates.py'))) {
     fs.copyFileSync(path.join(projectRoot, 'server', 'fetch_rates.py'), path.join(targetServer, 'fetch_rates.py'));
 }
+if (fs.existsSync(path.join(projectRoot, 'server', 'trade_api.py'))) {
+    fs.copyFileSync(path.join(projectRoot, 'server', 'trade_api.py'), path.join(targetServer, 'trade_api.py'));
+}
 runRobocopy(path.join(projectRoot, 'server', 'dist'), path.join(targetServer, 'dist'));
 
     // Use regular install instead of production to ensure devDependencies like 9router CLI are available
