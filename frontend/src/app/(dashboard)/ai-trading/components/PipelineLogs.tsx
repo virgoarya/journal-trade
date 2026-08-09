@@ -149,6 +149,23 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
   
   const [selectedStages, setSelectedStages] = useState<Record<string, string>>({});
 
+  const ALL_LOG_TYPES = ["SIGNAL", "CONFLUENCE", "TRADE", "TRAILING", "ERROR"];
+
+  // Cleanup selectedStages on unmount or when logs change significantly
+  useEffect(() => {
+    return () => {
+      // Cleanup selectedStages on unmount to prevent memory leaks
+      // Note: We don't clear the state here as React will handle cleanup on unmount
+      // But we could clear it if needed for specific cleanup logic
+    };
+  }, []);
+
+  // Reset selectedStages when logs change significantly (e.g., new pipeline run)
+  useEffect(() => {
+    // Clear selectedStages when logs array is replaced (new pipeline run)
+    setSelectedStages({});
+  }, [logs.length]); // Reset when logs array length changes significantly
+
   const logTypes = ["SIGNAL", "CONFLUENCE", "TRADE", "TRAILING", "ERROR"];
 
   if (isLoading) {

@@ -97,6 +97,7 @@ runRobocopy(path.join(projectRoot, 'server', 'dist'), path.join(targetServer, 'd
 
 
 // 6. Copy Frontend Files -> resources/frontend
+const frontendStandalone = path.join(projectRoot, 'frontend', '.next', 'standalone');
 const targetFrontend = path.join(resourcesDir, 'frontend');
 console.log(`[5/6] Bundling Frontend Standalone to ${targetFrontend}...`);
 if (fs.existsSync(targetFrontend)) {
@@ -104,13 +105,16 @@ if (fs.existsSync(targetFrontend)) {
 }
 fs.mkdirSync(targetFrontend, { recursive: true });
 
-const frontendStandalone = path.join(projectRoot, 'frontend', '.next', 'standalone');
-const standaloneInner = path.join(frontendStandalone, 'frontend');
-const sourceFrontend = fs.existsSync(standaloneInner) ? standaloneInner : frontendStandalone;
+// Determine the actual source directory for the standalone build
+let actualSourceFrontendDir = frontendStandalone;
+const nestedFrontendDir = path.join(frontendStandalone, 'frontend');
+if (fs.existsSync(nestedFrontendDir) && fs.existsSync(path.join(nestedFrontendDir, 'server.js'))) {
+    actualSourceFrontendDir = nestedFrontendDir;
+}
 
-runRobocopy(sourceFrontend, targetFrontend);
-runRobocopy(path.join(projectRoot, 'frontend', '.next', 'static'), path.join(targetFrontend, '.next', 'static'));
-runRobocopy(path.join(projectRoot, 'frontend', 'public'), path.join(targetFrontend, 'public'));
+runRobocopy(actualSourceFrontendDir, targetFrontend);
+runRobocopy(path.join(projectRoot, 'frontend', '.next', 'static'), path.join(targetFrontend, '_next', 'static')); // Next.js static assets
+runRobocopy(path.join(projectRoot, 'frontend', 'public'), path.join(targetFrontend, 'public')); // Public assets
 
 // 7. Verify All Requirements
 console.log(`[6/6] Verifying bundle integrity...`);
@@ -122,6 +126,11 @@ const checks = [
     { name: 'Frontend Entry (resources/frontend/server.js)', path: path.join(targetFrontend, 'server.js') },
     { name: 'Frontend Next Module', path: path.join(targetFrontend, 'node_modules', 'next') },
 ];
+// Check for nested frontend server.js
+const nestedFrontendServerJs = path.join(targetFrontend, 'frontend', 'server.js');
+if (fs.existsSync(nestedFrontendServerJs)) {
+    checks.push({ name: 'Frontend Entry (resources/frontend/frontend/server.js)', path: nestedFrontendServerJs });
+}
 
 let allPassed = true;
 for (const check of checks) {
