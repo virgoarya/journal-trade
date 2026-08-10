@@ -47,6 +47,9 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
         setPositions(data.positions);
         setOrders(Array.isArray(data.orders) ? data.orders : []);
         setTotal((Array.isArray(data.positions) ? data.positions.length : 0) + (Array.isArray(data.orders) ? data.orders.length : 0));
+        // Data real-time sudah sampai dari WebSocket — loading selesai
+        setIsLoading(false);
+        setFetchError(null);
       }
       // accountInfo handled in useAccountInfo
     }, []),
@@ -56,6 +59,8 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       // This is primarily for updating local isConnected state if hook is used standalone
     }, [])
   );
+
+  const isInitialLoadingRef = useRef(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -67,8 +72,8 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
         return;
       }
 
-      // Initial fetch or if WebSocket is not connected/has no data yet
-      if (!wsConnected || (wsConnected && positions.length === 0 && orders.length === 0)) {
+      // Fetch awal hanya jika data masih kosong (belum dapat dari WebSocket)
+      if (positions.length === 0 && orders.length === 0) {
          await fetchPositions();
       }
       
@@ -78,8 +83,12 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       }
     };
 
-    setIsLoading(true);
-    setFetchError(null);
+    // Hanya tampilkan skeleton saat load awal, bukan setiap re-render
+    if (isInitialLoadingRef.current) {
+      setIsLoading(true);
+      setFetchError(null);
+      isInitialLoadingRef.current = false;
+    }
     tick();
 
     return () => {
