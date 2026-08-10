@@ -349,3 +349,10 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 **Root Cause**: `rm -rf node_modules` + install ulang mengubah versi (mongoose, mongodb, better-auth, ai SDK, @modelcontextprotocol) → type error baru.
 **Solusi**: `noImplicitAny: false` di tsconfig, cast constructor (`const ObjectIdCtor: any = mongoose.Types.ObjectId`), `as any` untuk opsi baru, tipe eksplisit untuk array kosong (hindari `never[]`).
 **Hindari**: Setelah reinstall besar, selalu jalankan `npx tsc` dan fix error sebelum build. npm install Windows butuh timeout 900000.
+
+
+### [20260810] Skeleton Stuck di PositionsTable — Infinite Loop useEffect
+**Area**: Frontend / React Hooks
+**Root Cause**: `usePositions.ts` menaruh `positions.length` & `orders.length` di dependency `useEffect`. Setiap WebSocket kirim update posisi → length berubah → useEffect re-run → `setIsLoading(true)` → tapi karena data sudah ada, `fetchPositions()` tidak dipanggil → `setIsLoading(false)` tidak pernah jalan → skeleton stuck selamanya.
+**Solusi**: (1) `isInitialLoadingRef` — hanya set loading saat mount pertama. (2) WebSocket onTick set `setIsLoading(false)` saat data real-time sampai. (3) Fetch hanya jika data kosong.
+**Hindari**: Jangan gabungkan data.length di useEffect dependency dengan flag isLoading yang dikontrol terpisah. WebSocket = sumber data utama; fetch HTTP hanya fallback awal.
