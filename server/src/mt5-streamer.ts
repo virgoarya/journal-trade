@@ -140,7 +140,11 @@ function isMcpTradeBlocked(res: any): boolean {
 async function callPythonTrade(action: string, payload: any = {}): Promise<any> {
   try {
     const scriptPath = path.join(__dirname, "..", "trade_api.py");
-    const { stdout } = await execFileAsync("python", [scriptPath, action, JSON.stringify(payload)]);
+    const { stdout } = await execFileAsync("python", [scriptPath, action, JSON.stringify(payload)], {
+      timeout: 30000, // 30s timeout — Python MT5 call bisa hang jika terminal freeze
+      killSignal: "SIGKILL",
+      maxBuffer: 1024 * 1024 * 8,
+    });
     return JSON.parse(stdout);
   } catch (err: any) {
     silentLogger.error(`[MT5-Streamer] Python trade_api (${action}) failed: ${err.message}`);
