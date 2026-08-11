@@ -508,6 +508,14 @@ class AITradingService {
     return res;
   }
 
+  async resetPerformance() {
+    const res = await apiClient.post<{ deleted: number; message: string }>(
+      "/api/v1/ai-trading/reset-performance",
+      {},
+    );
+    return res;
+  }
+
   // ── Auto Backtest & Skill ──────────────────────────────────────────
   async autoBacktest() {
     const res = await apiClient.post<AutoBacktestSummary>(

@@ -3,7 +3,7 @@
 import { 
   Settings as SettingsIcon, 
   User, Bell, Palette, Shield, Database, Globe, Key, Save, Moon, Sun, 
-  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus, Terminal
+  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus, Terminal, RotateCcw
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
@@ -11,6 +11,7 @@ import { tradingAccountService, TradingAccount } from "@/services/trading-accoun
 import { settingsService, UserSettingsData } from "@/services/settings.service";
 import { mt5Service, MT5Status } from "@/services/mt5.service";
 import { apiClient } from "@/lib/api-client";
+import { aiTradingService } from "@/services/ai-trading.service";
 
 interface SettingsSection {
   id: string;
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [activeAccount, setActiveAccount] = useState<TradingAccount | null>(null);
   const [activeSection, setActiveSection] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
+  const [aiResetLoading, setAiResetLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]);
@@ -336,6 +338,26 @@ export default function SettingsPage() {
       alert("Network error occurred.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetAiPerformance = async () => {
+    if (!confirm("PERINGATAN: Seluruh riwayat AI Trade Histories dan statistik performance AI Trading Anda akan dihapus permanen. Lanjutkan?")) {
+      return;
+    }
+
+    setAiResetLoading(true);
+    try {
+      const response = await aiTradingService.resetPerformance();
+      if (response.success) {
+        alert(`AI performance berhasil di-reset. ${response.data?.deleted ?? 0} trade logs dihapus.`);
+      } else {
+        alert("Gagal reset: " + response.error);
+      }
+    } catch (error) {
+      alert("Network error occurred.");
+    } finally {
+      setAiResetLoading(false);
     }
   };
 
@@ -1128,23 +1150,41 @@ export default function SettingsPage() {
                    </div>
 
                    <div className="pt-8 border-t border-data-loss/10">
-                      <h4 className="text-[11px] font-bold text-data-loss uppercase tracking-widest mb-4">Danger Zone</h4>
-                      <div className="p-5 bg-data-loss/5 border border-data-loss/20 rounded-2xl">
-                         <div className="flex items-start space-x-4 mb-6">
-                            <Trash2 className="w-6 h-6 text-data-loss shrink-0" />
-                            <div>
-                               <h5 className="text-[13px] font-bold text-data-loss uppercase">Delete All Data</h5>
-                               <p className="text-[11px] text-text-secondary mt-1">This action will permanently delete all your trades, playbook, and statistics from our servers.</p>
-                            </div>
-                         </div>
-                         <button 
-                           onClick={handleDeleteAllData}
-                           disabled={isLoading}
-                           className="w-full py-4 bg-data-loss/10 border border-data-loss/30 text-data-loss rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-data-loss hover:text-white transition-all active:scale-95"
-                         >
-                            {isLoading ? "Deleting..." : "Permanently Delete All Trades"}
-                         </button>
-                      </div>
+                       <h4 className="text-[11px] font-bold text-data-loss uppercase tracking-widest mb-4">Danger Zone</h4>
+                       <div className="space-y-4">
+                       <div className="p-5 bg-data-loss/5 border border-data-loss/20 rounded-2xl">
+                          <div className="flex items-start space-x-4 mb-6">
+                             <RotateCcw className="w-6 h-6 text-data-loss shrink-0" />
+                             <div>
+                                <h5 className="text-[13px] font-bold text-data-loss uppercase">Reset AI Trading Performance</h5>
+                                <p className="text-[11px] text-text-secondary mt-1">Menghapus seluruh AI Trade Histories, statistik P&L, dan performance pipeline. Sinyal & pipeline AI tetap berjalan normal.</p>
+                             </div>
+                          </div>
+                          <button 
+                            onClick={handleResetAiPerformance}
+                            disabled={aiResetLoading}
+                            className="w-full py-4 bg-data-loss/10 border border-data-loss/30 text-data-loss rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-data-loss hover:text-white transition-all active:scale-95"
+                          >
+                             {aiResetLoading ? "Resetting..." : "Reset AI Performance & Histories"}
+                          </button>
+                       </div>
+                       <div className="p-5 bg-data-loss/5 border border-data-loss/20 rounded-2xl">
+                          <div className="flex items-start space-x-4 mb-6">
+                             <Trash2 className="w-6 h-6 text-data-loss shrink-0" />
+                             <div>
+                                <h5 className="text-[13px] font-bold text-data-loss uppercase">Delete All Data</h5>
+                                <p className="text-[11px] text-text-secondary mt-1">This action will permanently delete all your trades, playbook, and statistics from our servers.</p>
+                             </div>
+                          </div>
+                          <button 
+                            onClick={handleDeleteAllData}
+                            disabled={isLoading}
+                            className="w-full py-4 bg-data-loss/10 border border-data-loss/30 text-data-loss rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-data-loss hover:text-white transition-all active:scale-95"
+                          >
+                             {isLoading ? "Deleting..." : "Permanently Delete All Trades"}
+                          </button>
+                       </div>
+                       </div>
                    </div>
                 </div>
               </div>
