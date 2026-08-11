@@ -50,9 +50,9 @@ class MSNRStrategy {
     const htfAtr = atrService.calculate(htfCandles) || (Math.abs(htfCandles[htfCandles.length - 1].high - htfCandles[htfCandles.length - 1].low));
 
     // ─── STEP 1 & 2: MSNR Dealing Range & Inducement ──────────────
-    // Alchemist: monitor "at least" the recent session, not just the last 2 bars.
-    // A tap that happened 3-6 hours ago is still a live storyline setup.
-    const recentHtfCandles = htfCandles.slice(-6);
+    // Alchemist storyline stays live through the trading day — a tap that
+    // happened hours ago is still a live setup (not just the last 6 bars).
+    const recentHtfCandles = htfCandles.slice(-12);
     const activeHtfSetups: { direction: "BUY" | "SELL", type: "QML_BULLISH" | "QML_BEARISH" | "RBS" | "SBR", keyLevel: number, sweepLevel: number }[] = [];
 
     // Tap check — MSNR ignores wick noise: the sweep must poke the level by a
@@ -64,38 +64,24 @@ class MSNRStrategy {
       }
       return c.high >= level + htfAtr * 0.1 && c.close < level;
     };
-
-    const bullishSetup = this.detectMSNRSetup(htfStr, "BULL");
-    if (bullishSetup) {
-      const { qmlLevel, rbsLevel, inducement } = bullishSetup;
-      // Alchemist: enter from whichever key level price taps first — QML or RBS,
-      // NOT a rigid QML-vs-RBS binary switch. Both are valid storylines.
-      for (const level of [
-        { type: "QML_BULLISH" as const, price: qmlLevel },
-        { type: "RBS" as const, price: rbsLevel },
-      ]) {
-        if (level.price === null || level.price === undefined) continue;
-        const tapped = recentHtfCandles.some(c => checkLevelTap(c, level.price as number, "BUY"));
-        if (tapped) {
-          activeHtfSetups.push({ direction: "BUY", type: level.type, keyLevel: level.price as number, sweepLevel: inducement.price });
+    const collectTapped = (setups: ReturnType<typeof this.detectMSNRSetups>, dir: "BUY" | "SELL") => {
+      for (const setup of setups) {
+        const { qmlLevel, rbsLevel } = setup;
+        const lvlOpts = dir === "BUY"
+          ? [{ type: "QML_BULLISH" as const, price: qmlLevel }, { type: "RBS" as const, price: rbsLevel }]
+          : [{ type: "QML_BEARISH" as const, price: qmlLevel }, { type: "SBR" as const, price: rbsLevel }];
+        for (const level of lvlOpts) {
+          if (level.price === null || level.price === undefined) continue;
+          const tapped = recentHtfCandles.some(c => checkLevelTap(c, level.price as number, dir));
+          if (tapped) {
+            activeHtfSetups.push({ direction: dir, type: level.type, keyLevel: level.price as number, sweepLevel: setup.inducement.price });
+          }
         }
       }
-    }
+    };
 
-    const bearishSetup = this.detectMSNRSetup(htfStr, "BEAR");
-    if (bearishSetup) {
-      const { qmlLevel, sbrLevel, inducement } = bearishSetup;
-      for (const level of [
-        { type: "QML_BEARISH" as const, price: qmlLevel },
-        { type: "SBR" as const, price: sbrLevel },
-      ]) {
-        if (level.price === null || level.price === undefined) continue;
-        const tapped = recentHtfCandles.some(c => checkLevelTap(c, level.price as number, "SELL"));
-        if (tapped) {
-          activeHtfSetups.push({ direction: "SELL", type: level.type, keyLevel: level.price as number, sweepLevel: inducement.price });
-        }
-      }
-    }
+    collectTapped(this.detectMSNRSetups(htfStr, "BULL"), "BUY");
+    collectTapped(this.detectMSNRSetups(htfStr, "BEAR"), "SELL");
 
     // Deduplicate setups
     const uniqueSetups = activeHtfSetups.filter((v, i, a) => a.findIndex(t => (t.direction === v.direction && t.type === v.type && t.keyLevel === v.keyLevel)) === i);
@@ -173,13 +159,16 @@ class MSNRStrategy {
         });
         const bestOB = sortedOBs[0];
 
-        // OB must still be AHEAD of price (limit not already passed):
-        // BUY → price above OB top; SELL → price below OB bottom.
-        if (isBuy && lastLtf.close <= bestOB.top) continue;
-        if (!isBuy && lastLtf.close >= bestOB.bottom) continue;
-
-        // ─── STEP 5: ENTRY (PENDING LIMIT at 50% of OB body = mean threshold) ────
+        // Entry is a PENDING LIMIT — price may still be above the OB and pull
+        // back to it. Only skip when the entry is unreachably far from price
+        // (> 3 x ATR), otherwise we reject valid setups mid-pullback.
         const entryPrice = (bestOB.top + bestOB.bottom) / 2;
+        const entryGap = isBuy
+          ? lastLtf.close - entryPrice
+          : entryPrice - lastLtf.close;
+        if (entryGap > ltfAtr * 3) continue;
+
+        // ─── STEP 5: ENTRY (PENDING LIMIT at 50% of OB body = mean threshold) ──
 
         // Swing-protected SL: nearest swing low/high below/above OB, with a
         // minimum 0.5×ATR buffer so R:R stays sane and SL never == entry.
@@ -286,93 +275,89 @@ class MSNRStrategy {
       return sig;
   }
 
-  private detectMSNRSetup(htfStr: MarketStructure, direction: "BULL" | "BEAR") {
+  // Detect up to the last 3 structural patterns per direction (not just the
+  // newest swing) — a QML/RBS storyline stays valid until it is tapped, so older
+  // structures must keep producing setups while they remain untouched.
+  private detectMSNRSetups(htfStr: MarketStructure, direction: "BULL" | "BEAR"): Array<{
+    drHigh: import("./market-structure.service").SwingHigh | import("./market-structure.service").SwingLow;
+    drLow: import("./market-structure.service").SwingLow | import("./market-structure.service").SwingHigh;
+    inducement: import("./market-structure.service").SwingLow | import("./market-structure.service").SwingHigh;
+    qmlLevel: number | null;
+    rbsLevel: number | null;
+    sbrLevel: number | null;
+  }> {
     const { swingHighs, swingLows } = htfStr;
-    if (swingHighs.length < 3 || swingLows.length < 3) return null;
+    const out: ReturnType<typeof this.detectMSNRSetups> = [];
+    if (swingHighs.length < 3 || swingLows.length < 3) return out;
 
+    const maxPatterns = 3;
     if (direction === "BULL") {
-      // Find DR_High (Recent Highest Swing High)
-      const drHigh = swingHighs[swingHighs.length - 1];
-      
-      // Find BOS_High (The previous Swing High that was broken by DR_High)
-      let bosHigh: import("./market-structure.service").SwingHigh | null = null;
-      for (let i = swingHighs.length - 2; i >= 0; i--) {
-        if (swingHighs[i].price < drHigh.price) {
-          bosHigh = swingHighs[i];
-          break;
+      for (let s = 0; s < maxPatterns && s < swingHighs.length - 1; s++) {
+        const drHigh = swingHighs[swingHighs.length - 1 - s];
+
+        // BOS_High: nearest previous swing high that is lower (the broken level)
+        let bosHigh: import("./market-structure.service").SwingHigh | null = null;
+        for (let i = swingHighs.length - 2 - s; i >= 0; i--) {
+          if (swingHighs[i].price < drHigh.price) { bosHigh = swingHighs[i]; break; }
         }
+        if (!bosHigh) continue;
+        if (drHigh.index - bosHigh.index > 48) continue; // too old to be current storyline
+
+        // DR_Low: lowest swing low between BOS_High and DR_High (the Head)
+        const lowsBetween = swingLows.filter(sl => sl.index > bosHigh!.index && sl.index < drHigh.index);
+        if (lowsBetween.length === 0) continue;
+        const drLow = lowsBetween.sort((a, b) => a.price - b.price)[0];
+
+        // Inducement: last pullback low before DR_High
+        const pullbacks = swingLows.filter(sl => sl.index > drLow.index && sl.index < drHigh.index);
+        if (pullbacks.length === 0) continue;
+        const inducement = pullbacks[pullbacks.length - 1];
+
+        // QML (Left Shoulder): swing low just BEFORE BOS_High. Valid only when
+        // the Head makes a new low below the shoulder.
+        const lowsBeforeBOS = swingLows.filter(sl => sl.index < bosHigh!.index);
+        const leftShoulder = lowsBeforeBOS.length > 0 ? lowsBeforeBOS[lowsBeforeBOS.length - 1] : null;
+        const qmlValid = leftShoulder != null && drLow.price < leftShoulder.price;
+
+        out.push({
+          drHigh, drLow, inducement,
+          qmlLevel: qmlValid ? leftShoulder!.price : null,
+          rbsLevel: bosHigh.price,
+          sbrLevel: null,
+        });
       }
-      if (!bosHigh) return null;
-
-      // Find DR_Low (Lowest Swing Low between BOS_High and DR_High)
-      const lowsBetween = swingLows.filter(sl => sl.index > bosHigh!.index && sl.index < drHigh.index);
-      if (lowsBetween.length === 0) return null;
-      const drLow = lowsBetween.sort((a, b) => a.price - b.price)[0]; // The Head
-
-      // Find Inducement (The first Swing Low to the left of DR_High, after DR_Low)
-      const pullbacks = swingLows.filter(sl => sl.index > drLow.index && sl.index < drHigh.index);
-      if (pullbacks.length === 0) return null;
-      const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_High
-
-      // QML Level (Left Shoulder): The Swing Low just BEFORE BOS_High.
-      // Valid Quasimodo requires the HEAD (drLow) deeper than the LEFT SHOULDER
-      // (head must make a new low). Otherwise it is not a QM — skip the level.
-      const lowsBeforeBOS = swingLows.filter(sl => sl.index < bosHigh!.index);
-      const leftShoulder = lowsBeforeBOS.length > 0 ? lowsBeforeBOS[lowsBeforeBOS.length - 1] : null;
-      const qmlValid = leftShoulder != null && drLow.price < leftShoulder.price;
-
-      const fibo50 = (drHigh.price + drLow.price) / 2;
-
-      return {
-        drHigh,
-        drLow,
-        bosHigh,
-        inducement,
-        fibo50,
-        qmlLevel: qmlValid ? leftShoulder!.price : null,
-        rbsLevel: bosHigh.price,
-      };
-
     } else {
-      // BEARISH
-      const drLow = swingLows[swingLows.length - 1];
-      
-      let bosLow: import("./market-structure.service").SwingLow | null = null;
-      for (let i = swingLows.length - 2; i >= 0; i--) {
-        if (swingLows[i].price > drLow.price) {
-          bosLow = swingLows[i];
-          break;
+      for (let s = 0; s < maxPatterns && s < swingLows.length - 1; s++) {
+        const drLow = swingLows[swingLows.length - 1 - s];
+
+        let bosLow: import("./market-structure.service").SwingLow | null = null;
+        for (let i = swingLows.length - 2 - s; i >= 0; i--) {
+          if (swingLows[i].price > drLow.price) { bosLow = swingLows[i]; break; }
         }
+        if (!bosLow) continue;
+        if (drLow.index - bosLow.index > 48) continue;
+
+        const highsBetween = swingHighs.filter(sh => sh.index > bosLow!.index && sh.index < drLow.index);
+        if (highsBetween.length === 0) continue;
+        const drHigh = highsBetween.sort((a, b) => b.price - a.price)[0];
+
+        const pullbacks = swingHighs.filter(sh => sh.index > drHigh.index && sh.index < drLow.index);
+        if (pullbacks.length === 0) continue;
+        const inducement = pullbacks[pullbacks.length - 1];
+
+        const highsBeforeBOS = swingHighs.filter(sh => sh.index < bosLow!.index);
+        const leftShoulder = highsBeforeBOS.length > 0 ? highsBeforeBOS[highsBeforeBOS.length - 1] : null;
+        const qmlValid = leftShoulder != null && drHigh.price > leftShoulder.price;
+
+        out.push({
+          drHigh, drLow, inducement,
+          qmlLevel: qmlValid ? leftShoulder!.price : null,
+          rbsLevel: null,
+          sbrLevel: bosLow.price,
+        });
       }
-      if (!bosLow) return null;
-
-      const highsBetween = swingHighs.filter(sh => sh.index > bosLow!.index && sh.index < drLow.index);
-      if (highsBetween.length === 0) return null;
-      const drHigh = highsBetween.sort((a, b) => b.price - a.price)[0]; // The Head
-
-      const pullbacks = swingHighs.filter(sh => sh.index > drHigh.index && sh.index < drLow.index);
-      if (pullbacks.length === 0) return null;
-      const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_Low
-
-      // QML Level (Left Shoulder): The Swing High just BEFORE BOS_Low.
-      // Valid Quasimodo requires the HEAD (drHigh) HIGHER than the shoulder
-      // (head must make a new high). Otherwise it is not a QM — skip the level.
-      const highsBeforeBOS = swingHighs.filter(sh => sh.index < bosLow!.index);
-      const leftShoulder = highsBeforeBOS.length > 0 ? highsBeforeBOS[highsBeforeBOS.length - 1] : null;
-      const qmlValid = leftShoulder != null && drHigh.price > leftShoulder.price;
-
-      const fibo50 = (drHigh.price + drLow.price) / 2;
-
-      return {
-        drHigh,
-        drLow,
-        bosLow,
-        inducement,
-        fibo50,
-        qmlLevel: qmlValid ? leftShoulder!.price : null,
-        sbrLevel: bosLow.price,
-      };
     }
+    return out;
   }
 
   private buildMSNRChecklist(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): { items: ChecklistItem[], passed: boolean } {
