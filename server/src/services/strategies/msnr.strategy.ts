@@ -47,52 +47,52 @@ class MSNRStrategy {
     if (htfCandles.length < 5 || ltfCandles.length < 5) return signals;
 
     const ltfAtr = atrService.calculate(ltfCandles) || (Math.abs(ltfCandles[ltfCandles.length - 1].high - ltfCandles[ltfCandles.length - 1].low));
+    const htfAtr = atrService.calculate(htfCandles) || (Math.abs(htfCandles[htfCandles.length - 1].high - htfCandles[htfCandles.length - 1].low));
 
     // ─── STEP 1 & 2: MSNR Dealing Range & Inducement ──────────────
-    const recentHtfCandles = htfCandles.slice(-2);
+    // Alchemist: monitor "at least" the recent session, not just the last 2 bars.
+    // A tap that happened 3-6 hours ago is still a live storyline setup.
+    const recentHtfCandles = htfCandles.slice(-6);
     const activeHtfSetups: { direction: "BUY" | "SELL", type: "QML_BULLISH" | "QML_BEARISH" | "RBS" | "SBR", keyLevel: number, sweepLevel: number }[] = [];
+
+    // Tap check — MSNR ignores wick noise: the sweep must poke the level by a
+    // meaningful margin (>= 0.1 x HTF ATR) and the candle must CLOSE back on the
+    // original side (rejection).
+    const checkLevelTap = (c: Candle, level: number, dir: "BUY" | "SELL"): boolean => {
+      if (dir === "BUY") {
+        return c.low <= level - htfAtr * 0.1 && c.close > level;
+      }
+      return c.high >= level + htfAtr * 0.1 && c.close < level;
+    };
 
     const bullishSetup = this.detectMSNRSetup(htfStr, "BULL");
     if (bullishSetup) {
-      const { qmlLevel, rbsLevel, inducement, fibo50 } = bullishSetup;
-      
-      // Check if recent candles swept inducement and tapped key level
-      // For Bullish: Inducement < Fibo50 ? use QML : use RBS
-      const targetType = inducement.price < fibo50 ? "QML_BULLISH" : "RBS";
-      const targetLevel = targetType === "QML_BULLISH" ? qmlLevel : rbsLevel;
-      
-      if (targetLevel !== null && targetLevel !== undefined) {
-        const tLevel = targetLevel as number;
-        // Did recent price tap targetLevel and reject it?
-        for (const c of recentHtfCandles) {
-          if (c.low <= tLevel) {
-            // Must reject the key level (close above it)
-            if (c.close > tLevel) {
-              activeHtfSetups.push({ direction: "BUY", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
-              break;
-            }
-          }
+      const { qmlLevel, rbsLevel, inducement } = bullishSetup;
+      // Alchemist: enter from whichever key level price taps first — QML or RBS,
+      // NOT a rigid QML-vs-RBS binary switch. Both are valid storylines.
+      for (const level of [
+        { type: "QML_BULLISH" as const, price: qmlLevel },
+        { type: "RBS" as const, price: rbsLevel },
+      ]) {
+        if (level.price === null || level.price === undefined) continue;
+        const tapped = recentHtfCandles.some(c => checkLevelTap(c, level.price as number, "BUY"));
+        if (tapped) {
+          activeHtfSetups.push({ direction: "BUY", type: level.type, keyLevel: level.price as number, sweepLevel: inducement.price });
         }
       }
     }
 
     const bearishSetup = this.detectMSNRSetup(htfStr, "BEAR");
     if (bearishSetup) {
-      const { qmlLevel, sbrLevel, inducement, fibo50 } = bearishSetup;
-      
-      const targetType = inducement.price > fibo50 ? "QML_BEARISH" : "SBR";
-      const targetLevel = targetType === "QML_BEARISH" ? qmlLevel : sbrLevel;
-      
-      if (targetLevel !== null && targetLevel !== undefined) {
-        const tLevel = targetLevel as number;
-        for (const c of recentHtfCandles) {
-          if (c.high >= tLevel) {
-            // Must reject the key level (close below it)
-            if (c.close < tLevel) {
-              activeHtfSetups.push({ direction: "SELL", type: targetType, keyLevel: tLevel, sweepLevel: inducement.price });
-              break;
-            }
-          }
+      const { qmlLevel, sbrLevel, inducement } = bearishSetup;
+      for (const level of [
+        { type: "QML_BEARISH" as const, price: qmlLevel },
+        { type: "SBR" as const, price: sbrLevel },
+      ]) {
+        if (level.price === null || level.price === undefined) continue;
+        const tapped = recentHtfCandles.some(c => checkLevelTap(c, level.price as number, "SELL"));
+        if (tapped) {
+          activeHtfSetups.push({ direction: "SELL", type: level.type, keyLevel: level.price as number, sweepLevel: inducement.price });
         }
       }
     }
@@ -314,9 +314,12 @@ class MSNRStrategy {
       if (pullbacks.length === 0) return null;
       const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_High
 
-      // QML Level (Left Shoulder): The Swing Low just BEFORE BOS_High
+      // QML Level (Left Shoulder): The Swing Low just BEFORE BOS_High.
+      // Valid Quasimodo requires the HEAD (drLow) deeper than the LEFT SHOULDER
+      // (head must make a new low). Otherwise it is not a QM — skip the level.
       const lowsBeforeBOS = swingLows.filter(sl => sl.index < bosHigh!.index);
       const leftShoulder = lowsBeforeBOS.length > 0 ? lowsBeforeBOS[lowsBeforeBOS.length - 1] : null;
+      const qmlValid = leftShoulder != null && drLow.price < leftShoulder.price;
 
       const fibo50 = (drHigh.price + drLow.price) / 2;
 
@@ -326,7 +329,7 @@ class MSNRStrategy {
         bosHigh,
         inducement,
         fibo50,
-        qmlLevel: leftShoulder ? leftShoulder.price : null,
+        qmlLevel: qmlValid ? leftShoulder!.price : null,
         rbsLevel: bosHigh.price,
       };
 
@@ -351,9 +354,12 @@ class MSNRStrategy {
       if (pullbacks.length === 0) return null;
       const inducement = pullbacks[pullbacks.length - 1]; // Closest to DR_Low
 
-      // QML Level (Left Shoulder): The Swing High just BEFORE BOS_Low
+      // QML Level (Left Shoulder): The Swing High just BEFORE BOS_Low.
+      // Valid Quasimodo requires the HEAD (drHigh) HIGHER than the shoulder
+      // (head must make a new high). Otherwise it is not a QM — skip the level.
       const highsBeforeBOS = swingHighs.filter(sh => sh.index < bosLow!.index);
       const leftShoulder = highsBeforeBOS.length > 0 ? highsBeforeBOS[highsBeforeBOS.length - 1] : null;
+      const qmlValid = leftShoulder != null && drHigh.price > leftShoulder.price;
 
       const fibo50 = (drHigh.price + drLow.price) / 2;
 
@@ -363,7 +369,7 @@ class MSNRStrategy {
         bosLow,
         inducement,
         fibo50,
-        qmlLevel: leftShoulder ? leftShoulder.price : null,
+        qmlLevel: qmlValid ? leftShoulder!.price : null,
         sbrLevel: bosLow.price,
       };
     }

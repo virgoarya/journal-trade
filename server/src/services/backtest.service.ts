@@ -973,8 +973,15 @@ class BacktestService {
             entryMs = marketStructureService.analyzeMarketStructure(entryCandles);
             dailyMs = marketStructureService.analyzeMarketStructure(dailyCandles);
 
-            isAligned = dirMs.trend.direction === setupMs.trend.direction &&
-                        setupMs.trend.direction === entryMs.trend.direction;
+            // Mirror the LIVE engine's relaxed alignment (2-of-3 timeframes aligned;
+            // SIDEWAYS not counted). Strict 3-way alignment killed pullback-entry
+            // models (ICT/MSNR): entries happen WHILE the LTF pulls back against H1,
+            // so M15 counter-direction must not zero out the whole signal.
+            const dirTrend = dirMs.trend.direction;
+            const setupAligned = setupMs.trend.direction === dirTrend;
+            const entryAligned = entryMs.trend.direction === dirTrend;
+            const alignedCount = (dirTrend !== "SIDEWAYS" ? 1 : 0) + (setupAligned ? 1 : 0) + (entryAligned ? 1 : 0);
+            isAligned = alignedCount >= 2;
 
             msCache.set(tc.symbol, { idx, dirMs, setupMs, entryMs, dailyMs, isAligned });
             didStrategyEval = true; // flag for forced yield
