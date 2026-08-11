@@ -740,6 +740,28 @@ router.post("/analyze-multi", heavyLimiter, async (req, res, next) => {
 });
 
 /**
+ * POST /api/ai-trading/reset-performance
+ * Hapus semua AI trade logs user — reset pipeline performance & history.
+ */
+router.post("/reset-performance", async (req, res, next) => {
+  try {
+    const server = (req.query.server as string) || undefined;
+    const query: any = { userId: req.user.id };
+    if (server) query.server = server;
+
+    const result = await AITradeLog.deleteMany(query);
+    silentLogger.info(`[PERFORMANCE] Reset performance untuk user=${req.user.id} (${server || "all"}): ${result.deletedCount} trade logs dihapus`);
+
+    return apiResponse.success(res, {
+      deleted: result.deletedCount,
+      message: `Performance di-reset. ${result.deletedCount} trade logs dihapus.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/ai-trading/performance
  * Get aggregated pipeline performance stats (methodology breakdown, symbol stats).
  */

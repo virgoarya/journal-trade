@@ -1723,9 +1723,9 @@ busySymbols: new Set<string>(),
           
           let closeReason: "TP_HIT" | "SL_HIT" | "MANUAL" = "MANUAL";
           const commentLower = (closingDeal.comment || "").toLowerCase();
-          if (commentLower.includes("tp") || commentLower.includes("[tp]")) {
+          if (commentLower.includes("take profit") || commentLower.includes("tp") || commentLower.includes("[tp]")) {
             closeReason = "TP_HIT";
-          } else if (commentLower.includes("sl") || commentLower.includes("[sl]")) {
+          } else if (commentLower.includes("stop loss") || commentLower.includes("sl") || commentLower.includes("[sl]")) {
             closeReason = "SL_HIT";
           } else {
             // Compare closing price with log's SL/TP

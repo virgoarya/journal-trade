@@ -194,6 +194,36 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       return rawOrders;
     }
 
+    case "mt5_history_deals_get":
+    case "get_trading_history_positions": {
+      // Native MCP tidak punya tool deals terpisah — pakai get_trading_history_positions
+      // yang mengembalikan posisi tertutup lengkap (close_price, close_reason, profit)
+      const args: any = {};
+      if (payload.from) args.datetime_from = payload.from;
+      if (payload.to) args.datetime_to = payload.to;
+      if (payload.symbol) args.symbol = payload.symbol;
+      args.limit = payload.limit || 100;
+
+      const res = await callTool("get_trading_history_positions", args);
+      const raw = Array.isArray(res) ? res : (res?.positions ?? res?.result ?? []);
+      const deals = raw
+        .filter((p: any) => p.position_id && (p.close_price || p.profit !== undefined))
+        .map((p: any) => ({
+          position_id: Number(p.position_id),
+          // Dianggap side OUT (entry=1) karena posisi sudah tertutup
+          entry: 1,
+          symbol: String(p.symbol ?? ""),
+          profit: Number(p.profit ?? 0),
+          commission: 0,
+          swap: 0,
+          price: Number(p.close_price ?? 0),
+          time: p.close_time ? Math.floor(new Date(String(p.close_time).replace(/\./g, "-")).getTime() / 1000) : 0,
+          comment: String(p.close_reason ?? p.comment ?? ""),
+          type: String(p.type ?? ""),
+        }));
+      return { deals };
+    }
+
     case "mt5_symbols_get":
     case "get_marketwatch_symbols": {
       const res = await callTool("get_marketwatch_symbols", {});
