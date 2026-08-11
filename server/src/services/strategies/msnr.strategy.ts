@@ -13,7 +13,7 @@ import { atrService } from "./atr.service";
 import { strategyConfigService } from "./strategy-config.service";
 import type { ChecklistItem } from "./confluence-engine";
 import type { IPDAContext } from "./ipda-context";
-import { evaluateWaterfall, calculateRR, checkEntryRetest, analyzeDaily3CandleBias, validateContext, validateStructuralShift, validateInducement, validatePOI, validateEntryAndRisk } from "./checklist-validator";
+import { evaluateWaterfall, calculateRR, checkEntryRetest, getSwingPrices, analyzeDaily3CandleBias, validateContext, validateStructuralShift, validateInducement, validatePOI, validateEntryAndRisk } from "./checklist-validator";
 
 export interface MSNRSignal {
   direction: "BUY" | "SELL";
@@ -389,18 +389,20 @@ class MSNRStrategy {
     const htfStr = fractal?.directionStr || fractal?.dailyStr;
     const htfTrend = htfStr?.trend?.direction || "SIDEWAYS";
     const breachType = sig.signalType.includes("QML") ? "MSS" : (sig.signalType.includes("RBS") || sig.signalType.includes("SBR") ? "CHOCH" : "MSS");
-    const hasOB = true; // MSNR always has OB/CISD entry
+    // MSNR always enters on an OB/CISD — surface the ACTUAL entry OB zone
+    // (previously hardcoded "N/A - N/A" made the POI step meaningless).
+    const entryObs = (fractal?.entryStr?.orderBlocks ?? []).filter(ob => ob.type === (isBuy ? "BULLISH" : "BEARISH"));
+    const entryOb = entryObs.find(ob => sig.entry >= ob.bottom && sig.entry <= ob.top) ?? entryObs[0];
+    const hasOB = entryObs.length > 0; // MSNR always has OB/CISD entry
     const hasFVG = false;
-    const hasRecentSweep = true; // Turtle Soup always implies sweep
     const obSweepPrice = sig.entry.toFixed(5);
-    const relHigh = "N/A";
-    const relLow = "N/A";
+    const { relHigh, relLow } = getSwingPrices(fractal);
 
     // Validate key components using new helpers
     const ctxValidation = validateContext(isBuy, htfTrend, dailyBias);
     const bosValidation = validateStructuralShift(isBuy, htfStr!, htfTfLabel, relHigh, relLow);
-    const liquidityValidation = validateInducement(hasRecentSweep, obSweepPrice, relLow, setupTfLabel, isBuy);
-    const poiValidation = validatePOI(breachType, hasOB, hasFVG, "N/A", "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
+    const liquidityValidation = validateInducement(true, obSweepPrice, relLow, setupTfLabel, isBuy); // Turtle Soup always implies sweep
+    const poiValidation = validatePOI(breachType, hasOB, hasFVG, entryOb ? entryOb.bottom.toFixed(5) : "N/A", entryOb ? entryOb.top.toFixed(5) : "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
     const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel);
 
     // Get new structural elements for MSNR checklist
