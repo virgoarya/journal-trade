@@ -30,7 +30,7 @@ export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }
     return <SkeletonLoader type="card" />;
   }
 
-  const trades = data?.recentTrades || [];
+  const trades = (data?.recentTrades || []).filter((t: any) => (t?.pnl ?? 0) !== 0);
 
   return (
     <div className="glass p-5 space-y-3 h-full flex flex-col max-h-[600px]">

@@ -862,7 +862,7 @@ router.get("/performance", async (req, res, next) => {
       methodologyStats,
       symbolStats,
       equityCurve,
-      recentTrades: trades.slice(0, 50),
+      recentTrades: trades.filter((t) => (t.pnl ?? 0) !== 0).slice(0, 50),
     });
   } catch (error) {
     next(error);
