@@ -190,6 +190,7 @@ function killProcessOnPort(port) {
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
+  console.log("[MAIN] Single instance lock NOT acquired — quitting.");
   app.quit();
 } else {
   app.on("second-instance", () => {
