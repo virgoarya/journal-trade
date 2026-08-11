@@ -48,8 +48,8 @@ export interface StrategyConfig {
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   ict: {
     fvgProximityAtrMult: 1.5,
-    fvgKillzoneBoost: 10,
-    oteFibLevels: [0.618, 0.79],
+    fvgKillzoneBoost: 15,   // was 10 — kill zone is core ICT edge (time of day)
+    oteFibLevels: [0.618, 0.705, 0.79],
     judasSwingLookback: 6,
     minConfidence: 50,
   },

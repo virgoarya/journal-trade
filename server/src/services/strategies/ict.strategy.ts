@@ -106,7 +106,7 @@ class ICTStrategy {
 
     // ─── PATH B: Liquidity Sweep → ICT FVG confirmation ────────────────────────
 
-    const sweepResult = this.detectLiquiditySweep(entryCandles, avgRange, htfTrend);
+    const sweepResult = this.detectLiquiditySweep(entryCandles, entryStr, avgRange, htfTrend);
     if (sweepResult) {
       // After a sweep, look for nearest unmitigated FVG in sweep's direction
       const sweepFvgSignal = this.buildSweepFVGSignal(
@@ -449,7 +449,7 @@ class ICTStrategy {
 
         let conf = config.minConfidence + 20; // AMD (15) + FVG (5) = high quality
         let reason = `ICT AMD BUY: 3-Candle sweep + Bullish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}]`;
-        if (killzone !== "NONE") { conf += 10; reason += ` @ ${killzone}`; }
+        if (killzone !== "NONE") { conf += config.fvgKillzoneBoost; reason += ` @ ${killzone}`; }
 
         return {
           direction: "BUY",
@@ -471,7 +471,7 @@ class ICTStrategy {
 
         let conf = config.minConfidence + 20;
         let reason = `ICT AMD SELL: 3-Candle sweep + Bearish FVG [${fvg.bottom.toFixed(5)}–${fvg.top.toFixed(5)}]`;
-        if (killzone !== "NONE") { conf += 10; reason += ` @ ${killzone}`; }
+        if (killzone !== "NONE") { conf += config.fvgKillzoneBoost; reason += ` @ ${killzone}`; }
 
         return {
           direction: "SELL",
@@ -508,18 +508,13 @@ class ICTStrategy {
     const latestHigh = ms.swingHighs[ms.swingHighs.length - 1];
     const latestLow = ms.swingLows[ms.swingLows.length - 1];
 
-    // Entry Price Selection Logic:
-    // - For BUY signals, use swing low (OB Bottom) as entry
-    // - For SELL signals, use swing high (OB Top) as entry
-    // This ensures entry aligns with actual Order Block level rather than Fibonacci-based OTE
-    const entryPrice = direction === "BUY"
-      ? latestLow.price
-      : latestHigh.price;
-
     if (direction === "BUY" && latestLow.index < latestHigh.index) {
       const range = latestHigh.price - latestLow.price;
       if (range === 0) return null;
+      // OTE zone 62–79% of the displacement (sweep wick low → displacement high).
+      // Entry at the 70.5% mean threshold ("sweet spot"), stop beyond 100% (sweep wick).
       const ote618 = latestHigh.price - range * 0.618;
+      const ote705 = latestHigh.price - range * 0.705;
       const ote79  = latestHigh.price - range * 0.79;
 
       // Price in OTE zone AND OTE zone overlaps AMD zone
@@ -533,14 +528,14 @@ class ICTStrategy {
 
         return {
           direction: "BUY",
-          entry: entryPrice, // Use actual swing low as entry (OB bottom)
-          sl: ote79 - avgRange * 0.5, // SL below OTE zone edge with buffer
-          tp: latestHigh.price, // TP at impulse high
+          entry: ote705, // 70.5% mean threshold — the precise ICT entry
+          sl: latestLow.price - avgRange * 0.25, // beyond the swept wick (100%)
+          tp: latestHigh.price, // TP at displacement high
           orderType: "PENDING_LIMIT",
-          limitPrice: entryPrice, // Limit order at OB bottom
+          limitPrice: ote705, // Limit order at sweet spot
           signalType: "AMD_OTE",
           confidence: Math.min(93, config.minConfidence + 13),
-          reason: `ICT AMD OTE BUY: 3-Candle sweep + OTE zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) inside AMD range, Entry at ${entryPrice.toFixed(5)} (OB bottom)`,
+          reason: `ICT AMD OTE BUY: 3-Candle sweep + OTE (${ote79.toFixed(5)}–${ote618.toFixed(5)}) inside AMD range, Entry 70.5% @ ${ote705.toFixed(5)}`,
         };
       }
     }
@@ -549,6 +544,7 @@ class ICTStrategy {
       const range = latestHigh.price - latestLow.price;
       if (range === 0) return null;
       const ote618 = latestLow.price + range * 0.618;
+      const ote705 = latestLow.price + range * 0.705;
       const ote79  = latestLow.price + range * 0.79;
 
       if (last.close >= ote618 && last.close <= ote79 && ote79 <= zoneHigh && ote618 >= zoneLow) {
@@ -561,14 +557,14 @@ class ICTStrategy {
 
         return {
           direction: "SELL",
-          entry: entryPrice, // Use actual swing high as entry (OB top)
-          sl: ote79 + avgRange * 0.5, // SL above OTE zone edge with buffer
-          tp: latestLow.price, // TP at impulse low
+          entry: ote705, // 70.5% mean threshold — the precise ICT entry
+          sl: latestHigh.price + avgRange * 0.25, // beyond the swept wick (100%)
+          tp: latestLow.price, // TP at displacement low
           orderType: "PENDING_LIMIT",
-          limitPrice: entryPrice, // Limit order at OB top
+          limitPrice: ote705, // Limit order at sweet spot
           signalType: "AMD_OTE",
           confidence: Math.min(93, config.minConfidence + 13),
-          reason: `ICT AMD OTE SELL: 3-Candle sweep + OTE zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) inside AMD range, Entry at ${entryPrice.toFixed(5)} (OB top)`,
+          reason: `ICT AMD OTE SELL: 3-Candle sweep + OTE (${ote618.toFixed(5)}–${ote79.toFixed(5)}) inside AMD range, Entry 70.5% @ ${ote705.toFixed(5)}`,
         };
       }
     }
@@ -580,6 +576,7 @@ class ICTStrategy {
 
   private detectLiquiditySweep(
     candles: Candle[],
+    ms: MarketStructure,
     avgRange: number,
     htfTrend: "BULL" | "BEAR" | "SIDEWAYS",
   ): { direction: "BUY" | "SELL"; sweepLevel: number; swingSweepLow?: number; swingSweepHigh?: number } | null {
@@ -592,16 +589,22 @@ class ICTStrategy {
     const prev = candles[candles.length - 2];
     const last = candles[candles.length - 1];
 
-    // Bullish sweep: prev wick went below rangeLow, last closed back above
+    // Bullish sweep: prev wick went below rangeLow, last closed back above.
+    // Require the wick to also pierce a recent STRUCTURAL swing low (ERL) —
+    // ICT liquidity only exists at swing points / equal lows, not range noise.
     if (htfTrend === "BULL") {
-      if (prev.low < rangeLow && last.close > rangeLow) {
+      const recentStructuralLows = ms.swingLows.filter(s => s.index >= candles.length - 12 && s.index < candles.length - 1);
+      const sweptStructural = recentStructuralLows.some(s => prev.low < s.price && last.close > s.price);
+      if (prev.low < rangeLow && last.close > rangeLow && sweptStructural) {
         return { direction: "BUY", sweepLevel: rangeLow, swingSweepLow: prev.low };
       }
     }
 
     // Bearish sweep: prev wick went above rangeHigh, last closed back below
     if (htfTrend === "BEAR") {
-      if (prev.high > rangeHigh && last.close < rangeHigh) {
+      const recentStructuralHighs = ms.swingHighs.filter(s => s.index >= candles.length - 12 && s.index < candles.length - 1);
+      const sweptStructural = recentStructuralHighs.some(s => prev.high > s.price && last.close < s.price);
+      if (prev.high > rangeHigh && last.close < rangeHigh && sweptStructural) {
         return { direction: "SELL", sweepLevel: rangeHigh, swingSweepHigh: prev.high };
       }
     }
@@ -634,7 +637,7 @@ class ICTStrategy {
 
         let conf = config.minConfidence + 15;
         let reason = `ICT Sweep+FVG BUY: Liq. sweep @ ${sweepLevel.toFixed(5)} + Bullish FVG @ ${fvg.bottom.toFixed(5)}`;
-        if (killzone !== "NONE") { conf += 8; reason += ` @ ${killzone}`; }
+        if (killzone !== "NONE") { conf += config.fvgKillzoneBoost; reason += ` @ ${killzone}`; }
 
         return {
           direction: "BUY",
@@ -656,7 +659,7 @@ class ICTStrategy {
 
         let conf = config.minConfidence + 15;
         let reason = `ICT Sweep+FVG SELL: Liq. sweep @ ${sweepLevel.toFixed(5)} + Bearish FVG @ ${fvg.top.toFixed(5)}`;
-        if (killzone !== "NONE") { conf += 8; reason += ` @ ${killzone}`; }
+        if (killzone !== "NONE") { conf += config.fvgKillzoneBoost; reason += ` @ ${killzone}`; }
 
         return {
           direction: "SELL",
@@ -786,6 +789,7 @@ class ICTStrategy {
       const range = latestHigh.price - latestLow.price;
       if (range === 0) return null;
       const ote618 = latestHigh.price - range * 0.618;
+      const ote705 = latestHigh.price - range * 0.705;
       const ote79  = latestHigh.price - range * 0.79;
 
       if (last.close >= ote79 && last.close <= ote618) {
@@ -800,14 +804,14 @@ class ICTStrategy {
 
           return {
             direction: "BUY",
-            entry: ote79,
-            sl: latestLow.price, // SL at swing low wick (impulse origin)
+            entry: ote705, // 70.5% mean threshold — the precise ICT entry
+            sl: latestLow.price - avgRange * 0.25, // beyond the sweep/impulse wick
             tp,
             orderType: "PENDING_LIMIT",
-            limitPrice: ote79,
+            limitPrice: ote705,
             signalType: "OTE_AMD",
             confidence: Math.min(88, config.minConfidence + 13),
-            reason: `ICT OTE BUY: Fib zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
+            reason: `ICT OTE BUY: Fib zone (${ote79.toFixed(5)}–${ote618.toFixed(5)}) in consolidation context, Entry 70.5% @ ${ote705.toFixed(5)}, TP ${tp.toFixed(5)}`,
           };
         }
       }
@@ -818,6 +822,7 @@ class ICTStrategy {
       const range = latestHigh.price - latestLow.price;
       if (range === 0) return null;
       const ote618 = latestLow.price + range * 0.618;
+      const ote705 = latestLow.price + range * 0.705;
       const ote79  = latestLow.price + range * 0.79;
 
       if (last.close >= ote618 && last.close <= ote79) {
@@ -832,14 +837,14 @@ class ICTStrategy {
 
           return {
             direction: "SELL",
-            entry: ote79,
-            sl: latestHigh.price, // SL at swing high wick (impulse origin)
+            entry: ote705, // 70.5% mean threshold — the precise ICT entry
+            sl: latestHigh.price + avgRange * 0.25, // beyond the sweep/impulse wick
             tp,
             orderType: "PENDING_LIMIT",
-            limitPrice: ote79,
+            limitPrice: ote705,
             signalType: "OTE_AMD",
             confidence: Math.min(88, config.minConfidence + 13),
-            reason: `ICT OTE SELL: Fib zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) in consolidation context, TP ${tp.toFixed(5)}`,
+            reason: `ICT OTE SELL: Fib zone (${ote618.toFixed(5)}–${ote79.toFixed(5)}) in consolidation context, Entry 70.5% @ ${ote705.toFixed(5)}, TP ${tp.toFixed(5)}`,
           };
         }
       }
@@ -873,7 +878,7 @@ class ICTStrategy {
           return {
             direction: "BUY",
             entry: fvg.bottom,
-            sl: fvg.bottom,
+            sl: fvg.bottom - avgRange * 0.5, // stop below the level, never == entry
             tp: fvg.bottom + avgRange * 3,
             orderType: "PENDING_LIMIT",
             limitPrice: fvg.bottom,
@@ -892,7 +897,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: fvg.top,
-            sl: fvg.top,
+            sl: fvg.top + avgRange * 0.5, // stop above the level, never == entry
             tp: fvg.top - avgRange * 3,
             orderType: "PENDING_LIMIT",
             limitPrice: fvg.top,

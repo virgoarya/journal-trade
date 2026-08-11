@@ -110,13 +110,17 @@ class MSNRStrategy {
         let mssPrice = 0;
 
         if (isBuy) {
-            // Find a recent LTF Swing High broken by a bullish candle body
-            const recentLtfHighs = ltfStr.swingHighs.slice(-8); 
+            // Find the MOST RECENT LTF Swing High broken by a bullish candle body
+            // (iterate newest first — the valid MSS is the break of the LATEST structure)
+            const recentLtfHighs = ltfStr.swingHighs.slice(-8).reverse();
             for (const high of recentLtfHighs) {
                 const breakoutCandles = ltfCandles.slice(high.index + 1);
                 for (let i = 0; i < breakoutCandles.length; i++) {
                     const bc = breakoutCandles[i];
-                    if (bc.close > high.price && bc.close > bc.open) { 
+                    // MSS = body close beyond the swing + DISPLACEMENT (body >= 1.5×ATR).
+                    // A weak close without displacement is not institutional.
+                    if (bc.close > high.price && bc.close > bc.open &&
+                        (bc.close - bc.open) >= msnrConfig.structureBreakMinBodyAtr * ltfAtr) { 
                         mssFound = true;
                         mssIndex = high.index + 1 + i; 
                         mssPrice = high.price;
@@ -126,13 +130,14 @@ class MSNRStrategy {
                 if (mssFound) break;
             }
         } else {
-            // Find a recent LTF Swing Low broken by a bearish candle body
-            const recentLtfLows = ltfStr.swingLows.slice(-8);
+            // Find the MOST RECENT LTF Swing Low broken by a bearish candle body
+            const recentLtfLows = ltfStr.swingLows.slice(-8).reverse();
             for (const low of recentLtfLows) {
                 const breakoutCandles = ltfCandles.slice(low.index + 1);
                 for (let i = 0; i < breakoutCandles.length; i++) {
                     const bc = breakoutCandles[i];
-                    if (bc.close < low.price && bc.close < bc.open) { 
+                    if (bc.close < low.price && bc.close < bc.open &&
+                        (bc.open - bc.close) >= msnrConfig.structureBreakMinBodyAtr * ltfAtr) { 
                         mssFound = true;
                         mssIndex = low.index + 1 + i;
                         mssPrice = low.price;
@@ -156,28 +161,40 @@ class MSNRStrategy {
 
         if (validOBs.length === 0) continue;
 
-        // Choose the best OB. 
-        // For BUY, we want the most discounted OB (lowest). For SELL, most premium OB (highest).
-        const bestOB = validOBs.sort((a, b) => isBuy ? a.bottom - b.bottom : b.top - a.top)[0];
+        const lastLtf = ltfCandles[ltfCandles.length - 1];
 
-        // ─── STEP 5: ENTRY (PENDING LIMIT) ────────────────────────────────────
-        
-        // Wait for price to pullback to OB
-        const entryPrice = isBuy ? bestOB.top : bestOB.bottom;
+        // Choose the FIRST PRESENTED OB (closest to current price) — Alchemist
+        // enters the first OB after the MSS, not the most discounted one far away
+        // (a distant limit rarely fills and misses the delivery).
+        const sortedOBs = [...validOBs].sort((a, b) => {
+            const distA = isBuy ? lastLtf.close - a.top : a.bottom - lastLtf.close;
+            const distB = isBuy ? lastLtf.close - b.top : b.bottom - lastLtf.close;
+            return distA - distB;
+        });
+        const bestOB = sortedOBs[0];
 
-        // Swing-protected SL: nearest swing low/high below/above OB
+        // OB must still be AHEAD of price (limit not already passed):
+        // BUY → price above OB top; SELL → price below OB bottom.
+        if (isBuy && lastLtf.close <= bestOB.top) continue;
+        if (!isBuy && lastLtf.close >= bestOB.bottom) continue;
+
+        // ─── STEP 5: ENTRY (PENDING LIMIT at 50% of OB body = mean threshold) ────
+        const entryPrice = (bestOB.top + bestOB.bottom) / 2;
+
+        // Swing-protected SL: nearest swing low/high below/above OB, with a
+        // minimum 0.5×ATR buffer so R:R stays sane and SL never == entry.
         let swingProtectedSl: number;
         if (isBuy) {
           const slCandidates = ltfStr.swingLows.filter(s => s.price < bestOB.bottom).sort((a, b) => b.price - a.price);
-          swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : bestOB.bottom;
+          const candidate = slCandidates.length > 0 ? slCandidates[0].price : bestOB.bottom;
+          swingProtectedSl = Math.min(candidate, entryPrice - ltfAtr * 0.5);
         } else {
           const slCandidates = ltfStr.swingHighs.filter(s => s.price > bestOB.top).sort((a, b) => a.price - b.price);
-          swingProtectedSl = slCandidates.length > 0 ? slCandidates[0].price : bestOB.top;
+          const candidate = slCandidates.length > 0 ? slCandidates[0].price : bestOB.top;
+          swingProtectedSl = Math.max(candidate, entryPrice + ltfAtr * 0.5);
         }
         const slPrice = swingProtectedSl;
-        
-        const lastLtf = ltfCandles[ltfCandles.length - 1];
-        
+
         // Ensure the setup isn't invalidated (price smashed SL of OB before we could enter)
         if (isBuy && lastLtf.close < slPrice) continue;
         if (!isBuy && lastLtf.close > slPrice) continue;
