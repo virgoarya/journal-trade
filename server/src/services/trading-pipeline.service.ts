@@ -602,7 +602,7 @@ busySymbols: new Set<string>(),
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const query: any = { userId, closed: true };
+        const query: any = { userId, closed: true, isPendingOrder: { $ne: true } };
         if (accountId) query.accountId = accountId;
 
         const closedTrades = await AITradeLog.find(query).lean();
@@ -1458,6 +1458,7 @@ busySymbols: new Set<string>(),
             executionTime: new Date(),
             mt5Ticket: orderResult.ticket,
             positionSize: volume,
+            isPendingOrder: !!isPending,
             closed: false,
           });
         } else {
@@ -1512,6 +1513,11 @@ busySymbols: new Set<string>(),
           // Remove if already filled (no longer in pending orders list)
           if (!activeTickets.has(ticket)) {
             pipeline.pendingOrders.delete(ticket);
+            // Filled pending order became a real position — count it as a trade.
+            await AITradeLog.updateOne(
+              { mt5Ticket: ticket, closed: false },
+              { $set: { isPendingOrder: false } }
+            ).catch(() => {});
             continue;
           }
           // Cancel if expired
@@ -1523,7 +1529,7 @@ busySymbols: new Set<string>(),
               );
               await AITradeLog.updateOne(
                 { mt5Ticket: ticket, closed: false },
-                { closed: true, closedAt: new Date(), closeReason: "TIMEOUT", pnl: 0 }
+                { closed: true, closedAt: new Date(), closeReason: "TIMEOUT", pnl: 0, isPendingOrder: true }
               );
             } catch (cancelErr: any) {
               silentLogger.warn(`[PIPELINE] Failed to cancel expired order #${ticket}: ${cancelErr.message}`);
@@ -1544,7 +1550,7 @@ busySymbols: new Set<string>(),
                 );
                 await AITradeLog.updateOne(
                   { mt5Ticket: ticket, closed: false },
-                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0 }
+                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0, isPendingOrder: true }
                 );
                 pipeline.pendingOrders.delete(ticket);
                 continue;
@@ -1556,7 +1562,7 @@ busySymbols: new Set<string>(),
                 );
                 await AITradeLog.updateOne(
                   { mt5Ticket: ticket, closed: false },
-                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0 }
+                  { closed: true, closedAt: new Date(), closeReason: "TP_ALREADY_HIT", pnl: 0, isPendingOrder: true }
                 );
                 pipeline.pendingOrders.delete(ticket);
                 continue;

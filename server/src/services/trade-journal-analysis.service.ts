@@ -35,6 +35,7 @@ class TradeJournalAnalysisService {
           userId,
           closed: true,
           pnl: { $exists: true },
+          isPendingOrder: { $ne: true },
           "signal.primaryMethodology": methRank.methodology,
         }).lean();
 

@@ -389,6 +389,7 @@ router.post(
         executionTime: new Date(),
         mt5Ticket: result.ticket,
         positionSize: volume,
+        isPendingOrder: type.includes("LIMIT") || type.includes("STOP"),
         closed: false,
       });
 
@@ -436,7 +437,7 @@ router.post(
         if (result && result.success) {
           await AITradeLog.updateOne(
             { userId: req.user.id, mt5Ticket: ticket, closed: false },
-            { closed: true, closedAt: new Date(), closeReason: "MANUAL", pnl: 0 }
+            { closed: true, closedAt: new Date(), closeReason: "MANUAL", pnl: 0, isPendingOrder: true }
           );
         }
       } else {
@@ -781,6 +782,8 @@ router.get("/performance", async (req, res, next) => {
       userId: req.user.id,
       closed: true,
       pnl: { $exists: true },
+      // Cancelled pending orders are not real trades — only count positions (deals).
+      isPendingOrder: { $ne: true },
     };
     
     // If MT5 disconnected, try to get the most recent account used by this user

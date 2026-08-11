@@ -319,6 +319,7 @@ class RiskManagerService {
             userId,
             closed: true,
             pnl: { $exists: true },
+            isPendingOrder: { $ne: true },
           }).lean();
           if (closedTrades.length > 0) {
             const wins = closedTrades.filter(t => (t.pnl ?? 0) > 0).length;

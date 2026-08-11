@@ -32,11 +32,15 @@ export interface IAITradeLog extends Document {
   mt5Ticket?: number;
   positionSize?: number;
 
+  // True for limit/stop orders that were placed but may be cancelled without
+  // ever becoming a position. Cancelled pending orders must NOT count as trades.
+  isPendingOrder?: boolean;
+
   // Result
   closed: boolean;
   closedAt?: Date;
   closePrice?: number;
-  closeReason?: "TP_HIT" | "SL_HIT" | "MANUAL" | "TIMEOUT" | "SIGNAL";
+  closeReason?: "TP_HIT" | "SL_HIT" | "MANUAL" | "TIMEOUT" | "SIGNAL" | "TP_ALREADY_HIT";
   pnl?: number;
   pnlPips?: number;
   pnlPercent?: number;
@@ -93,13 +97,14 @@ const AITradeLogSchema = new Schema<IAITradeLog>(
     executionTime: Date,
     mt5Ticket: { type: Number, index: true },
     positionSize: Number,
+    isPendingOrder: { type: Boolean, default: false },
 
     closed: { type: Boolean, default: false },
     closedAt: Date,
     closePrice: Number,
     closeReason: {
       type: String,
-      enum: ["TP_HIT", "SL_HIT", "MANUAL", "TIMEOUT", "SIGNAL"],
+      enum: ["TP_HIT", "SL_HIT", "MANUAL", "TIMEOUT", "SIGNAL", "TP_ALREADY_HIT"],
     },
     pnl: Number,
     pnlPips: Number,
