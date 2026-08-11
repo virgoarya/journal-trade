@@ -1,4 +1,16 @@
-## 🚀 [v1.0.15] — 2026-08-10 (Versi Terbaru)
+## 🚀 [v1.1.0] — 2026-08-11 (Versi Terbaru)
+
+### ✨ Fitur Baru: Reset AI Trading Performance
+- **Tombol "Reset AI Trading Performance"** di Settings → Data & Privacy → Danger Zone (`frontend/src/app/(dashboard)/settings/page.tsx`).
+- Menghapus seluruh AI Trade Histories, statistik P&L, dan performance pipeline untuk user yang sedang login (isolasi per-user via `req.user.id`).
+- Memanfaatkan endpoint `POST /api/v1/ai-trading/reset-performance` yang sudah ada (`ai-trading.routes.ts`), didukung method baru `resetPerformance()` di `frontend/src/services/ai-trading.service.ts`.
+- Dilengkapi dialog konfirmasi (`confirm`) dan feedback jumlah trade logs yang dihapus. Pipeline AI tetap berjalan normal — hanya history/statistik yang dihapus.
+- **Verifikasi**: `tsc --noEmit` lolos; reset 205 trade logs berhasil via API.
+- Semua `package.json` dan patch OTA di-bump ke **v1.1.0**.
+
+---
+
+## 🚀 [v1.0.15] — 2026-08-10
 
 ### 🎯 Perbaikan Akurasi Level Methodology SMC/ICT/MSNR
 - **Fix Bug RBS/SBR Terbalik** (`market-structure.service.ts`):

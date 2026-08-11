@@ -7,5 +7,5 @@
     "dev:server": "npm run dev --prefix server",
     "dev:frontend": "npm run dev --prefix frontend"
   },
-  "version": "1.0.15"
+  "version": "1.1.0"
 }
