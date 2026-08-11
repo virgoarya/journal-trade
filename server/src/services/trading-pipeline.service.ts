@@ -1717,24 +1717,40 @@ busySymbols: new Set<string>(),
       const activeTickets = new Set(activePositions.map(p => p.ticket));
       silentLogger.debug(`[PIPELINE] syncClosedPositions: ${openLogs.length} open logs, ${activePositions.length} active positions`);
 
-      // 3. Find trade logs whose positions are no longer in MT5 active positions (meaning they closed)
-      const closedLogs = openLogs.filter(log => log.mt5Ticket && !activeTickets.has(log.mt5Ticket));
-      if (closedLogs.length === 0) return;
-      silentLogger.debug(`[PIPELINE] syncClosedPositions: ${closedLogs.length} logs detected as closed`);
-
-      // 4. Fetch last 7 days of deal history from MT5 (fast path)
+      // 2b. Fetch deal history (fast path: 7 days) — needed to bridge pending
+      // order tickets (log.mt5Ticket) to position tickets (deals carry both).
       const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
       const deals = await mt5McpService.getHistory(sevenDaysAgo);
+      const orderToPosition = new Map<string, string>();
+      for (const d of deals) {
+        if (d.entry === 0 && d.order) {
+          orderToPosition.set(String(d.order), String(d.position_id));
+        }
+      }
+
+      // 3. Find trade logs whose positions are no longer in MT5 active positions
+      // (meaning they closed). Resolve order ticket → position ticket via deals
+      // for pending orders that got filled (tickets differ in MT5).
+      const closedLogs: Array<{ log: any; positionId: string }> = [];
+      for (const log of openLogs) {
+        if (!log.mt5Ticket) continue;
+        const positionId = orderToPosition.get(String(log.mt5Ticket)) || String(log.mt5Ticket);
+        if (!activeTickets.has(Number(positionId))) {
+          closedLogs.push({ log, positionId });
+        }
+      }
+      if (closedLogs.length === 0) return;
+      silentLogger.debug(`[PIPELINE] syncClosedPositions: ${closedLogs.length} logs detected as closed`);
 
       // 4b. Also fetch full history as fallback for older trades
       let fullDeals: any[] | null = null;
 
-      for (const log of closedLogs) {
+      for (const { log, positionId } of closedLogs) {
         if (!log.mt5Ticket) continue;
 
         // Find the OUT deal (entry === 1) that closed this position
         let closingDeal = deals.find(
-          d => String(d.position_id) === String(log.mt5Ticket) && d.entry === 1
+          d => String(d.position_id) === positionId && d.entry === 1
         );
 
         // Fallback: if not found in 7-day window, try full history
@@ -1743,7 +1759,7 @@ busySymbols: new Set<string>(),
             fullDeals = await mt5McpService.getHistory(0); // fetch all available
           }
           closingDeal = fullDeals.find(
-            d => String(d.position_id) === String(log.mt5Ticket) && d.entry === 1
+            d => String(d.position_id) === positionId && d.entry === 1
           );
         }
 
@@ -1781,6 +1797,7 @@ busySymbols: new Set<string>(),
           const pnlPercent = Math.round((pnl / balance) * 100 * 100) / 100;
 
           // Save to DB
+          log.mt5Ticket = Number(positionId); // bridge pending order ticket → position ticket
           log.closed = true;
           log.closedAt = new Date(closingDeal.time * 1000);
           log.closePrice = closePrice;
