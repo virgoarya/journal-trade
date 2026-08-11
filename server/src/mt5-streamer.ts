@@ -136,11 +136,23 @@ function isMcpTradeBlocked(res: any): boolean {
   return /not permitted|not allowed/i.test(text);
 }
 
-/** Execute a trade operation via the Python MetaTrader5 API (bypasses native MCP trade restrictions). */
-async function callPythonTrade(action: string, payload: any = {}): Promise<any> {
+// ─── Python subprocess queue ─────────────────────────────────────────────────
+// MT5 hanya mengizinkan SATU proses python terhubung ke terminal pada satu waktu
+// (retcode -6 "connection failed"). Semua spawn python di-serialize via promise
+// chain agar manual close, pipeline AI, dan trailing stop tidak saling rebut.
+let pythonQueue: Promise<any> = Promise.resolve();
+
+function enqueuePython(args: string[], options: any): Promise<any> {
+  const run = pythonQueue.then(() => execFileAsync("python", args, options));
+  pythonQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+/** Execute a trade operation via the Python MetaTrader5 API (bypasses native MCP trade restrictions). Serialized via pythonQueue. */
+async function enqueuePythonTrade(action: string, payload: any = {}): Promise<any> {
   try {
     const scriptPath = path.join(__dirname, "..", "trade_api.py");
-    const { stdout } = await execFileAsync("python", [scriptPath, action, JSON.stringify(payload)], {
+    const { stdout } = await enqueuePython([scriptPath, action, JSON.stringify(payload)], {
       timeout: 30000, // 30s timeout — Python MT5 call bisa hang jika terminal freeze
       killSignal: "SIGKILL",
       maxBuffer: 1024 * 1024 * 8,
@@ -182,7 +194,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     case "mt5_orders_get":
     case "get_trading_orders": {
       // Try Python MetaTrader5 API first (orders_get is reliable there)
-      const pyRes = await callPythonTrade("orders_get", { symbol: payload.symbol });
+      const pyRes = await enqueuePythonTrade("orders_get", { symbol: payload.symbol });
       if (pyRes && Array.isArray(pyRes.orders)) {
         cachedOrders = pyRes.orders;
         return pyRes.orders;
@@ -288,7 +300,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       const actionType = String(payload.action ?? "BUY").toUpperCase();
 
       // Try Python MetaTrader5 API first (bypasses native MCP restrictions)
-      const pyRes = await callPythonTrade("order_send", {
+      const pyRes = await enqueuePythonTrade("order_send", {
         symbol: payload.symbol,
         type: actionType,
         volume: Number(payload.volume),
@@ -297,6 +309,17 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         tp: payload.tp !== undefined ? Number(payload.tp) : undefined,
         comment: payload.comment ? String(payload.comment).slice(0, 31) : undefined,
       });
+      // Timeout/kill atau stdout gagal parse → order MUNGKIN sudah terkirim.
+      // Jangan fallback ke native MCP (bisa double-submit). Minta verifikasi manual.
+      const pyErrMsg = pyRes?.error ? String(pyRes.error) : "";
+      if (pyRes?.success !== true && /timeout|ETIMEDOUT|SIGKILL|JSON|Unexpected token/i.test(pyErrMsg)) {
+        silentLogger.error(`[MT5-Streamer] Python order_send result uncertain (${pyErrMsg}). Raw payload: ${JSON.stringify(payload)}`);
+        return {
+          success: false,
+          uncertain: true,
+          error: "Order status tidak pasti — verifikasi posisi di MT5 sebelum submit ulang.",
+        };
+      }
       if (pyRes?.success === true) {
         return {
           success: true,
@@ -366,14 +389,19 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       const ticketNum = Number(payload.ticket);
       const isPendingOrder = cachedOrders.some((o) => o.ticket === ticketNum);
       if (isPendingOrder) {
-        const pyRes = await callPythonTrade("order_delete", { ticket: ticketNum });
+        const pyRes = await enqueuePythonTrade("order_delete", { ticket: ticketNum });
         if (pyRes?.success === true) {
           return { success: true, ticket: ticketNum, source: "python" };
         }
       } else {
-        const pyRes = await callPythonTrade("position_close", { ticket: ticketNum });
+        const pyRes = await enqueuePythonTrade("position_close", { ticket: ticketNum });
         if (pyRes?.success === true) {
           return { success: true, ticket: ticketNum, source: "python" };
+        }
+        // Retcode 10016 = TRADE_DISABLED, 10014 = MARKET_CLOSED: tidak ada gunanya
+        // fallback ke native MCP — hasilnya sama-sama ditolak terminal.
+        if (pyRes?.retcode === 10016 || pyRes?.retcode === 10014) {
+          return { success: false, ticket: ticketNum, error: mcpTradeError(pyRes.error || pyRes) };
         }
       }
 
@@ -417,10 +445,11 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
       if (isMcpTradeBlocked(res)) {
         return { success: false, ticket: payload.ticket, error: mcpTradeError(res) };
       }
+      const isErr = typeof res === "string" || res?.error || res?.isError;
       return {
-        success: !res?.error && !res?.isError,
+        success: !isErr,
         ticket: payload.ticket,
-        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined) || (typeof res === "string" ? mcpTradeError(res) : undefined),
+        error: isErr ? (typeof res === "string" ? mcpTradeError(res) : (res?.error || (res?.isError ? JSON.stringify(res) : undefined))) : undefined,
       };
     }
 
@@ -428,7 +457,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     case "mt5_order_delete": {
       // Try Python MetaTrader5 API first (bypasses native MCP restrictions)
       const ticketNum = Number(payload.ticket);
-      const pyRes = await callPythonTrade("order_delete", { ticket: ticketNum });
+      const pyRes = await enqueuePythonTrade("order_delete", { ticket: ticketNum });
       if (pyRes?.success === true) {
         return { success: true, ticket: ticketNum, source: "python" };
       }
@@ -482,7 +511,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
       // Try Python MetaTrader5 API first (bypasses native MCP restrictions)
       const pyArgs: any = { ticket: Number(payload.ticket), sl: payload.sl, tp: payload.tp };
-      const pyRes = await callPythonTrade(isPendingOrder ? "pending_modify" : "position_modify", pyArgs);
+      const pyRes = await enqueuePythonTrade(isPendingOrder ? "pending_modify" : "position_modify", pyArgs);
       if (pyRes?.success === true) {
         return { success: true, ticket: payload.ticket, source: "python" };
       }
@@ -495,10 +524,11 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           error: mcpTradeError(res),
         };
       }
+      const isErr = typeof res === "string" || res?.error || res?.isError;
       return {
-        success: !res?.error && !res?.isError,
+        success: !isErr,
         ticket: payload.ticket,
-        error: res?.error || (res?.isError ? JSON.stringify(res) : undefined) || (typeof res === "string" ? mcpTradeError(res) : undefined),
+        error: isErr ? (typeof res === "string" ? mcpTradeError(res) : (res?.error || (res?.isError ? JSON.stringify(res) : undefined))) : undefined,
       };
     }
 
@@ -516,13 +546,13 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     case "mt5_copy_rates": {
       try {
         const scriptPath = path.join(__dirname, "..", "fetch_rates.py");
-        const { stdout } = await execFileAsync("python", [
+        const { stdout } = await enqueuePython([
           scriptPath,
           payload.symbol,
           payload.timeframe,
           "count",
           String(payload.count)
-        ]);
+        ], {});
         const result = JSON.parse(stdout);
         if (result.error) {
           throw new Error(result.error);
@@ -537,14 +567,14 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
     case "mt5_copy_rates_range": {
       try {
         const scriptPath = path.join(__dirname, "..", "fetch_rates.py");
-        const { stdout } = await execFileAsync("python", [
+        const { stdout } = await enqueuePython([
           scriptPath,
           payload.symbol,
           payload.timeframe,
           "range", // we must pass a string that is not "count"
           String(payload.from),
           String(payload.to)
-        ]);
+        ], {});
         const result = JSON.parse(stdout);
         if (result.error) {
           throw new Error(result.error);
@@ -621,6 +651,7 @@ export async function disconnectMcp(): Promise<void> {
 }
 
 async function connectToNativeMcp(): Promise<void> {
+  if (mcpClient || isConnected) return; // re-entrancy guard
   const mcpUrl = activeMcpUrl;
   const apiKey = activeApiKey;
 

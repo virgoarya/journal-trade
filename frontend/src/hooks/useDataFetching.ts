@@ -98,6 +98,17 @@ export function useDataFetching() {
   const [isFallback, setIsFallback] = useState(false);
   // Use ref for retry counts to avoid triggering re-renders on every retry
   const retryCountsRef = useRef<Record<string, number>>({});
+  // Guard against setState after unmount (React 18 warning)
+  const mountedRef = useRef(true);
+  // Keys that ever received good data — a 429 rate-limit must not wipe their status
+  const hasGoodDataRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const setStatus = useCallback(
     (key: keyof DataStatusState, status: DataStatus) => {
@@ -236,6 +247,8 @@ export function useDataFetching() {
       parseJson(tgaRes),
     ]);
 
+    if (!mountedRef.current) return;
+
     const quoteStatus = getStatusFromResponse(quotesRes, quotesData);
     const liquidityFetchStatus = getStatusFromResponse(liquidityRes, liquidityData);
     const regimeFetchStatus = getStatusFromResponse(regimeRes, regimeApiData);
@@ -245,15 +258,28 @@ export function useDataFetching() {
     const geoRiskFetchStatus = getStatusFromResponse(geoRiskRes, geoRiskData);
     const tgaFetchStatus = getStatusFromResponse(tgaRes, tgaData);
 
-    // Set statuses independently - each component handles its own error state
-    setStatus("quotes", quoteStatus);
-    setStatus("liquidity", liquidityFetchStatus);
-    setStatus("regime", regimeFetchStatus);
-    setStatus("calendar", calendarFetchStatus);
-    setStatus("news", newsFetchStatus);
-    setStatus("quant", quantFetchStatus);
-    setStatus("geoRisk", geoRiskFetchStatus);
-    setStatus("tga", tgaFetchStatus);
+    // Set statuses independently - each component handles its own error state.
+    // On rate-limit (429) keep last good values: never downgrade a key that
+    // already has good data — surface the status flag only.
+    const rateLimitedKeys = new Set<keyof DataStatusState>();
+    responses.forEach((res, idx) => {
+      if (res?.status === 429) rateLimitedKeys.add(fetchTasks[idx].key);
+    });
+
+    const applyStatus = (key: keyof DataStatusState, status: DataStatus) => {
+      if (rateLimitedKeys.has(key) && hasGoodDataRef.current[key]) return;
+      if (status === "live" || status === "cache") hasGoodDataRef.current[key] = true;
+      setStatus(key, status);
+    };
+
+    applyStatus("quotes", quoteStatus);
+    applyStatus("liquidity", liquidityFetchStatus);
+    applyStatus("regime", regimeFetchStatus);
+    applyStatus("calendar", calendarFetchStatus);
+    applyStatus("news", newsFetchStatus);
+    applyStatus("quant", quantFetchStatus);
+    applyStatus("geoRisk", geoRiskFetchStatus);
+    applyStatus("tga", tgaFetchStatus);
 
     // Set fallback only if critical data sources error
     setIsFallback([

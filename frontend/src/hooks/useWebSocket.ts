@@ -27,9 +27,16 @@ export function useWebSocket(
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(false);
+  const connectingRef = useRef(false);
 
   const WS_RECONNECT_MS = 3_000;
   const connectRef = useRef<() => void>(() => {});
+
+  // Keep latest callbacks in a ref so connect() stays stable across re-renders
+  const callbacksRef = useRef({ onQuoteUpdate, onLiquidityUpdate, onVixUpdate });
+  useEffect(() => {
+    callbacksRef.current = { onQuoteUpdate, onLiquidityUpdate, onVixUpdate };
+  });
 
   const getWebSocketUrl = useCallback(() => {
     if (typeof window === "undefined") return "";
@@ -38,13 +45,16 @@ export function useWebSocket(
   }, []);
 
   const connect = useCallback(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || connectingRef.current) return;
 
     try {
+      connectingRef.current = true;
+      setStatus("connecting");
       const ws = new WebSocket(getWebSocketUrl());
       wsRef.current = ws;
 
       ws.onopen = () => {
+        connectingRef.current = false;
         setStatus("connected");
         console.log("[Macro Terminal] WebSocket connected");
       };
@@ -52,6 +62,7 @@ export function useWebSocket(
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage;
+          const { onQuoteUpdate, onLiquidityUpdate, onVixUpdate } = callbacksRef.current;
 
           if (message.type === "quote_update") {
             onQuoteUpdate(message.data as QuotePayload);
@@ -70,6 +81,7 @@ export function useWebSocket(
       };
 
       ws.onclose = () => {
+        connectingRef.current = false;
         setStatus("disconnected");
         if (mountedRef.current) {
           reconnectTimerRef.current = setTimeout(() => connectRef.current(), WS_RECONNECT_MS);
@@ -77,17 +89,19 @@ export function useWebSocket(
       };
 
       ws.onerror = () => {
+        connectingRef.current = false;
         setStatus("error");
         ws.close();
       };
     } catch (error) {
+      connectingRef.current = false;
       console.error("[Macro Terminal] WebSocket connect error:", error);
       setStatus("error");
       if (mountedRef.current) {
         reconnectTimerRef.current = setTimeout(() => connectRef.current(), WS_RECONNECT_MS);
       }
     }
-  }, [getWebSocketUrl, onQuoteUpdate, onLiquidityUpdate, onVixUpdate]);
+  }, [getWebSocketUrl]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {

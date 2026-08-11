@@ -13,7 +13,7 @@ import { MongoClient } from "mongodb";
 export const authMongoClient = new MongoClient(env.DATABASE_URL, {
   serverSelectionTimeoutMS: 5000,
   connectTimeoutMS: 5000,
-});
+} as any);
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 3000;
@@ -49,7 +49,7 @@ export const connectDB = async () => {
     if (mongoose.connection.readyState < 1) {
       await mongoose.connect(env.DATABASE_URL, {
         serverSelectionTimeoutMS: 10000,
-      });
+      } as any);
       console.log("🚀 Mongoose Connected.");
     }
 
@@ -69,6 +69,6 @@ export const connectDB = async () => {
     }
   } catch (error) {
     console.error("🔥 Error connecting to MongoDB:", error);
-    // Do not call process.exit(1) so HTTP server stays up and allows diagnostics
+    throw error; // let index.ts decide shutdown — app is useless without DB
   }
 };

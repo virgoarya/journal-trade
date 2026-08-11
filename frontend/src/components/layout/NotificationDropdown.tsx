@@ -31,6 +31,18 @@ const formatTimeIndonesia = (dateString: string) => {
   return `${hari} yang lalu`;
 };
 
+const getSafeLink = (link?: string | null): { href: string; external: boolean } | null => {
+  if (!link) return null;
+  if (link.startsWith("/") || link.startsWith("#")) return { href: link, external: false };
+  try {
+    const url = new URL(link);
+    if (url.protocol === "http:" || url.protocol === "https:") return { href: url.href, external: true };
+  } catch {
+    // invalid URL — treat as unsafe
+  }
+  return null;
+};
+
 export default function NotificationDropdown({ className = "" }: NotificationDropdownProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -248,16 +260,28 @@ export default function NotificationDropdown({ className = "" }: NotificationDro
                             {notification.message}
                           </p>
                           <div className="flex items-center space-x-2">
-                            {notification.link && (
-                              <a
-                                href={notification.link}
-                                className="inline-flex items-center text-[10px] text-accent-gold hover:underline"
-                                onClick={() => handleLinkClick(notification.id)}
-                              >
-                                <ExternalLink className="w-3 h-3 mr-1" />
-                                Buka
-                              </a>
-                            )}
+                            {notification.link && (() => {
+                              const safeLink = getSafeLink(notification.link);
+                              if (!safeLink) {
+                                return (
+                                  <span className="inline-flex items-center text-[10px] text-accent-gold/50 cursor-not-allowed">
+                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                    Buka
+                                  </span>
+                                );
+                              }
+                              return (
+                                <a
+                                  href={safeLink.href}
+                                  className="inline-flex items-center text-[10px] text-accent-gold hover:underline"
+                                  onClick={() => handleLinkClick(notification.id)}
+                                  {...(safeLink.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                                >
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  Buka
+                                </a>
+                              );
+                            })()}
                             {!notification.read && (
                               <button
                                 onClick={() => handleMarkAsRead(notification.id)}

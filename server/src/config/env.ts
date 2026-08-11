@@ -21,9 +21,12 @@ for (const cand of envCandidates) {
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
-    .default("development"),
+    .default("production"),
   PORT: z.coerce.number().default(5000),
   DATABASE_URL: z.string().min(1),
+
+  // Encryption key for credentials at rest (MT5 passwords, API keys). REQUIRED in production.
+  ENCRYPTION_KEY: z.string().min(32).optional(),
 
   // Database name (default: journal_trade_dev)
   DATABASE_NAME: z.string().optional().default("journal_trade_dev"),

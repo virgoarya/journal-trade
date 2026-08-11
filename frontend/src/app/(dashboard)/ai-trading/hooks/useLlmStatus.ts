@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { aiTradingService } from "@/services/ai-trading.service";
 import { type LlmModelNode, type LlmModelStatus } from "../types";
 import { providerRegistry } from "../services/provider-registry.service";
@@ -29,9 +29,13 @@ export function useLlmStatus(opts: { pollIntervalMs?: number } = {}) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isFirstLoadRef = useRef(true);
 
   const fetchStatus = useCallback(async () => {
-    setLoading(true);
+    if (isFirstLoadRef.current) {
+      isFirstLoadRef.current = false;
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await aiTradingService.getLlmStatus();

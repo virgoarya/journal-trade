@@ -34,7 +34,7 @@ router.get('/verify-guild', requireAuth, async (req, res) => {
     // Find the Discord OAuth account for this user
     // Support both String and ObjectId formats and common collection names
     const { ObjectId } = require('mongodb');
-    let account = null;
+    let account: any = null;
     const collections = ['account', 'accounts'];
 
     for (const colName of collections) {

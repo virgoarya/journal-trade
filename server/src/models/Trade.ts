@@ -77,4 +77,6 @@ const TradeSchema = new Schema<ITrade>({
   toObject: { virtuals: true }
 });
 
+TradeSchema.index({ userId: 1, tradingAccountId: 1, isDeleted: 1, tradeDate: -1 });
+
 export const Trade = mongoose.models.Trade || mongoose.model<ITrade>("Trade", TradeSchema);

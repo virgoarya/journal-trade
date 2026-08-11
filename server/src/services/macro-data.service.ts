@@ -269,7 +269,7 @@ export const macroDataService = {
                 if (!isNaN(parsedActual)) {
                   // Only update if the release date is newer or same
                   await MacroIndicator.findOneAndUpdate(
-                    { indicatorName: e.title, country: e.country },
+                    { indicatorName: e.title, country: e.country, releaseDate: { $lte: new Date(e.date) } },
                     {
                       $set: {
                         actualValue: parsedActual,

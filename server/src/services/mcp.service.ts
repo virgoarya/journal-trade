@@ -191,6 +191,31 @@ class MCPService {
     return Array.from(this.toolsCache.values()).map((entry) => entry.tool);
   }
 
+  /**
+   * Best-effort shutdown: kill spawned child processes and close clients.
+   */
+  async shutdown() {
+    for (const [serverName, child] of this.processes.entries()) {
+      try {
+        child.kill();
+      } catch (e: any) {
+        silentLogger.warn(`[MCP] Failed to kill process for '${serverName}': ${e.message}`);
+      }
+    }
+    this.processes.clear();
+
+    for (const [serverName, client] of this.clients.entries()) {
+      try {
+        await client.close();
+      } catch (e: any) {
+        silentLogger.warn(`[MCP] Failed to close client '${serverName}': ${e.message}`);
+      }
+    }
+    this.clients.clear();
+    this.toolsCache.clear();
+    this.isConnected = false;
+  }
+
   async executeTool(name: string, args: Record<string, any>): Promise<any> {
     const entry = this.toolsCache.get(name);
     if (!entry) {

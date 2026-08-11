@@ -95,14 +95,14 @@ def _get_supported_filling_modes(symbol: str) -> list[str]:
 def _get_filling_mode(symbol: str) -> int:
     """
     Get the best supported filling mode for a symbol.
-    Priority: IOC > FOK > RETURN.
+    Priority: FOK > IOC > RETURN (matches trade_api.py pick_filling).
     """
     supported = _get_supported_filling_modes(symbol)
 
-    if "IOC" in supported:
-        return mt5.ORDER_FILLING_IOC
     if "FOK" in supported:
         return mt5.ORDER_FILLING_FOK
+    if "IOC" in supported:
+        return mt5.ORDER_FILLING_IOC
     if "RETURN" in supported:
         return mt5.ORDER_FILLING_RETURN
 
@@ -424,7 +424,10 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
     # ── Connection ────────────────────────────────────────────────────
     if name == "mt5_connect":
         server = arguments["server"]
-        login = int(arguments["login"])
+        try:
+            login = int(arguments["login"])
+        except (ValueError, TypeError):
+            return _err(f"Invalid login: {arguments.get('login')!r}")
         password = arguments["password"]
 
         if mt5_connected:
@@ -672,7 +675,7 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         volume = arguments["volume"]
         sl_raw = arguments.get("sl", 0.0)
         tp_raw = arguments.get("tp", 0.0)
-        comment = (arguments.get("comment") or "AI-Trade")[:32]
+        comment = (arguments.get("comment") or "AI-Trade")[:31]
         
         symbol_info = mt5.symbol_info(symbol)
         digits = symbol_info.digits if symbol_info else 5
@@ -844,16 +847,10 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         symbol_info = mt5.symbol_info(pos.symbol)
         digits = symbol_info.digits if symbol_info else 5
         
-        sl_raw = arguments.get("sl", pos.sl or 0)
-        tp_raw = arguments.get("tp", pos.tp or 0)
-        
-        sl = round(float(sl_raw), digits) if sl_raw != 0 else 0.0
-        tp = round(float(tp_raw), digits) if tp_raw != 0 else 0.0
-        
-        if sl == 0:
-            sl = round(float(pos.sl or 0), digits)
-        if tp == 0:
-            tp = round(float(pos.tp or 0), digits)
+        # Use explicit sl/tp from payload even when 0 (clears SL/TP).
+        # Fall back to current value only when the key is absent.
+        sl = round(float(arguments["sl"]), digits) if arguments.get("sl") is not None else round(float(pos.sl or 0), digits)
+        tp = round(float(arguments["tp"]), digits) if arguments.get("tp") is not None else round(float(pos.tp or 0), digits)
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
@@ -1010,6 +1007,7 @@ def run_ws_client(app_instance=None, ws_url=None):
     print(f"[WS-STREAM] Menghubungkan ke: {WS_URL}")
     
     async def tick_streamer(ws):
+        global mt5_connected, mt5_config
         while True:
             try:
                 if not mt5_connected:
@@ -1018,6 +1016,34 @@ def run_ws_client(app_instance=None, ws_url=None):
                 
                 # 1. Tarik posisi terbuka
                 positions = mt5.positions_get()
+                if positions is None:
+                    err = mt5.last_error()
+                    print(f"[MT5-ERROR] positions_get returned None: {err}", file=sys.stderr)
+                    if mt5_connected:
+                        # Connection lost (return code < 0) — clear stale flag so
+                        # node can react, then try one reconnect like the startup path.
+                        mt5_connected = False
+                        await ws.send(json.dumps({
+                            "type": "mt5_status",
+                            "data": {"connected": False, "last_error": err},
+                        }))
+                        try:
+                            if mt5.initialize():
+                                acc = mt5.account_info()
+                                if acc:
+                                    mt5_connected = True
+                                    mt5_config = {"server": acc.server, "login": acc.login}
+                                    print(f"[MT5] 🟢 Reconnect berhasil: Akun #{acc.login} ({acc.server})")
+                                    await ws.send(json.dumps({
+                                        "type": "mt5_status",
+                                        "data": {"connected": True, "login": acc.login, "server": acc.server},
+                                    }))
+                                else:
+                                    mt5.shutdown()
+                        except Exception as e:
+                            print(f"[MT5] Reconnect gagal: {e}")
+                    await asyncio.sleep(1)
+                    continue
                 pos_data = []
                 if positions:
                     for p in positions:
@@ -1052,9 +1078,10 @@ def run_ws_client(app_instance=None, ws_url=None):
                     
                     print(f"[RPC] Menerima request {action} (ID: {req_id})")
                     
-                    # Jalankan command (di thread utama atau di async)
+                    # Jalankan command di worker thread agar blocking MT5 calls
+                    # tidak membekukan event loop
                     try:
-                        res = sync_call_tool(action, payload)
+                        res = await asyncio.to_thread(sync_call_tool, action, payload)
                         if res and len(res) > 0:
                             res_json = json.loads(res[0].text)
                             await ws.send(json.dumps({
@@ -1111,6 +1138,12 @@ def run_ws_client(app_instance=None, ws_url=None):
         loop.run_until_complete(streamer())
     except KeyboardInterrupt:
         print("\nExiting...")
+    finally:
+        try:
+            mt5.shutdown()
+        except Exception:
+            pass
+        loop.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hunter Trades MT5 Bridge")

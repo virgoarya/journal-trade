@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   aiTradingService,
   type PipelineStatus,
@@ -28,9 +28,15 @@ export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
   const [lastLLMVotes, setLastLLMVotes] = useState<LLMConsensusResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
+  const isFirstLoadRef = useRef(true);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (opts?: { showLoading?: boolean }) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (opts?.showLoading ?? isFirstLoadRef.current) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [statusRes, logsRes] = await Promise.all([
@@ -59,6 +65,8 @@ export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
     } catch (e: any) {
       setError(e?.message ?? "Pipeline data fetch error");
     } finally {
+      inFlightRef.current = false;
+      isFirstLoadRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -78,6 +86,6 @@ export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
     lastLLMVotes,
     loading,
     error,
-    refresh: fetchData,
+    refresh: () => fetchData({ showLoading: true }),
   };
 }

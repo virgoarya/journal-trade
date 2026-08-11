@@ -58,7 +58,7 @@ ATURAN PERILAKU:
     });
 
     // Build provider candidates queue for high resilience
-    const candidates = [];
+    const candidates: { model: any; label: string }[] = [];
 
     if (env.NINE_ROUTER_URL) {
       const nineRouter = createOpenAI({
@@ -79,7 +79,7 @@ ATURAN PERILAKU:
     // Ultimate free fallback
     candidates.push({ model: openRouter.chat("openai/gpt-oss-120b:free"), label: "openrouter-free" });
 
-    let response = null;
+    let response: any = null;
     let lastError: any = null;
 
     // 3. Try candidates sequentially until one succeeds

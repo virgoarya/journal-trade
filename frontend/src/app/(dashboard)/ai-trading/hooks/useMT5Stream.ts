@@ -66,6 +66,7 @@ function connect() {
 
   ws.onclose = () => {
     console.log("[MT5 Stream] Disconnected. Reconnecting...");
+    isConnecting = false;
     wsRef = null;
     broadcastToSubscribers({ type: "mt5_status", data: { connected: false } });
     if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -74,7 +75,8 @@ function connect() {
 
   ws.onerror = (err) => {
     console.error("[MT5 Stream] WebSocket error:", err);
-    ws.close();
+    isConnecting = false;
+    try { ws.close(); } catch { /* already closed */ }
   };
 }
 

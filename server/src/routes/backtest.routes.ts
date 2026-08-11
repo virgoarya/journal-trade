@@ -217,7 +217,7 @@ router.post("/prepare", validate({ body: backtestRunSchema }), async (req, res, 
  */
 router.post("/session/:sessionId/start", async (req, res, next) => {
   try {
-    await backtestSessionManager.triggerStart(req.params.sessionId);
+    await backtestSessionManager.triggerStart(req.params.sessionId, req.user.id);
     return apiResponse.success(res, { started: true });
   } catch (error: any) {
     return apiResponse.error(res, error.message || "Failed to start session", "SESSION_ERROR", 400);
@@ -358,7 +358,7 @@ router.get("/history", async (req, res, next) => {
     const skip = parseInt(req.query.skip as string) || 0;
 
     const experiences = await BacktestExperience.find({ userId: req.user.id })
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .select("-pipelineConfigSnapshot"); // Don't send full config in list

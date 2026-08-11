@@ -218,7 +218,7 @@ async function callDualEngineStream(
   const systemPrompt = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages.filter((m) => m.role !== "system");
 
-  const geminiContents = [];
+  const geminiContents: { role: string; parts: { text: string }[] }[] = [];
   if (systemPrompt) {
     geminiContents.push({ role: "user", parts: [{ text: systemPrompt }] });
   }

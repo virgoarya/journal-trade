@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Loader2, PlugZap, Eye, EyeOff, Key, ShieldCheck, ChevronDown, ChevronUp, Copy, CheckCircle2, Terminal } from "lucide-react";
 
 interface MT5Credentials {
@@ -30,20 +30,10 @@ export function ConnectionPanel({
   const [showGuide, setShowGuide] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem("mt5_mcp_api_key");
-    if (savedApiKey) setApiKey(savedApiKey);
-    const savedMcpUrl = localStorage.getItem("mt5_mcp_url");
-    if (savedMcpUrl) setMcpUrl(savedMcpUrl);
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanApiKey = apiKey.trim();
     const cleanUrl = mcpUrl.trim() || "http://127.0.0.1:22346/mcp";
-
-    localStorage.setItem("mt5_mcp_api_key", cleanApiKey);
-    localStorage.setItem("mt5_mcp_url", cleanUrl);
 
     await onConnect({
       apiKey: cleanApiKey,

@@ -61,6 +61,11 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
   );
 
   const isInitialLoadingRef = useRef(true);
+  const isEmptyRef = useRef(true);
+
+  useEffect(() => {
+    isEmptyRef.current = positions.length === 0 && orders.length === 0;
+  }, [positions, orders]);
 
   useEffect(() => {
     let isMounted = true;
@@ -73,7 +78,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       }
 
       // Fetch awal hanya jika data masih kosong (belum dapat dari WebSocket)
-      if (positions.length === 0 && orders.length === 0) {
+      if (isEmptyRef.current) {
          await fetchPositions();
       }
       
@@ -95,7 +100,7 @@ export function usePositions(isConnected: boolean, pollInterval = 10000) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [fetchPositions, isConnected, wsConnected, pollInterval, positions.length, orders.length]); // Add wsConnected and data lengths
+  }, [fetchPositions, isConnected, wsConnected, pollInterval]);
 
   const closePosition = useCallback(
     async (ticket: number) => {

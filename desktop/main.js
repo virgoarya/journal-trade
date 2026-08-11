@@ -9,7 +9,7 @@ const axios = require("axios");
 const AdmZip = require("adm-zip");
 const crypto = require("crypto");
 const path = require("path");
-const { spawn, fork, execFile } = require("child_process");
+const { spawn, fork, execFile, execSync } = require("child_process");
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
@@ -55,6 +55,31 @@ let backendProcess = null;
 let frontendProcess = null;
 let routerProcess = null;
 let isQuitting = false;
+
+// ─── Restart Guard (cap consecutive failures) ────────────────
+const MAX_RESTART_ATTEMPTS = 5;
+const restartAttempts = { backend: 0, frontend: 0 };
+
+function scheduleRestart(key, getProcess, restartFn, getLastError) {
+  restartAttempts[key]++;
+  if (restartAttempts[key] > MAX_RESTART_ATTEMPTS) {
+    console.error(`[MAIN] ${key} failed ${MAX_RESTART_ATTEMPTS} consecutive times. Stopping restart loop.`);
+    const lastErr = getLastError ? getLastError() : "";
+    dialog.showErrorBox(
+      `Hunter Trades — ${key} Failed to Start`,
+      `${key} gagal dimulai setelah ${MAX_RESTART_ATTEMPTS} kali percobaan.\n\n${lastErr ? "Error terakhir:\n" + lastErr : "Tidak ada detail error."}`
+    );
+    return;
+  }
+  console.log(`[MAIN] Restarting ${key} in 3s...`);
+  setTimeout(restartFn, 3000);
+  setTimeout(() => {
+    const proc = getProcess();
+    if (proc && proc.exitCode === null && proc.signalCode === null) {
+      restartAttempts[key] = 0;
+    }
+  }, 60000);
+}
 
 // ─── .env Loader ─────────────────────────────────────────────
 function loadEnvFile(envPath) {
@@ -161,6 +186,21 @@ function killProcessOnPort(port) {
   }
 }
 
+// ─── Single Instance Lock ────────────────────────────────────
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // Clean up any leftover processes on our ports before starting
 killProcessOnPort(BACKEND_PORT);
 killProcessOnPort(FRONTEND_PORT);
@@ -214,10 +254,9 @@ async function startBackend() {
     });
     backendProcess.on("exit", (code) => {
       console.log(`[MAIN] Backend exited with code ${code}`);
-      if (!isQuitting && code !== 0) {
-        console.log("[MAIN] Restarting backend in 3s...");
-        setTimeout(startBackend, 3000);
-      }
+      if (isQuitting) return;
+      if (code === 0) { restartAttempts.backend = 0; return; }
+      scheduleRestart("Backend", () => backendProcess, startBackend, () => backendLastStderr);
     });
   } else {
     const serverScript = path.join(serverCwd, "dist", "index.js");
@@ -260,10 +299,9 @@ async function startBackend() {
     });
     backendProcess.on("exit", (code) => {
       console.log(`[MAIN] Backend exited with code ${code}`);
-      if (!isQuitting && code !== 0) {
-        console.log("[MAIN] Restarting backend in 3s...");
-        setTimeout(startBackend, 3000);
-      }
+      if (isQuitting) return;
+      if (code === 0) { restartAttempts.backend = 0; return; }
+      scheduleRestart("Backend", () => backendProcess, startBackend, () => backendLastStderr);
     });
   }
 }
@@ -358,9 +396,9 @@ async function startFrontend() {
     });
     frontendProcess.on("exit", (code) => {
       console.log(`[MAIN] Frontend exited with code ${code}`);
-      if (!isQuitting && code !== 0) {
-        setTimeout(startFrontend, 3000);
-      }
+      if (isQuitting) return;
+      if (code === 0) { restartAttempts.frontend = 0; return; }
+      scheduleRestart("Frontend", () => frontendProcess, startFrontend, () => frontendLastStderr);
     });
     return;
   }
@@ -532,7 +570,14 @@ function createMainWindow() {
   // Allow Discord OAuth flow: let the BrowserWindow navigate to discord.com
   // and then redirect back to localhost after auth completes.
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    const parsedUrl = new URL(url);
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch (e) {
+      console.log(`[MAIN] Blocking navigation to malformed URL: ${url}`);
+      event.preventDefault();
+      return;
+    }
     const allowedHosts = ["discord.com", "discordapp.com", "localhost", "127.0.0.1"];
     if (allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
       console.log(`[MAIN] Allowing navigation to: ${url}`);
@@ -574,51 +619,73 @@ function getLocalIP() {
 // ─── System Tray ──────────────────────────────────// ─── OTA Updater Implementation ───────────────────────────────────────
 const OTA_VERSION_URL = "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/version.json";
 
+// Compare two semver-ish strings ("1.2.10" > "1.2.9"). Returns 1, -1, or 0.
+function compareVersions(a, b) {
+  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+async function runUpdateCheck() {
+  if (isDev) {
+    console.log("[OTA-UPDATER] Running in dev mode, skipping updates.");
+    return { status: "dev-mode", message: "Auto-updater is disabled in dev mode." };
+  }
+
+  const currentVersion = app.getVersion();
+
+  try {
+    console.log(`[OTA-UPDATER] Checking for updates (current: ${currentVersion})...`);
+    const response = await axios.get(`${OTA_VERSION_URL}?t=${Date.now()}`);
+    const remoteInfo = response.data;
+
+    if (!remoteInfo || !remoteInfo.version) {
+      return { status: "no-update", version: currentVersion, message: "Tidak ada pembaruan tersedia." };
+    }
+
+    // Simple version compare (assumes semver e.g., 1.0.5)
+    const isNewer = remoteInfo.version.localeCompare(currentVersion, undefined, { numeric: true, sensitivity: 'base' }) > 0;
+
+    if (isNewer) {
+      console.log(`[OTA-UPDATER] Update available: v${remoteInfo.version}`);
+      const result = {
+        status: "downloaded", // We mock downloaded so the UI asks to install immediately
+        version: remoteInfo.version,
+        releaseNotes: remoteInfo.notes || "A new update is available.",
+        patchUrl: remoteInfo.patchUrl
+      };
+      sendToRenderer("updater:status", result);
+      return result;
+    }
+
+    return { status: "no-update", version: currentVersion, message: "Tidak ada pembaruan tersedia." };
+  } catch (err) {
+    console.warn("[OTA-UPDATER] Update check failed:", err.message);
+    return { status: "error", message: "Gagal memeriksa update: " + err.message };
+  }
+}
+
 function setupAutoUpdater() {
   if (isDev) {
     console.log("[OTA-UPDATER] Running in dev mode, skipping updates.");
     return;
   }
-  
-  const currentVersion = app.getVersion();
-
-  async function checkOtaUpdate() {
-    try {
-      console.log(`[OTA-UPDATER] Checking for updates (current: ${currentVersion})...`);
-      const response = await axios.get(`${OTA_VERSION_URL}?t=${Date.now()}`);
-      const remoteInfo = response.data;
-      
-      if (!remoteInfo || !remoteInfo.version) return;
-
-      // Simple version compare (assumes semver e.g., 1.0.5)
-      const isNewer = remoteInfo.version.localeCompare(currentVersion, undefined, { numeric: true, sensitivity: 'base' }) > 0;
-      
-      if (isNewer) {
-        console.log(`[OTA-UPDATER] Update available: v${remoteInfo.version}`);
-        sendToRenderer("updater:status", {
-          status: "downloaded", // We mock downloaded so the UI asks to install immediately
-          version: remoteInfo.version,
-          releaseNotes: remoteInfo.notes || "A new update is available.",
-          patchUrl: remoteInfo.patchUrl
-        });
-      }
-    } catch (err) {
-      console.warn("[OTA-UPDATER] Update check failed:", err.message);
-    }
-  }
 
   // Check on startup after 10s
-  setTimeout(checkOtaUpdate, 10000);
+  setTimeout(runUpdateCheck, 10000);
   // Periodic check every 1 hour
-  setInterval(checkOtaUpdate, 60 * 60 * 1000);
+  setInterval(runUpdateCheck, 60 * 60 * 1000);
 }
 
 // IPC Handlers for Updater
 ipcMain.handle("updater:check-now", async () => {
-  if (isDev) {
-    return { status: "dev-mode", message: "Auto-updater is disabled in dev mode." };
-  }
-  return { status: "success", message: "OTA update check running in background." };
+  return runUpdateCheck();
 });
 
 ipcMain.on("updater:quit-and-install", async (event) => {
@@ -633,6 +700,31 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     const responseInfo = await axios.get(`${OTA_VERSION_URL}?t=${Date.now()}`);
     const remoteInfo = responseInfo.data;
     if (!remoteInfo || !remoteInfo.patchUrl) throw new Error("Invalid version data from server");
+
+    // 1b. Version gate: never downgrade a newer local install
+    const remoteVersion = String(remoteInfo.version || "");
+    if (!remoteVersion) throw new Error("Invalid version data from server");
+    const currentVersion = app.getVersion();
+    if (compareVersions(remoteVersion, currentVersion) <= 0) {
+      console.log(`[OTA-UPDATER] Skipping patch: remote ${remoteVersion} <= local ${currentVersion}`);
+      sendToRenderer("updater:status", {
+        status: "no-update",
+        version: currentVersion,
+        message: "Tidak ada pembaruan tersedia.",
+      });
+      return;
+    }
+
+    // 1c. Only allow https patch URLs
+    let patchUrl;
+    try {
+      patchUrl = new URL(remoteInfo.patchUrl);
+    } catch (e) {
+      throw new Error("Invalid patch URL from server");
+    }
+    if (patchUrl.protocol !== "https:") {
+      throw new Error(`Unsafe patch URL protocol: ${patchUrl.protocol}`);
+    }
 
     // 2. Download zip with progress tracking & timeout
     console.log(`[OTA-UPDATER] Downloading patch from: ${remoteInfo.patchUrl}`);
@@ -796,10 +888,34 @@ function sendToRenderer(channel, data) {
     mainWindow.webContents.send(channel, data);
   }
 }
+
+// Stop a forked/spawned child and wait for it to actually exit. Needed before
+// touching process.resourcesPath: on Windows a child's CWD locks the dir tree.
+function killChildGracefully(child) {
+  return new Promise((resolve) => {
+    if (!child) return resolve();
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    let settled = false;
+    const finish = () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
+    child.once("exit", finish);
+    try {
+      child.kill("SIGTERM");
+    } catch (e) {
+      return finish();
+    }
+    setTimeout(finish, 3000);
+  });
+}
 // (Cleaned up old auto-updater)
 
 // ─── App Lifecycle ──────────────────────────────────────────
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return;
   logSystemDiagnostics();
 
   // Show splash while servers start
@@ -847,12 +963,36 @@ app.whenReady().then(async () => {
     if (fs.existsSync(otaFlagPath)) {
        console.log("[OTA-SAFETY] Health check failed! Rolling back to backup...");
        try {
-         fs.rmSync(process.resourcesPath, { recursive: true, force: true });
+         // Stop children first: on Windows a child's CWD locks the resources dir.
+         isQuitting = true;
+         await killChildGracefully(backendProcess);
+         await killChildGracefully(frontendProcess);
+
+         // Never rm a dir a process may still hold. Rename corrupted -> staging,
+         // then backup -> resources, then delete staging.
+         const corruptPath = process.resourcesPath + ".corrupt";
+         if (fs.existsSync(corruptPath)) {
+           fs.rmSync(corruptPath, { recursive: true, force: true });
+         }
+         if (fs.existsSync(process.resourcesPath)) {
+           fs.renameSync(process.resourcesPath, corruptPath);
+         }
+         if (!fs.existsSync(backupPath)) {
+           throw new Error(`Backup not found: ${backupPath}`);
+         }
          fs.renameSync(backupPath, process.resourcesPath);
+         if (fs.existsSync(corruptPath)) {
+           fs.rmSync(corruptPath, { recursive: true, force: true });
+         }
          fs.unlinkSync(otaFlagPath);
          dialog.showErrorBox("OTA Update Failed", "Patch pembaruan gagal dimuat (Server Error). Sistem telah melakukan rollback otomatis ke versi sebelumnya agar aplikasi tetap bisa digunakan.");
        } catch (rbErr) {
          console.error("[OTA-SAFETY] CRITICAL: Rollback failed!", rbErr);
+         console.error("[OTA-SAFETY] FATAL: Refusing to relaunch into broken install. Exiting to prevent boot-loop.");
+         dialog.showErrorBox("OTA Update Failed", "Rollback otomatis gagal. Aplikasi akan ditutup untuk mencegah boot-loop. Silakan pasang ulang aplikasi.");
+         isQuitting = true;
+         app.exit(1);
+         return;
        }
        isQuitting = true;
        app.relaunch();

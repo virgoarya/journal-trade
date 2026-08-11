@@ -157,6 +157,11 @@ const DEFAULT_CONFIG: PipelineConfig = {
   llmConsensus: { enabled: false, minProviders: 4, threshold: 0.7, providerTimeoutMs: 45000 },
 };
 
+// Re-entrancy guards for the 2s interval jobs: setInterval callbacks are async and can
+// overlap with themselves when a slow MT5/DB cycle exceeds the interval.
+let isManagingPositions = false;
+let isSyncClosedRunning = false;
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 class TradingPipelineService {
@@ -765,6 +770,9 @@ busySymbols: new Set<string>(),
     if (!pipeline) return;
 
     let currentSymbol: string | undefined = symbol; // Initialize with the symbol parameter
+    // Track locks acquired during THIS invocation so finally can release all of them,
+    // not just the last one processed (multi-symbol loop otherwise leaks locks).
+    const lockedSymbolsThisTick = new Set<string>();
 
     try {
       // Handle MT5 disconnections by auto-pausing without killing the timer
@@ -1119,6 +1127,7 @@ busySymbols: new Set<string>(),
           continue;
         }
         pipeline.busySymbols.add(signal.symbol);
+        lockedSymbolsThisTick.add(signal.symbol);
 
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
@@ -1465,13 +1474,25 @@ busySymbols: new Set<string>(),
         this.addLog(userId, "ERROR", `Pipeline error: ${error.message} [symbol: ${currentSymbol}]`);
         silentLogger.error(`[PIPELINE] Error for ${userId}: ${error.message}`);
       } finally {
-        if (currentSymbol) pipeline.busySymbols.delete(currentSymbol);
+        for (const sym of lockedSymbolsThisTick) {
+          pipeline.busySymbols.delete(sym);
+        }
         pipeline.running = false;
       }
     }
   private marketClosedCache = new Map<string, number>();
 
   private async managePositions(userId: string): Promise<void> {
+    if (isManagingPositions) return;
+    isManagingPositions = true;
+    try {
+      await this.managePositionsInner(userId);
+    } finally {
+      isManagingPositions = false;
+    }
+  }
+
+  private async managePositionsInner(userId: string): Promise<void> {
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
 
@@ -1668,8 +1689,10 @@ busySymbols: new Set<string>(),
    * Synchronize closed MT5 positions with the AI trade logs DB.
    */
   private async syncClosedPositions(userId: string): Promise<void> {
+    if (isSyncClosedRunning) return;
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) return;
+    isSyncClosedRunning = true;
 
     try {
       if (!mt5McpService.isConnected) return;
@@ -1774,6 +1797,8 @@ busySymbols: new Set<string>(),
       }
     } catch (err: any) {
       silentLogger.warn(`[PIPELINE] syncClosedPositions error: ${err.message}`);
+    } finally {
+      isSyncClosedRunning = false;
     }
   }
 

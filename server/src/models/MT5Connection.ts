@@ -2,24 +2,38 @@ import mongoose, { Schema, Document } from "mongoose";
 import crypto from "node:crypto";
 import { env } from "../config/env";
 
-const ENCRYPTION_KEY = ((env as any).ENCRYPTION_KEY || "hunter-trades-default-secret-32ch").padEnd(32, "x").substring(0, 32); // Ensure exactly 32 bytes
+// Never fall back to a hardcoded key — in production a missing key must fail loudly.
+const configuredKey = (env as any).ENCRYPTION_KEY as string | undefined;
+const ENCRYPTION_KEY: Buffer = configuredKey
+  ? Buffer.from(configuredKey.padEnd(32, "x").substring(0, 32))
+  : (() => {
+      if (env.NODE_ENV === "production") {
+        throw new Error(
+          "ENCRYPTION_KEY (min 32 chars) wajib di-set di environment production.",
+        );
+      }
+      console.warn(
+        "[MT5Connection] ENCRYPTION_KEY tidak di-set — memakai kunci ephemeral (dev only). Data lama yang terenkripsi tidak dapat didecrypt.",
+      );
+      return crypto.randomBytes(32);
+    })();
 const IV_LENGTH = 16;
 
-function encrypt(text: string): string {
+export function encrypt(text: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY), iv);
+  const cipher = crypto.createCipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
   let encrypted = cipher.update(text);
   encrypted = Buffer.concat([encrypted, cipher.final()]);
   return iv.toString("hex") + ":" + encrypted.toString("hex");
 }
 
-function decrypt(text: string): string {
+export function decrypt(text: string): string {
   const textParts = text.split(":");
   const ivHex = textParts.shift();
   if (!ivHex) return "";
   const iv = Buffer.from(ivHex, "hex");
   const encryptedText = Buffer.from(textParts.join(":"), "hex");
-  const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY), iv);
+  const decipher = crypto.createDecipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString();

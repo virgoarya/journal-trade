@@ -32,6 +32,7 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isBacktestDrawerOpen, setIsBacktestDrawerOpen] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [lastBacktestId, setLastBacktestId] = useState<string | null>(null);
 
   // Load the most recent backtest result on initial mount
   useEffect(() => {
@@ -41,6 +42,7 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
         if (res.success && res.data && res.data.experiences.length > 0) {
           const latestExp = res.data.experiences[0];
           setResult(latestExp.result as any);
+          setLastBacktestId(latestExp.id);
           if ((latestExp as any).aiAnalysis) {
             setAnalysis((latestExp as any).aiAnalysis);
           } else if (latestExp.id) {
@@ -79,6 +81,7 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
 
       // Auto AI analysis
       if (btResult.backtestId) {
+        setLastBacktestId(btResult.backtestId);
         setIsAnalyzing(true);
         try {
           const analysisRes = await backtestService.analyze(btResult.backtestId);
@@ -103,13 +106,14 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
   }, []);
 
   const handleAnalyze = useCallback(async () => {
-    if (!result?.backtestId) {
+    const btId = result?.backtestId ?? lastBacktestId;
+    if (!btId) {
       toast.error("No backtest ID available");
       return;
     }
     setIsAnalyzing(true);
     try {
-      const analysisRes = await backtestService.analyze(result.backtestId);
+      const analysisRes = await backtestService.analyze(btId);
       if (analysisRes.success && analysisRes.data) {
         setAnalysis(analysisRes.data);
       } else {
@@ -120,10 +124,10 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
     } finally {
       setIsAnalyzing(false);
     }
-  }, [result]);
+  }, [result, lastBacktestId]);
 
   const handleApplyToPipeline = useCallback(async () => {
-    const btId = result?.backtestId;
+    const btId = result?.backtestId ?? lastBacktestId;
     if (!btId) {
       toast.error("No backtest ID. Run a backtest first.");
       return;
@@ -144,7 +148,7 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
     } finally {
       setIsApplying(false);
     }
-  }, [result, refreshSettings]);
+  }, [result, lastBacktestId, refreshSettings]);
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);

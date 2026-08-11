@@ -6,6 +6,7 @@ import { mt5ConnectSchema, mt5UpdateSettingsSchema, mt5SyncSchema } from "../val
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
 import { startSyncForAccount, stopSyncForAccount, updateSyncInterval } from "../services/mt5-scheduler.service";
+import { encrypt as encryptSecret } from "../models/MT5Connection";
 import mongoose from "mongoose";
 
 const router = Router();
@@ -27,7 +28,7 @@ router.post("/connect", validate({ body: mt5ConnectSchema }), async (req, res, n
     account.mt5Config = {
       server: req.body.server,
       login: req.body.login,
-      password: req.body.password,
+      password: encryptSecret(req.body.password),
     };
     await account.save();
 

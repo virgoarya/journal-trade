@@ -173,6 +173,8 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
         if (res.data.lastAutoBacktestAt) {
           setLastAutoBacktestAt(res.data.lastAutoBacktestAt);
         }
+        hasLoadedSettings.current = true;
+        suppressNextSave.current = true;
       }
 
       if (skillRes && skillRes.success && skillRes.data) {
@@ -189,6 +191,8 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
 
   // Re-fetch settings when broker server changes (per-broker isolation)
   const prevServer = useRef<string | undefined>(undefined);
+  const hasLoadedSettings = useRef(false);
+  const suppressNextSave = useRef(false);
   useEffect(() => {
     const currentServer = accountInfo?.server;
     if (currentServer && currentServer !== prevServer.current) {
@@ -230,8 +234,15 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs]);
 
-  // Debounced save when settings change
+  // Debounced save when settings change.
+  // Skip until the initial backend load finished (else defaults would overwrite saved settings),
+  // and skip the single echo fired right after a load applied its values.
   useEffect(() => {
+    if (!hasLoadedSettings.current) return;
+    if (suppressNextSave.current) {
+      suppressNextSave.current = false;
+      return;
+    }
     const timer = setTimeout(saveSettings, 1000);
     return () => clearTimeout(timer);
   }, [saveSettings]);
@@ -315,6 +326,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       isConnected,
+      isReconnecting,
       isConnecting,
       isCheckingSession,
       connectError,
@@ -324,6 +336,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       accountLoading,
       refetchAccount,
       positions,
+      orders,
       positionsLoading,
       positionsError,
       closePosition,

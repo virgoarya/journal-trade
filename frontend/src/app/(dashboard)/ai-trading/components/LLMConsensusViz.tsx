@@ -67,7 +67,7 @@ function Consensus2DFallback({ currentProviders, votes }: { currentProviders: an
             const x = Math.cos(angle) * radius;
             const y = Math.sin(angle) * radius;
             const vote = votes?.votes ? votes.votes.find((v: any) => v.provider === provider.name) : null;
-            const statusColor = !vote ? "#4B5563" : vote.decision === "GOOD" ? "#39FF88" : vote.decision === "BAD" ? "#FF3864" : "#EAB308";
+            const statusColor = !vote ? "#4B5563" : (vote.verdict ?? vote.decision) === "GOOD" ? "#39FF88" : (vote.verdict ?? vote.decision) === "BAD" ? "#FF3864" : "#EAB308";
             
             return (
               <g key={`line-${provider.name}`}>
@@ -108,7 +108,7 @@ function Consensus2DFallback({ currentProviders, votes }: { currentProviders: an
             const x = Math.cos(angle) * radius;
             const y = Math.sin(angle) * radius;
             const vote = votes?.votes ? votes.votes.find((v: any) => v.provider === provider.name) : null;
-            const statusColor = !vote ? "#4B5563" : vote.decision === "GOOD" ? "#39FF88" : vote.decision === "BAD" ? "#FF3864" : "#EAB308";
+            const statusColor = !vote ? "#4B5563" : (vote.verdict ?? vote.decision) === "GOOD" ? "#39FF88" : (vote.verdict ?? vote.decision) === "BAD" ? "#FF3864" : "#EAB308";
             
             return (
               <g key={`line-${provider.name}`}>
@@ -139,7 +139,7 @@ function Consensus2DFallback({ currentProviders, votes }: { currentProviders: an
           const y = Math.sin(angle) * radius;
           const vote = votes?.votes ? votes.votes.find((v: any) => v.provider === provider.name) : null;
           const color = MODEL_COLORS[provider.name] || "#6B7280";
-          const statusColor = !vote ? "#4B5563" : vote.decision === "GOOD" ? "#39FF88" : vote.decision === "BAD" ? "#FF3864" : "#EAB308";
+          const statusColor = !vote ? "#4B5563" : (vote.verdict ?? vote.decision) === "GOOD" ? "#39FF88" : (vote.verdict ?? vote.decision) === "BAD" ? "#FF3864" : "#EAB308";
           
           return (
               <div key={provider.name} className="absolute z-10" style={{ 

@@ -86,10 +86,17 @@ export function PositionsTable({
   const handleCloseAll = async () => {
     if (!window.confirm("Are you sure you want to close ALL open positions?")) return;
     setIsClosingAll(true);
-    for (const pos of marketPositions) {
-      await onClose(pos.ticket);
+    try {
+      for (const pos of marketPositions) {
+        try {
+          await onClose(pos.ticket);
+        } catch {
+          console.error(`Failed to close position ${pos.ticket}`);
+        }
+      }
+    } finally {
+      setIsClosingAll(false);
     }
-    setIsClosingAll(false);
   };
 
   const handleClose = async (ticket: number) => {

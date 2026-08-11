@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Grid, HelpCircle, Loader2 } from "lucide-react";
 import { aiTradingService } from "@/services/ai-trading.service";
 
@@ -22,7 +22,7 @@ export function CorrelationHeatmap() {
   const [dataSource, setDataSource] = useState("fallback");
 
   // Fetch actual correlations from backend
-const fetchCorrelations = async () => {
+  const fetchCorrelations = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await aiTradingService.getCorrelation();
@@ -35,43 +35,14 @@ const fetchCorrelations = async () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCorrelations();
     // Refresh actual data every 5 minutes
     const dataInterval = setInterval(fetchCorrelations, 5 * 60 * 1000);
     return () => clearInterval(dataInterval);
-  }, []);
-
-  // Micro-fluctuations to make the dashboard feel alive and real-time
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCorrelations((prev) => {
-        const next = { ...prev };
-        PAIRS.forEach((p1, idx1) => {
-          PAIRS.forEach((p2, idx2) => {
-            if (idx1 === idx2) return; // 1.0 stays 1.0
-            if (idx2 > idx1) {
-              const base = prev[p1]?.[p2] ?? BASE_CORRELATIONS[p1][p2];
-              // Fluctuates slightly by up to +/- 0.01
-              const fluctuation = (Math.random() - 0.5) * 0.01;
-              const val = Math.max(-0.99, Math.min(0.99, base + fluctuation));
-              
-              // Maintain symmetry
-              if (!next[p1]) next[p1] = {};
-              if (!next[p2]) next[p2] = {};
-              next[p1][p2] = parseFloat(val.toFixed(2));
-              next[p2][p1] = parseFloat(val.toFixed(2));
-            }
-          });
-        });
-        return next;
-      });
-    }, 8000);
-
-    return () => clearInterval(interval);
-  }, []);
+  }, [fetchCorrelations]);
 
   // Helper to get color code matching "Terminal Noir" (gold/void/rose-red)
   const getCellBgColor = (val: number) => {

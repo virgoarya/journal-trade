@@ -128,6 +128,7 @@ const AITradeLogSchema = new Schema<IAITradeLog>(
 );
 
 AITradeLogSchema.index({ userId: 1, createdAt: -1 });
+AITradeLogSchema.index({ userId: 1, accountId: 1, closed: 1 });
 
 export const AITradeLog =
   mongoose.models.AITradeLog ||

@@ -6,6 +6,15 @@ import { SkeletonLoader } from "./SkeletonLoader";
 import { Terminal, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 
+const formatPrice = (value: unknown): string =>
+  value != null ? Number(value).toFixed(5) : "—";
+
+const formatDate = (value: unknown): string => {
+  if (value == null) return "—";
+  const d = new Date(value as string | number);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+};
+
 export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }) {
   const [data, setData] = useState<PipelinePerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,16 +83,16 @@ export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }
                 
                 <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
                   <div>
-                    <span className="text-text-muted">Entry:</span> <span className="text-gray-300">{t.signal?.entry?.toFixed(5)}</span>
+                    <span className="text-text-muted">Entry:</span> <span className="text-gray-300">{formatPrice(t.signal?.entry)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-text-muted">Exit:</span> <span className="text-gray-300">{t.closePrice?.toFixed(5)}</span>
+                    <span className="text-text-muted">Exit:</span> <span className="text-gray-300">{formatPrice(t.closePrice)}</span>
                   </div>
                   <div>
-                    <span className="text-text-muted">Time:</span> <span className="text-gray-400">{new Date(t.createdAt).toLocaleString()}</span>
+                    <span className="text-text-muted">Time:</span> <span className="text-gray-400">{formatDate(t.createdAt)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-text-muted">Conf:</span> <span className="text-accent-gold">{t.signal?.confidence}%</span>
+                    <span className="text-text-muted">Conf:</span> <span className="text-accent-gold">{t.signal?.confidence ?? "—"}%</span>
                   </div>
                 </div>
 

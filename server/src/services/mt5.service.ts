@@ -46,6 +46,18 @@ interface MT5PositionsResponse {
   positions: MT5Position[];
 }
 
+import { decrypt as decryptSecret } from "../models/MT5Connection";
+
+// Decrypt stored password; legacy documents may still hold plaintext.
+function resolvePassword(p: string): string {
+  if (!p) return "";
+  try {
+    return decryptSecret(p);
+  } catch {
+    return p; // legacy plaintext fallback
+  }
+}
+
 class MT5Service {
   private getClient(config: MT5Config): AxiosInstance {
     return axios.create({
@@ -63,7 +75,7 @@ class MT5Service {
       
       const loginResponse = await client.post("/api/login", {
         user: config.login,
-        password: config.password,
+        password: resolvePassword(config.password),
       });
 
       const data = loginResponse.data as MT5LoginResponse;
@@ -89,7 +101,7 @@ class MT5Service {
 
       const loginResponse = await client.post("/api/login", {
         user: config.login,
-        password: config.password,
+        password: resolvePassword(config.password),
       });
 
       const loginData = loginResponse.data as MT5LoginResponse;
@@ -121,7 +133,7 @@ class MT5Service {
 
       const loginResponse = await client.post("/api/login", {
         user: config.login,
-        password: config.password,
+        password: resolvePassword(config.password),
       });
 
       const loginData = loginResponse.data as MT5LoginResponse;
@@ -151,10 +163,12 @@ class MT5Service {
     errors: string[];
   }> {
     const result = { synced: 0, created: 0, updated: 0, errors: [] as string[] };
+    // Cast ObjectId constructor to any to avoid version-specific typing issues
+    const ObjectIdCtor: any = mongoose.Types.ObjectId;
 
     try {
       const account = await TradingAccount.findOne({
-        _id: new mongoose.Types.ObjectId(accountId),
+        _id: new ObjectIdCtor(accountId),
         userId,
       });
 
@@ -168,13 +182,13 @@ class MT5Service {
       for (const pos of openPositions) {
         const existingTrade = await Trade.findOne({
           userId,
-          tradingAccountId: new mongoose.Types.ObjectId(accountId),
+          tradingAccountId: new ObjectIdCtor(accountId),
           mt5TicketId: pos.ticket.toString(),
         });
 
         const tradeData = {
           userId,
-          tradingAccountId: new mongoose.Types.ObjectId(accountId),
+          tradingAccountId: new ObjectIdCtor(accountId),
           tradeDate: new Date(pos.time * 1000),
           pair: pos.symbol,
           direction: pos.type === "BUY" ? "LONG" : "SHORT",

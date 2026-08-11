@@ -4,7 +4,7 @@ import { authInstance } from "./auth-context";
 import { silentLogger } from "./utils/silent-logger";
 
 // Extend WebSocket to store authentication state and subscriptions
-export type MacroChannel = "market" | "vix" | "liquidity" | "quant" | "nexus" | "all";
+export type MacroChannel = "market" | "vix" | "liquidity" | "quant" | "nexus" | "all" | "mt5";
 export interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   channels: Set<MacroChannel>;

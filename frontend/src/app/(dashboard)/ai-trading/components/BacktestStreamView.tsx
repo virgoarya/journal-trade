@@ -73,6 +73,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dataReadyInfo, setDataReadyInfo] = useState<StreamDataReady | null>(null);
   const [startingSimulation, setStartingSimulation] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   // New SMC-focused states
   const [activeTradeCount, setActiveTradeCount] = useState(0);
@@ -90,6 +91,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const configKeyRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const completedRef = useRef(false);
+  const errorHandledRef = useRef(false);
 
   // ── Performance: RAF-based throttling ──────────────────────────
   // Buffer incoming SSE data in refs (no re-render), then flush to state at ~60fps
@@ -137,6 +139,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       setSessionId(null);
       setDataReadyInfo(null);
       setStartingSimulation(false);
+      setStreamError(null);
+      errorHandledRef.current = false;
       setActiveTradeCount(0);
       setGlobalWins(0);
       setGlobalLosses(0);
@@ -467,29 +471,20 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           }
         });
 
-        es.onerror = () => {
-          if (!mounted || completedRef.current) return;
-          // Prevent EventSource auto-reconnect
-          if (es.readyState === EventSource.CONNECTING) {
-            es.close();
-            return;
-          }
-          if (es.readyState !== EventSource.CLOSED) {
-            addLog("error", "Connection interrupted.");
-            es.close();
-            eventSourceRef.current = null;
-            setTimeout(() => { if (mounted && !completedRef.current) onErrorRef.current("Connection lost"); }, 2000);
-          }
-        };
-
+        // Single error handler: network failures (readyState CONNECTING) AND
+        // server-sent error events both land here. errorHandledRef ensures it fires once.
         es.addEventListener("error", (e: any) => {
-          if (!mounted || completedRef.current) return;
-          let msg = "Stream error";
+          if (!mounted || completedRef.current || errorHandledRef.current) return;
+          errorHandledRef.current = true;
+          let msg = "Connection lost";
           try { if (e.data) { const d = JSON.parse(e.data); msg = d.message || msg; } } catch {}
           addLog("error", "ERROR: " + msg);
-          es.close();
+          if (es.readyState !== EventSource.CLOSED) {
+            es.close();
+          }
           eventSourceRef.current = null;
-          setTimeout(() => { if (mounted && !completedRef.current) onErrorRef.current(msg); }, 2000);
+          setStreamError(msg);
+          if (mounted && !completedRef.current) onErrorRef.current(msg);
         });
 
       } catch (err: any) {
@@ -753,14 +748,21 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       <div className="px-5 py-3 bg-black/40 border-t border-accent-gold/10">
         <div className="flex justify-between text-xs font-mono">
           <span className="text-accent-gold flex items-center gap-1.5">
-            {phase === "preparing" && !progress && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Fetching data...</>}
-            {phase === "running" && progress && progress.percent === 0 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Initializing...</>}
-            {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Simulating {Math.round(progressPercent)}%</>}
-            {phase === "running" && progress && progress.percent >= 100 && <>Completed.</>}
-            {phase === "complete" && <>Completed.</>}
+            {streamError ? (
+              <span className="text-red-400">Error: {streamError}. Check server connection and retry.</span>
+            ) : phase === "preparing" && !progress ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Fetching data...</>
+            ) : (
+              <>
+                {phase === "running" && progress && progress.percent === 0 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Initializing...</>}
+                {phase === "running" && progress && progress.percent > 0 && progress.percent < 100 && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Simulating {Math.round(progressPercent)}%</>}
+                {phase === "running" && progress && progress.percent >= 100 && <>Completed.</>}
+                {phase === "complete" && <>Completed.</>}
+              </>
+            )}
           </span>
           <span className="text-text-muted">
-            {progress ? `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)` : "loading..."}
+            {streamError ? "failed" : progress ? `${progress.currentCandle} / ${progress.totalCandles} (${Math.round(progressPercent)}%)` : "loading..."}
           </span>
         </div>
       </div>

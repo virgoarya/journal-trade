@@ -36,10 +36,10 @@ router.post("/test-session", async (req, res) => {
     await db.collection("session").deleteMany({ userId: USER_ID });
 
     const token = crypto.randomBytes(32).toString("base64url");
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    // better-auth stores the RAW token in DB and matches the raw cookie token.
     await db.collection("session").insertOne({
       id: crypto.randomBytes(16).toString("hex"),
-      token: hashedToken,
+      token,
       userId: USER_ID,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       ipAddress: req.ip || "::1",

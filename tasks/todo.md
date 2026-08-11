@@ -1,37 +1,26 @@
-# Todo — Sinkronisasi Total AI Trading Pipeline
+# Todo — Perbaikan Methodology SMC/ICT/MSNR + LLM Voting
 
-## Phase 0 — Baseline
-- [ ] Task 0: `npx tsc` server bersih + `npm run build` frontend sukses + `npm test` server pass
+## Phase 1: Fix Level Harga
+- [ ] Task 1: Fix bug RBS/SBR terbalik di detectSNRFlip (market-structure.service.ts:1489)
+- [ ] Task 2: Order Block boundary (config wick-inclusive opsional)
+- [ ] Task 3: Validasi swing detection (filter noise ATR-based)
+- [ ] Task 4: KeyLevel clustering — validasi tap count min 2
+- [ ] **Checkpoint 1: RBS/SBR & OB cocok real chart**
 
-## Phase 1 — Koneksi & Data Live (read-only)
-- [ ] Task 1: `/connect` + `/status` connected; ConnectionPanel OK
-- [ ] Task 2: `/account` & `/symbols` sinkron dengan MT5 desktop
-- [ ] Task 3: `/positions` menampilkan `{positions, orders, total}`; badge UI benar
-- [ ] **Checkpoint 1**
+## Phase 2: Checklist Validation 3 Methodology
+- [ ] Task 5: Checklist SMC — validasi level OB & sweep price
+- [ ] Task 6: Checklist ICT — validasi FVG & OTE zone
+- [ ] Task 7: Checklist MSNR — QML & SNR-Flip (depend Task 1)
+- [ ] **Checkpoint 2: 3 methodology tampil level akurat**
 
-## Phase 2 — Trading Write Ops (trade_api.py)
-- [ ] Task 4: Open market order BUY/SELL (0.01 lot) — retcode 10009
-- [ ] Task 5: Place pending BUY_LIMIT/STOP — muncul di orders
-- [ ] Task 6: Cancel pending order — hilang dari list
-- [ ] Task 7: Close open position — hilang dari list
-- [ ] Task 8: Modify SL/TP (posisi & pending) — berubah di MT5
-- [ ] **Checkpoint 2 — tanpa error "not permitted"**
+## Phase 3: LLM Voting & Model IDs
+- [ ] Task 8: Update NINE_ROUTER_MODELS — 6 provider model+fallback baru
+- [ ] Task 9: Implementasi fallback retry di callProvider
+- [ ] Task 10: Reasoning DeepSeek → Bahasa Indonesia (forceIndonesian + prompt)
+- [ ] **Checkpoint 3: 6 provider aktif, fallback jalan, reasoning ID**
 
-## Phase 3 — Pipeline & LLM
-- [ ] Task 9: Pipeline start/stop/pause/resume — status & logs benar
-- [ ] Task 10: `/analyze` & `/analyze-multi` → confluence/entry/SL/TP
-- [ ] Task 11: `/llm-status` model tidak hibernasi; LLMConsensusViz benar
-- [ ] **Checkpoint 3**
-
-## Phase 4 — Backtest & History
-- [ ] Task 12: `/auto-backtest` & `/performance` jalan
-- [ ] Task 13: AITradeHistories & journal sinkron PnL
-- [ ] Task 14: Badge AI/MANUAL benar setelah trade ops
-
-## Phase 5 — E2E & Regression
-- [ ] Task 15: `server/scripts/integration-test.mjs` — full E2E scripted
-- [ ] Task 16: Frontend smoke manual checklist per panel
-
-## Phase 6 — Release
-- [ ] Task 17: Full rebuild packaged (tsc → frontend → buildApp → buildPatch → checksum → push)
-- [ ] Verifikasi `git status` kosong & `git log` mencerminkan fix terakhir
+## Phase 4: Testing & Release
+- [ ] Task 11: Unit test RBS/SBR + fallback model
+- [ ] Task 12: Full rebuild (tsc, frontend, buildApp, buildPatch)
+- [ ] Task 13: Bump v1.0.15 + CHANGELOG
+- [ ] Task 14: Commit & push

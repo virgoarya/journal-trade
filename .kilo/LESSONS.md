@@ -356,3 +356,43 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 **Root Cause**: `usePositions.ts` menaruh `positions.length` & `orders.length` di dependency `useEffect`. Setiap WebSocket kirim update posisi → length berubah → useEffect re-run → `setIsLoading(true)` → tapi karena data sudah ada, `fetchPositions()` tidak dipanggil → `setIsLoading(false)` tidak pernah jalan → skeleton stuck selamanya.
 **Solusi**: (1) `isInitialLoadingRef` — hanya set loading saat mount pertama. (2) WebSocket onTick set `setIsLoading(false)` saat data real-time sampai. (3) Fetch hanya jika data kosong.
 **Hindari**: Jangan gabungkan data.length di useEffect dependency dengan flag isLoading yang dikontrol terpisah. WebSocket = sumber data utama; fetch HTTP hanya fallback awal.
+
+### [20260811] Reset Data via API: Better-Auth Signed Cookie + Dua Database Berbeda
+**Area**: Backend / Auth / MongoDB
+**Root Cause**: Panggil `POST /api/v1/ai-trading/reset-performance` secara manual selalu gagal `UNAUTHORIZED` karena format sesi better-auth v1.5.6 salah:
+1. Token sesi di DB disimpan **mentah** (base64url 32 char), BUKAN sha256 — route dev `dev-test.routes.ts` yang pakai sha256 sudah usang/broken.
+2. Cookie `better-auth.session_token` adalah **signed cookie**: `value.signature` dengan signature = HMAC-SHA256(key=`BETTER_AUTH_SECRET`, msg=token) di-encode **base64 standar 44 char berakhiran `=`** (bukan base64url) — lihat `better-call/dist/crypto.mjs` `makeSignature`.
+3. Mongo adapter mapping `id↔_id`: field `userId` di collection `session` bertipe **ObjectId** (bukan string), dan join user via `$lookup` gagal jika tipe tidak sama.
+4. Ada **dua database**: data bisnis (`journal_trade_dev` — dari path di `DATABASE_URL`), auth (`journal_trade_dev_local` — dari `DATABASE_NAME`). Script harus tahu bedanya.
+**Solusi**: Buat sesi via insert manual: `user` dengan `_id: new ObjectId(userId)` (upsert jika belum ada), `session` dengan `token` mentah + `userId: new ObjectId(userId)`, lalu kirim cookie signed. Cek dulu lokasi data (collection `ai_trade_logs` untuk AI trades, bukan `aitradelogs`).
+**Hindari**: Jangan menebak format sesi — baca source `node_modules/better-auth/dist` dan `@better-auth/mongo-adapter/dist` dulu. Jangan pernah simpan token yang tercetak di chat; hapus sesi buatan setelah selesai.
+
+### [20260811] Bump Versi ≠ Build Exe/OTA — Workflow Release Lengkap
+**Area**: Build / Release / Desktop
+**Root Cause**: Bump versi di package.json saja TIDAK menghasilkan `Hunter Trades.exe` maupun patch OTA — keduanya langkah build terpisah yang tidak jalan otomatis.
+**Solusi** (urutan benar): (1) Bump versi di 5 file: `package.json`, `server/package.json`, `frontend/package.json`, `desktop/package.json`, `update/version.json` + entri CHANGELOG. (2) `npm run build` di `frontend` (5-10 menit, timeout 900000). (3) `npx tsc` di `server`. (4) `node buildHooks/buildApp.js` di `desktop` → `dist-app/win-unpacked/Hunter Trades.exe`. (5) `node buildHooks/buildPatch.js` → `update/patch.zip` + `update/version.json` (patchUrl = raw GitHub `main/update/patch.zip`). (6) Commit + push `update/` agar URL patch aktif (verifikasi HTTP 200).
+**Hindari**: Jangan klaim release selesai tanpa build exe + patch. Jika `copyFileSync` exe error `EBUSY` → aplikasi sedang berjalan, `taskkill /F /IM "Hunter Trades.exe"` dulu. Timestamp exe hasil copy = timestamp `electron.exe` sumber (copyFileSync mempertahankan LastWriteTime) — verifikasi pakai hash, bukan tanggal.
+
+### [20260811] Next.js Standalone Nested di .next/standalone/frontend
+**Area**: Frontend / Build
+**Root Cause**: Build Next.js 16 menghasilkan standalone bersarang: `.next/standalone/frontend/server.js` (prefix nama folder), bukan `.next/standalone/server.js` — mudah salah copy.
+**Solusi**: `buildApp.js` sudah mendeteksi nested dir (`standalone/frontend` dengan `server.js`) sebelum robocopy ke `resources/frontend`. Static tetap wajib disalin ke `.next/static` relatif server.js.
+**Hindari**: Jangan hardcode path standalone satu level. Verifikasi `resources/frontend/server.js` + `.next/static/css` setelah build.
+
+### [20260811] Endpoint Backend Ada Tapi Belum Terpanggil UI
+**Area**: Frontend / Backend / Feature
+**Root Cause**: Route `POST /api/v1/ai-trading/reset-performance` sudah ada di backend (auth per-user via `req.user.id`) tapi tidak pernah dipanggil frontend → user tidak bisa reset dari UI → data lama tampil terus.
+**Solusi**: (1) Tambah method service `resetPerformance()` di `frontend/src/services/ai-trading.service.ts`. (2) Tombol di Settings → Data & Privacy → Danger Zone dengan `confirm()` + feedback jumlah deleted. (3) Pola sama dengan "Delete All Data" yang sudah ada.
+**Hindari**: Saat fitur backend sudah ada, cek dulu apakah UI memanggilnya sebelum menulis endpoint baru. Per-user reset sudah aman otomatis karena `requireAuth` + `req.user.id`.
+
+### [20260811] Close Position gagal: "trading not permitted" padahal Algo Trading aktif
+**Area**: Python Client / MT5 Integration
+**Root Cause**: `trade_api.py` `position_close` hardcode `ORDER_FILLING_IOC`. XAUUSD di Exness-MT5Trial6 hanya mendukung FOK/RETURN ? retcode 10030 "Unsupported filling mode" ? fallback native MCP menampilkan pesan menyesatkan "trading not permitted".
+**Solusi**: Pilih filling mode dari `symbol_info(pos.symbol).filling_mode` (FOK ? IOC ? RETURN), sama seperti `order_send`. Juga: `mt5_streamer.ts` jangan anggap response string dari native MCP sebagai sukses; retcode Python 10016/10014 langsung tampil tanpa fallback.
+**Hindari**: Jangan hardcode `type_filling` di order MT5 � selalu baca `filling_mode` per symbol. Debug retcode MT5 dengan python langsung (`python trade_api.py position_close '{"ticket": X}'`) sebelum menyalahkan permission/broker.
+
+### [20260811] Scan Arsitektur Menyeluruh � 30+ bug diperbaiki (3 batch)
+**Area**: Backend / Frontend / Python Client / Desktop
+**Root Cause**: Akumulasi bug lintas lapisan: (1) WS tanpa auth (isAuthenticated=true bypass), (2) kunci enkripsi hardcoded publik, (3) password broker plaintext di TradingAccount, (4) backdoor dev karena NODE_ENV default development, (5) OTA tanpa version gate + rollback merusak install, (6) satu koneksi MT5 global lintas user, (7) spawn trade_api.py paralel (MT5 hanya 1 koneksi Python), (8) backtest memutasi config live via singleton, (9) busySymbols lock bocor di pipeline, (10) settings frontend ter-wipe saat mount, (11) useMT5Stream isConnecting stuck ? WS mati permanen, (12) interval poll bocor tanpa guard.
+**Solusi**: 3 batch berturut: security (WS auth real + Origin check, ENCRYPTION_KEY fail-fast prod, password encrypt AES, NODE_ENV default production, OTA version gate + rollback rename-safe, triggerStart ownership), reliability (pythonQueue serialisasi spawn Python, busySymbols unlock per-tick, AsyncLocalStorage scoped config backtest, deviation/rounding/None-guard di trade_api.py, re-entrancy guard sync, reconnect fix frontend), kebersihan (index compound, execSync import, single-instance lock, restart cap, check-now nyata, upsert backtest + dateRange, error-handler 5xx generic, mcp kill on shutdown, trust proxy false).
+**Hindari**: Jangan pernah bypass auth dengan komentar "temporary"; jangan hardcode secret fallback; jangan default NODE_ENV development; jangan spawn proses yang compete atas resource tunggal tanpa mutex; jangan mutate global singleton dari task paralel (pakai AsyncLocalStorage/scope).

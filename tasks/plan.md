@@ -1,117 +1,147 @@
-# Implementation Plan: Sinkronisasi Total AI Trading Pipeline
+# Implementation Plan: Perbaikan Methodology SMC/ICT/MSNR + LLM Voting
 
 ## Overview
 
-Memastikan seluruh fungsi AI trading di **Hunter Trades Desktop (v1.0.14+)** bekerja sinkron di 3 lapisan: **Backend Server** (routes/services/streamer), **Frontend** (React hooks/context/komponen), dan **MCP Server** (native MT5 MCP + Python bridge `trade_api.py`/`server.py`/`fetch_rates.py`). Approach: verifikasi per vertical slice (setiap fungsi dari UI → API → service → MT5 dan balik), dengan tes nyata ke MT5 (akun demo Exness yang sudah connect), bukan sekadar compile.
+Memperbaiki akurasi level harga dan checklist validation pada 3 methodology trading (SMC, ICT, MSNR) yang saat ini meleset dari real chart (contoh: level RBS/OB terdeteksi tapi bukan RBS/OB sebenarnya). Juga memperbaiki LLM voting: model IDs + fallback baru untuk 6 provider, dan reasoning DeepSeek yang masih bahasa Inggris.
 
-## Architecture / Alur Data Nyata (hasil scan)
+## Temuan Audit (Root Cause)
 
+### A. Level Harga Tidak Akurat
+
+**A1. [KRITIS] Bug RBS/SBR terbalik — `market-structure.service.ts:1489-1519`**
+```typescript
+// SALAH: Resistance + harga turun → diklasifikasikan "RBS"
+// BENAR:  Resistance ditembus ke BAWAH = SBR (Support Become Resistance)
+// SALAH: Support + harga naik → diklasifikasikan "SBR"
+// BENAR:  Support ditembus ke ATAS = RBS (Resistance Become Support)
 ```
-MT5 Desktop (native MCP :22346)
-   ├─ mt5-streamer.ts (poll 1.5s) ──► broadcast("mt5_tick") ──► WS ──► useMT5Stream ──► hooks ──► UI
-   ├─ trade_api.py  (Python fallback utk order/cancel/modify/close) ◄── mt5-mcp.service.ts
-   ├─ fetch_rates.py (rates) ──► mt5_copy_rates
-   └─ mcp-mt5-server/server.py (bridge lama, masih tersedia)
+Definisi yang benar:
+- **RBS (Resistance Become Support)**: level resistance lama, harga break ke ATAS, lalu level jadi support → terjadi saat candle CLOSE di atas resistance.
+- **SBR (Support Become Resistance)**: level support lama, harga break ke BAWAH, lalu level jadi resistance → terjadi saat candle CLOSE di bawah support.
 
-Backend Routes (ai-trading.routes.ts, mt5.routes.ts):
-  /connect /disconnect /status /account /symbols /rates /positions /debug-positions /debug-order
-  /open /close /modify /pipeline/* /analyze /analyze-multi /performance /skill /llm-status
-  /auto-backtest /news/* /correlation
+**A2. [KRITIS] Deteksi flip hanya cek 1 candle di index SNR — `market-structure.service.ts:1495-1513`**
+- `const recentCandle = candles[snr.index]` → hanya cek candle pada index yang sama dengan level dibuat, bukan candle TERAKHIR yang menembus level. Harus cek candle terakhir (atau lookback 5 candle terakhir).
 
-Frontend (interopd): AiTradingContext ─ seasons hooks ──► components
-  useMT5Connection, useAccountInfo, usePositions, usePipeline, useLlmStatus, useMT5Stream
-  Komponen: PositionsTable / PendingOrdersTable / AccountOverview / PipelineLogs / LLMConsensusViz / TradingPanel / BacktestTab …
+**A3. [TINGGI] Order Block boundary pakai body candle — `detectOrderBlocks:628-629,659-660`**
+- `obTop = max(open, close)`, `obBottom = min(open, close)` — hanya BODY, tidak termasuk wick. Banyak OB sejati yang boundary-nya di wick. Perlu konfigurasi: body-only vs wick-inclusive.
 
-Services: mt5-mcp.service (22 method), mt5-streamer (18 handler MCP), trading-pipeline.service,
-  ai-trading-engine.service (analysis/cache 5s), llm-consensus.service (9router 127.0.0.1:20128)
-```
+**A4. [TINGGI] Swing detection strength & lookback** — `findSwingHighs/Lows:340-431`
+- Konfirmasi parameter `leftBars=3, rightBars=2` sudah benar untuk SMC.
+- Tambahkan validasi swing minimum jarak (ATR-based) untuk filter noise.
 
-## Strategy & Risk (dari pengalaman sesi sebelumnya)
+**A5. [SEDANG] KeyLevel clustering rata-rata — `identifyKeyLevels:824-898`**
+- Level = rata-rata cluster swing points, tapi tidak ada validasi tap count/strength sebelum dianggap level valid.
 
-- **Native MCP blokir trading write** ("not permitted") walaupun setting MT5 sudah benar → **semua operasi trading (open/close/cancel/modify) harus lewat Python `trade_api.py` dulu**, fallback native MCP. VERIFIED `order_delete` retcode 10009.
-- **Pending order tidak pernah muncul** → tool MCP native perlu `include_orders: true` pada `get_trading_open_positions`; sudah difix + probe. Harus tetap di-verifikasi di build packaged.
-- **9Router path**: spawn wajib `shell:true` + path di-quote (`"D:\Journal Trade\...\9router.cmd"`) karena spasi di path "Journal Trade". cwd = folder `.bin`.
-- **LLM hibernasi** → `monitor.ts` default `nineRouterUrl=http://127.0.0.1:20128`, tapi 9router harus benar-benar start & listening.
-- **Build Windows**: `buildApp.js` pakai `npm install` di `resources/server` + salin `trade_api.py` & `fetch_rates.py`; frontend wajib `npm run build` (standalone) sebelum `buildApp.js`.
-- **Jangan commit/push klaim palsu**; selalu `git status` + `git log` verifikasi sebelum lapor selesai.
+**A6. [RISET] Checklist validation** — `checklist-validator.ts` & `smc/ict/msnr.strategy.ts`
+- SMC: checklist `smc-liq` (liquidity sweep), `smc-ob` (order block), `smc-mss` (MSS) — perlu validasi harga level yang ditampilkan benar-benar level sebenarnya.
+- ICT: `validatePOI`, `validateInducement` — perlu validasi FVG/OTE zone.
+- MSNR: `detectMSNRSetup` (QML/RBS/SBR levels) — tergantung fix A1/A2.
 
-## Task List (urut, tiap task = satu fungsi utuh + verifikasi)
+### B. LLM Voting
 
-### Phase 0 — Baseline & Health Check
-- [ ] Task 0: Sanity build & base test
-   Accept: server `npx tsc` bersih; frontend `npm run build` sukses; test existing `npm test` server pass.
-   Verification: tsc/exit 0; `.next/standalone/server.js` ada.
-   Scope: S (0 file rusak).
+**B1. Model IDs baru + fallback — `llm-consensus.service.ts:64-71` (NINE_ROUTER_MODELS)**
 
-### Phase 1 — Koneksi & Data Live MCP (read-only)
-- [ ] Task 1: Connect MT5 (native MCP) end-to-end
-   Accept: `POST /api/v1/ai-trading/connect` sukses; `/status` connected; frontend ConnectionPanel masuk.
-   Verification: curl POST /connect; GET /status → `{connected:true}`; UI Connection badge.
-- [ ] Task 2: Account & Symbols sinkron
-   Accept: `/account` return balance/equity/margin; `/symbols` return list; baris di AccountOverview tampil.
-   Verification: curl GET /account & /symbols; bandingkan nilai dengan MT5 desktop.
-- [ ] Task 3: Positions + Pending Orders (include_orders)
-   Accept: `/positions` return `{positions, orders, total}`; POS & pending muncul terpisah di PositionsTable.
-   Verification: curl GET /positions; pastikan `orders.length>=0`; cocokkan dengan Trade MT5.
-- [ ] Checkpoint Phase 1: stop/resume di posisi — concurrency ben-taruhan koneksi.
+| Provider | Model Utama (baru) | Fallback (baru) |
+|---|---|---|
+| deepseek | `oc/deepseek-v4-flash-free` | `oc/laguna-s-2.1-free` |
+| gpt | `groq/openai/gpt-oss-120b` | `groq/llama-3.3-70b-versatile` |
+| gemini | `gc/gemini-3.1-flash-lite-preview` | `gc/gemini-2.5-pro` |
+| mistral | `mistral/mistral-large-latest` | `mistral/mistral-medium-latest` |
+| nemotron | `oc/nemotron-3-ultra-free` | `nvidia/minimaxai/minimax-m3` |
+| claude-opus | `ag/claude-opus-4-6-thinking` | `kr/claude-sonnet-4.5` |
 
-### Phase 2 — Trading Write Ops (Python trade_api fallback)
-- [ ] Task 4: Open market order (BUY/SELL) — via `trade_api.py order_send`
-   Accept: `/open` sukses retcode 10009; posisi baru muncul di `/positions` dalam 2s; tidak ada error "not permitted".
-   - Verification: test volume 0.01; posisi setelah 5s.
-- [ ] Task 5: Place pending order (BUY_LIMIT/STOP, SELL_LIMIT/STOP)
-   Accept: `/open` dengan price jauh dr harga → pending; `/positions.orders` bertambah; error "not permitted" tidak muncul.
-- [ ] Task 6: Cancel pending order
-   Accept: `/close` (ticket pending) → `order_delete` retcode; order hilang dari list.
-- [ ] Task 7: Close open position
-   Accept: `/close` (ticket posisi) → `position_close` sukses; ticked len −1.
-- [ ] Task 8: Modify SL/TP (posisi & pending)
-   Accept: `/modify` untuk open pos & pending → SL/TP berubah di MT5; UI cell warna ikut sesuai getSLTPColor.
-- [ ] Checkpoint: semua trade ops tanpa error not permitted.
+**B2. [KRITIS] Fallback tidak diimplementasi** — `getAvailableProviders():193-258`
+- `NINE_ROUTER_MODELS` hanya punya 1 `model` per provider, TIDAK ada fallback model. Saat model utama gagal (rate-limit/error), seluruh provider di-skip. Harus tambah `fallbackModel` dan retry dengan fallback saat utama gagal.
 
-### Phase 3 — Pipeline Trading & Konfigurasi
-- [ ] Task 9: Pipeline start/stop/pause/resume via API
-   Accept: `/pipeline/start` berjalan (status running, logs mulai); pause → no new signal; stop → bersih.
-- [ ] Task 10: AI Engine analysis (multi-strategi)
-   Accept: `/analyze` & `/analyze-multi` return sinyal (confluence, confidence, entry/SL/TP); `MethodologyConfluence` renderNET/priority.
-- [ ] Task 11: LLM Consensus & 9router
-   Accept: `/llm-status` → model aktif ≥1 (tidak hibernasi); `/pipeline/status-with-logs` tampil votes per model; LLMConsensusViz benar.
-- [ ] Checkpoint: pipeline jalan full tanpa crash.
+**B3. DeepSeek reasoning masih Inggris — `parseVerdict:916-1074`**
+- `forceIndonesian()` hanya translate kata kunci terbatas (`the trend is`, `strong buy`, dll). Model think-block (`reasoning_content`) yang panjang dalam bahasa Inggris tidak ditranslate dengan baik.
+- Perlu: (a) prompt tambahan di SYSTEM_PROMPT untuk reasoning_content, (b) perluas kamus forceIndonesian, (c) pakai model `oc/deepseek-v4-flash-free` yang reasoning-nya sudah seharusnya ID.
 
-### Phase 4 — Backtest, Skill & History
-- [ ] Task 12: Backtest & Auto-backtest
-   Accept: `/auto-backtest` sintak & sim jalan; `/performance` metrics tampil; BacktestResult/StreamView update.
-- [ ] Task 13: Position history & journal (trade logs)
-   Accept: AITradeHistories render riwayat; `/positions`+closing logs sinkron; pnl kalkulasi sesuai lot/contract size.
-- [ ] Task 14: Hands-on table: deteksi sumber AI/MANUAL (badge) tetap benar setelah ops.
+## Architecture Decisions
 
-### Phase 5 — Frontend E2E & Regression
-- [ ] Task 15: AI MCP sync test suite (scripted)
-   - Bikin `server/scripts/integration-test.mjs`: urutan connect → account → symbols → positions → pending place → pending list → modify pending → cancel pending → open market → close market → status; assert setiap step; keluar exitcode.
-   - `server/scripts/ota-health.mjs`: cek `update/version.json` konsisten dengan `desktop/package.json`, patch.zip checksum SHA256.
-- [ ] Task 16: Frontend smoke via browser (minimal manual)
-   - Panduan checklis manual: buka UI → cek AccountOverview, Positions, Pending, PipelineLogs, LLMConsensus, TradingPanel; screenshot tiap panel.
+- **RBS/SBR fix**: Definisi SMC/ICT yang benar — RBS = break atas, SBR = break bawah. Gunakan CLOSE price untuk konfirmasi break, bukan low/high wick.
+- **Fallback model**: Tambah field `fallbackModel` di `LLMProvider` interface. Saat call model utama gagal (non-2xx / rate-limit), retry sekali dengan fallback.
+- **Level validation**: Semua level (OB, RBS, SBR, QML) divalidasi terhadap harga aktual candle terakhir sebelum ditampilkan sebagai sinyal.
+- **forceIndonesian**: Perluas kamus dengan istilah SMC/ICT/SNR umum; tambahkan deteksi "reasoning panjang" untuk translate kalimat utuh.
 
-### Phase 6 — Release Packaged & OTA
-- [ ] Task 17: Rebuild penuh & verifikasi packaged
-   - tsc; frontend build; buildApp.js; check `resources/server/trade_api.py` & 9router.cmd ada; buildPatch.js; bump version bila perlu.
-   - Verification: `node buildPatch.js` → checksum; `curl` raw GitHub patch URL; commit+push; `git status` kosong.
+## Task List
+
+### Phase 1: Fix Level Harga (Paling Kritis)
+- [ ] Task 1: Fix bug RBS/SBR terbalik di `detectSNRFlip` (market-structure.service.ts:1489-1519)
+  - [ ] RBS = resistance lama, candle terakhir CLOSE di atas level
+  - [ ] SBR = support lama, candle terakhir CLOSE di bawah level
+  - [ ] Gunakan lookback 5 candle terakhir, bukan hanya candle di index SNR
+  - Verification: test unit — buat 10 candle mock dengan break atas/bawah, assert type RBS/SBR benar.
+- [ ] Task 2: Perbaiki deteksi Order Block boundary (wick-inclusive opsional)
+  - [ ] Tambah config `obUseWickBoundary` di strategy-config (default false)
+  - [ ] Bila true: obTop = current.high, obBottom = current.low
+  - Verification: OB level tampil cocok dengan real chart.
+- [ ] Task 3: Validasi swing detection (filter noise ATR-based)
+  - [ ] Swing valid hanya jika jarak dari swing sebelumnya > 0.5 × ATR
+  - Verification: jumlah swing berkurang, level lebih bermakna.
+- [ ] Task 4: Perbaiki KeyLevel clustering — tambah validasi tap count
+  - [ ] Level hanya valid jika di-tap minimal 2× (ada 2+ swing points di cluster)
+  - Verification: level RBS/SBR hanya muncul jika pernah diuji.
+
+### Checkpoint 1: Level harga
+- [ ] RBS/SBR level cocok dengan real chart (verifikasi manual 5 simbol)
+- [ ] OB level cocok dengan displacement candle asli
+- [ ] Build server sukses, test unit lulus
+
+### Phase 2: Checklist Validation 3 Methodology
+- [ ] Task 5: Riset & perbaiki checklist SMC (`smc.strategy.ts:128-231`)
+  - [ ] Validasi `smc-ob`: level OB harus overlap dengan displacement candle
+  - [ ] Validasi `smc-liq`: sweep price harus = harga wick yang menyapu level
+  - Verification: checklist SMC menampilkan harga level yang benar.
+- [ ] Task 6: Riset & perbaiki checklist ICT (`ict.strategy.ts:237-339`)
+  - [ ] Validasi FVG zone: top/bottom sesuai gap candle sebenarnya
+  - [ ] Validasi OTE: zona 61.8%-79% dari swing range yang benar
+  - Verification: FVG/OTE zone cocok di chart.
+- [ ] Task 7: Riset & perbaiki checklist MSNR (`msnr.strategy.ts:355-452`)
+  - [ ] QML shoulder/head dari swing yang benar (depend Task 1)
+  - [ ] SNR-Flip type & level dari detectSNRFlip yang sudah difix
+  - Verification: QML/RBS/SBR cocok di chart.
+
+### Checkpoint 2: Checklist validation
+- [ ] Ketiga methodology menampilkan level harga yang akurat
+- [ ] Backtest 100 candle per simbol — tidak ada level yang meleset jauh (>2 ATR dari level sebenarnya)
+
+### Phase 3: LLM Voting & Model IDs
+- [ ] Task 8: Update NINE_ROUTER_MODELS dengan model utama + fallback (llm-consensus.service.ts:64-71)
+  - [ ] Tambah field `fallbackModel` di interface LLMProvider
+  - [ ] Update 6 provider sesuai tabel B1
+  - Verification: `getAvailableProviders()` mengembalikan model+fallback yang benar.
+- [ ] Task 9: Implementasi fallback retry di call provider
+  - [ ] Di `LLMConsensusService.callProvider` (sekitar line 750-790): jika call utama gagal (non-2xx/rate-limit), retry dengan `fallbackModel`
+  - [ ] Logging: `[LLM-CONSENSUS] deepseek: primary fail → fallback oc/laguna-s-2.1-free`
+  - Verification: test dengan mock fetch — primary 429 → fallback sukses.
+- [ ] Task 10: Perbaiki reasoning DeepSeek → Bahasa Indonesia
+  - [ ] Perluas `forceIndonesian` kamus (istilah SMC/ICT: order block, fair value gap, liquidity, sweep, manipulation, dll)
+  - [ ] Tambah translate kalimat umum (dictionary-based phrase replacement)
+  - [ ] Update SYSTEM_PROMPT: instruksi keras "reasoning_content JANGAN dalam bahasa Inggris"
+  - Verification: reasoning DeepSeek muncul dalam Bahasa Indonesia di UI.
+
+### Checkpoint 3: LLM voting
+- [ ] 6 provider aktif dengan model baru
+- [ ] Saat model utama rate-limited, fallback dipakai otomatis
+- [ ] DeepSeek reasoning dalam Bahasa Indonesia
+
+### Phase 4: Testing & Release
+- [ ] Task 11: Unit test untuk RBS/SBR + fallback model
+- [ ] Task 12: Full rebuild (server tsc, frontend build, buildApp, buildPatch)
+- [ ] Task 13: Bump version → v1.0.15, update CHANGELOG
+- [ ] Task 14: Commit & push
 
 ## Risks and Mitigations
+
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Round-trip trading masih kena "not permitted" | High | Pastikan `trade_api.py` benar dipakai; tambah log `source:"python"`; test task 4-8 dengan volume 0.01. |
-| 9router tidak start (path/multi-instance) | High | Cek listening :20128; spawn flag; log. |
-| Frontend compile lama / ENOTDIR | Med | Gunakan timeout besar; jangan rm folder; build saat dist-app tidak running |
-| Registry lama japdi path berbeda | Med | Pastikan jarak exe yang diuji = dist-app/win-unpacked/Hunter Trades.exe |
+| Perubahan level RBS/SBR mempengaruhi sinyal MSNR/ICT yang ada | Medium | Test unit + backtest sebelum release; pastikan sinyal tidak menurun drastis |
+| Fallback model tidak tersedia di 9router (404) | Medium | Health check di startup: jika fallback juga gagal, skip provider |
+| forceIndonesian terlalu agresif merusak kalimat | Low | Hanya translate saat deteksi bahasa Inggris kuat (enCount >> idCount) |
+| Model baru (gemini-3.1, claude-opus-4-6-thinking) belum di 9router | High | Test `get_trading_account_info`-style probe ke 9router `/v1/models` sebelum commit |
 
 ## Open Questions
-1. LLM provider API key aktif di 9router? (untuk Phase 3 llm-status)
-2. Akun demo Exness `login 413890999` siap dipakai uji trade kecil? (0.01 lot)
-3. Apakah perlu test di mesin kedua setelah OTA (produksi absorb) atau cukup local packaged app?
-
-## Deliverables
-- `tasks/todo.md` — task check list ini
-- `server/scripts/integration-test.mjs` — automated E2E sanity
-- Update CHANGELOG (v1.0.14+ / v1.0.15/1.0.16 sesuai fix)
-- Patch OTA baru (bila ada fix)
+1. Apakah `oc/nemotron-3-ultra-free` dan `ag/claude-opus-4-6-thinking` tersedia di 9router yang berjalan? (perlu probe `/v1/models`)
+2. Apakah `gc/gemini-3.1-flash-lite-preview` tersedia? (perlu probe)
+3. Level OB: mau body-only (default) atau wick-inclusive? (Task 2, default body-only dulu)

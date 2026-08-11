@@ -27,11 +27,13 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
     }
   }, []);
 
-  useMT5Stream((data) => {
+  const handleTick = useCallback((data: { accountInfo?: any }) => {
     if (data.accountInfo) {
       setAccountInfo(prev => ({ ...prev, ...data.accountInfo }));
     }
-  });
+  }, []);
+
+  useMT5Stream(handleTick);
 
   useEffect(() => {
     let isMounted = true;

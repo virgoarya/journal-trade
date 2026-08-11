@@ -57,7 +57,7 @@ router.post(
 );
 
 // Clear cache when regime shifts
-router.post("/clear-cache", (_req: Request, res: Response) => {
+router.post("/clear-cache", requireAuth, (_req: Request, res: Response) => {
   macroAiService.clearPlaybookCache();
   res.json({ success: true, message: "Cache cleared" });
 });

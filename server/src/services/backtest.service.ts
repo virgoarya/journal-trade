@@ -326,9 +326,12 @@ class BacktestService {
     const session = backtestSessionManager.getSession(sessionId, userId);
     if (!session) throw new Error("Session creation failed");
     // Auto-start (no waiting) — synchronous run
-    const result = await this.runSimulationCore(userId, session.config, session.symbolStates, () => {});
-    backtestSessionManager.removeSession(sessionId, userId);
-    return result;
+    try {
+      const result = await this.runSimulationCore(userId, session.config, session.symbolStates, () => {});
+      return result;
+    } finally {
+      backtestSessionManager.removeSession(sessionId, userId);
+    }
   }
 
   /**
@@ -565,27 +568,46 @@ class BacktestService {
     await new Promise(r => setTimeout(r, 30)); // flush SSE
 
     // Wait for start signal from frontend (or immediate abort)
-    await new Promise<void>((resolve, reject) => {
-      // Poll abort every 500ms while waiting
-      const interval = setInterval(() => {
-        if (isAborted()) {
-          clearInterval(interval);
-          reject(new Error("Backtest cancelled by user"));
-        }
-      }, 500);
-      backtestSessionManager.setStartResolver(sessionId, () => {
-        clearInterval(interval);
-        resolve();
+    let startInterval: NodeJS.Timeout | null = null;
+    let startTimeout: NodeJS.Timeout | null = null;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // Guard against a session that was force-removed/TTL-expired while waiting
+        startTimeout = setTimeout(() => {
+          reject(new Error("Backtest session timeout waiting for start signal"));
+        }, 60_000);
+        // Poll abort every 500ms while waiting
+        startInterval = setInterval(() => {
+          if (isAborted()) {
+            reject(new Error("Backtest cancelled by user"));
+          }
+        }, 500);
+        backtestSessionManager.setStartResolver(sessionId, () => {
+          resolve();
+        });
       });
-    });
+    } finally {
+      if (startInterval) clearInterval(startInterval);
+      if (startTimeout) clearTimeout(startTimeout);
+    }
 
     // Mark session as running
     backtestSessionManager.updateStatus(sessionId, 'running');
 
     // ── Now run the simulation using pre-loaded data ──
-    return this.runSimulationCore(userId, merged, symbolStates, emit, isAborted);
+    try {
+      return await this.runSimulationCore(userId, merged, symbolStates, emit, isAborted);
+    } finally {
+      backtestSessionManager.removeSession(sessionId, userId);
+    }
   }
 
+  /**
+   * Run a simulation with a backtest-local snapshot of strategy settings.
+   * The shared strategy config (used by the LIVE engine) is never mutated:
+   * the snapshot is derived once from merged.entrySettings and visible only
+   * inside this async context, so parallel backtests cannot race each other.
+   */
   private async runSimulationCore(
     userId: string,
     merged: BacktestConfig,
@@ -594,9 +616,20 @@ class BacktestService {
     /** Optional abort check — return true to stop simulation early */
     abortCheck?: () => boolean,
   ): Promise<BacktestResult> {
+    return strategyConfigService.runWithScopedConfig(
+      strategyConfigService.buildScopedConfig(merged.entrySettings),
+      () => this.runSimulationCoreInner(userId, merged, symbolStates, emit, abortCheck),
+    );
+  }
 
-    // ── Sync strategy configs from backtest entrySettings ────────────
-    strategyConfigService.updateFromBacktestConfig(merged.entrySettings);
+  private async runSimulationCoreInner(
+    userId: string,
+    merged: BacktestConfig,
+    symbolStates: Map<string, SymbolState>,
+    emit: StreamEventCallback,
+    /** Optional abort check — return true to stop simulation early */
+    abortCheck?: () => boolean,
+  ): Promise<BacktestResult> {
 
     // ── Emit sim-start progress ──────────────────────────────
     emit({ type: "progress", data: { currentCandle: 0, totalCandles: 100, percent: 0 } });
@@ -1574,9 +1607,11 @@ class BacktestService {
       if (merged.sessionId) {
         query.sessionId = merged.sessionId;
       } else {
-        // Overwrite if no session ID, to prevent DB bloat for generic backtests
+        // One doc per date range so different ranges don't overwrite each other
         query.symbol = merged.symbols.join(",");
         query.timeframe = merged.timeframe;
+        query["dateRange.from"] = merged.fromDate;
+        query["dateRange.to"] = merged.toDate;
       }
       const saved = await BacktestExperience.findOneAndUpdate(
         query,
@@ -1586,6 +1621,7 @@ class BacktestService {
             symbols: merged.symbols,
             timeframe: merged.timeframe,
             dateRange: { from: merged.fromDate, to: merged.toDate },
+            updatedAt: new Date(),
             strategy: {
               name: `MULTI_METHODOLOGY${merged.methodologyWeights ? "_WEIGHTED" : ""}`,
               params: merged,
@@ -1602,6 +1638,13 @@ class BacktestService {
               sharpeRatio: Math.round(sharpeRatio * 100) / 100,
               averageWin: Math.round(avgWin * 100) / 100,
               averageLoss: Math.round(avgLoss * 100) / 100,
+              largestWin: Math.round(largestWin * 100) / 100,
+              largestLoss: Math.round(largestLoss * 100) / 100,
+              totalCandles: totalTimelineSteps,
+              symbols: merged.symbols,
+              timeframe: merged.timeframe,
+              fromDate: merged.fromDate.toISOString(),
+              toDate: merged.toDate.toISOString(),
               equityCurve: equityCurve.length > 500
                 ? equityCurve.filter((_, i) => i % Math.ceil(equityCurve.length / 500) === 0 || i === equityCurve.length - 1)
                 : equityCurve,
@@ -1613,7 +1656,7 @@ class BacktestService {
             pipelineConfigSnapshot: merged,
           }
         },
-        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, timestamps: true }
       );
       savedDocId = saved?._id?.toString();
     } catch (dbError: any) {

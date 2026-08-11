@@ -209,7 +209,7 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-text-muted text-[11px] w-14">METHOD</span>
-                <span className="text-accent-gold font-bold">: {METHODOLOGY_LABELS[finalSignal.primaryMethodology as MethodologyName] || finalSignal.primaryMethodology.toUpperCase()}</span>
+                <span className="text-accent-gold font-bold">: {finalSignal.primaryMethodology ? (METHODOLOGY_LABELS[finalSignal.primaryMethodology as MethodologyName] || finalSignal.primaryMethodology.toUpperCase()) : "UNKNOWN"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-text-muted text-[11px] w-14">ENTRY</span>

@@ -435,7 +435,7 @@ router.post(
         result = await mt5McpService.call("mt5_order_cancel", { ticket });
         if (result && result.success) {
           await AITradeLog.updateOne(
-            { mt5Ticket: ticket, closed: false },
+            { userId: req.user.id, mt5Ticket: ticket, closed: false },
             { closed: true, closedAt: new Date(), closeReason: "MANUAL", pnl: 0 }
           );
         }

@@ -1,56 +1,43 @@
 # System Monitoring Report
 
-**Generated:** 3/8/2026, 22.12.49 WIB
-**Status:** 🔴 CRITICAL
+**Generated:** 11/8/2026, 19.38.50 WIB
+**Status:** 🟡 WARNING
+
+---
+
+## 🤖 AI Insights (9Router)
+
+* Tingginya penggunaan memori (86,5%) karena sistem operasi win32 10.0.19045. 
+  Tindakan: Periksa proses yang menguras memori dan hentikan jika tidak diperlukan.
+* Sistem memiliki 4 core CPU yang belum dioptimalkan. 
+  Tindakan: Tinjau penggunaan CPU dan optimalkan kode untuk memanfaatkan multi-core.
+* Uptime sistem yang relatif lama (46,3 jam) dapat menyebabkan penumpukan memori. 
+  Tindakan: Jadwalkan restart sistem secara berkala untuk menghindari penumpukan memori.
 
 ---
 
 ## Executive Summary
 
-10 critical issue(s), 9 warning(s)
-
-## 🔴 Critical Issues
-
-- [mt5] MT5 connection lost
--   -> MT5 tidak terhubung - pipeline auto-paused
-- [llm_consensus] All LLM providers unavailable
--   -> 💤 DeepSeek V4 (deepseek): hibernasi
--   -> 💤 GPT OSS 120B (gpt): hibernasi
--   -> 💤 Gemini 2.5 Flash (gemini): hibernasi
--   -> 💤 Mistral Large (mistral): hibernasi
--   -> 💤 Nemotron 3 Ultra (nemotron): hibernasi
--   -> 💤 Claude Opus 4.7 (claude-opus): hibernasi
--   -> Semua LLM provider tidak tersedia - consensus akan fallback ke rule-based
+6 warning(s), no critical issues
 
 ## 🟡 Warnings
 
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 88.7% used (5.93GB total)
--   -> Uptime: 23.3h
+-   -> Memory: 86.5% used (5.93GB total)
+-   -> Uptime: 46.3h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 88.7% (threshold: 85%)
-- [data_quality] Data quality issues detected (2)
--   -> [XAUUSD.l] MT5 not connected - cannot query rates
--   -> [BTCUSD.l] MT5 not connected - cannot query rates
-
-## Recommended Actions
-
-| # | Action | Component |
-|---|--------|-----------|
-| 1 | Restart MT5 MCP service | - |
-| 2 | Verify MT5 terminal is running on broker VPS | - |
-| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
-| 4 | Rotate LLM providers via 9Router configuration | - |
-| 5 | Request quota increase for rate-limited providers | - |
-| 6 | Consider adding backup provider (e.g. Groq) | - |
+-   -> ⚠️ Memory usage tinggi: 86.5% (threshold: 85%)
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 0 |
+| connected | 1 |
 | circuitState | CLOSED |
+| balance | 10359.04 |
+| equity | 9896.44 |
+| marginLevel | 4502.884702884703 |
 | activePipelines | 1 |
 | 6a26146a9cad211ba0631027.running | 1 |
 | 6a26146a9cad211ba0631027.paused | 0 |
@@ -59,75 +46,72 @@
 | 6a26146a9cad211ba0631027.pnl | 0 |
 | 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 0 |
-| hibernasiProviders | 6 |
+| activeProviders | 6 |
+| hibernasiProviders | 0 |
 | circuitOpenProviders | 0 |
-| provider.deepseek | hibernasi |
-| provider.gpt | hibernasi |
-| provider.gemini | hibernasi |
-| provider.mistral | hibernasi |
-| provider.nemotron | hibernasi |
-| provider.claude-opus | hibernasi |
+| provider.deepseek | active |
+| provider.gpt | active |
+| provider.gemini | active |
+| provider.mistral | active |
+| provider.nemotron | active |
+| provider.claude-opus | active |
+| availableForConsensus | 6 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 88.7 |
-| uptimeHours | 23.3 |
+| memoryUsagePercent | 86.5 |
+| uptimeHours | 46.3 |
 | checkedPipelines | 1 |
-| dataIssues | 2 |
+| dataIssues | 0 |
 
 ## Detailed Health Checks
 
-### 🔴 MT5
+### 🟢 MT5
 
-- **Severity:** critical
-- **Summary:** MT5 connection lost
-- **Time:** 2026-08-03T15:12:49.829Z
+- **Severity:** healthy
+- **Summary:** MT5 connected and operational
+- **Time:** 2026-08-11T12:38:49.444Z
 
-- MT5 tidak terhubung - pipeline auto-paused
+- Balance: $10359.04, Equity: $9896.44
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
 - **Summary:** 1 pipeline(s) running
-- **Time:** 2026-08-03T15:12:49.874Z
+- **Time:** 2026-08-11T12:38:49.518Z
 
 - Found 1 active pipeline(s)
 
-### 🔴 LLM_CONSENSUS
+### 🟢 LLM_CONSENSUS
 
-- **Severity:** critical
-- **Summary:** All LLM providers unavailable
-- **Time:** 2026-08-03T15:12:49.829Z
+- **Severity:** healthy
+- **Summary:** 6 provider(s) available for consensus
+- **Time:** 2026-08-11T12:38:49.444Z
 
-- 💤 DeepSeek V4 (deepseek): hibernasi
-- 💤 GPT OSS 120B (gpt): hibernasi
-- 💤 Gemini 2.5 Flash (gemini): hibernasi
-- 💤 Mistral Large (mistral): hibernasi
-- 💤 Nemotron 3 Ultra (nemotron): hibernasi
-- 💤 Claude Opus 4.7 (claude-opus): hibernasi
-- Semua LLM provider tidak tersedia - consensus akan fallback ke rule-based
+- ✅ DeepSeek V4 (deepseek): active
+- ✅ GPT OSS 120B (gpt): active
+- ✅ Gemini 3.1 Flash (gemini): active
+- ✅ Mistral Large (mistral): active
+- ✅ Nemotron 3 Ultra (nemotron): active
+- ✅ Claude Opus 4.6 (claude-opus): active
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-08-03T15:12:49.829Z
+- **Time:** 2026-08-11T12:38:49.444Z
 
 - CPU: 4 cores
-- Memory: 88.7% used (5.93GB total)
-- Uptime: 23.3h
+- Memory: 86.5% used (5.93GB total)
+- Uptime: 46.3h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 88.7% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 86.5% (threshold: 85%)
 
-### 🟡 DATA_QUALITY
+### 🟢 DATA_QUALITY
 
-- **Severity:** warning
-- **Summary:** Data quality issues detected (2)
-- **Time:** 2026-08-03T15:12:49.874Z
-
-- [XAUUSD.l] MT5 not connected - cannot query rates
-- [BTCUSD.l] MT5 not connected - cannot query rates
+- **Severity:** healthy
+- **Summary:** All data feeds operational
+- **Time:** 2026-08-11T12:38:50.008Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 3/8/2026, 23.12.53 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 11/8/2026, 20.38.51 WIB*

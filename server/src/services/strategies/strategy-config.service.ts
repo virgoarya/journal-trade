@@ -2,6 +2,8 @@
 // Centralized, tunable parameters for all methodologies. Values can be
 // loaded from env/DB/user-settings at runtime.
 
+import { AsyncLocalStorage } from "async_hooks";
+
 export interface StrategyConfig {
   ict: {
     fvgProximityAtrMult: number;
@@ -84,33 +86,46 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   },
 };
 
+// Backtest-local config snapshot. While a simulation runs inside
+// runWithScopedConfig, every getter returns the scoped copy, so the strategy
+// modules read per-backtest thresholds WITHOUT mutating the shared config
+// consumed by the live engine. AsyncLocalStorage isolates concurrent
+// backtests from each other.
+const strategyConfigScope = new AsyncLocalStorage<StrategyConfig>();
+
 class StrategyConfigService {
   private config: StrategyConfig = { ...DEFAULT_STRATEGY_CONFIG };
 
   getConfig(): StrategyConfig {
-    return { ...this.config };
+    const scoped = strategyConfigScope.getStore();
+    return scoped ? { ...scoped } : { ...this.config };
   }
 
   getICTConfig() {
-    return { ...this.config.ict };
+    const scoped = strategyConfigScope.getStore();
+    return { ...(scoped ? scoped.ict : this.config.ict) };
   }
 
   getSMCConfig() {
-    return { ...this.config.smc };
+    const scoped = strategyConfigScope.getStore();
+    return { ...(scoped ? scoped.smc : this.config.smc) };
   }
 
   getMSNRConfig() {
-    return { ...this.config.msnr };
+    const scoped = strategyConfigScope.getStore();
+    return { ...(scoped ? scoped.msnr : this.config.msnr) };
   }
 
 
 
   getConfluenceConfig() {
-    return { ...this.config.confluence };
+    const scoped = strategyConfigScope.getStore();
+    return { ...(scoped ? scoped.confluence : this.config.confluence) };
   }
 
   getRiskConfig() {
-    return { ...this.config.risk };
+    const scoped = strategyConfigScope.getStore();
+    return { ...(scoped ? scoped.risk : this.config.risk) };
   }
 
   /**
@@ -121,21 +136,23 @@ class StrategyConfigService {
   }
 
   /**
-   * Update config from backtest config entrySettings
+   * Compute the config deltas derived from backtest entrySettings. Shared by
+   * the live mutation path (updateFromBacktestConfig) and the backtest-local
+   * snapshot builder (buildScopedConfig) so both stay in sync.
    */
-  updateFromBacktestConfig(entrySettings: {
+  private computeBacktestUpdates(entrySettings: {
     rsiOversold?: number;
     rsiOverbought?: number;
     atrMultiplierSL?: number;
     atrMultiplierTP?: number;
-  }): void {
+  }): Partial<StrategyConfig> {
     // Map backtest entrySettings to strategy configs where applicable
     const updates: Partial<StrategyConfig> = {};
 
     if (entrySettings.atrMultiplierSL !== undefined || entrySettings.atrMultiplierTP !== undefined) {
       const atrMultSL = entrySettings.atrMultiplierSL ?? this.config.risk.atrMultiplier;
       const atrMultTP = entrySettings.atrMultiplierTP ?? this.config.risk.atrMultiplier;
-      
+
       // Update risk config
       updates.risk = {
         ...this.config.risk,
@@ -153,18 +170,69 @@ class StrategyConfigService {
       const oversold = entrySettings.rsiOversold ?? 30;
       const overbought = entrySettings.rsiOverbought ?? 70;
       const rsiRange = overbought - oversold;
-      
+
       // Tighter RSI range = more selective = higher min confidence
       const confidenceBoost = rsiRange < 30 ? 5 : 0;
-      
+
       updates.ict = { ...updates.ict, ...this.config.ict, minConfidence: (this.config.ict?.minConfidence ?? 50) + confidenceBoost };
       updates.msnr = { ...updates.msnr, ...this.config.msnr, minConfidence: (this.config.msnr?.minConfidence ?? 50) + confidenceBoost };
       updates.smc = { ...updates.smc, ...this.config.smc, minConfidence: (this.config.smc?.minConfidence ?? 50) + confidenceBoost };
     }
 
+    return updates;
+  }
+
+  /**
+   * Update config from backtest config entrySettings
+   */
+  updateFromBacktestConfig(entrySettings: {
+    rsiOversold?: number;
+    rsiOverbought?: number;
+    atrMultiplierSL?: number;
+    atrMultiplierTP?: number;
+  }): void {
+    // Map backtest entrySettings to strategy configs where applicable
+    const updates = this.computeBacktestUpdates(entrySettings);
+
     if (Object.keys(updates).length > 0) {
       this.updateConfig(updates);
     }
+  }
+
+  /**
+   * Build a full StrategyConfig snapshot for ONE backtest run without
+   * touching the shared config. Base = current live config (keeps user-tuned
+   * values); the same deltas as updateFromBacktestConfig are layered on top,
+   * so backtest thresholds stay identical to before — deterministically, no
+   * matter what other backtests are doing.
+   */
+  buildScopedConfig(entrySettings: {
+    rsiOversold?: number;
+    rsiOverbought?: number;
+    atrMultiplierSL?: number;
+    atrMultiplierTP?: number;
+  }): StrategyConfig {
+    const scoped = JSON.parse(JSON.stringify(this.config)) as StrategyConfig;
+    const updates = this.computeBacktestUpdates(entrySettings);
+
+    if (Object.keys(updates).length > 0) {
+      scoped.ict = { ...scoped.ict, ...updates.ict };
+      scoped.smc = { ...scoped.smc, ...updates.smc };
+      scoped.msnr = { ...scoped.msnr, ...updates.msnr };
+      scoped.risk = { ...scoped.risk, ...updates.risk };
+      scoped.confluence = { ...scoped.confluence, ...updates.confluence };
+    }
+
+    return scoped;
+  }
+
+  /**
+   * Run fn with a backtest-local strategy config visible only to this async
+   * context. The shared config is never modified, and concurrent backtests
+   * each see their own snapshot (AsyncLocalStorage).
+   */
+  runWithScopedConfig<T>(config: StrategyConfig, fn: () => T): T {
+    return strategyConfigScope.run(config, fn);
   }
 
   /**
