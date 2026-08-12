@@ -271,7 +271,8 @@ export function BacktestForm({ onRun, isRunning }: Props) {
         breakEven: false,
       },
       maxRiskPerTrade: maxRisk,
-      maxDailyRisk: undefined,
+      maxDailyRisk: dlLossPct,  // daily loss limit (form default 3%) — was undefined,
+                                 // which silently dropped the user's daily risk setting
       maxOpenPositions: 1, // Diamankan dari logic awal
       leverage: accountInfo?.leverage || 500,
       signalInterval,

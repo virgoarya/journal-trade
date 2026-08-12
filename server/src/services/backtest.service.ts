@@ -968,8 +968,13 @@ class BacktestService {
         if (doEval && openTrades.size < merged.maxOpenPositions && !dailyTradingBlocked && !globalTradingBlocked) {
           let newTrade: OpenSimTrade | null = null;
           const hasSymbolOpen = Array.from(openTrades.values()).some(t => t.symbol === tc.symbol);
-          const volumeBuy = !hasSymbolOpen;
-          const volumeSell = !hasSymbolOpen;
+          if (hasSymbolOpen) {
+            // Simbol sudah punya posisi terbuka — skip evaluasi strategi yang
+            // mahal (struktur 4-TF + 3 metodologi) untuk candle ini. Ini
+            // memangkas beban simulasi besar saat banyak posisi terbuka.
+          } else {
+          const volumeBuy = true;
+          const volumeSell = true;
 
           const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1) as unknown as Candle[];
 
@@ -1112,8 +1117,7 @@ class BacktestService {
               }
             }
           }
-
-
+          }
 
           if (newTrade) {
             const key = `${newTrade.direction}_${newTrade.symbol}`;

@@ -492,6 +492,16 @@ class AILearningService {
       updatedConfig.maxRiskPerTrade = snapshot.maxRiskPerTrade;
       changes.maxRiskPerTrade = snapshot.maxRiskPerTrade;
     }
+    // Daily risk limit + smart-risk rules must carry over too — without this the
+    // trading panel fell back to a stale pipeline config (e.g. 1.5%) after Apply.
+    if (snapshot?.maxDailyRisk !== undefined) {
+      updatedConfig.maxDailyRisk = snapshot.maxDailyRisk;
+      changes.maxDailyRisk = snapshot.maxDailyRisk;
+    }
+    if (snapshot?.smartRisk) {
+      updatedConfig.smartRisk = { ...snapshot.smartRisk };
+      changes.smartRisk = snapshot.smartRisk;
+    }
     if (snapshot?.maxOpenPositions !== undefined) {
       updatedConfig.maxOpenPositions = snapshot.maxOpenPositions;
     }

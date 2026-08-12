@@ -307,31 +307,22 @@ export function TradingPanel({
                     (rank) => rank.methodology.toLowerCase() === m.toLowerCase()
                   );
                   const verdict = mRank?.verdict;
-                  let bgClass = "bg-accent-gold/10";
-                  let borderClass = "border-accent-gold/20";
-                  let textClass = "text-accent-gold";
-                  let glowClass = "shadow-[0_0_8px_rgba(212,175,55,0.2)]";
-
-                  if (verdict === "KEEP") {
-                    bgClass = "bg-neon-green/10";
-                    borderClass = "border-neon-green/30";
-                    textClass = "text-neon-green";
-                    glowClass = "shadow-[0_0_8px_rgba(57,255,136,0.3)]";
-                  } else if (verdict === "ADJUST") {
-                    bgClass = "bg-yellow-500/10";
-                    borderClass = "border-yellow-500/30";
-                    textClass = "text-yellow-400";
-                    glowClass = "shadow-[0_0_8px_rgba(234,179,8,0.3)]";
-                  } else if (verdict === "DISABLE") {
-                    bgClass = "bg-neon-red/10";
-                    borderClass = "border-neon-red/30";
-                    textClass = "text-neon-red";
-                    glowClass = "shadow-[0_0_8px_rgba(255,56,100,0.3)]";
-                  }
-
+                  // Chip color = ACTIVE status, not the skill verdict. The AI
+                  // skill verdict (computed from live history) is shown as a
+                  // small badge — a red chip for an ACTIVE methodology misled
+                  // users into thinking it was disabled.
                   return (
-                    <span key={m + idx} className={`${bgClass} border ${borderClass} ${glowClass} text-[10px] px-2 py-1 rounded ${textClass} uppercase font-bold tracking-wider font-mono`}>
+                    <span key={m + idx} className="bg-neon-green/10 border border-neon-green/30 shadow-[0_0_8px_rgba(57,255,136,0.25)] text-[10px] px-2 py-1 rounded text-neon-green uppercase font-bold tracking-wider font-mono">
                       {m}
+                      {verdict && (
+                        <span className={`ml-1.5 text-[8px] px-1 py-0.5 rounded font-bold ${
+                          verdict === "KEEP" ? "bg-neon-green/20 text-neon-green"
+                          : verdict === "ADJUST" ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-neon-red/20 text-neon-red"
+                        }`}>
+                          {verdict}
+                        </span>
+                      )}
                     </span>
                   );
                 })}
