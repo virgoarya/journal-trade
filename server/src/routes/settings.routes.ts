@@ -74,10 +74,17 @@ router.get("/ai-trading", async (req, res, next) => {
 
     const brokerConfig = (settings.savedPipelineConfigs as any)?.[brokerServer];
     const configToReturn = brokerConfig || null;
-    
+
+    // Source of truth ordering: applied pipeline config (per-broker) FIRST,
+    // then the generic saved settings. applyToLivePipeline writes
+    // savedPipelineConfigs[server] — without this fallback the trading panel
+    // kept showing stale methodologies ("ICT merah") after Apply.
+    const appliedMethWeights = brokerConfig?.methodologyWeights;
+    const appliedActiveMeth = brokerConfig?.activeMethodologies;
+
     return apiResponse.success(res, {
-      methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
-      activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
+      methodologyWeights: appliedMethWeights || settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
+      activeMethodologies: appliedActiveMeth || settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
       savedPipelineConfig: configToReturn,
       lastAutoBacktestAt: settings.lastAutoBacktestAt,
@@ -90,10 +97,22 @@ router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), 
   try {
     const userId = req.user.id;
     const { methodologyWeights, activeMethodologies, llmConsensus } = req.body;
-    
+
+    // Keep both sources in sync: aiTrading.* (panel defaults) AND the
+    // per-broker applied config — otherwise GET prefers brokerConfig and the
+    // panel reverts to a stale methodology list after every PATCH.
+    const conn = await MT5Connection.findOne({ userId }).lean();
+    const brokerServer = conn?.server || "unknown";
+
     const update: any = {};
-    if (methodologyWeights) update["aiTrading.methodologyWeights"] = methodologyWeights;
-    if (activeMethodologies) update["aiTrading.activeMethodologies"] = activeMethodologies;
+    if (methodologyWeights) {
+      update["aiTrading.methodologyWeights"] = methodologyWeights;
+      update[`savedPipelineConfigs.${brokerServer}.methodologyWeights`] = methodologyWeights;
+    }
+    if (activeMethodologies) {
+      update["aiTrading.activeMethodologies"] = activeMethodologies;
+      update[`savedPipelineConfigs.${brokerServer}.activeMethodologies`] = activeMethodologies;
+    }
     if (llmConsensus) update["aiTrading.llmConsensus"] = llmConsensus;
     
     const settings = await UserSettings.findOneAndUpdate(

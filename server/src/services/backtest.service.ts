@@ -1148,8 +1148,10 @@ class BacktestService {
           const emitInterval = Math.max(1, Math.floor(totalTimelineSteps / 300));
           shouldEmitLive = timelineStep % emitInterval === 0;
         } else {
-          // Visual mode: cap at ~30 FPS (every 33ms) to prevent React stuttering
-          shouldEmitLive = timeSinceLastEmit >= 33;
+          // Visual mode: cap at ~7 FPS (150ms). 30 FPS SSE + per-frame React
+          // renders made "Smooth" feel frozen on large backtests; 150ms is
+          // still visually fluid and ~4x faster overall.
+          shouldEmitLive = timeSinceLastEmit >= 150;
         }
       }
       
