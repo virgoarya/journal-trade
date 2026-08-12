@@ -55,14 +55,16 @@ class MSNRStrategy {
     const recentHtfCandles = htfCandles.slice(-12);
     const activeHtfSetups: { direction: "BUY" | "SELL", type: "QML_BULLISH" | "QML_BEARISH" | "RBS" | "SBR", keyLevel: number, sweepLevel: number }[] = [];
 
-    // Tap check — MSNR ignores wick noise: the sweep must poke the level by a
-    // meaningful margin (>= 0.1 x HTF ATR) and the candle must CLOSE back on the
-    // original side (rejection).
+    // Tap check — MSNR ignores wick noise, but a touch is valid when price comes
+    // WITHIN the level or pierces it and CLOSES back (rejection). The buffer
+    // WIDENS the window (price may turn a few pips before the exact level due
+    // to spread/liquidity) — it must never shrink it.
     const checkLevelTap = (c: Candle, level: number, dir: "BUY" | "SELL"): boolean => {
+      const buf = htfAtr * 0.15;
       if (dir === "BUY") {
-        return c.low <= level - htfAtr * 0.1 && c.close > level;
+        return c.low <= level + buf && c.close > level - buf;
       }
-      return c.high >= level + htfAtr * 0.1 && c.close < level;
+      return c.high >= level - buf && c.close < level + buf;
     };
     const collectTapped = (setups: ReturnType<typeof this.detectMSNRSetups>, dir: "BUY" | "SELL") => {
       for (const setup of setups) {
@@ -301,7 +303,7 @@ class MSNRStrategy {
           if (swingHighs[i].price < drHigh.price) { bosHigh = swingHighs[i]; break; }
         }
         if (!bosHigh) continue;
-        if (drHigh.index - bosHigh.index > 48) continue; // too old to be current storyline
+        if (drHigh.index - bosHigh.index > 96) continue; // too old to be current storyline
 
         // DR_Low: lowest swing low between BOS_High and DR_High (the Head)
         const lowsBetween = swingLows.filter(sl => sl.index > bosHigh!.index && sl.index < drHigh.index);
@@ -335,7 +337,7 @@ class MSNRStrategy {
           if (swingLows[i].price > drLow.price) { bosLow = swingLows[i]; break; }
         }
         if (!bosLow) continue;
-        if (drLow.index - bosLow.index > 48) continue;
+        if (drLow.index - bosLow.index > 96) continue;
 
         const highsBetween = swingHighs.filter(sh => sh.index > bosLow!.index && sh.index < drLow.index);
         if (highsBetween.length === 0) continue;
@@ -391,7 +393,10 @@ class MSNRStrategy {
 
     // Validate key components using new helpers
     const ctxValidation = validateContext(isBuy, htfTrend, dailyBias);
-    const bosValidation = validateStructuralShift(isBuy, htfStr!, htfTfLabel, relHigh, relLow);
+    // MSNR trades reversals — ranging HTF is a valid context, NOT a signal killer.
+    // Make the BOS step non-failable (it becomes WAITING instead of FAILED when
+    // the H4 trend is sideways, so range/SBR-RBS trades are not discarded).
+    const bosValidation = { ...validateStructuralShift(isBuy, htfStr!, htfTfLabel, relHigh, relLow), isFailable: false };
     const liquidityValidation = validateInducement(true, obSweepPrice, relLow, setupTfLabel, isBuy); // Turtle Soup always implies sweep
     const poiValidation = validatePOI(breachType, hasOB, hasFVG, entryOb ? entryOb.bottom.toFixed(5) : "N/A", entryOb ? entryOb.top.toFixed(5) : "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
     const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel);
