@@ -1,7 +1,7 @@
 import { mt5McpService, type MT5Rate } from "./mt5-mcp.service";
 import { backtestSessionManager, type BacktestSession } from './backtest-session.manager';
 import { aiTradingEngine, type Timeframe } from "./ai-trading-engine.service";
-import { marketStructureService } from "./strategies/market-structure.service";
+import { marketStructureService, type Candle } from "./strategies/market-structure.service";
 import { smcStrategy } from "./strategies/smc.strategy";
 import { ictStrategy } from "./strategies/ict.strategy";
 import { msnrStrategy } from "./strategies/msnr.strategy";
@@ -15,6 +15,10 @@ import { silentLogger } from "../utils/silent-logger";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
 import { strategyConfigService } from "./strategies/strategy-config.service";
+
+// Module-level rate cache: repeated backtests with the same symbol/timeframe/
+// range skip the (slow native-MCP) fetch entirely — instant re-runs.
+const RATE_CACHE = new Map<string, { rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; spread: number; point: number; ts: number }>();
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -364,36 +368,44 @@ class BacktestService {
       }
     };
 
-    // Fetch all symbols sequentially (so progress is real)
+    // Fetch all symbols with a bounded parallel pool (concurrency 3) so a slow
+    // symbol doesn't block the whole progress bar. Results are cached in-memory:
+    // repeat backtests with the same config skip MT5 entirely (instant re-run).
+    const rateCache = RATE_CACHE;
+    const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+    const cacheKeyFor = (sym: string) => `${sym}|${merged.timeframe}|${fromTs}|${toTs}`;
+
     const fetchResults: Array<{ sym: string; rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; spread?: number; point?: number; error: string | null }> = [];
-    for (let idx = 0; idx < merged.symbols.length; idx++) {
-      const sym = merged.symbols[idx];
-      emit(idx);
+    let completedFetches = 0;
+
+    const fetchOne = async (sym: string) => {
+      const key = cacheKeyFor(sym);
+      const hit = rateCache.get(key);
+      if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
+        fetchResults.push({ sym, error: null, ...hit });
+        emit(++completedFetches);
+        return;
+      }
       let rates: MT5Rate[] = [];
+      let failMsg: string | null = null;
       try {
         rates = await Promise.race([
           mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs),
           new Promise<MT5Rate[]>((_, reject) => setTimeout(() => reject(new Error("MT5 Connection Timeout (15000ms)")), 15000))
         ]);
+        if (rates.length < 50) {
+          failMsg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
+        }
       } catch (error: any) {
-        const msg = `Failed to fetch data for ${sym}: ${error.message}`;
-        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, spread: 0, point: 0.00001, error: msg });
-        continue;
+        failMsg = `Failed to fetch data for ${sym}: ${error.message}`;
+      }
+      if (failMsg) {
+        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, spread: 0, point: 0.00001, error: failMsg });
+        emit(++completedFetches);
+        return;
       }
 
-      if (rates.length < 50) {
-        const msg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
-        fetchResults.push({ sym, rates: [], closes: [], contractSize: 100000, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01, spread: 0, point: 0.00001, error: msg });
-        continue;
-      }
-
-      // Fetch symbol info for broker-agnostic positioning
-      let contractSize = 100000;
-      let volumeMin = 0.01;
-      let volumeMax = 100;
-      let volumeStep = 0.01;
-      let symbolSpread = 0;
-      let symbolPoint = 0.00001;
+      let contractSize = 100000, volumeMin = 0.01, volumeMax = 100, volumeStep = 0.01, symbolSpread = 0, symbolPoint = 0.00001;
       try {
         const info = await Promise.race([
           mt5McpService.getSymbolInfo(sym),
@@ -407,16 +419,29 @@ class BacktestService {
           symbolSpread = info.spread || 0;
           symbolPoint = info.point || 0.00001;
         }
-      } catch {
-        // fallback
-      }
+      } catch { /* fallback */ }
 
-      fetchResults.push({
-        sym, rates, closes: rates.map((r) => r.close),
-        contractSize, volumeMin, volumeMax, volumeStep,
-        spread: symbolSpread, point: symbolPoint, error: null,
-      });
-    }
+      const entry = { rates, closes: rates.map((r) => r.close), contractSize, volumeMin, volumeMax, volumeStep, spread: symbolSpread, point: symbolPoint };
+      if (rateCache.size >= 100) { // bound cache growth — drop oldest entry
+        const oldest = rateCache.keys().next().value;
+        if (oldest !== undefined) rateCache.delete(oldest);
+      }
+      rateCache.set(key, { ...entry, ts: Date.now() });
+      fetchResults.push({ sym, error: null, ...entry });
+      emit(++completedFetches);
+    };
+
+    const pool = async (symbols: string[], concurrency: number) => {
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < symbols.length) {
+          const sym = symbols[cursor++];
+          await fetchOne(sym);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(concurrency, symbols.length) }, worker));
+    };
+    await pool(merged.symbols, 3);
     emit(totalSymbols); // 100% fetching done
 
     for (const r of fetchResults) {
@@ -640,7 +665,8 @@ class BacktestService {
     const ATR_PERIOD = 14;
     const warmupCandles = Math.max(RSI_PERIOD, ATR_PERIOD) + 2;
     /** Limit strategy analysis to last N candles for performance */
-    const MAX_STRATEGY_CANDLES = 1000;
+    const MAX_STRATEGY_CANDLES = 500;  // 500 bars still holds weeks of H1 context
+                                        // (was 1000 — halved analysis cost per candle)
 
     let allTimelineCandles: TimelineCandle[] = [];
     for (const [sym, state] of symbolStates) {
@@ -945,9 +971,7 @@ class BacktestService {
           const volumeBuy = !hasSymbolOpen;
           const volumeSell = !hasSymbolOpen;
 
-          const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1).map((r: MT5Rate) => ({
-            time: r.time, open: r.open, high: r.high, low: r.low, close: r.close,
-          }));
+          const strategyCandles = symState.rates.slice(Math.max(0, idx + 1 - MAX_STRATEGY_CANDLES), idx + 1) as unknown as Candle[];
 
           // Simulate 3-layer fractal: 4× candles for direction (HTF), 2× for setup, 1× for entry (LTF)
           // This approximates H1 → M15 → M5 from a single timeframe dataset
