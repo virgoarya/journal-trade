@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   type BacktestConfig,
   type BacktestResult as BacktestResultData,
@@ -99,6 +99,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const progressBufferRef = useRef<StreamProgress | null>(null);
   const equityBufferRef = useRef<Array<{ time: number; equity: number; floatingPnL?: number }>>([]);
   const rafRef = useRef<number | null>(null);
+  const lastCandleFlushRef = useRef(0);
   const globalWinsRef = useRef(0);
   const globalLossesRef = useRef(0);
   const maxDrawdownPctRef = useRef(0);
@@ -188,11 +189,16 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
     let running = true;
     const flush = () => {
       if (!running) return;
-      // Flush candle
+      // Flush candle (throttled to ~10fps — 60fps full-panel renders
+      // stall the browser on large backtests; 100ms is still smooth)
       const c = candleBufferRef.current;
       if (c) {
-        candleBufferRef.current = null;
-        setCandle(c);
+        const nowF = performance.now();
+        if (nowF - lastCandleFlushRef.current >= 100) {
+          lastCandleFlushRef.current = nowF;
+          candleBufferRef.current = null;
+          setCandle(c);
+        }
       }
       // Flush progress
       const p = progressBufferRef.current;
@@ -251,10 +257,12 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
         );
       }
 
-      // Flush Active Trades
+      // Flush Active Trades (batched from equity/trade_close events)
       if (tradesDirtyRef.current) {
         tradesDirtyRef.current = false;
-        const currActive = Array.from(activeTradesRef.current.values());
+        const buffered = liveTradesBufferRef.current;
+        const currActive = buffered.length > 0 ? buffered : Array.from(activeTradesRef.current.values());
+        liveTradesBufferRef.current = [];
         setActiveTradeCount(currActive.length);
         setLiveTrades(currActive);
       }
@@ -330,11 +338,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
 
-            // Synchronize active open trades from server
+            // Synchronize active open trades from server — buffer for RAF flush
+            // (never setState per SSE event — that thrashes React)
             if (data.activeTrades && Array.isArray(data.activeTrades)) {
               liveTradesBufferRef.current = data.activeTrades;
-              setLiveTrades(data.activeTrades);
-              setActiveTradeCount(data.activeTrades.length);
+              tradesDirtyRef.current = true;
             }
           } catch {}
         });
@@ -417,27 +425,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             sData.count++;
             sData.pnl += data.pnl;
             if (data.pnl >= 0) sData.wins++; else sData.losses++;
+            sessionStatsDirtyRef.current = true;
 
-            const SESS_ORDER = ["Asian", "London", "New York", "Off-Hours"];
-            setLiveSessionStats(
-              Array.from(sessionStatsRef.current.entries())
-                .map(([session, s]) => ({
-                  session,
-                  count: s.count,
-                  wins: s.wins,
-                  losses: s.losses,
-                  winRate: s.count > 0 ? Math.round((s.wins / s.count) * 100) : 0,
-                  pnl: Math.round(s.pnl * 100) / 100,
-                  color: session === "Asian" ? "text-yellow-400" : session === "London" ? "text-blue-400" : session === "New York" ? "text-red-400" : "text-gray-400",
-                }))
-                .sort((a, b) => SESS_ORDER.indexOf(a.session) - SESS_ORDER.indexOf(b.session))
-            );
-
-            // Remove from active trades
+            // Remove from active trades — RAF loop flushes the UI
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
-            const currActive = Array.from(activeTradesRef.current.values());
-            setActiveTradeCount(currActive.length);
-            setLiveTrades(currActive);
+            tradesDirtyRef.current = true;
             
             // Update Global Win Rate
             if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
@@ -548,6 +540,10 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const liveTradesTotal = liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
   const sessionPnL = (candle?.equity || 0) - (config.initialBalance || 0);
   const sessionPnLPct = config.initialBalance > 0 ? (sessionPnL / config.initialBalance) * 100 : 0;
+  const chartData = useMemo(() =>
+    equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity })),
+    [equityHistory]
+  );
 
   return (
     <div className="h-full min-h-[660px] flex flex-col glass overflow-hidden relative">
@@ -671,7 +667,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               <p className="text-xs text-accent-gold-dim uppercase tracking-wider font-mono mb-1">Equity Curve</p>
               <div style={{ height: "280px", width: "100%" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={equityHistory.map(p => ({ t: new Date(p.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }), e: p.equity }))}>
+                  <AreaChart data={chartData}>
                     <defs><linearGradient id="streamEqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.2} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                     <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 8 }} tickLine={false} axisLine={false} />
