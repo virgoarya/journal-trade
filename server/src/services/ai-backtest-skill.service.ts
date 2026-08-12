@@ -141,18 +141,23 @@ class AIBacktestSkillService {
             methodology: methStat.methodology,
             totalTrades: methStat.totalTrades,
             totalPnL: methStat.totalPnL,
+            // Verdict from THIS run's window — fresh runs recover immediately
+            recentPnL: methStat.totalPnL,
             avgWinRate: methStat.winRate,
             bestSymbol: result.symbols.join(","),
-            verdict: methStat.totalPnL < 0 ? "DISABLE" : methStat.winRate < 45 ? "ADJUST" : "KEEP",
+            verdict: methStat.totalPnL < -100 ? "DISABLE" : methStat.winRate < 45 ? "ADJUST" : "KEEP",
           });
         } else {
           methSkill.totalTrades += methStat.totalTrades;
           methSkill.totalPnL += methStat.totalPnL;
           methSkill.avgWinRate = (methSkill.avgWinRate * 0.7) + (methStat.winRate * 0.3); // Exponential weighted moving average
+          // EMA window verdict — totalPnL accumulates forever and would pin
+          // old broken runs to DISABLE regardless of recent improvement.
+          methSkill.recentPnL = ((methSkill.recentPnL ?? 0) * 0.7) + (methStat.totalPnL * 0.3);
 
-          if (methSkill.totalPnL < -200) {
+          if (methSkill.recentPnL < -100) {
             methSkill.verdict = "DISABLE";
-          } else if (methSkill.avgWinRate < 45 || methSkill.totalPnL < 0) {
+          } else if (methSkill.avgWinRate < 45 || methSkill.recentPnL < 0) {
             methSkill.verdict = "ADJUST";
           } else {
             methSkill.verdict = "KEEP";
@@ -176,6 +181,7 @@ class AIBacktestSkillService {
               methodology: meth,
               totalTrades: 0,
               totalPnL: 0,
+              recentPnL: 0,
               avgWinRate: 0,
               bestSymbol: result.symbols.join(","),
               verdict: "ADJUST",

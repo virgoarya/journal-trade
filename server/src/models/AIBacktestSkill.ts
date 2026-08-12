@@ -24,6 +24,9 @@ export interface IMethodologySkill {
   methodology: string;
   totalTrades: number;
   totalPnL: number;
+  /** EMA of per-run PnL — verdicts use this window, not totalPnL (which
+   * accumulates forever and pins old broken runs to DISABLE). */
+  recentPnL: number;
   avgWinRate: number;
   bestSymbol: string;
   verdict: "KEEP" | "ADJUST" | "DISABLE";
@@ -63,6 +66,7 @@ const MethodologySkillSchema = new Schema<IMethodologySkill>({
   methodology: { type: String, required: true },
   totalTrades: { type: Number, required: true, default: 0 },
   totalPnL: { type: Number, required: true, default: 0 },
+  recentPnL: { type: Number, required: true, default: 0 },
   avgWinRate: { type: Number, required: true, default: 0 },
   bestSymbol: { type: String, default: "unknown" },
   verdict: {
