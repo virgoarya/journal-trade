@@ -302,6 +302,12 @@ export function buildStreamUrl(config: BacktestConfig): string {
   p.set("trailATR", String(config.trailingStop.trailATR));
   p.set("maxRiskPerTrade", String(config.maxRiskPerTrade));
   p.set("maxOpenPositions", String(config.maxOpenPositions));
+  if (config.maxDailyRisk !== undefined) {
+    p.set("maxDailyRisk", String(config.maxDailyRisk));
+  }
+  if (config.smartRisk) {
+    p.set("smartRisk", JSON.stringify(config.smartRisk));
+  }
   p.set("leverage", String(config.leverage));
   p.set("signalInterval", String(config.signalInterval));
   p.set("speedMs", String(config.speedMs ?? 0));

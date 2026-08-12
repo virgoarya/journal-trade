@@ -27,6 +27,17 @@ export const backtestRunSchema = z.object({
 
   maxRiskPerTrade: z.number().min(0.1).max(10).default(1.0),
   maxOpenPositions: z.number().int().min(1).default(3),
+  maxDailyRisk: z.number().min(0).max(10).optional(),
+  smartRisk: z
+    .object({
+      enabled: z.boolean().optional(),
+      capitalPreservation: z.record(z.string(), z.any()).optional(),
+      dailyLimits: z.record(z.string(), z.any()).optional(),
+      drawdownRecovery: z.record(z.string(), z.any()).optional(),
+      globalDrawdownLimit: z.record(z.string(), z.any()).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 export const backtestApplySchema = z.object({
