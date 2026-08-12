@@ -85,6 +85,28 @@ class MSNRStrategy {
     collectTapped(this.detectMSNRSetups(htfStr, "BULL"), "BUY");
     collectTapped(this.detectMSNRSetups(htfStr, "BEAR"), "SELL");
 
+    // ─── Jalur MalaysianSNR (body-based levels) — metode asli Alchemist ────
+    // Level dibentuk dari transisi body close→open (bukan wick/swing), jauh
+    // lebih sering muncul daripada pola QML 4-titik. Tap level + close-back =
+    // Turtle Soup klasik.
+    const snrs = htfStr.malaysianSNRs ?? [];
+    const lastHtf = htfCandles[htfCandles.length - 1];
+    for (const snr of snrs) {
+      if (!snr.isFresh) continue; // level yang sudah dipakai = unfresh, lemah
+      const isBuy = snr.type === "SUPPORT";
+      const tapped = recentHtfCandles.some(c => checkLevelTap(c, snr.price, isBuy ? "BUY" : "SELL"));
+      if (!tapped) continue;
+      // Level harus masih "di depan" harga (support di bawah untuk BUY)
+      if (isBuy && lastHtf.close < snr.price - htfAtr * 0.5) continue;
+      if (!isBuy && lastHtf.close > snr.price + htfAtr * 0.5) continue;
+      activeHtfSetups.push({
+        direction: isBuy ? "BUY" : "SELL",
+        type: isBuy ? "RBS" : "SBR",
+        keyLevel: snr.price,
+        sweepLevel: snr.price,
+      });
+    }
+
     // Deduplicate setups
     const uniqueSetups = activeHtfSetups.filter((v, i, a) => a.findIndex(t => (t.direction === v.direction && t.type === v.type && t.keyLevel === v.keyLevel)) === i);
 
@@ -162,13 +184,14 @@ class MSNRStrategy {
         const bestOB = sortedOBs[0];
 
         // Entry is a PENDING LIMIT — price may still be above the OB and pull
-        // back to it. Only skip when the entry is unreachably far from price
-        // (> 3 x ATR), otherwise we reject valid setups mid-pullback.
+        // back to it. Accept deeper pullbacks (up to 6xATR) — the R:R check is
+        // the real quality filter; a far OB in a strong trend simply gets
+        // skipped when the order never fills.
         const entryPrice = (bestOB.top + bestOB.bottom) / 2;
         const entryGap = isBuy
           ? lastLtf.close - entryPrice
           : entryPrice - lastLtf.close;
-        if (entryGap > ltfAtr * 3) continue;
+        if (entryGap > ltfAtr * 6) continue;
 
         // ─── STEP 5: ENTRY (PENDING LIMIT at 50% of OB body = mean threshold) ──
 

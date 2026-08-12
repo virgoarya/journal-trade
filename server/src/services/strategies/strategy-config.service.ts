@@ -65,7 +65,7 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
     levelProximityAtrMult: 1.2,
     sbrRbsProximityPct: 0.002,
     qmlLookback: 4,
-    structureBreakMinBodyAtr: 1.5,
+    structureBreakMinBodyAtr: 0.5,  // was 1.5 — terlalu ketat utk MSS M15
     minConfidence: 55,   // was 50 — naik agar hanya level kuat yang diambil
   },
 
