@@ -58,6 +58,8 @@ export interface MultiStrategySymbolAnalysis {
 
 class AITradingEngine {
   private candleCache = new Map<string, { rates: MT5Rate[]; timestamp: number }>();
+  private symbolCache = new Map<string, { analysis: MultiStrategySymbolAnalysis; timestamp: number }>();
+  private readonly SYMBOL_CACHE_TTL_MS = 60 * 1000; // 1 minute cache for symbol analysis
   private readonly CACHE_TTL_MS = 5000;
 
   private async getCachedRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
@@ -91,6 +93,18 @@ class AITradingEngine {
     methodologyWeights?: MethodologyWeights,
     activeMethodologies?: MethodologyName[],
   ): Promise<MultiStrategySymbolAnalysis> {
+    // Memoization: same symbol + TF + weights within TTL reuses prior analysis
+    // to avoid re-running all 3 strategies (SMC/ICT/MSNR) on every pipeline tick.
+    const weightsKey = methodologyWeights
+      ? Object.entries(methodologyWeights).map(([k, v]) => `${k}=${v}`).join("|")
+      : "default";
+    const methKey = activeMethodologies?.sort().join(",") ?? "all";
+    const cacheKey = `${symbol}_${timeframe}_${weightsKey}_${methKey}`;
+    const cached = this.symbolCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.SYMBOL_CACHE_TTL_MS) {
+      return cached.analysis;
+    }
+
     const fractals = this.getFractalTimeframes(timeframe);
     const [dailyRates, directionRates, setupRates, entryRates] = await Promise.all([
       this.getCachedRates(symbol, "D1", 100),
@@ -172,12 +186,20 @@ class AITradingEngine {
       directionStructure.trend
     );
 
-    return {
+    const result: MultiStrategySymbolAnalysis = {
       symbol,
       marketStructure: directionStructure,
       methodologySignals: { smc: smcSignals, ict: ictSignals, msnr: msnrSignals },
       confluence,
     };
+
+    // Store in memoization cache (bounded to avoid unbounded growth)
+    if (this.symbolCache.size >= 100) {
+      const oldestKey = this.symbolCache.keys().next().value;
+      if (oldestKey) this.symbolCache.delete(oldestKey);
+    }
+    this.symbolCache.set(cacheKey, { analysis: result, timestamp: Date.now() });
+    return result;
   }
 
   /**

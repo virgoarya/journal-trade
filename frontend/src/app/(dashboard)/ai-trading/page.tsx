@@ -11,6 +11,7 @@ import { PipelinePerformance } from "./components/PipelinePerformance";
 import { AITradeHistories } from "./components/AITradeHistories";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
+import { LLMConsensusBreakdown } from "./components/LLMConsensusBreakdown";
 
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
@@ -111,7 +112,7 @@ function AITradingPageContent() {
           setRegCheck("redirect");
         }
       } catch {
-        setRegCheck("ok");
+        setRegCheck("redirect");
       }
     })();
   }, [sessionPending]);
@@ -122,15 +123,7 @@ function AITradingPageContent() {
     }
   }, [regCheck, router]);
 
-  if (regCheck === "loading" || sessionPending) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (regCheck === "redirect") {
+  if (regCheck === "loading" || regCheck === "redirect" || sessionPending) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>

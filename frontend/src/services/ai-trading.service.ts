@@ -77,6 +77,7 @@ export interface Rate {
 }
 
 export interface PipelineConfig {
+  useAppliedConfig?: boolean;
   symbols: string[];
   timeframe: "M5" | "M15" | "H1";
   strategy: string;

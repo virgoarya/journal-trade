@@ -32,7 +32,6 @@ export interface StrategyConfig {
     minSignalConfidence: number;
     agree2Boost: number;  // ≥2 methodology agree
     agree3Boost: number;  // ≥3 methodology agree
-    agree4Boost: number;  // all 4 methodology agree
     macroTimeBoost: number;
     conflictThreshold: number; // ratio of scores for conflict resolution
   };
@@ -73,7 +72,6 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
     minSignalConfidence: 55,  // was 50 — filter out weak signals sebelum voting
     agree2Boost: 5,
     agree3Boost: 10,
-    agree4Boost: 15,
     macroTimeBoost: 10,
     conflictThreshold: 1.5,
   },

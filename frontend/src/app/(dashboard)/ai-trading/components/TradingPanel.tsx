@@ -7,12 +7,21 @@ import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
 import { useState, useEffect } from "react";
 
+import { LlmConsensusConfig } from "./LlmConsensusConfig";
+
 interface TradingPanelProps {
   pipelineRunning: boolean;
   pipelinePaused: boolean;
   isStarting: boolean;
   isStopping: boolean;
   skillConfig?: AIBacktestSkill | null;
+  // Visualization options
+  showContributionIndicators?: boolean;
+  onShowContributionIndicatorsChange?: (v: boolean) => void;
+  showConsensusPanelByDefault?: boolean;
+  onShowConsensusPanelByDefaultChange?: (v: boolean) => void;
+  visualizationStyle?: "radar" | "cards" | "table";
+  onVisualizationStyleChange?: (v: "radar" | "cards" | "table") => void;
 }
 
 export function TradingPanel({
@@ -35,6 +44,12 @@ export function TradingPanel({
     accountInfo,
     setSkillConfig,
     skillVersion,
+    showContributionIndicators,
+    setShowContributionIndicators,
+    showConsensusPanelByDefault,
+    setShowConsensusPanelByDefault,
+    visualizationStyle,
+    setVisualizationStyle,
   } = useAiTrading();
 
   const handleStart = async () => {
@@ -44,7 +59,7 @@ export function TradingPanel({
     }
     // Clear any lingering circuit breaker alert before starting
     setCircuitBreakerAlert(null);
-    await startPipeline({ useAppliedConfig: true } as any);
+    await startPipeline({ ...savedPipelineConfig, useAppliedConfig: true });
   };
 
   // ── Circuit Breaker Alert State ─────────────────────────────────────
@@ -62,8 +77,8 @@ export function TradingPanel({
   // Force LLM to be always active
   const isLlmActive = true;
 
-  const minProviders = pipelineRunning || pipelinePaused 
-    ? displayConfig?.llmConsensus?.minProviders 
+  const minProviders = pipelineRunning || pipelinePaused
+    ? (displayConfig?.llmConsensus?.minProviders ?? llmMinProviders)
     : llmMinProviders;
 
   // Calculate overall grade based on selected symbols
@@ -331,30 +346,10 @@ export function TradingPanel({
 
             <div className="col-span-2 pt-3 border-t border-accent-gold/10 flex flex-col gap-2">
               <div>
-                <p className="text-[9px] text-[#A855F7] mb-0.5 uppercase tracking-widest font-bold">LLM Consensus Link</p>
+                <p className="text-[9px] text-accent-gold mb-0.5 uppercase tracking-widest font-bold">LLM Nodes</p>
                 <p className="text-[10px] text-text-muted">
-                  Sync nodes req: {minProviders} models
+                  {llmModels.filter(m => m.status === "active").length}/{llmModels.length} active
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {llmModels.length > 0 ? (
-                  llmModels.map((m) => {
-                    const isOk = m.status === "active";
-                    return (
-                      <div key={m.name} className={`flex items-center gap-1.5 px-2 py-1 rounded border ${isOk ? 'bg-[#A855F7]/10 border-[#A855F7]/30 shadow-[0_0_8px_rgba(168,85,247,0.2)]' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
-                        <span className={`text-[10px] font-bold font-mono ${isOk ? 'text-[#D8B4FE]' : 'text-yellow-400'}`}>
-                          {m.label}
-                        </span>
-                        <span className="text-text-muted/50">|</span>
-                        <span className={`text-[9px] uppercase font-bold tracking-widest ${isOk ? 'text-[#A855F7]' : 'text-yellow-500/80'}`}>
-                          {isOk ? 'ONLINE' : m.status}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <span className="text-[10px] text-text-muted italic">No LLM models available...</span>
-                )}
               </div>
             </div>
 
@@ -475,6 +470,26 @@ export function TradingPanel({
           setSkillConfig(skill);
         }} />
       )}
+
+      {/* LLM Visualization Config */}
+      <LlmConsensusConfig
+        enabled={true}
+        threshold={pipelineStatus?.config?.llmConsensus?.threshold ?? 0.7}
+        minProviders={minProviders}
+        providerTimeoutMs={pipelineStatus?.config?.llmConsensus?.providerTimeoutMs ?? 25000}
+        models={llmModels}
+        loading={false}
+        onToggle={() => {}}
+        onThresholdChange={() => {}}
+        onMinProvidersChange={() => {}}
+        onProviderTimeoutChange={() => {}}
+        showContributionIndicators={showContributionIndicators}
+        onShowContributionIndicatorsChange={setShowContributionIndicators}
+        showConsensusPanelByDefault={showConsensusPanelByDefault}
+        onShowConsensusPanelByDefaultChange={setShowConsensusPanelByDefault}
+        visualizationStyle={visualizationStyle}
+        onVisualizationStyleChange={setVisualizationStyle}
+      />
 
       {/* Pipeline Controls (Tactile Switches) */}
       <div className="pt-4 border-t border-accent-gold/20 space-y-3">

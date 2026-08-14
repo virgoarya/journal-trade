@@ -17,7 +17,7 @@ function calculateQualificationScore(result: BacktestResult): number {
 
 // Define the shape of the config needed by runBacktestStream
 const TIMEFRAMES = ["M15", "H1", "M5"];
-const ACTIVE_METHODOLOGIES = ["smc", "ict", "msnr", "lit", "rsiEngulf"];
+const ACTIVE_METHODOLOGIES = ["smc", "ict", "msnr"];
 
 async function runOptimizationForUser(userId: string, savedConfig: any = {}) {
   let bestSkill: any = null;

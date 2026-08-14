@@ -8,6 +8,8 @@ import { tradeExitStrategyService } from "./trade-exit-strategy.service";
 import { AITradingSession } from "../models/AITradingSession";
 import { AITradeLog } from "../models/AITradeLog";
 import { silentLogger } from "../utils/silent-logger";
+import { UserSettings } from "../models/UserSettings";
+import { MT5Connection } from "../models/MT5Connection";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
 
@@ -21,7 +23,8 @@ export interface PipelineConfig {
   strategy: string;
   maxOpenPositions: number;
   maxRiskPerTrade: number;
-  maxDailyRisk: number;
+  /** % of account — resolved from applied/smart-risk settings, NOT hardcoded. */
+  maxDailyRisk?: number;
   tradingHours?: {
     start: string; // "HH:mm"
     end: string;
@@ -139,7 +142,10 @@ const DEFAULT_CONFIG: PipelineConfig = {
   strategy: "MULTI_METHODOLOGY",
   maxOpenPositions: 3,
   maxRiskPerTrade: 0.5,
-  maxDailyRisk: 1.5,
+  // NOTE: maxDailyRisk & smartRisk deliberately OMITTED from the defaults —
+  // they must come from the applied/per-broker config (smart risk management).
+  // startPipeline resolves them from UserSettings as the source of truth.
+  // (Kept maxRiskPerTrade/1.0 as a last-resort safety floor only.)
   trailingStop: {
     enabled: true,
     activationATR: 1.0,
@@ -246,6 +252,24 @@ class TradingPipelineService {
       await this.stopPipeline(userId);
     }
 
+    // Resolve risk settings from the per-broker applied config (smart risk
+    // management) as the single source of truth — never a hardcoded default.
+    // DEFAULT_CONFIG intentionally omits maxDailyRisk/smartRisk; if the caller
+    // didn't pass them (e.g. Start without useAppliedConfig), fall back to
+    // UserSettings.savedPipelineConfigs[server].
+    let persistedRisk: Partial<PipelineConfig> = {};
+    try {
+      const settings = await UserSettings.findOne({ userId }).lean();
+      const conn = await MT5Connection.findOne({ userId }).lean();
+      const brokerServer = conn?.server || "unknown";
+      persistedRisk =
+        (settings?.savedPipelineConfigs as any)?.[brokerServer] ||
+        (settings as any)?.savedPipelineConfig ||
+        {};
+    } catch {
+      // best-effort — ignore lookup failures
+    }
+
     const merged: PipelineConfig = {
       ...DEFAULT_CONFIG,
       ...config,
@@ -261,12 +285,24 @@ class TradingPipelineService {
         ...DEFAULT_CONFIG.methodologyWeights!,
         ...(config.methodologyWeights || {}),
       },
-      activeMethodologies: config.activeMethodologies ?? DEFAULT_CONFIG.activeMethodologies,
+      activeMethodologies: config.activeMethodologies ?? persistedRisk.activeMethodologies ?? DEFAULT_CONFIG.activeMethodologies,
       llmConsensus: {
         ...DEFAULT_CONFIG.llmConsensus!,
         ...(config.llmConsensus || {}),
       },
+      // Smart-risk settings: caller > persisted > undefined (no silent default)
+      maxDailyRisk: config.maxDailyRisk ?? persistedRisk.maxDailyRisk,
+      smartRisk: config.smartRisk ?? persistedRisk.smartRisk,
+      maxRiskPerTrade: config.maxRiskPerTrade ?? persistedRisk.maxRiskPerTrade ?? DEFAULT_CONFIG.maxRiskPerTrade,
+      maxOpenPositions: config.maxOpenPositions ?? persistedRisk.maxOpenPositions ?? DEFAULT_CONFIG.maxOpenPositions,
     };
+
+    this.addLog(userId, "INFO", `[PIPELINE] Risk config loaded: maxDailyRisk=${merged.maxDailyRisk ?? 'undefined'}%, smartRisk=${merged.smartRisk?.enabled ? 'ON' : 'OFF'}`);
+
+    if (merged.maxDailyRisk === undefined) {
+      this.addLog(userId, "ERROR", `[PIPELINE] Critical: maxDailyRisk not defined in config or persisted settings. Stopping pipeline.`);
+      throw new Error("maxDailyRisk not defined");
+    }
 
     if (merged.symbols.length === 0) {
       throw new Error("At least one symbol required");

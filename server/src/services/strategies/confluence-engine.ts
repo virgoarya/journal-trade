@@ -235,7 +235,7 @@ class ConfluenceEngine {
     const confluenceConfig = strategyConfigService.getConfluenceConfig();
     const agreeCount = winningSignals.length;
     let boost = 0;
-    if (agreeCount >= 4) boost = confluenceConfig.agree4Boost;       // semua 4 agree → +15
+    if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
     else if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
     else if (agreeCount >= 2) boost = confluenceConfig.agree2Boost;  // 2 agree → +5
 

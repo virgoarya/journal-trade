@@ -38,7 +38,7 @@ class RiskManagerService {
     signal: TradingSignal,
     pipelineConfig: {
       maxOpenPositions: number;
-      maxDailyRisk: number;
+      maxDailyRisk?: number;
       maxRiskPerTrade: number;
       smartRisk?: any;
     },
@@ -73,7 +73,13 @@ class RiskManagerService {
         }
       }
 
-      const totalRiskCapacity = Math.max(pipelineConfig.maxDailyRisk, pipelineConfig.maxOpenPositions * pipelineConfig.maxRiskPerTrade);
+      // maxDailyRisk may be undefined (resolved from smart-risk settings) — treat
+      // as no cap rather than NaN. When set, it's the hard ceiling.
+      const dailyRiskCap = pipelineConfig.maxDailyRisk !== undefined && !isNaN(pipelineConfig.maxDailyRisk)
+        ? pipelineConfig.maxDailyRisk
+        : (pipelineConfig.maxOpenPositions * pipelineConfig.maxRiskPerTrade);
+      // maxDailyRisk is the hard ceiling for total daily risk. Per-position risk is already bounded by maxRiskPerTrade above.
+      const totalRiskCapacity = dailyRiskCap;
       if (totalOpenRiskPercent + pipelineConfig.maxRiskPerTrade > totalRiskCapacity && positions.length >= pipelineConfig.maxOpenPositions) {
         return {
           allowed: false,
@@ -97,7 +103,7 @@ class RiskManagerService {
       // ── 5. Check daily PnL and risk limit ────────────────────────────
       const todayMetrics = await this.getDailyMetrics(userId);
       if (todayMetrics) {
-        const dailyMaxLoss = accountInfo.balance * (pipelineConfig.maxDailyRisk / 100);
+        const dailyMaxLoss = accountInfo.balance * (dailyRiskCap / 100);
         if (todayMetrics.dailyPnL <= -dailyMaxLoss) {
           // ── Trade Attribution: who caused the loss? ──────────────────
           const attribution = await this.getDailyPnLAttribution(userId);

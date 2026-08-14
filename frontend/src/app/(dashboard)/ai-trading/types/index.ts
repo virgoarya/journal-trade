@@ -156,12 +156,12 @@ export const VERDICT_STYLES: Record<string, { bg: string; text: string; border: 
  * Order matches the UI grid in LLMConsensusViz; kept stable for UI layout.
  */
 export const ALL_LLM_PROVIDERS: LlmModelNode[] = [
-  { name: "deepseek", label: "DeepSeek V4", model: "deepseek-v4", status: "active" },
+  { name: "gemini", label: "Gemini 3.1 Flash", model: "gc/gemini-3.1-flash-lite-preview", status: "active" },
+  { name: "mistral", label: "Mistral Large", model: "mistral/mistral-large-latest", status: "active" },
   { name: "gpt", label: "GPT OSS 120B", model: "groq/openai/gpt-oss-120b", status: "active" },
-  { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", status: "active" },
-  { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", status: "active" },
-  { name: "nemotron", label: "Nemotron 3 Ultra", model: "nemotron-4-340b-instruct", status: "active" },
-  { name: "claude-opus", label: "Claude Opus 4.7", model: "cc/claude-opus-4-7", status: "active" },
+  { name: "deepseek", label: "DeepSeek 3.2", model: "kr/deepseek-3.2", status: "active" },
+  { name: "nemotron", label: "Nemotron 3.5", model: "openrouter/nvidia/nemotron-3.5-lightning:free", status: "active" },
+  { name: "claude-opus", label: "Claude Opus 4.6", model: "ag/claude-opus-4-6-thinking", status: "active" },
 ];
 
 /**
@@ -177,6 +177,9 @@ export type { ACCOUNTInfo, Position, SymbolInfo, Rate, TradingSignal, PipelineLo
 export type { LLMConsensusVote, LLMConsensusResult };
 export type { MultiStrategyAnalysis, ConfluenceResult, MarketStructureSummary, MethodologySignalResult, MethodologyBreakdown };
 export type { AIBacktestSkill, AutoBacktestSummary, PipelinePerformance };
+
+// Re-export MT5Credentials from hook
+export type { MT5Credentials } from "../hooks/useMT5Connection";
 
 // Re-export methodology display config so components can import from types only
 import {

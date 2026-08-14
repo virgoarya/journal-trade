@@ -10,6 +10,9 @@ import {
   type MultiStrategyAnalysis,
   type LLMConsensusResult,
   type PipelineLog,
+  type ACCOUNTInfo,
+  type Position,
+  type MT5Credentials,
   MethodologyName,
   MethodologyWeights,
 } from "../types";
@@ -28,17 +31,17 @@ interface AiTradingContextType {
   isConnecting: boolean;
   isCheckingSession: boolean;
   connectError: string | null;
-  connectMT5: (payload: any) => Promise<boolean>;
+  connectMT5: (payload: MT5Credentials) => Promise<boolean>;
   disconnectMT5: () => Promise<void>;
 
   // Account Info
-  accountInfo: any | null;
+  accountInfo: ACCOUNTInfo | null;
   accountLoading: boolean;
   refetchAccountInfo: () => void;
 
   // Positions
-  positions: any[];
-  orders: any[];
+  positions: Position[];
+  orders: Position[];
   positionsLoading: boolean;
   positionsError: string | null;
   closePosition: (ticket: number) => Promise<void>;
@@ -89,6 +92,18 @@ interface AiTradingContextType {
   llmProviderTimeoutMs: number;
   setLlmProviderTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
   isSavingSettings: boolean;
+
+  // Consensus Panel State
+  isConsensusPanelOpen: boolean;
+  setIsConsensusPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
+
+  // Visualization Options
+  showContributionIndicators: boolean;
+  setShowContributionIndicators: React.Dispatch<React.SetStateAction<boolean>>;
+  showConsensusPanelByDefault: boolean;
+  setShowConsensusPanelByDefault: React.Dispatch<React.SetStateAction<boolean>>;
+  visualizationStyle: "radar" | "cards" | "table";
+  setVisualizationStyle: React.Dispatch<React.SetStateAction<"radar" | "cards" | "table">>;
 
   // Saved Pipeline Config from backend
   savedPipelineConfig: PipelineConfig | null;
@@ -147,6 +162,14 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [llmMinProviders, setLlmMinProviders] = useState(3);
   const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(25000);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Consensus Panel State
+  const [isConsensusPanelOpen, setIsConsensusPanelOpen] = useState(false);
+
+  // Visualization Options
+  const [showContributionIndicators, setShowContributionIndicators] = useState(true);
+  const [showConsensusPanelByDefault, setShowConsensusPanelByDefault] = useState(false);
+  const [visualizationStyle, setVisualizationStyle] = useState<"radar" | "cards" | "table">("radar");
 
   // Saved Pipeline Config from backend
   const [savedPipelineConfig, setSavedPipelineConfig] = useState<PipelineConfig | null>(null);
@@ -252,7 +275,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const stopPipeline = stop;
   const pausePipeline = pause;
   const resumePipeline = resume;
-  const connectMT5 = connect as unknown as (payload: any) => Promise<boolean>;
+  const connectMT5: (payload: MT5Credentials) => Promise<boolean> = connect;
   const disconnectMT5 = async () => {
     await disconnect();
   };
@@ -318,6 +341,14 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       llmProviderTimeoutMs,
       setLlmProviderTimeoutMs,
       isSavingSettings,
+      showContributionIndicators,
+      setShowContributionIndicators,
+      showConsensusPanelByDefault,
+      setShowConsensusPanelByDefault,
+      isConsensusPanelOpen,
+      setIsConsensusPanelOpen,
+      visualizationStyle,
+      setVisualizationStyle,
       savedPipelineConfig,
       setSavedPipelineConfig,
       lastAutoBacktestAt,
@@ -377,6 +408,14 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       llmProviderTimeoutMs,
       setLlmProviderTimeoutMs,
       isSavingSettings,
+      showContributionIndicators,
+      setShowContributionIndicators,
+      showConsensusPanelByDefault,
+      setShowConsensusPanelByDefault,
+      isConsensusPanelOpen,
+      setIsConsensusPanelOpen,
+      visualizationStyle,
+      setVisualizationStyle,
       savedPipelineConfig,
       setSavedPipelineConfig,
       lastAutoBacktestAt,

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { aiTradingService } from "@/services/ai-trading.service";
 import { toast } from "sonner";
 
-interface MT5Credentials {
+export interface MT5Credentials {
   apiKey?: string;
   mcpUrl?: string;
   server?: string;

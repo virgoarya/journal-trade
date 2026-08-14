@@ -105,8 +105,8 @@ class MarketRegimeService {
 
   /**
    * Get methodology weight multipliers for current regime.
-   * Trending: boost SMC/ICT/LIT, reduce CRT/MSNR
-   * Ranging: boost CRT/MSNR, reduce SMC/ICT
+   * Trending: boost SMC, reduce ICT/MSNR
+   * Ranging: boost ICT/MSNR, reduce SMC
    * High Vol: reduce all weights (reduce trade frequency)
    */
   getRegimeMultipliers(regime: MarketRegime): Record<string, number> {
@@ -118,11 +118,11 @@ class MarketRegimeService {
       case "TRENDING_BULL":
       case "TRENDING_BEAR":
         multipliers.smc = 1.3;
-        multipliers.ict = 0.6;  // ICT (Upgraded with CRT) still useful in trends
+        multipliers.ict = 0.6;  // ICT still useful in trends (sweep/judas)
         multipliers.msnr = 0.7;
         break;
       case "RANGING":
-        multipliers.ict = 1.3;  // ICT (Upgraded) excels in ranging AMD accumulation
+        multipliers.ict = 1.3;  // ICT excels in ranging AMD accumulation
         multipliers.msnr = 1.2;
         multipliers.smc = 0.7;
         break;

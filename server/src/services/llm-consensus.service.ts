@@ -61,6 +61,8 @@ interface LLMProvider {
   baseUrl: string;
   apiKey: string;
   isDirect?: boolean;
+  /** Priority order - lower number = higher priority */
+  priority?: number;
 }
 
 import { NINE_ROUTER_MODELS } from "../config/llm-models.config";
@@ -202,6 +204,7 @@ function getAvailableProviders(): LLMProvider[] {
         fallbackModel: m.fallbackModel,
         baseUrl: nineRouterUrl!,
         apiKey: nineRouterApiKey,
+        priority: m.priority,
       });
     }
   }
@@ -546,11 +549,14 @@ class LLMConsensusService {
       };
     }
 
-    const providers = getAvailableProviders().filter(p => {
-      const circuit = this.providerCircuitBreakers.get(p.name);
-      // Provider is usable if it's not rate-limited AND its circuit breaker is not OPEN
-      return !isRateLimited(p.name) && circuit?.canExecute();
-    });
+    const providers = getAvailableProviders()
+      .filter(p => {
+        const circuit = this.providerCircuitBreakers.get(p.name);
+        // Provider is usable if it's not rate-limited AND its circuit breaker is not OPEN
+        return !isRateLimited(p.name) && circuit?.canExecute();
+      })
+      // Sort by priority: lower priority number = higher preference (Gemini > Mistral > GPT > DeepSeek > etc.)
+      .sort((a, b) => (a.priority || 999) - (b.priority || 999));
     if (providers.length < (cfg.minProviders || 2)) {
       silentLogger.warn(`[LLM-CONSENSUS] Cuma ${providers.length} provider tersedia (butuh ${cfg.minProviders}). SKIP trade.`);
       return {

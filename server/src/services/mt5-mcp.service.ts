@@ -427,9 +427,11 @@ class MT5MCPService {
       return this.accountInfo;
     }
 
-    const result = await this.callWithCircuit("mt5_account_info", {});
-    this.accountInfo = result as MT5AccountInfo;
-    return this.accountInfo;
+    return withRetry(async () => {
+      const result = await this.callWithCircuit("mt5_account_info", {});
+      this.accountInfo = result as MT5AccountInfo;
+      return this.accountInfo;
+    }, 3, 500);
   }
 
   /** Get tradable symbols (optionally filtered). */
@@ -440,36 +442,34 @@ class MT5MCPService {
 
   /** Get symbol details. */
   async getSymbolInfo(symbol: string): Promise<MT5Symbol | null> {
-    try {
+    return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_info", { symbol });
       return result as MT5Symbol;
-    } catch (error) {
-      logErrorStructured("getSymbolInfo", error, { symbol }, "warn");
-      return null;
-    }
+    }, 3, 500);
   }
 
   /** Fetch OHLCV rates. */
   async getRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
-    const result = await this.callWithCircuit("mt5_copy_rates", { symbol, timeframe, count });
-    return (result as any).rates ?? [];
+    return withRetry(async () => {
+      const result = await this.callWithCircuit("mt5_copy_rates", { symbol, timeframe, count });
+      return (result as any).rates ?? [];
+    }, 3, 500);
   }
 
   /** Fetch OHLCV rates within a date range (for backtesting). */
   async getRatesRange(symbol: string, timeframe: string, from: number, to: number): Promise<MT5Rate[]> {
-    const result = await this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to });
-    return (result as any).rates ?? [];
+    return withRetry(async () => {
+      const result = await this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to });
+      return (result as any).rates ?? [];
+    }, 3, 500);
   }
 
   /** Get current tick. */
   async getTick(symbol: string): Promise<MT5Tick | null> {
-    try {
+    return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_tick", { symbol });
       return result as MT5Tick;
-    } catch (error) {
-      logErrorStructured("getTick", error, { symbol }, "warn");
-      return null;
-    }
+    }, 3, 500);
   }
 
   /** Get all open positions with retry on transient failure. */
@@ -480,8 +480,10 @@ class MT5MCPService {
     }
     
     // Fallback if cache is completely empty or hasn't received ticks yet
-    const result = await this.callWithCircuit("mt5_positions_get", { includeOrders: true });
-    return (result as any).positions ?? [];
+    return withRetry(async () => {
+      const result = await this.callWithCircuit("mt5_positions_get", { includeOrders: true });
+      return (result as any).positions ?? [];
+    }, 3, 500);
   }
 
   /** Get all active pending (limit/stop) orders. */

@@ -93,7 +93,7 @@ const AITradingSessionSchema = new Schema<IAITradingSession>(
         default: {},
       },
       methodologyWeights: { type: Map, of: Number, default: {} },
-      activeMethodologies: { type: [String], default: ["smc", "ict", "msnr", "crt"] },
+      activeMethodologies: { type: [String], default: ["smc", "ict", "msnr"] },
       llmConsensus: {
         type: {
           enabled: { type: Boolean, default: false },
