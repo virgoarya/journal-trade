@@ -488,16 +488,12 @@ class AILearningService {
     }
 
     // Copy risk settings
-    if (snapshot?.maxRiskPerTrade !== undefined) {
-      updatedConfig.maxRiskPerTrade = snapshot.maxRiskPerTrade;
-      changes.maxRiskPerTrade = snapshot.maxRiskPerTrade;
-    }
-    // Daily risk limit + smart-risk rules must carry over too — without this the
-    // trading panel fell back to a stale pipeline config (e.g. 1.5%) after Apply.
-    if (snapshot?.maxDailyRisk !== undefined) {
-      updatedConfig.maxDailyRisk = snapshot.maxDailyRisk;
-      changes.maxDailyRisk = snapshot.maxDailyRisk;
-    }
+    // maxDailyRisk is critical — if not in snapshot, default to 3% (user expectation from backtest form)
+    // This prevents silent fallback to 1.5% and ensures the applied config respects the user's target daily loss limit.
+    updatedConfig.maxRiskPerTrade = snapshot?.maxRiskPerTrade ?? 1.0;
+    updatedConfig.maxDailyRisk = snapshot?.maxDailyRisk ?? 3.0;
+    changes.maxRiskPerTrade = snapshot?.maxRiskPerTrade ?? 1.0;
+    changes.maxDailyRisk = snapshot?.maxDailyRisk ?? 3.0;
     if (snapshot?.smartRisk) {
       updatedConfig.smartRisk = { ...snapshot.smartRisk };
       changes.smartRisk = snapshot.smartRisk;
