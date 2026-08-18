@@ -80,10 +80,16 @@ function connect() {
 
   ws.onerror = (err) => {
     isConnecting = false;
-    // Event objects have no enumerable props -> {} when logged directly.
-    // Log actionable info instead.
+    // Browser always fires onerror right before onclose. When CLOSED, onclose
+    // already carries the real code/reason (4011 auth, 4003 origin) — so skip
+    // this generic "error" noise. Only log when not yet closed (genuine mid-flight error).
+    if (ws.readyState === WebSocket.CLOSED) {
+      try { ws.close(); } catch { /* already closed */ }
+      scheduleReconnect();
+      return;
+    }
     const detail = (err as ErrorEvent | undefined)?.message ?? (err as Event | undefined)?.type ?? "no detail";
-    console.error(
+    console.warn(
       `[MT5 Stream] WebSocket error (attempt=${attempt}, url=${wsUrl}, readyState=${ws.readyState}): ${detail}`,
     );
     try { ws.close(); } catch { /* already closed */ }
