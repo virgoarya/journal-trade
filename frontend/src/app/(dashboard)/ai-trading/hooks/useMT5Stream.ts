@@ -23,6 +23,7 @@ const subscribers = new Set<{
 let reconnectTimeout: NodeJS.Timeout | null = null;
 let isConnecting = false;
 let wsRef: WebSocket | null = null;
+let attempt = 0;
 
 function getWsUrl(): string {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -51,6 +52,7 @@ function connect() {
 
   ws.onopen = () => {
     isConnecting = false;
+    attempt = 0;
     broadcastToSubscribers({ type: "mt5_status", data: { connected: true } });
     console.log("[MT5 Stream] Connected to backend WS server.");
   };
@@ -64,23 +66,37 @@ function connect() {
     }
   };
 
-  ws.onclose = () => {
-    console.log("[MT5 Stream] Disconnected. Reconnecting...");
+  ws.onclose = (event) => {
+    const code = event.code ?? "?";
+    const reason = event.reason ?? "";
+    console.log(
+      `[MT5 Stream] Disconnected (code=${code}${reason ? `, reason=${reason}` : ""}). Reconnecting...`,
+    );
     isConnecting = false;
     wsRef = null;
     broadcastToSubscribers({ type: "mt5_status", data: { connected: false } });
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    reconnectTimeout = setTimeout(connect, 3000);
+    scheduleReconnect();
   };
 
   ws.onerror = (err) => {
-    console.error('[MT5 Stream] WebSocket error:', err);
     isConnecting = false;
+    // Event objects have no enumerable props -> {} when logged directly.
+    // Log actionable info instead.
+    const detail = (err as ErrorEvent | undefined)?.message ?? (err as Event | undefined)?.type ?? "no detail";
+    console.error(
+      `[MT5 Stream] WebSocket error (attempt=${attempt}, url=${wsUrl}, readyState=${ws.readyState}): ${detail}`,
+    );
     try { ws.close(); } catch { /* already closed */ }
-    // Ensure reconnect triggers even if onclose doesn't
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    reconnectTimeout = setTimeout(connect, 3000);
+    scheduleReconnect();
   };
+}
+
+function scheduleReconnect() {
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  attempt += 1;
+  // Exponential backoff: 3s, 4.5s, ~7s, ~10s ... capped at 30s
+  const delay = Math.min(3000 * Math.pow(1.5, attempt - 1), 30000);
+  reconnectTimeout = setTimeout(connect, delay);
 }
 
 function subscribe(callbacks: { onTick?: (data: any) => void; onStatus?: (data: any) => void }) {
