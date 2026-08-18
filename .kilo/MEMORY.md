@@ -52,3 +52,9 @@ D:\Journal Trade\
 │   └── src/           → TypeScript source (mt5-streamer.ts connects to MT5 MCP)
 └── .kilo/             → Agent config, memory, skills
 ```
+
+## Environment Setup
+- server/.env: Contains all backend API keys and secrets. **DO NOT COMMIT THIS FILE.**
+  - ENCRYPTION_KEY: A 48-character persistent key has been generated and set. This key is used for encrypting and decrypting sensitive data like MT5 passwords in the database. Without it, the server will use an ephemeral key, and encrypted data will be unrecoverable across restarts.
+  - NODE_ENV: Set to development. In production, this should be production to disable dev-only features.
+- rontend/.env: Contains frontend-specific environment variables.
