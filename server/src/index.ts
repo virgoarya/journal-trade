@@ -18,7 +18,7 @@ import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
-import { setWebSocketServer, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
+import { setWebSocketServer, startWebSocketHeartbeat, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
 import { initMt5NativeMcp } from "./mt5-streamer";
 import { silentLogger } from "./utils/silent-logger";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
