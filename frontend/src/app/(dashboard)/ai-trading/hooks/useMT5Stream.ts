@@ -74,9 +74,12 @@ function connect() {
   };
 
   ws.onerror = (err) => {
-    console.error("[MT5 Stream] WebSocket error:", err);
+    console.error('[MT5 Stream] WebSocket error:', err);
     isConnecting = false;
     try { ws.close(); } catch { /* already closed */ }
+    // Ensure reconnect triggers even if onclose doesn't
+    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    reconnectTimeout = setTimeout(connect, 3000);
   };
 }
 
