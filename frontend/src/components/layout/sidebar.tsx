@@ -20,7 +20,6 @@ import {
   FlaskConical
 } from "lucide-react";
 import { useState } from "react";
-import pkg from "../../../../package.json";
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
