@@ -402,3 +402,28 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 **Root Cause**: (1) ENCRYPTION_KEY ditambahkan ke `server/.env` source, tapi EXE membaca `resources\server\.env` (salinan build) yang belum punya key ? backend crash di production. buildApp.js:79 memang menyalin .env, tapi build berjalan SEBELUM key ditambahkan. (2) Debug jadi kacau karena env sesi tooling punya `ELECTRON_RUN_AS_NODE=1` ? `electron.exe` jalan sebagai Node biasa: require('electron') resolve ke stub path string, main process crash diam-diam tanpa dialog, exit code 0.
 **Solusi**: Tambahkan ENCRYPTION_KEY (48 char, sama dengan source .env) langsung ke `dist-app\win-unpacked\resources\server\.env`; verifikasi dengan curl health :5000. Untuk debug: `Remove-Item Env:ELECTRON_RUN_AS_NODE` sebelum Start-Process EXE.
 **Hindari**: Saat menambah env baru, selalu cek resources build (bukan hanya source). Jangan percaya exit code 0 dari Electron saat ELECTRON_RUN_AS_NODE aktif — selalu verifikasi via /health atau main.log. Tambah log rotasi untuk main.log/backend.log yang tumbuh 180MB+ per hari.
+
+### [20260818] Cleanup hapus root package.json rusak sidebar.tsx
+**Area**: Cleanup / Build Integrity
+**Root Cause**: Saat cleanup file stray, root package.json dihapus. Tapi rontend/src/components/layout/sidebar.tsx import ../../../../package.json (resolve ke root) ? typecheck frontend fail TS2307: Cannot find module. Import ternyata unused (tidak dipakai di file), tapi tetap break compile.
+**Solusi**: Hapus import unused di sidebar.tsx. TIDAK restore root package.json (monorepo tidak butuh itu, masing-masing rontend/ & server/ punya package.json sendiri).
+**Hindari**: Saat cleanup, jangan hapus file yang mungkin di-import lintas folder oleh kode yang masih hidup. Cek grep reference sebelum delete. Setelah cleanup selalu jalan 
+px tsc --noEmit di frontend & server untuk catch broken import.
+
+**Area**: Cleanup / Build Integrity
+**Root Cause**: Saat cleanup file stray, root package.json dihapus. Tapi rontend/src/components/layout/sidebar.tsx import ../../../../package.json (resolve ke root) ? typecheck frontend fail TS2307: Cannot find module. Import ternyata unused (tidak dipakai di file), tapi tetap break compile.
+**Solusi**: Hapus import unused di sidebar.tsx. TIDAK restore root package.json (monorepo tidak butuh itu, masing-masing rontend/ & server/ punya package.json sendiri).
+**Hindari**: Saat cleanup, jangan hapus file yang mungkin di-import lintas folder oleh kode yang masih hidup. Cek grep reference sebelum delete. Setelah cleanup selalu jalan 
+px tsc --noEmit di frontend & server untuk catch broken import.
+
+**Area**: Cleanup / Build Integrity
+**Root Cause**: Saat cleanup file stray, root package.json dihapus. Tapi rontend/src/components/layout/sidebar.tsx import ../../../../package.json (resolve ke root) ? typecheck frontend fail TS2307: Cannot find module. Import ternyata unused (tidak dipakai di file), tapi tetap break compile.
+**Solusi**: Hapus import unused di sidebar.tsx. TIDAK restore root package.json (monorepo tidak butuh itu, masing-masing rontend/ & server/ punya package.json sendiri).
+**Hindari**: Saat cleanup, jangan hapus file yang mungkin di-import lintas folder oleh kode yang masih hidup. Cek grep reference sebelum delete. Setelah cleanup selalu jalan 
+px tsc --noEmit di frontend & server untuk catch broken import.
+
+**Area**: Cleanup / Build Integrity
+**Root Cause**: Saat cleanup file stray, root package.json dihapus. Tapi rontend/src/components/layout/sidebar.tsx import ../../../../package.json (resolve ke root) ? typecheck frontend fail TS2307: Cannot find module. Import ternyata unused (tidak dipakai di file), tapi tetap break compile.
+**Solusi**: Hapus import unused di sidebar.tsx. TIDAK restore root package.json (monorepo tidak butuh itu, masing-masing rontend/ & server/ punya package.json sendiri).
+**Hindari**: Saat cleanup, jangan hapus file yang mungkin di-import lintas folder oleh kode yang masih hidup. Cek grep reference sebelum delete. Setelah cleanup selalu jalan 
+px tsc --noEmit di frontend & server untuk catch broken import.
