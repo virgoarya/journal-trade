@@ -9,9 +9,11 @@ export interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   channels: Set<MacroChannel>;
   isAuthenticated: boolean;
+  isAlive: boolean;
 }
 
 let wss: WebSocketServer | undefined;
+let pingInterval: NodeJS.Timeout | undefined;
 
 export const setWebSocketServer = (server: WebSocketServer) => {
   wss = server;
@@ -22,6 +24,40 @@ export const getWebSocketServer = () => {
     throw new Error("WebSocketServer not initialized");
   }
   return wss;
+};
+
+export const startWebSocketHeartbeat = (wssInstance: WebSocketServer) => {
+  wssInstance.on('connection', (ws: WebSocket) => {
+    const authenticatedWs = ws as AuthenticatedWebSocket;
+    authenticatedWs.isAlive = true;
+    ws.on('pong', () => {
+      authenticatedWs.isAlive = true;
+    });
+  });
+
+  // Ping clients every 30 seconds to check for liveness
+  pingInterval = setInterval(() => {
+    wssInstance.clients.forEach((ws: WebSocket) => {
+      const authenticatedWs = ws as AuthenticatedWebSocket;
+      if (!authenticatedWs.isAlive) {
+        silentLogger.warn(`[WS Heartbeat] Terminating unresponsive client: ${authenticatedWs.userId}`);
+        return ws.terminate();
+      }
+
+      authenticatedWs.isAlive = false;
+      ws.ping();
+    });
+  }, 30000); // 30 seconds
+
+  silentLogger.info("[WS Heartbeat] Started ping-pong interval.");
+};
+
+export const stopWebSocketHeartbeat = () => {
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = undefined;
+    silentLogger.info("[WS Heartbeat] Stopped ping-pong interval.");
+  }
 };
 
 /**
