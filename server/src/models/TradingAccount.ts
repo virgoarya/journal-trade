@@ -72,7 +72,7 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
     login: { type: String },
     password: { type: String }
   },
-  sourcePreference: { type: String, enum: ["manual", "mt5"], required: true },
+  sourcePreference: { type: String, enum: ["manual", "mt5"], required: true, default: "manual" },
   marketType: { type: String, enum: ["CFD", "FUTURES"], default: "CFD" }, // Added
   lastMt5SyncAt: { type: Date },
   mt5AutoSyncEnabled: {
