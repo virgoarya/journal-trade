@@ -1067,7 +1067,9 @@ function LogTradePageInner() {
                       {/* Left: Entry, Size, Risk */}
                       <div className="space-y-1.5">
                         <div>Entry: <span className="font-mono text-text-primary">{trade.entryPrice}</span></div>
-                        <div>Lot Size: <span className="font-mono text-text-primary">{trade.lotSize}</span></div>
+                        <div>
+                          {activeAccount?.marketType === "FUTURES" ? "Contract Size" : "Lot Size"}: <span className="font-mono text-text-primary">{trade.lotSize}</span>
+                        </div>
                         <div>Risk: <span className={`font-mono ${trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : trade.riskPercent ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
                       </div>
                       {/* Right: SL, TP, RR */}

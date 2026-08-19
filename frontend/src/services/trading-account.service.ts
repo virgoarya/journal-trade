@@ -22,6 +22,7 @@ export interface TradingAccount {
   referralBroker?: "exness" | "valetax";
   referralEmail?: string;
   referralVerified?: boolean;
+  marketType?: "CFD" | "FUTURES";
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +32,7 @@ export interface CreateAccountDto {
   initialBalance: number;
   currency: string;
   broker: string;
+  marketType?: "CFD" | "FUTURES";
   maxDailyDrawdownPct: number;
   maxTotalDrawdownPct: number;
   maxDailyTrades?: number;

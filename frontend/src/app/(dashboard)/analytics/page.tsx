@@ -6,23 +6,22 @@ import { analyticsService, type AnalyticsData } from "@/services/analytics.servi
 import { Heatmap } from "@/components/analytics/Heatmap";
 import { EquityCurveChart } from "@/components/analytics/EquityCurveChart";
 import { SessionPerformanceChart } from "@/components/analytics/SessionPerformanceChart";
-import { EquityCurveChart } from "@/components/analytics/EquityCurveChart";
-import { SessionPerformanceChart } from "@/components/analytics/SessionPerformanceChart";
+import { AssetDistributionChart } from "@/components/analytics/AssetDistributionChart";
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<string>("6M");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [equityCurve, setEquityCurve] = useState<{ date: string; equity: number }[]>([]);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        setLoading(true);
-        setError(null);
         const result = await analyticsService.getOverview(timeRange);
         if (result.success && result.data) {
-          // Merge with defaults to ensure all fields exist
           const data = result.data;
           data.monthlyPnL = data.monthlyPnL || [];
           data.weeklyStats = data.weeklyStats || [];
@@ -56,8 +55,6 @@ export default function AnalyticsPage() {
       setAnalytics(result.data);
     }
   };
-
-  const [equityCurve, setEquityCurve] = useState<{ date: string; equity: number }[]>([]);
 
   useEffect(() => {
     const fetchEquity = async () => {
@@ -102,6 +99,7 @@ export default function AnalyticsPage() {
     weeklyStats: [],
     sessionPerformance: [],
     heatmap: [],
+    assetDistribution: [],
     streakStats: { longestWin: 0, longestLoss: 0, currentStreak: { type: "win" as const, count: 0 }, avgConsecutiveWins: 0, avgConsecutiveLosses: 0 },
     totalPnL: 0,
     totalTrades: 0,
@@ -117,7 +115,6 @@ export default function AnalyticsPage() {
     const max = Math.max(...data.map(d => Math.abs(d[valueKey])));
     return (
       <div className="flex items-end justify-between h-48 gap-4 px-2 relative">
-        {/* Background Grid Lines (Subtle) */}
         <div className="absolute inset-0 flex flex-col justify-between opacity-5">
            <div className="w-full border-t border-white" />
            <div className="w-full border-t border-white" />
@@ -137,7 +134,6 @@ export default function AnalyticsPage() {
                   minHeight: Math.abs(val) > 0 ? '4px' : '0',
                 }}
               >
-                 {/* Detail Popup on Hover */}
                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-surface border border-accent-gold/20 px-2 py-1 rounded text-[9px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-20 shadow-xl font-mono">
                     ${val.toLocaleString()}
                  </div>
@@ -220,14 +216,13 @@ export default function AnalyticsPage() {
           <EquityCurveChart data={equityCurve} />
         </div>
 
-
         {/* Asset Distribution */}
         <div className="glass p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-semibold text-text-primary">Asset Distribution</h3>
             <DollarSign className="w-4 h-4 text-text-muted" />
           </div>
-          <AssetDistributionChart data={displayData.assetDistribution} />
+          <AssetDistributionChart data={displayData.assetDistribution || []} />
         </div>
 
         {/* Session Performance Detail */}
@@ -237,6 +232,16 @@ export default function AnalyticsPage() {
             <Calendar className="w-4 h-4 text-text-muted" />
           </div>
           <SessionPerformanceChart data={displayData.sessionPerformance} />
+        </div>
+
+        {/* Weekly Performance */}
+        <div className="glass p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-semibold text-text-primary">Weekly Performance</h3>
+            <Calendar className="w-4 h-4 text-text-muted" />
+          </div>
+          <SimpleBarChart data={displayData.weeklyStats.filter(d => d.trades > 0)} valueKey="avgPnl" color="#D4AF37" />
+          <p className="text-[10px] text-text-muted italic mt-4 text-center font-mono opacity-50 uppercase tracking-widest">Average P&L by Weekday (Absolute USD)</p>
         </div>
 
         {/* Streak Stats */}
@@ -272,6 +277,15 @@ export default function AnalyticsPage() {
               <p className="font-mono text-2xl font-bold text-accent-gold">{displayData.streakStats.avgConsecutiveWins.toFixed(1)}</p>
             </div>
           </div>
+        </div>
+
+        {/* Deep Dive: Heatmap */}
+        <div className="glass p-6 lg:col-span-2">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-text-primary tracking-wide">Performance Heatmap (Session vs Day)</h3>
+            <Activity className="w-4 h-4 text-accent-gold" />
+          </div>
+          <Heatmap data={displayData.heatmap} />
         </div>
       </div>
 

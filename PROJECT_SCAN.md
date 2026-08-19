@@ -1,7 +1,7 @@
 # 📋 Project Scan — AI Trading & Backtest System
 
 > **Generated:** 2026-07-07  
-> **Stack:** Next.js 15 (App Router) + Express + TypeScript + MongoDB + MT5 MCP  
+> **Stack:** Next.js 16 (App Router) + Express + TypeScript + MongoDB + Native MT5 MCP + 9Router + LLM Consensus  
 > **Total Services:** 40+ | **Frontend Components:** 20+ | **Models:** 15 | **Routes:** 21
 
 ---
@@ -10,7 +10,7 @@
 
 ```
 D:\Journal Trade\
-├── frontend/                     # Next.js 15 (App Router, Turbopack)
+├── frontend/                     # Next.js 16 (App Router, Turbopack)
 │   └── src/
 │       ├── app/(dashboard)/ai-trading/
 │       │   ├── components/       # UI components (13 files)
@@ -28,7 +28,7 @@ D:\Journal Trade\
 │   │   ├── models/               # Mongoose models (15 files)
 │   │   ├── middleware/            # Auth, validation, rate limiting
 │   │   └── config/               # Env, CORS, DB config
-│   └── mcp-mt5-server/           # Python MCP server for MT5 bridge
+│   └── mcp-mt5-server/           # Python client for Native MT5 MCP
 └── .claude/                      # AI assistant configuration
 ```
 
@@ -322,3 +322,4 @@ Navigasi tab di header: **Trading** (default) dan **Backtest**. Backtest tab men
 | **Shared Skill Pool** | Aggregasi AIBacktestSkill antar user untuk sample size lebih besar |
 | **Telegram/Discord Alert** | Notifikasi real-time ke external chat |
 | **Multi-Broker Support** | Abstraction layer untuk broker selain MT5 |
+| **Macro Terminal** | New comprehensive macro-economic terminal with advanced analytics |
