@@ -32,7 +32,8 @@ export default function SettingsPage() {
     accountName: "",
     initialBalance: 1000,
     broker: "",
-    currency: "USD"
+    currency: "USD",
+    marketType: "CFD"
   });
 
   const [bio, setBio] = useState("");
@@ -264,7 +265,8 @@ export default function SettingsPage() {
         ...newAccountForm,
         maxDailyDrawdownPct: 5.0,
         maxTotalDrawdownPct: 10.0,
-        maxDailyTrades: 5
+        maxDailyTrades: 5,
+        marketType: newAccountForm.marketType
       });
       if (res.success && res.data) {
         setStatusMsg({ type: 'success', text: "Berhasil membuat akun Trading baru!" });
@@ -632,21 +634,28 @@ export default function SettingsPage() {
                    <h3 className="text-sm font-bold text-text-primary mb-4 flex items-center"><Plus className="w-4 h-4 mr-2" /> Add New Trading Account</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Account Name</label>
-                        <input type="text" placeholder="e.g. FTMO Challenge 100k" value={newAccountForm.accountName} onChange={e => setNewAccountForm({...newAccountForm, accountName: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Broker Name</label>
-                        <input type="text" placeholder="e.g. FTMO, IC Markets" value={newAccountForm.broker} onChange={e => setNewAccountForm({...newAccountForm, broker: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Initial Balance</label>
-                        <div className="relative">
-                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-mono">{newAccountForm.currency}</span>
-                           <input type="number" min="0" value={newAccountForm.initialBalance} onChange={e => setNewAccountForm({...newAccountForm, initialBalance: parseFloat(e.target.value)})} className="w-full bg-bg-input border border-white/5 rounded-xl pl-12 pr-4 py-3 text-text-primary font-mono focus:border-accent-gold focus:outline-none" />
-                        </div>
-                      </div>
-                   </div>
+                         <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Account Name</label>
+                         <input type="text" placeholder="e.g. FTMO Challenge 100k" value={newAccountForm.accountName} onChange={e => setNewAccountForm({...newAccountForm, accountName: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
+                       </div>
+                       <div>
+                         <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Broker Name</label>
+                         <input type="text" placeholder="e.g. FTMO, IC Markets" value={newAccountForm.broker} onChange={e => setNewAccountForm({...newAccountForm, broker: e.target.value})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none" />
+                       </div>
+                       <div>
+                         <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Market Type</label>
+                         <select value={newAccountForm.marketType} onChange={e => setNewAccountForm({...newAccountForm, marketType: e.target.value as "CFD" | "FUTURES"})} className="w-full bg-bg-input border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none">
+                           <option value="CFD">CFDs (Forex, Gold, Indices)</option>
+                           <option value="FUTURES">Futures (CME, Crypto)</option>
+                         </select>
+                       </div>
+                       <div>
+                         <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Initial Balance</label>
+                         <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-mono">{newAccountForm.currency}</span>
+                            <input type="number" min="0" value={newAccountForm.initialBalance} onChange={e => setNewAccountForm({...newAccountForm, initialBalance: parseFloat(e.target.value)})} className="w-full bg-bg-input border border-white/5 rounded-xl pl-12 pr-4 py-3 text-text-primary font-mono focus:border-accent-gold focus:outline-none" />
+                         </div>
+                       </div>
+                    </div>
                    <button onClick={handleCreateAccount} disabled={isLoading || !newAccountForm.accountName} className="px-6 py-3 bg-white/5 hover:bg-accent-gold hover:text-bg-void text-text-primary rounded-xl font-bold uppercase text-[11px] tracking-widest border border-white/10 transition-all disabled:opacity-50 mt-2">
                      Create Broker Account
                    </button>
