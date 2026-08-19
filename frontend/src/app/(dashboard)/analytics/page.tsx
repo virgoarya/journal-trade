@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { BarChart3, TrendingUp, TrendingDown, Calendar, DollarSign, Percent, Target, Activity, Award, Loader2 } from "lucide-react";
 import { analyticsService, type AnalyticsData } from "@/services/analytics.service";
 import { Heatmap } from "@/components/analytics/Heatmap";
+import { EquityCurveChart } from "@/components/analytics/EquityCurveChart";
+import { SessionPerformanceChart } from "@/components/analytics/SessionPerformanceChart";
+import { EquityCurveChart } from "@/components/analytics/EquityCurveChart";
+import { SessionPerformanceChart } from "@/components/analytics/SessionPerformanceChart";
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<string>("6M");
@@ -52,6 +56,26 @@ export default function AnalyticsPage() {
       setAnalytics(result.data);
     }
   };
+
+  const [equityCurve, setEquityCurve] = useState<{ date: string; equity: number }[]>([]);
+
+  useEffect(() => {
+    const fetchEquity = async () => {
+      try {
+        const res = await analyticsService.getEquityCurve();
+        if (res.success && res.data) {
+          const points = res.data.points.map(p => ({
+            date: p.date,
+            equity: p.equity
+          }));
+          setEquityCurve(points);
+        }
+      } catch (err) {
+        console.error("Failed to load equity curve", err);
+      }
+    };
+    fetchEquity();
+  }, []);
 
   if (loading) {
     return (
@@ -187,50 +211,23 @@ export default function AnalyticsPage() {
 
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly P&L Chart */}
-        <div className="glass p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Monthly P&L (Last 6M)</h3>
-            <BarChart3 className="w-4 h-4 text-text-muted" />
-          </div>
-          <SimpleBarChart data={displayData.monthlyPnL} valueKey="pnl" color="#D4AF37" />
-          <div className="flex justify-between mt-4 pt-4 border-t border-white/5">
-            <div className="flex items-center text-data-profit text-[10px] font-mono tracking-wider">
-              <TrendingUp className="w-3 h-3 mr-1" />
-              WINS: {displayData.monthlyPnL.reduce((sum, m) => sum + m.wins, 0)}
-            </div>
-            <div className="flex items-center text-data-loss text-[10px] font-mono tracking-wider">
-              <TrendingDown className="w-3 h-3 mr-1" />
-              LOSSES: {displayData.monthlyPnL.reduce((sum, m) => sum + m.losses, 0)}
-            </div>
-          </div>
-        </div>
-
-        {/* Weekly Performance */}
-        <div className="glass p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-semibold text-text-primary">Weekly Performance</h3>
-            <Calendar className="w-4 h-4 text-text-muted" />
-          </div>
-          <SimpleBarChart data={displayData.weeklyStats.filter(d => d.trades > 0)} valueKey="avgPnl" color="#D4AF37" />
-          <p className="text-[10px] text-text-muted italic mt-4 text-center font-mono opacity-50 uppercase tracking-widest">Average P&L by Weekday (Absolute USD)</p>
-        </div>
-
-        {/* New Real Heatmap Component */}
+        {/* Equity Curve Chart */}
         <div className="glass p-6 lg:col-span-2">
-           <div className="flex justify-between items-center mb-10">
-              <div className="flex items-center space-x-3">
-                 <div className="w-8 h-8 rounded-lg bg-accent-gold/10 flex items-center justify-center">
-                   <Activity className="w-4 h-4 text-accent-gold" />
-                 </div>
-                 <h3 className="font-bold text-text-primary tracking-wide">Performance Heatmap (Session vs Day)</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                 <span className="px-3 py-1 rounded bg-bg-elevated border border-white/5 text-[9px] font-bold text-text-muted tracking-[0.2em] uppercase">Real-Time Data Flow</span>
-              </div>
-           </div>
-           
-           <Heatmap data={displayData.heatmap} />
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-semibold text-text-primary">Equity Curve</h3>
+            <TrendingUp className="w-4 h-4 text-text-muted" />
+          </div>
+          <EquityCurveChart data={equityCurve} />
+        </div>
+
+
+        {/* Asset Distribution */}
+        <div className="glass p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-semibold text-text-primary">Asset Distribution</h3>
+            <DollarSign className="w-4 h-4 text-text-muted" />
+          </div>
+          <AssetDistributionChart data={displayData.assetDistribution} />
         </div>
 
         {/* Session Performance Detail */}
@@ -239,30 +236,7 @@ export default function AnalyticsPage() {
             <h3 className="font-semibold text-text-primary">Session Alpha</h3>
             <Calendar className="w-4 h-4 text-text-muted" />
           </div>
-          <div className="space-y-6">
-            {displayData.sessionPerformance.map((session) => {
-              const maxPnl = Math.max(...displayData.sessionPerformance.map(s => Math.abs(s.pnl)));
-              const barWidth = maxPnl > 0 ? (Math.abs(session.pnl) / maxPnl) * 100 : 0;
-              
-              return (
-                <div key={session.session} className="flex items-center">
-                  <div className="w-24 text-[10px] font-bold text-accent-gold uppercase tracking-widest">{session.session}</div>
-                  <div className="flex-1 bg-bg-void/50 rounded-full h-1.5 overflow-hidden mx-4 border border-white/5">
-                    <div
-                      className="h-full bg-accent-gold shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-1000"
-                      style={{ width: `${barWidth}%` }}
-                    />
-                  </div>
-                  <div className="w-24 text-right">
-                    <span className={`font-mono text-sm font-bold ${session.pnl >= 0 ? "text-data-profit" : "text-data-loss"}`}>
-                      {session.pnl >= 0 ? "+" : ""}${session.pnl.toLocaleString()}
-                    </span>
-                    <div className="text-[9px] text-text-muted uppercase tracking-tighter">{session.trades} Executions</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <SessionPerformanceChart data={displayData.sessionPerformance} />
         </div>
 
         {/* Streak Stats */}
