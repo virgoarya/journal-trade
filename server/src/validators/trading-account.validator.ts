@@ -10,6 +10,7 @@ export const createTradingAccountSchema = z.object({
   maxDailyTrades: z.number().int().positive().optional(),
   riskTier: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE", "SPECULATIVE"]).optional(),
   defaultRiskPercent: z.number().min(0.1).max(10).optional(),
+  marketType: z.enum(["CFD", "FUTURES"]).default("CFD"),
 });
 
 export const updateRiskRulesSchema = z.object({

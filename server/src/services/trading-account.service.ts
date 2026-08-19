@@ -52,6 +52,7 @@ export const tradingAccountService = {
       maxDailyDrawdownPct: data.maxDailyDrawdownPct,
       maxTotalDrawdownPct: data.maxTotalDrawdownPct,
       maxDailyTrades: data.maxDailyTrades,
+      marketType: data.marketType ?? "CFD",
       onboardingCompleted: true,
       isActive: isActive,
     });

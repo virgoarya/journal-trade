@@ -14,6 +14,7 @@ export const logTradeSchema = z.object({
   stopLoss: z.number().positive("Stop loss harus lebih dari 0"),
   takeProfit: z.number().positive("Take profit harus lebih dari 0").optional().nullable(),
   lotSize: z.number().positive("Ukuran lot harus positif"),
+  sizeUnit: z.enum(["LOT", "CONTRACT"]).default("LOT"),
   actualPnl: z.number(),
 
   result: z.enum(TRADE_RESULTS as readonly ["WIN", "LOSS", "BREAKEVEN"]),
