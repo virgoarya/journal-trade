@@ -34,11 +34,6 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
     return data;
   }, [trades, currentDate]);
 
-  const maxPnL = useMemo(() => {
-    const values = Object.values(pnlData).map(v => Math.abs(v));
-    return Math.max(...values, 100);
-  }, [pnlData]);
-
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
@@ -56,15 +51,12 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
 
   const getCellStyles = (day: number) => {
     const pnl = pnlData[day];
-    if (pnl === undefined || pnl === 0) return "bg-white/5 border-white/5";
+    if (pnl === undefined || pnl === 0) return "bg-zinc-900/40 border-zinc-800/60 text-zinc-600 hover:bg-zinc-800/60";
 
-    // Opacity updated to 40% (0.4) as requested
-    const opacity = 0.4;
-    
     if (pnl > 0) {
-      return `bg-data-profit/[${Math.round(opacity * 100)}] border-data-profit/20 shadow-[0_0_12px_rgba(16,185,129,${opacity * 0.5})] hover:bg-data-profit/30 cursor-pointer`;
+      return `bg-green-700/20 border-green-600/50 shadow-[inset_0_0_8px_rgba(16,185,129,0.2)] hover:bg-green-700/30 cursor-pointer`;
     } else {
-      return `bg-data-loss/[${Math.round(opacity * 100)}] border-data-loss/20 hover:bg-data-loss/30 cursor-pointer`;
+      return `bg-red-700/20 border-red-600/50 shadow-[inset_0_0_8px_rgba(239,68,68,0.2)] hover:bg-red-700/30 cursor-pointer`;
     }
   };
 
@@ -74,41 +66,41 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full grid grid-rows-[auto_1fr] gap-4">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="font-semibold text-text-primary uppercase tracking-widest text-[10px]">{monthYear}</h4>
+        <h4 className="font-bold text-text-primary uppercase tracking-widest text-sm">{monthYear}</h4>
         <div className="flex gap-2">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-white/5 rounded-lg border border-white/5 transition-all">
-            <ChevronLeft className="w-4 h-4 text-text-muted" />
+          <button onClick={handlePrevMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
+            <ChevronLeft className="w-4 h-4 text-text-muted hover:text-accent-gold" />
           </button>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-white/5 rounded-lg border border-white/5 transition-all">
-            <ChevronRight className="w-4 h-4 text-text-muted" />
+          <button onClick={handleNextMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
+            <ChevronRight className="w-4 h-4 text-text-muted hover:text-accent-gold" />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-7 gap-1.5"> {/* Gap reduced from 2 to 1.5 */}
+      <div className="grid grid-cols-7 gap-1.5 min-w-0 min-h-fit">
         {weekdays.map(d => (
-          <div key={d} className="text-[9px] text-text-muted font-bold text-center tracking-widest pb-1">
+          <div key={d} className="text-[10px] text-text-muted font-bold text-center tracking-widest pb-1">
             {d}
           </div>
         ))}
-        
-        {Array.from({ length: skipDays }).map((_, i) => <div key={`skip-${i}`} />)}
-        
+
+        {Array.from({ length: skipDays }).map((_, i) => <div key={`skip-${i}`} className="aspect-square"></div>)}
+
         {daysArr.map(day => {
           const pnl = pnlData[day];
           return (
             <div
               key={day}
               onClick={() => navigateToLogDate(day)}
-              className={`aspect-square rounded-lg border p-1 sm:p-1.5 flex flex-col justify-between transition-all duration-300 overflow-hidden min-w-0 group hover:scale-[1.02] active:scale-95 ${getCellStyles(day)}`}
+              className={`rounded-xl border p-2 flex flex-col justify-between transition-all duration-300 aspect-square group hover:scale-[1.02] active:scale-[0.98] ${getCellStyles(day)}`}
             >
-              <span className="text-[10px] sm:text-[11px] font-mono font-bold text-text-primary/70 group-hover:text-text-primary transition-colors">
+              <span className="text-xs font-mono font-bold text-text-primary/70 group-hover:text-text-primary transition-colors leading-none">
                 {day}
               </span>
               {pnl !== undefined && pnl !== 0 && (
-                <span className={`text-[9px] sm:text-[10px] font-bold font-mono truncate w-full ${pnl > 0 ? 'text-data-profit' : 'text-data-loss'}`}>
+                <span className={`text-[10px] sm:text-xs font-extrabold font-mono truncate w-full text-right mt-1 leading-none ${pnl > 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {pnl > 0 ? '+' : ''}${Math.abs(pnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </span>
               )}

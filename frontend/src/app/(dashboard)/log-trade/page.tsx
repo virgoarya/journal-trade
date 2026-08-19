@@ -146,6 +146,9 @@ function LogTradePageInner() {
   const [isHardDelete, setIsHardDelete] = useState(false);
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState(false);
 
+  // View mode toggle (Table vs Card)
+  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+
   const fetchTrades = async (includeDeleted: boolean = false) => {
     try {
       setLoading(true);
@@ -669,11 +672,29 @@ function LogTradePageInner() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-12">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">Trade Journal</h1>
           <p className="text-sm text-text-secondary mt-1">Cycles of psychology, habits, and your absolute numbers</p>
         </div>
+        <div className="flex items-center bg-bg-elevated rounded-lg p-1 border border-white/5">
+          <button
+            onClick={() => setViewMode("table")}
+            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] rounded-md transition-all ${viewMode === 'table' ? 'bg-accent-gold text-bg-void' : 'text-text-secondary hover:text-accent-gold'}`}
+          >
+            Table
+          </button>
+          <button
+            onClick={() => setViewMode("card")}
+            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] rounded-md transition-all ${viewMode === 'card' ? 'bg-accent-gold text-bg-void' : 'text-text-secondary hover:text-accent-gold'}`}
+          >
+            Card
+          </button>
+        </div>
+      </div>
+
+      {/* Add Trade Button Row */}
+      <div className="flex justify-end">
         <button
           onClick={() => setShowForm(true)}
           className="btn-gold flex items-center space-x-2"
@@ -762,6 +783,7 @@ function LogTradePageInner() {
       )}
 
       {/* Trade Entries Table */}
+      {viewMode === 'table' && (
       <div className="glass overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -976,6 +998,117 @@ function LogTradePageInner() {
           </table>
         </div>
       </div>
+      )}
+
+      {/* Trade Entries Card View */}
+      {viewMode === 'card' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredTrades.length === 0 ? (
+            <div className="col-span-full p-8 text-center text-text-muted text-sm italic glass rounded-xl">
+              No execution records yet
+            </div>
+          ) : (
+            filteredTrades.map((trade) => {
+              const tradeDateNY = formatToNYDateTimeLocal(trade.tradeDate);
+              const [entryDatePart, entryTimePart = ""] = tradeDateNY.split('T');
+              const exitDateNY = trade.exitDate ? formatToNYDateTimeLocal(trade.exitDate) : null;
+              let exitDateTimeDisplay = "-";
+              if (exitDateNY) {
+                const [exitDatePart, exitTimePart] = exitDateNY.split('T');
+                exitDateTimeDisplay = `${exitDatePart} ${exitTimePart}`;
+              }
+              const duration = calculateDuration(trade.tradeDate, trade.exitDate);
+              const isWin = trade.result.toLowerCase() === 'win';
+              return (
+                <div key={trade.id} className="glass rounded-xl overflow-hidden shadow-lg hover:shadow-accent-gold/20 hover:border-accent-gold/30 border border-white/5 transition-all duration-300 flex flex-col">
+                  {/* Chart Image - Natural aspect, tidak dipotong */}
+                  <div className="relative w-full bg-bg-void/50 flex items-center justify-center overflow-hidden">
+                    {trade.chartLink ? (
+                      <img
+                        src={trade.chartLink}
+                        alt={`${trade.pair} chart`}
+                        className="w-full h-auto object-contain opacity-90 hover:opacity-100 transition-opacity"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-full h-40 flex items-center justify-center text-text-muted text-xs italic">No chart attached</div>
+                    )}
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-bg-void/80 text-[10px] font-bold uppercase tracking-widest border border-white/10">
+                      {entryDatePart}
+                    </div>
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border ${isWin ? 'bg-data-profit/20 text-data-profit border-data-profit/30' : 'bg-data-loss/20 text-data-loss border-data-loss/30'}`}>
+                      {trade.result}
+                    </div>
+                  </div>
+                  {/* Content */}
+                  <div className="p-4 space-y-3 flex-1 flex flex-col">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-bold text-text-primary">{trade.pair}</span>
+                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${trade.direction === 'Long' ? 'bg-data-profit/20 text-data-profit' : 'bg-data-loss/20 text-data-loss'}`}>
+                          {trade.direction}
+                        </span>
+                      </div>
+                      <span className={`font-mono font-bold ${trade.pnl >= 0 ? 'text-data-profit' : 'text-data-loss'}`}>
+                        {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Timing Info */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-text-secondary">
+                      <div>Entry: <span className="font-mono text-text-primary">{entryDatePart} {entryTimePart}</span></div>
+                      <div className="text-right">Exit: <span className="font-mono text-text-primary">{exitDateTimeDisplay}</span></div>
+                      <div>Duration: <span className="font-mono text-text-primary">{duration}</span></div>
+                      <div className="text-right">Session: <span className="font-mono text-text-primary">{trade.session || '-'}</span></div>
+                    </div>
+
+                    {/* Trade Parameters */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-text-secondary pt-2 border-t border-white/5">
+                      {/* Left: Entry, Size, Risk */}
+                      <div className="space-y-1.5">
+                        <div>Entry: <span className="font-mono text-text-primary">{trade.entryPrice}</span></div>
+                        <div>Size: <span className="font-mono text-text-primary">{trade.lotSize}</span></div>
+                        <div>Risk: <span className={`font-mono ${trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : trade.riskPercent ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
+                      </div>
+                      {/* Right: SL, TP, RR */}
+                      <div className="space-y-1.5 text-right">
+                        <div>SL: <span className="font-mono text-text-primary">{trade.stopLoss}</span></div>
+                        <div>TP: <span className="font-mono text-text-primary">{trade.takeProfit || '-'}</span></div>
+                        <div>RR: <span className="font-mono text-text-primary">{trade.rMultiple || '-'}</span></div>
+                      </div>
+                    </div>
+
+                    {/* Extra Info */}
+                    <div className="flex items-center justify-between text-[10px] text-text-muted pt-2 border-t border-white/5">
+                      <span>Market: <span className="text-text-primary uppercase">{trade.marketCondition || '-'}</span></span>
+                      <span>Mind: <span className={`font-bold ${trade.emotionalState >= 4 ? 'text-data-profit' : trade.emotionalState === 3 ? 'text-accent-gold' : 'text-data-loss'}`}>{trade.emotionalState || '-'}/5</span></span>
+                    </div>
+
+                    {trade.playbookName && (
+                      <div className="text-[11px] truncate">Playbook: <span className="text-accent-gold">{trade.playbookName}</span></div>
+                    )}
+                    {trade.notes && <p className="text-[11px] text-text-muted italic line-clamp-2">{trade.notes}</p>}
+                    <div className="flex items-center space-x-2 pt-1 border-t border-white/5 mt-auto">
+                      <button onClick={() => handleReviewAI(trade.id)} className="text-text-muted hover:text-accent-gold transition-colors p-1" title="Review AI">
+                        <Zap className="w-4 h-4" />
+                      </button>
+                      {trade.chartLink && <a href={trade.chartLink} target="_blank" rel="noopener noreferrer" className="text-text-muted hover:text-accent-gold transition-colors p-1" title="Chart">
+                        <LinkIcon className="w-4 h-4" />
+                      </a>}
+                      {!trade.isDeleted && <button onClick={() => startEdit(trade)} className="text-text-muted hover:text-accent-gold transition-colors p-1" title="Edit">
+                        <Edit2 className="w-4 h-4" />
+                      </button>}
+                      <button onClick={() => setDeleteConfirmTrade(trade)} className="text-text-muted hover:text-data-loss transition-colors p-1 ml-auto" title="Delete">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* AI Review Modal */}
       {selectedReview && (

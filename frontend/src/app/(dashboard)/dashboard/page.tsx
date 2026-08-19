@@ -420,7 +420,7 @@ export default function DashboardPage() {
         {/* ROW 2: Performance Tracking */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left: Monthly Performance Calendar */}
-          <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-6 min-h-[250px] md:min-h-[300px]">
+          <div className="lg:col-span-7 glass p-3 sm:p-4 md:p-6 min-h-[250px] md:min-h-[300px] min-w-0 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h4 className="font-semibold text-text-primary uppercase tracking-[0.2em] text-xs sm:text-sm">Monthly Performance Calendar</h4>
               <div className="text-[10px] sm:text-xs text-accent-gold font-mono uppercase tracking-[0.2em] bg-accent-gold/5 px-2 sm:px-3 py-1 rounded-full border border-accent-gold/10">
