@@ -13,6 +13,7 @@ export interface Trade {
   stopLoss: number;
   takeProfit?: number;
   lotSize: number;
+  sizeUnit?: "LOT" | "CONTRACT";
   actualPnl: number;
   pnl: number;  // Alias for actualPnl for UI convenience
   rMultiple?: number;
@@ -41,6 +42,7 @@ export interface CreateTradeDto {
   stopLoss: number;
   takeProfit?: number;
   lotSize: number;
+  sizeUnit?: "LOT" | "CONTRACT";
   actualPnl?: number;
   rMultiple?: number;
   result?: "WIN" | "LOSS" | "BREAKEVEN";  // Send uppercase to backend

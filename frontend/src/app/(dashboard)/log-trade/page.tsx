@@ -1067,7 +1067,7 @@ function LogTradePageInner() {
                       {/* Left: Entry, Size, Risk */}
                       <div className="space-y-1.5">
                         <div>Entry: <span className="font-mono text-text-primary">{trade.entryPrice}</span></div>
-                        <div>Size: <span className="font-mono text-text-primary">{trade.lotSize}</span></div>
+                        <div>Lot Size: <span className="font-mono text-text-primary">{trade.lotSize}</span></div>
                         <div>Risk: <span className={`font-mono ${trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : trade.riskPercent ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
                       </div>
                       {/* Right: SL, TP, RR */}
@@ -1398,12 +1398,14 @@ function LogTradePageInner() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Lot Size</label>
+                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">
+                        {activeAccount?.marketType === "FUTURES" ? "Contract Size" : "Lot Size"}
+                      </label>
                       <input
                         name="lotSize"
                         type="number"
-                        step="0.01"
-                        placeholder="0.00"
+                        step={activeAccount?.marketType === "FUTURES" ? "1" : "0.01"}
+                        placeholder={activeAccount?.marketType === "FUTURES" ? "1" : "0.01"}
                         required
                         value={lotSize}
                         onChange={(e) => setLotSize(e.target.value ? parseFloat(e.target.value) : "")}

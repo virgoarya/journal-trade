@@ -25,6 +25,7 @@ export interface ITradingAccount extends Document {
     password: string;
   };
   sourcePreference: "manual" | "mt5";
+  marketType: "CFD" | "FUTURES"; // Added
   lastMt5SyncAt?: Date;
   mt5AutoSyncEnabled?: boolean;
   mt5SyncIntervalMinutes?: number;
@@ -71,11 +72,8 @@ const TradingAccountSchema = new Schema<ITradingAccount>({
     login: { type: String },
     password: { type: String }
   },
-  sourcePreference: {
-    type: String,
-    enum: ["manual", "mt5"],
-    default: "manual"
-  },
+  sourcePreference: { type: String, enum: ["manual", "mt5"], required: true },
+  marketType: { type: String, enum: ["CFD", "FUTURES"], default: "CFD" }, // Added
   lastMt5SyncAt: { type: Date },
   mt5AutoSyncEnabled: {
     type: Boolean,

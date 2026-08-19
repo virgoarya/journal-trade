@@ -24,6 +24,7 @@ export interface ITrade extends Document {
   riskPercent?: number;
   source: "manual" | "mt5";
   mt5TicketId?: string;
+  sizeUnit: "LOT" | "CONTRACT"; // Added
   mt5OrderId?: number;
   isDeleted?: boolean;
   deletedAt?: Date;
@@ -45,6 +46,7 @@ const TradeSchema = new Schema<ITrade>({
   lotSize: { type: Number, required: true },
   actualPnl: { type: Number, required: true },
   rMultiple: { type: Number },
+  sizeUnit: { type: String, enum: ["LOT", "CONTRACT"], default: "LOT" },
   result: { type: String, enum: ["WIN", "LOSS", "BREAKEVEN"], required: true },
   emotionalState: { type: Number, min: 1, max: 5 },
   notes: { type: String },
