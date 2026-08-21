@@ -485,19 +485,23 @@ class AITradingService {
     return res;
   }
 
-  async getPipelineLogs(limit = 100) {
+  async getPipelineLogs(limit = 100, since?: string) {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (since) params.set('since', since);
     const res = await apiClient.get<{ logs: PipelineLog[] }>(
-      `/api/v1/ai-trading/pipeline/logs?limit=${limit}`,
+      `/api/v1/ai-trading/pipeline/logs?${params.toString()}`,
     );
     return res;
   }
 
   /** Combined endpoint: status + logs in one request */
-  async getPipelineStatusWithLogs(limit = 100) {
+  async getPipelineStatusWithLogs(limit = 100, since?: string) {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (since) params.set('since', since);
     const res = await apiClient.get<{
       status: PipelineStatus;
       logs: PipelineLog[];
-    }>(`/api/v1/ai-trading/pipeline/status-with-logs?limit=${limit}`);
+    }>(`/api/v1/ai-trading/pipeline/status-with-logs?${params.toString()}`);
     return res;
   }
 
@@ -512,6 +516,15 @@ class AITradingService {
   async resetPerformance() {
     const res = await apiClient.post<{ deleted: number; message: string }>(
       "/api/v1/ai-trading/reset-performance",
+      {},
+    );
+    return res;
+  }
+
+  /** DEV: Force sync PnL for closed trades that show 0 */
+  async debugSyncAllPnl() {
+    const res = await apiClient.post<{ message: string }>(
+      "/api/v1/ai-trading/debug-sync-all-pnl",
       {},
     );
     return res;

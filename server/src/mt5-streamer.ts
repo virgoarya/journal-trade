@@ -230,7 +230,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           swap: 0,
           price: Number(p.close_price ?? 0),
           time: p.close_time ? Math.floor(new Date(String(p.close_time).replace(/\./g, "-")).getTime() / 1000) : 0,
-          comment: String(p.close_reason ?? p.comment ?? ""),
+          comment: String(p.comment ?? p.close_reason ?? ""),
           type: String(p.type ?? ""),
         }));
       return { deals };

@@ -91,12 +91,12 @@ export default function OnboardingPage() {
   if (sessionPending) return null;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-[#e5e1e7] font-sans selection:bg-[#d4af37]/30 selection:text-[#f2ca50] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#050508] text-[#e5e1e7] font-sans selection:bg-[var(--color-accent-gold)]/30 selection:text-[#f2ca50] flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
       {/* Background Decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#d4af37]/5 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#d4af37]/5 rounded-full blur-[120px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[var(--color-accent-gold)]/5 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[var(--color-accent-gold)]/5 rounded-full blur-[120px]"></div>
       </div>
 
       <main className="w-full max-w-[640px] flex flex-col gap-8">
@@ -211,7 +211,7 @@ export default function OnboardingPage() {
                       </div>
                       <div className="space-y-2">
                         <label className="block text-[10px] font-bold tracking-widest text-[#d0c5af]/60 uppercase">Currency</label>
-                        <div className="w-full bg-[#1b1b1f] border-transparent rounded-xl px-4 py-3 text-sm flex items-center text-[#d4af37] font-bold">
+                        <div className="w-full bg-[#1b1b1f] border-transparent rounded-xl px-4 py-3 text-sm flex items-center text-[var(--color-accent-gold)] font-bold">
                           USD - United States Dollar
                         </div>
                       </div>
@@ -239,7 +239,7 @@ export default function OnboardingPage() {
                             onClick={() => setFormData({...formData, marketType: type as "CFD" | "FUTURES"})}
                             className={`p-4 rounded-xl border text-center transition-all ${
                               formData.marketType === type
-                                ? "border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.15)]"
+                                ? "border-[var(--color-accent-gold)] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] shadow-[0_0_15px_rgba(212,175,55,0.15)]"
                                 : "border-white/10 bg-[#1b1b1f] text-white/40 hover:border-white/20"
                             }`}
                           >
@@ -252,11 +252,6 @@ export default function OnboardingPage() {
                   </div>
 
                   <div className="flex items-center justify-between pt-6">
-                    <button 
-                      type="button"
-                      onClick={handleBack}
-                      className="flex items-center gap-2 text-xs font-bold text-[#d0c5af]/60 hover:text-[#d4af37] uppercase tracking-widest transition-colors"
-                    >
                     <button
                       type="button"
                       onClick={handleBack}
@@ -339,7 +334,7 @@ export default function OnboardingPage() {
                     <button 
                       type="button"
                       onClick={handleBack}
-                      className="flex items-center gap-2 text-xs font-bold text-[#d0c5af]/60 hover:text-[#d4af37] uppercase tracking-widest transition-colors"
+                      className="flex items-center gap-2 text-xs font-bold text-[#d0c5af]/60 hover:text-[var(--color-accent-gold)] uppercase tracking-widest transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4" /> Back
                     </button>

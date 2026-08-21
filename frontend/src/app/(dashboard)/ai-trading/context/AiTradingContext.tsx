@@ -176,13 +176,16 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [lastAutoBacktestAt, setLastAutoBacktestAt] = useState<string | null>(null);
 
   // Load AI trading settings from backend
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
   const refreshSettings = useCallback(async (server?: string) => {
     try {
+      setSettingsError(null);
       const [res, skillRes] = await Promise.all([
         aiTradingService.getAiTradingSettings(server),
         aiTradingService.getSkill(server).catch(() => null)
       ]);
-      
+
       if (res.success && res.data) {
         setActiveMethodologies(res.data.activeMethodologies || []);
         setMethodologyWeights(res.data.methodologyWeights || { ...DEFAULT_METHODOLOGY_WEIGHTS });
@@ -198,13 +201,16 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
         }
         hasLoadedSettings.current = true;
         suppressNextSave.current = true;
+      } else {
+        setSettingsError("Failed to load settings from server");
       }
 
       if (skillRes && skillRes.success && skillRes.data) {
         setSkillConfig(skillRes.data);
       }
     } catch (e) {
-      console.warn("Failed to load AI trading settings:", e);
+      setSettingsError("Failed to load AI trading settings");
+      console.error("Failed to load AI trading settings:", e);
     }
   }, []);
 

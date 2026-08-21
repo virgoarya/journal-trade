@@ -1122,4 +1122,70 @@ router.get("/correlation", async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/ai-trading/debug-sync-all-pnl
+ * Force sync PnL from MT5 history for closed trades that show 0.
+ * Note: query uses `mt5Ticket` (per AITradeLog schema), NOT `metadata.positionId`.
+ */
+router.post("/debug-sync-all-pnl", heavyLimiter, async (req, res, next) => {
+  try {
+    if (!mt5McpService.isConnected) {
+      return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
+    }
+
+    const accountInfo = await mt5McpService.getAccountInfo();
+    const accountId = accountInfo?.login?.toString();
+    if (!accountId) throw new Error("Could not get accountId from MT5");
+
+    // Fetch last 30 days of history deals
+    const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const deals = await mt5McpService.getHistory(thirtyDaysAgo);
+
+    // Only OUT (closing) deals
+    const outDeals = deals.filter((d: any) => d.entry === 1);
+
+    let synced = 0;
+    let skipped = 0;
+
+    for (const deal of outDeals) {
+      // Match by mt5Ticket (position_id) — not metadata.positionId
+      const existing = await AITradeLog.findOne({
+        userId: req.user.id,
+        mt5Ticket: deal.position_id,
+        closed: true,
+      }).lean();
+
+      if (!existing) {
+        skipped++;
+        continue;
+      }
+
+      if ((existing.pnl ?? 0) === 0) {
+        await AITradeLog.findOneAndUpdate(
+          { userId: req.user.id, mt5Ticket: deal.position_id },
+          {
+            $set: {
+              pnl: Math.round((deal.profit + deal.commission + deal.swap) * 100) / 100,
+              closePrice: deal.price,
+              closedAt: new Date(deal.time * 1000),
+            },
+          },
+          { upsert: false },
+        ).catch(() => {});
+        synced++;
+      } else {
+        skipped++;
+      }
+    }
+
+    return apiResponse.success(res, {
+      message: `Sync completed: ${synced} trades updated, ${skipped} skipped`,
+      synced,
+      skipped,
+    });
+  } catch (error: any) {
+    next(error);
+  }
+});
+
 export default router;

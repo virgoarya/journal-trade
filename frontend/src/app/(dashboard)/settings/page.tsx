@@ -1,12 +1,13 @@
 "use client";
 
-import { 
-  Settings as SettingsIcon, 
-  User, Bell, Palette, Shield, Database, Globe, Key, Save, Moon, Sun, 
-  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus, Terminal, RotateCcw
+import {
+  Settings as SettingsIcon,
+  User, Bell, Palette, Shield, Database, Globe, Key, Save, Moon, Sun,
+  Volume2, Loader2, Camera, Download, Trash2, AlertTriangle, CheckCircle, Briefcase, Plus, Terminal, RotateCcw, RefreshCcw
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
+import { toast } from "sonner";
 import { tradingAccountService, TradingAccount } from "@/services/trading-account.service";
 import { settingsService, UserSettingsData } from "@/services/settings.service";
 import { mt5Service, MT5Status } from "@/services/mt5.service";
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
   const [aiResetLoading, setAiResetLoading] = useState(false);
+  const [debugSyncLoading, setDebugSyncLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]);
@@ -266,12 +268,12 @@ export default function SettingsPage() {
         maxDailyDrawdownPct: 5.0,
         maxTotalDrawdownPct: 10.0,
         maxDailyTrades: 5,
-        marketType: newAccountForm.marketType
+        marketType: newAccountForm.marketType as "CFD" | "FUTURES"
       });
       if (res.success && res.data) {
         setStatusMsg({ type: 'success', text: "Berhasil membuat akun Trading baru!" });
         setUserAccounts(prev => [...prev, res.data!]);
-        setNewAccountForm({ accountName: "", initialBalance: 1000, broker: "", currency: "USD" });
+        setNewAccountForm({ accountName: "", initialBalance: 1000, broker: "", currency: "USD", marketType: "CFD" });
       } else {
         setStatusMsg({ type: 'error', text: res.error || "Gagal membuat akun." });
       }
@@ -360,6 +362,26 @@ export default function SettingsPage() {
       alert("Network error occurred.");
     } finally {
       setAiResetLoading(false);
+    }
+  };
+
+  const handleDebugSyncAllPnl = async () => {
+    if (!confirm("Debug Sync All PnL hanya untuk development. Yakin jalankan?")) {
+      return;
+    }
+
+    setDebugSyncLoading(true);
+    try {
+      const response = await aiTradingService.debugSyncAllPnl();
+      if (response.success) {
+        toast.success("PnL sync selesai. Refresh halaman untuk melihat hasil.");
+      } else {
+        toast.error("Sync gagal: " + (response.error || "Unknown error"));
+      }
+    } catch (error: any) {
+      toast.error("Error: " + (error?.message || "Network error"));
+    } finally {
+      setDebugSyncLoading(false);
     }
   };
 
@@ -601,6 +623,11 @@ export default function SettingsPage() {
                                  {account.isActive && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-accent-gold text-bg-void">Active</span>}
                               </h3>
                               <p className="text-[11px] text-text-secondary mt-1">{account.broker || "No Broker Specified"}</p>
+                              {account.marketType && (
+                                <span className="text-[10px] text-text-muted/70 mt-1">
+                                  {account.marketType === "CFD" ? "CFDs" : "Futures"}
+                                </span>
+                              )}
                            </div>
                            <Briefcase className="w-5 h-5 text-text-muted" />
                         </div>
@@ -1169,12 +1196,28 @@ export default function SettingsPage() {
                                 <p className="text-[11px] text-text-secondary mt-1">Menghapus seluruh AI Trade Histories, statistik P&L, dan performance pipeline. Sinyal & pipeline AI tetap berjalan normal.</p>
                              </div>
                           </div>
-                          <button 
+                          <button
                             onClick={handleResetAiPerformance}
                             disabled={aiResetLoading}
                             className="w-full py-4 bg-data-loss/10 border border-data-loss/30 text-data-loss rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-data-loss hover:text-white transition-all active:scale-95"
                           >
                              {aiResetLoading ? "Resetting..." : "Reset AI Performance & Histories"}
+                          </button>
+                       </div>
+                       <div className="p-5 bg-blue-950/5 border border-blue-500/20 rounded-2xl">
+                          <div className="flex items-start space-x-4 mb-6">
+                             <RefreshCcw className="w-6 h-6 text-blue-400 shrink-0" />
+                             <div>
+                                <h5 className="text-[13px] font-bold text-blue-400 uppercase">Debug: Sync All PnL</h5>
+                                <p className="text-[11px] text-text-secondary mt-1">Force sync PnL untuk trade closed yang masih 0. Hanya untuk development.</p>
+                             </div>
+                          </div>
+                          <button
+                            onClick={handleDebugSyncAllPnl}
+                            disabled={debugSyncLoading}
+                            className="w-full py-4 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95"
+                          >
+                             {debugSyncLoading ? "Syncing..." : "Run Debug PnL Sync"}
                           </button>
                        </div>
                        <div className="p-5 bg-data-loss/5 border border-data-loss/20 rounded-2xl">

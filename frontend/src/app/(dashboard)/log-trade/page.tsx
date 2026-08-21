@@ -1070,7 +1070,7 @@ function LogTradePageInner() {
                         <div>
                           {activeAccount?.marketType === "FUTURES" ? "Contract Size" : "Lot Size"}: <span className="font-mono text-text-primary">{trade.lotSize}</span>
                         </div>
-                        <div>Risk: <span className={`font-mono ${trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : trade.riskPercent ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
+                        <div>Risk: <span className={`font-mono ${(trade.riskPercent ?? 0) > 2 ? "text-data-loss" : (trade.riskPercent ?? 0) >= 1 ? "text-accent-gold" : (trade.riskPercent ?? 0) ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
                       </div>
                       {/* Right: SL, TP, RR */}
                       <div className="space-y-1.5 text-right">
@@ -1083,7 +1083,7 @@ function LogTradePageInner() {
                     {/* Extra Info */}
                     <div className="flex items-center justify-between text-[10px] text-text-muted pt-2 border-t border-white/5">
                       <span>Market: <span className="text-text-primary uppercase">{trade.marketCondition || '-'}</span></span>
-                      <span>Mind: <span className={`font-bold ${trade.emotionalState >= 4 ? 'text-data-profit' : trade.emotionalState === 3 ? 'text-accent-gold' : 'text-data-loss'}`}>{trade.emotionalState || '-'}/5</span></span>
+                      <span>Mind: <span className={`font-bold ${(trade.emotionalState ?? 0) >= 4 ? 'text-data-profit' : (trade.emotionalState ?? 0) === 3 ? 'text-accent-gold' : 'text-data-loss'}`}>{trade.emotionalState || '-'}/5</span></span>
                     </div>
 
                     {trade.playbookName && (

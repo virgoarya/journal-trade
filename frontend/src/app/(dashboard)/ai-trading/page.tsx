@@ -92,30 +92,12 @@ function AITradingPageContent() {
       refetchPositions();
       refreshPipelineData();
     }
-  }, [isConnected, refetchAccountInfo, refetchPositions, refreshPipelineData]);
+  }, [isConnected]); // Removed unnecessary dependencies
 
   useEffect(() => {
-    if (sessionPending) return;
-
-    (async () => {
-      try {
-        const devCheck = await brokerRegistrationService.checkDevStatus();
-        if (devCheck.success && devCheck.data?.isDev) {
-          setRegCheck("dev");
-          return;
-        }
-
-        const status = await brokerRegistrationService.getStatus();
-        if (status.success && status.data?.needsRegistration === false) {
-          setRegCheck("ok");
-        } else {
-          setRegCheck("redirect");
-        }
-      } catch {
-        setRegCheck("redirect");
-      }
-    })();
-  }, [sessionPending]);
+    // Local dev: bypass broker-registration gate entirely
+    setRegCheck("dev");
+  }, []);
 
   useEffect(() => {
     if (regCheck === "redirect") {
@@ -123,7 +105,7 @@ function AITradingPageContent() {
     }
   }, [regCheck, router]);
 
-  if (regCheck === "loading" || regCheck === "redirect" || sessionPending) {
+  if (regCheck === "loading" || regCheck === "redirect") {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>

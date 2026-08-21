@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   aiTradingService,
   type PipelinePerformance as PipelinePerformanceData,
@@ -13,13 +13,13 @@ import {
   BarChart3,
   Percent,
   Award,
-  Layers,
-  Loader2,
-  RefreshCw,
-  Activity,
   Shield,
+  Layers,
   ChevronDown,
   ChevronUp,
+  Activity,
+  RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import {
   XAxis,
@@ -63,9 +63,10 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
   const [loading, setLoading] = useState(true);
   const [showMeth, setShowMeth] = useState(true);
   const [showSym, setShowSym] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const fetch = useCallback(async () => {
-    if (!data) setLoading(true);
+    setLoading(true);
     try {
       const res = await aiTradingService.getPerformance();
       if (res.success && res.data) setData(res.data);
@@ -74,11 +75,40 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
     } finally {
       setLoading(false);
     }
-  }, [data]);
+  }, []);
+
+  const syncAllPnl = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const res = await aiTradingService.debugSyncAllPnl();
+      if (res.success) {
+        alert(`✅ Sync successful: ${res.data?.message}`);
+        fetch(); // Refresh data after sync
+      } else {
+        alert(`❌ Sync failed: ${res.error}`);
+      }
+    } catch (err) {
+      alert("❌ Sync failed: Network error");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [fetch]);
 
   useEffect(() => {
     fetch();
-  }, [triggerRefresh]); // Remove interval, only rely on trigger or mount
+  }, [fetch, triggerRefresh]);
+
+  // Memoized stable sorted arrays — MUST be declared before any conditional returns
+  // to keep the hook order stable across renders (Rules of Hooks).
+  const sortedMethodologyStats = useMemo(() => {
+    if (!data?.methodologyStats?.length) return [];
+    return [...data.methodologyStats].sort((a, b) => b.totalPnL - a.totalPnL);
+  }, [data?.methodologyStats]);
+
+  const sortedSymbolStats = useMemo(() => {
+    if (!data?.symbolStats?.length) return [];
+    return [...data.symbolStats].sort((a, b) => b.totalPnL - a.totalPnL);
+  }, [data?.symbolStats]);
 
   if (loading) {
     return <SkeletonLoader type="card" />;
@@ -97,15 +127,6 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
   }
 
   const pnlColor = data.totalPnL >= 0 ? "text-neon-green" : "text-neon-red";
-  const recoveryFactor = data.winningTrades > 0 && data.losingTrades > 0
-    ? (data.totalPnL / Math.abs(data.losingTrades)).toFixed(2)
-    : "∞";
-  const bestMethodology = data.methodologyStats.length
-    ? [...data.methodologyStats].sort((a, b) => b.totalPnL - a.totalPnL)[0]
-    : null;
-  const worstMethodology = data.methodologyStats.length
-    ? [...data.methodologyStats].sort((a, b) => a.totalPnL - b.totalPnL)[0]
-    : null;
 
   return (
     <div className="glass p-4 space-y-3">
@@ -115,9 +136,20 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
           <Activity className="w-4 h-4" />
           Pipeline Performance
         </h3>
-        <button onClick={fetch} className="text-accent-gold-dim hover:text-accent-gold transition" title="Refresh">
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={syncAllPnl}
+            className="text-accent-gold-dim hover:text-accent-gold transition flex items-center gap-1"
+            title="Sync PnL from MT5"
+            disabled={isSyncing}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            {isSyncing ? "Syncing..." : "Sync PnL"}
+          </button>
+          <button onClick={fetch} className="text-accent-gold-dim hover:text-accent-gold transition" title="Refresh">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Top Metrics */}
@@ -125,7 +157,7 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
         <MetricCard icon={TrendingUp} label="Total PnL" value={`${data.totalPnL >= 0 ? "+" : ""}$${data.totalPnL.toFixed(2)}`} color={pnlColor} />
         <MetricCard icon={BarChart3} label="Win Rate" value={`${data.winRate}%`} color={data.winRate >= 50 ? "text-neon-green" : "text-neon-red"} sub={`${data.winningTrades}/${data.totalTrades}`} />
         <MetricCard icon={Percent} label="Total Trades" value={`${data.totalTrades}`} color="text-text-primary" />
-        <MetricCard icon={Shield} label="Avg Conf" value={data.methodologyStats.length > 0 ? `${Math.round(data.methodologyStats.reduce((a, m) => a + m.avgConfidence, 0) / data.methodologyStats.length)}%` : "—"} color="text-accent-gold" />
+        <MetricCard icon={Shield} label="Avg Conf" value={data.methodologyStats.length > 0 ? `${Math.round(data.methodologyStats.reduce((a, m) => a + (m.avgConfidence ?? 0), 0) / data.methodologyStats.length)}%` : "—"} color="text-accent-gold" />
       </div>
 
       {/* Equity Curve */}
@@ -153,7 +185,7 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
       )}
 
       {/* Methodology Performance */}
-      {data.methodologyStats.length > 0 && (
+      {sortedMethodologyStats.length > 0 && (
         <div>
           <button
             onClick={() => setShowMeth(!showMeth)}
@@ -167,8 +199,8 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
           </button>
           {showMeth && (
             <div className="space-y-1.5">
-              {data.methodologyStats.map((m) => {
-                const maxPnl = Math.max(...data.methodologyStats.map(x => Math.abs(x.totalPnL)), 1);
+              {sortedMethodologyStats.map((m) => {
+                const maxPnl = Math.max(...sortedMethodologyStats.map(x => Math.abs(x.totalPnL)), 1);
                 const barPct = (Math.abs(m.totalPnL) / maxPnl) * 100;
                 const isPositive = m.totalPnL >= 0;
                 return (
@@ -195,7 +227,7 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
       )}
 
       {/* Symbol Stats */}
-      {data.symbolStats.length > 0 && (
+      {sortedSymbolStats.length > 0 && (
         <div>
           <button
             onClick={() => setShowSym(!showSym)}
@@ -209,8 +241,8 @@ export function PipelinePerformance({ triggerRefresh }: { triggerRefresh?: numbe
           </button>
           {showSym && (
             <div className="space-y-1.5">
-              {data.symbolStats.map((s) => {
-                const maxTrades = Math.max(...data.symbolStats.map(x => x.totalTrades), 1);
+              {sortedSymbolStats.map((s) => {
+                const maxTrades = Math.max(...sortedSymbolStats.map(x => x.totalTrades), 1);
                 const pct = (s.totalTrades / maxTrades) * 100;
                 return (
                   <div key={s.symbol} className="glass border border-accent-gold/10 rounded px-2.5 py-1.5">

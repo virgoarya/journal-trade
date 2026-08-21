@@ -134,6 +134,15 @@ interface ActivePipeline {
   busySymbols: Set<string>;
   running: boolean;
   circuitBreakerReason?: string;
+  isBusy: boolean;
+  cachedMetrics?: {
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    allTimePnL: number;
+    dailyPnLSum: number;
+  };
+  lastMetricsUpdate?: number;
 }
 
 const DEFAULT_CONFIG: PipelineConfig = {
@@ -165,60 +174,14 @@ const DEFAULT_CONFIG: PipelineConfig = {
 
 // Re-entrancy guards for the 2s interval jobs: setInterval callbacks are async and can
 // overlap with themselves when a slow MT5/DB cycle exceeds the interval.
-let isManagingPositions = false;
-let isSyncClosedRunning = false;
+// NOTE: Guard state is moved into ActivePipeline per-user state to prevent global race conditions.
 
 // ─── Service ─────────────────────────────────────────────────────────
 
 class TradingPipelineService {
-  private activePipelines: Map<
-    string,
-    {
-      config: PipelineConfig;
-      intervals: Map<string, NodeJS.Timeout>;
-      trailingInterval: NodeJS.Timeout | null;
-      logs: PipelineLog[];
-      lastSignal: TradingSignal | null;
-      lastAnalysis: MultiStrategySymbolAnalysis | null;
-      lastError: string | null;
-      lastAnalyzedCandleTimes?: Map<string, number>;
-      waitingReconnect?: boolean;
-      paused: boolean;
-      /** Track pending orders for expiry management */
-      pendingOrders: Map<number, { symbol: string; direction: string; entry: number; tp: number; sl: number; placedAt: number; expiryAt: number }>;
-      /** Circuit breaker states */
-      mt5CircuitOpen: boolean;
-      llmCircuitOpen: boolean;
-      llmCircuitStates: Record<string, string>;
-      /** Smart Risk Management States */
-      startOfDayEquity?: number;
-      currentDayStr?: string;
-      peakEquity?: number;
-      initialBalance?: number;
-      dailyTradingBlocked?: boolean;
-      currentDrawdownPct?: number;
-      currentGrowthPct?: number;
-      currentRiskMultiplier?: number;
-      /** Circuit breaker auto-stop reason, if any */
-      circuitBreakerReason?: string;
-      cachedMetrics?: {
-        totalTrades: number;
-        winningTrades: number;
-        losingTrades: number;
-        allTimePnL: number;
-        dailyPnLSum: number;
-      };
-      lastMetricsUpdate?: number;
-      /** Dedup LLM voting — prevents re-evaluating the same signal */
-      lastLlmSignalKey: string | null;
-      lastLlmVerdictTime: number;
-      /** All analyses from latest cycle, keyed by symbol for per-pair display */
-      allAnalyses: MultiStrategySymbolAnalysis[];
-      /** Per-symbol lock to prevent race condition: signals arriving between gate check and order placement */
-      busySymbols: Set<string>;
-      running: boolean;
-    }
-  > = new Map();
+  private activePipelines: Map<string, ActivePipeline> = new Map();
+  /** Re-entrancy guard for syncClosedPositions when no ActivePipeline is in memory */
+  private syncGuard = new Set<string>();
 
 
   // ─── Cache ────────────────────────────────────────────────────────────
@@ -227,6 +190,10 @@ class TradingPipelineService {
 
   /** Temporary store for circuit breaker reasons after pipeline stops (max 60s) */
   private circuitBreakerCache = new Map<string, { reason: string; at: number }>();
+
+  /** Cache for status responses to avoid spamming DB/MT5 on high frequency polling */
+  private statusCache = new Map<string, { status: PipelineStatus; timestamp: number }>();
+  private readonly STATUS_CACHE_TTL_MS = 5_000; // 5 seconds TTL
 
   private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
     const cached = this.regimeCache.get(key);
@@ -339,9 +306,11 @@ const pipeline = {
       allAnalyses: [],
       busySymbols: new Set<string>(),
       running: false,
+      isBusy: false,
     };
 
     this.activePipelines.set(userId, pipeline);
+    this.statusCache.delete(userId); // Invalidate cache on start
 
     try {
       const accountInfo = await mt5McpService.getAccountInfo();
@@ -409,9 +378,13 @@ const pipeline = {
     }
 
     silentLogger.info(`[PIPELINE] Started for user ${userId} on ${merged.timeframe} with ${merged.activeMethodologies!.length} methodologies (isRecovery=${isRecovery})`);
+
+    pipeline.running = true;
+    pipeline.lastError = null;
   }
 
   async stopPipeline(userId: string, circuitBreakerReason?: string): Promise<void> {
+    this.statusCache.delete(userId);
     const pipeline = this.activePipelines.get(userId);
     if (pipeline?.intervals) {
       for (const interval of pipeline.intervals.values()) {
@@ -469,6 +442,7 @@ const pipeline = {
   }
 
   async pausePipeline(userId: string): Promise<void> {
+    this.statusCache.delete(userId);
     const pipeline = this.activePipelines.get(userId);
     if (pipeline?.intervals) {
       for (const interval of pipeline.intervals.values()) {
@@ -476,11 +450,13 @@ const pipeline = {
       }
       pipeline.intervals.clear();
       pipeline.paused = true;
+      pipeline.running = false;
     }
     this.addLog(userId, "INFO", "Pipeline paused");
   }
 
   async resumePipeline(userId: string): Promise<void> {
+    this.statusCache.delete(userId);
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline?.paused) {
       throw new Error("Pipeline is not paused");
@@ -495,6 +471,7 @@ const pipeline = {
       pipeline.intervals.set(symbol, intervalId);
     });
     pipeline.paused = false;
+    pipeline.running = true;
 
     this.addLog(userId, "INFO", "Pipeline resumed");
   }
@@ -542,6 +519,12 @@ const pipeline = {
   }
 
   async getPipelineStatus(userId: string): Promise<PipelineStatus> {
+    // Check status cache first to reduce DB/MT5 calls during polling
+    const cached = this.statusCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < this.STATUS_CACHE_TTL_MS) {
+      return cached.status;
+    }
+
     const pipeline = this.activePipelines.get(userId);
     if (!pipeline) {
       // Check if a circuit breaker recently fired for this user (last 60s)
@@ -585,7 +568,7 @@ busySymbols: new Set<string>(),
     try {
       if (!mt5McpService.isConnected) {
         return {
-          running: pipeline.intervals.size > 0 && !pipeline.paused,
+          running: pipeline.running,
           paused: pipeline.paused,
           startedAt: null,
           config: pipeline.config,
@@ -684,7 +667,7 @@ busySymbols: new Set<string>(),
       silentLogger.warn(`[PIPELINE] Status metrics query error: ${err}`);
     }
 
-    return {
+    const finalStatus: PipelineStatus = {
       running: pipeline.intervals.size > 0 && !pipeline.paused,
       paused: pipeline.paused,
       startedAt: null,
@@ -706,12 +689,20 @@ busySymbols: new Set<string>(),
       },
       lastSignal: pipeline.lastSignal,
       lastAnalysis: pipeline.lastAnalysis,
-          allAnalyses: pipeline.allAnalyses || [],
-          lastError: pipeline.lastError,
-          mt5CircuitState: mt5McpService.circuitBreakerState,
-          llmCircuitStates: llmConsensusService.getCircuitStates(),
-          busySymbols: pipeline.busySymbols,
-        };
+      allAnalyses: pipeline.allAnalyses || [],
+      lastError: pipeline.lastError,
+      mt5CircuitState: mt5McpService.circuitBreakerState,
+      llmCircuitStates: llmConsensusService.getCircuitStates(),
+      busySymbols: pipeline.busySymbols,
+    };
+
+    // Save to cache
+    this.statusCache.set(userId, {
+      status: finalStatus,
+      timestamp: Date.now(),
+    });
+
+    return finalStatus;
   }
 
   getPipelineLogs(userId: string, limit = 100): PipelineLog[] {
@@ -1520,12 +1511,14 @@ busySymbols: new Set<string>(),
   private marketClosedCache = new Map<string, number>();
 
   private async managePositions(userId: string): Promise<void> {
-    if (isManagingPositions) return;
-    isManagingPositions = true;
+    const pipeline = this.activePipelines.get(userId);
+    if (!pipeline) return;
+    if (pipeline.isBusy) return;
+    pipeline.isBusy = true;
     try {
       await this.managePositionsInner(userId);
     } finally {
-      isManagingPositions = false;
+      if (pipeline) pipeline.isBusy = false;
     }
   }
 
@@ -1730,21 +1723,39 @@ busySymbols: new Set<string>(),
   /**
    * Synchronize closed MT5 positions with the AI trade logs DB.
    */
-  private async syncClosedPositions(userId: string): Promise<void> {
-    if (isSyncClosedRunning) return;
+  public async syncClosedPositions(userId: string): Promise<void> {
+    // Allow sync to run even if no pipeline is active in memory (e.g. manual
+    // trigger, recovery, or standalone PnL backfill). Fall back to a local
+    // re-entrancy guard when no ActivePipeline is present.
     const pipeline = this.activePipelines.get(userId);
-    if (!pipeline) return;
-    isSyncClosedRunning = true;
+    if (pipeline) {
+      if (pipeline.isBusy) return;
+      pipeline.isBusy = true;
+    } else if (this.syncGuard.has(userId)) {
+      return;
+    } else {
+      this.syncGuard.add(userId);
+    }
+    const release = () => {
+      if (pipeline) pipeline.isBusy = false;
+      else this.syncGuard.delete(userId);
+    };
 
     try {
       if (!mt5McpService.isConnected) return;
       const accountInfo = await mt5McpService.getAccountInfo();
       const accountId = accountInfo?.login?.toString();
 
-      const query: any = { userId, closed: false };
+      const query: any = {
+        userId,
+        $or: [
+          { closed: false },
+          { closed: true, pnl: 0, executed: true }
+        ]
+      };
       if (accountId) query.accountId = accountId;
 
-      // 1. Fetch all trade logs that are still marked as OPEN (closed: false)
+      // 1. Fetch all trade logs that need syncing
       const openLogs = await AITradeLog.find(query);
       if (openLogs.length === 0) return;
 
@@ -1757,6 +1768,7 @@ busySymbols: new Set<string>(),
       // order tickets (log.mt5Ticket) to position tickets (deals carry both).
       const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
       const deals = await mt5McpService.getHistory(sevenDaysAgo);
+      silentLogger.debug(`[SYNC-DEBUG] Deals fetched: ${deals.length}, sample: ${JSON.stringify(deals.slice(0, 3))}`);
       const orderToPosition = new Map<string, string>();
       for (const d of deals) {
         if (d.entry === 0 && d.order) {
@@ -1782,6 +1794,7 @@ busySymbols: new Set<string>(),
       let fullDeals: any[] | null = null;
 
       for (const { log, positionId } of closedLogs) {
+        silentLogger.debug(`[SYNC-DEBUG] Processing log ID: ${log._id}, MT5 Ticket: ${log.mt5Ticket}, Position ID: ${positionId}`);
         if (!log.mt5Ticket) continue;
 
         // Find the OUT deal (entry === 1) that closed this position
@@ -1800,8 +1813,21 @@ busySymbols: new Set<string>(),
         }
 
         if (closingDeal) {
-          const pnl = closingDeal.profit + closingDeal.commission + closingDeal.swap;
-          
+          // Calculate PnL: use deal profit if available, otherwise fall back to manual calculation
+          const dealProfit = closingDeal.profit || 0;
+          const dealCommission = closingDeal.commission || 0;
+          const dealSwap = closingDeal.swap || 0;
+          let pnl = Math.round((dealProfit + dealCommission + dealSwap) * 100) / 100;
+
+          // Fallback: if pnl still 0 but closePrice != entryPrice, estimate manually
+          if (pnl === 0 && log.signal && log.executionPrice) {
+            const entryPrice = log.executionPrice || log.signal.entry;
+            const closePrice = closingDeal.price;
+            const contractSize = 1; // Fallback: assume 1 lot = 1 contract for estimation
+            const isBuy = log.signal.direction === "BUY";
+            pnl = Math.round(((closePrice - entryPrice) * (isBuy ? 1 : -1) * contractSize) * 100) / 100;
+          }
+
           let closeReason: "TP_HIT" | "SL_HIT" | "MANUAL" = "MANUAL";
           const commentLower = (closingDeal.comment || "").toLowerCase();
           if (commentLower.includes("take profit") || commentLower.includes("tp") || commentLower.includes("[tp]")) {
@@ -1834,6 +1860,7 @@ busySymbols: new Set<string>(),
 
           // Save to DB
           log.mt5Ticket = Number(positionId); // bridge pending order ticket → position ticket
+          log.accountId = accountId; // ensure accountId is set
           log.closed = true;
           log.closedAt = new Date(closingDeal.time * 1000);
           log.closePrice = closePrice;
@@ -1857,7 +1884,7 @@ busySymbols: new Set<string>(),
     } catch (err: any) {
       silentLogger.warn(`[PIPELINE] syncClosedPositions error: ${err.message}`);
     } finally {
-      isSyncClosedRunning = false;
+      release();
     }
   }
 
