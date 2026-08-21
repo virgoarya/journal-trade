@@ -19,6 +19,18 @@ let reconnectTimer: NodeJS.Timeout | null = null;
 
 const POLL_INTERVAL_MS = 1500;   // Poll every 1.5s
 const RECONNECT_DELAY_MS = 5000; // Retry connection every 5s
+const CONNECT_TIMEOUT_MS = 15000; // Fail fast if MT5 MCP unreachable (avoids hanging the connect request)
+
+/** Reject if promise does not settle within ms. */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
 
 // ─── Normalizers ────────────────────────────────────────────────────────────
 function normalizeAccountInfo(raw: any): any {
@@ -673,7 +685,11 @@ async function connectToNativeMcp(): Promise<void> {
       { capabilities: {} }
     );
 
-    await client.connect(transport);
+    await withTimeout(
+      client.connect(transport),
+      CONNECT_TIMEOUT_MS,
+      "Koneksi ke MT5 MCP timeout. Pastikan MetaTrader 5 menyala dan 'Enable Internal Server' aktif di Options → MCP.",
+    );
     mcpClient = client;
     isConnected = true;
 

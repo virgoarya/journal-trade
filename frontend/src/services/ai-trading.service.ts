@@ -334,7 +334,7 @@ class AITradingService {
     const res = await apiClient.post<{
       connected: boolean;
       accountInfo: ACCOUNTInfo;
-    }>("/api/v1/ai-trading/connect", payload);
+    }>("/api/v1/ai-trading/connect", payload, 20000);
     return res;
   }
 
