@@ -29,7 +29,10 @@ export function useAccountInfo(isConnected: boolean, pollInterval = 30000) {
 
   const handleTick = useCallback((data: { accountInfo?: any }) => {
     if (data.accountInfo) {
-      setAccountInfo(prev => ({ ...prev, ...data.accountInfo }));
+      // WS broadcast accountInfo does NOT carry winRate (computed from DB in /account).
+      // Preserve winRate from REST source to avoid showing stale/incorrect values.
+      const { winRate, ...rest } = data.accountInfo;
+      setAccountInfo(prev => ({ ...prev, ...rest, winRate: prev?.winRate ?? 0 }));
     }
   }, []);
 

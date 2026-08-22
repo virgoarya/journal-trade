@@ -48,21 +48,32 @@ class AIBacktestSkillService {
 
         // Find best methodology for this symbol in this test
         const symbolTrades = result.trades.filter((t) => t.symbol === symStat.symbol);
-        const methWinRates = new Map<string, { wins: number; total: number }>();
-        for (const t of symbolTrades) {
-          const m = t.primaryMethodology || "unknown";
-          if (!methWinRates.has(m)) methWinRates.set(m, { wins: 0, total: 0 });
-          const wr = methWinRates.get(m)!;
-          wr.total++;
-          if (t.pnl > 0) wr.wins++;
-        }
         let bestMeth = "unknown";
-        let bestWrRatio = 0;
-        for (const [meth, wr] of methWinRates.entries()) {
-          const ratio = wr.wins / wr.total;
-          if (ratio > bestWrRatio) {
-            bestWrRatio = ratio;
-            bestMeth = meth;
+        if (symbolTrades.length > 0) {
+          const methWinRates = new Map<string, { wins: number; total: number }>();
+          for (const t of symbolTrades) {
+            const m = t.primaryMethodology || "unknown";
+            if (!methWinRates.has(m)) methWinRates.set(m, { wins: 0, total: 0 });
+            const wr = methWinRates.get(m)!;
+            wr.total++;
+            if (t.pnl > 0) wr.wins++;
+          }
+          let bestWrRatio = 0;
+          for (const [meth, wr] of methWinRates.entries()) {
+            const ratio = wr.wins / wr.total;
+            if (ratio > bestWrRatio) {
+              bestWrRatio = ratio;
+              bestMeth = meth;
+            }
+          }
+        } else if (result.methodologyStats && result.methodologyStats.length > 0) {
+          // Fallback: if individual trades are not available, use aggregated methodology stats
+          const bestAggregatedMeth = result.methodologyStats
+            .filter(m => m.totalTrades > 0 && m.methodology !== "unknown")
+            .sort((a, b) => b.winRate - a.winRate)
+            .find(() => true); // Get the first one
+          if (bestAggregatedMeth) {
+            bestMeth = bestAggregatedMeth.methodology;
           }
         }
 

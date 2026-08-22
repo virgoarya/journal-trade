@@ -143,7 +143,7 @@ export function AccountOverview({
             </div>
           </div>
 
-          {/* Risk % & Winrate */}
+          {/* Risk % & Winrate & AI Stats */}
           <div className="flex items-center gap-5 px-5 py-3 rounded-lg border border-neon-green/10 bg-black/40 flex-shrink-0">
             <div>
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Risk</span>
@@ -156,6 +156,20 @@ export function AccountOverview({
               <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Winrate</span>
               <span className="text-sm font-mono font-bold text-neon-green drop-shadow-[0_0_4px_rgba(57,255,136,0.3)]">
                 {((accountInfo.winRate || 0)).toFixed(1)}%
+              </span>
+            </div>
+            <div className="w-px h-8 bg-neon-green/10" />
+            <div>
+              <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Trades</span>
+              <span className="text-sm font-mono font-bold text-white drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]">
+                {accountInfo.totalTrades || 0}
+              </span>
+            </div>
+            <div className="w-px h-8 bg-neon-green/10" />
+            <div>
+              <span className="text-[9px] uppercase tracking-widest text-gray-400 block mb-1">Profit Factor</span>
+              <span className={`text-sm font-mono font-bold drop-shadow-[0_0_4px_currentColor] ${(accountInfo.profitFactor || 0) >= 1 ? "text-neon-green" : "text-neon-red"}`}>
+                {(accountInfo.profitFactor || 0).toFixed(2)}
               </span>
             </div>
           </div>

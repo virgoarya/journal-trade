@@ -36,34 +36,13 @@ export function LLMConsensusViz({ votes, modelStatus, threshold = 0.5 }: Props) 
     setIsPanelOpen(showConsensusPanelByDefault);
   }, [showConsensusPanelByDefault]);
 
-  // Mock data for testing
-  const mockVotes: LLMConsensusResult = {
-    verdict: "GOOD",
-    votes: [
-      { provider: "gemini", modelLabel: "Gemini 2.5 Flash", verdict: "GOOD", reasoning: "SMC indicates strong bullish momentum.\nICT shows high institutional interest.\nMSNR suggests potential breakout.", latencyMs: 120, error: undefined },
-      { provider: "mistral", modelLabel: "Mistral Large", verdict: "BAD", reasoning: "SMC shows weak price action.\nICT indicates low volume.\nMSNR suggests potential reversal.", latencyMs: 150, error: undefined },
-      { provider: "gpt", modelLabel: "GPT OSS 120B", verdict: "GOOD", reasoning: "SMC shows strong trend continuation.\nICT indicates high liquidity.\nMSNR suggests potential continuation.", latencyMs: 180, error: undefined },
-      { provider: "deepseek", modelLabel: "DeepSeek V4", verdict: "SKIP", reasoning: "Insufficient data points for reliable analysis.", latencyMs: 200, error: undefined },
-      { provider: "nemotron", modelLabel: "Nemotron 3 Ultra", verdict: "GOOD", reasoning: "SMC shows strong trend continuation.\nICT indicates high liquidity.\nMSNR suggests potential continuation.", latencyMs: 220, error: undefined },
-      { provider: "claude-opus", modelLabel: "Claude Opus 4.7", verdict: "GOOD", reasoning: "SMC shows strong trend continuation.\nICT indicates high liquidity.\nMSNR suggests potential continuation.", latencyMs: 250, error: undefined }
-    ],
-    totalVotes: 6,
-    goodVotes: 4,
-    badVotes: 1,
-    skipVotes: 1,
-    consensusReached: true,
-    details: "Consensus reached with 4 GOOD votes out of 5 effective votes (70% threshold)"
-  };
-
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {
     return <SkeletonLoader type="card" />;
   }
 
-  // Use mock data for testing
-  const useMockData = process.env.NODE_ENV === 'development' && false;
-  const testVotes = useMockData ? mockVotes : votes;
+  const testVotes = votes;
 
   const goodVotes = testVotes?.goodVotes ?? 0;
   const badVotes = testVotes?.badVotes ?? 0;
@@ -223,25 +202,9 @@ export function LLMConsensusViz({ votes, modelStatus, threshold = 0.5 }: Props) 
               </span>
             </div>
           </div>
-
-          {/* Provider Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-            {currentProviders.map(provider => {
-              const vote = testVotes?.votes?.find(v => v.provider === provider.name);
-              if (!vote) return null;
-              return (
-                <LLMProviderCard
-                  key={provider.name}
-                  provider={provider}
-                  vote={vote}
-                  color={MODEL_COLORS[provider.name] || "#6B7280"}
-                  votes={testVotes}
-                />
-              );
-            })}
-          </div>
         </div>
       )}
+
 
       {/* Scanline overlay */}
       <div className="absolute inset-0 pointer-events-none terminal-scanline opacity-20 mix-blend-overlay"></div>

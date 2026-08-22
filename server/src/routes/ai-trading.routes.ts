@@ -178,6 +178,7 @@ router.get("/account", async (req, res, next) => {
     return apiResponse.success(res, {
       ...accountInfo,
       ...riskMetrics,
+      winRate: riskMetrics?.winRate ?? 0,
     });
   } catch (error: any) {
     if (error.message && error.message.includes("not connected")) {
@@ -770,12 +771,9 @@ router.get("/performance", async (req, res, next) => {
   try {
     let accountId;
     if (mt5McpService.isConnected) {
-      try {
-        const accountInfo = await mt5McpService.getAccountInfo();
-        accountId = accountInfo?.login?.toString();
-      } catch (e) {
-        console.warn(`[PERFORMANCE] Could not get account info: ${e}`);
-      }
+      // Use cached account (getter, does not throw) — MT5 login = accountId
+      const acc = mt5McpService.account;
+      accountId = acc?.login?.toString();
     }
 
     const query: any = {
@@ -785,8 +783,8 @@ router.get("/performance", async (req, res, next) => {
       // Cancelled pending orders are not real trades — only count positions (deals).
       isPendingOrder: { $ne: true },
     };
-    
-    // If MT5 disconnected, try to get the most recent account used by this user
+
+    // If MT5 disconnected or login unknown, try to get the most recent account used by this user
     if (!accountId) {
       const lastTrade = await AITradeLog.findOne(query).sort({ createdAt: -1 }).lean();
       if (lastTrade && lastTrade.accountId) {

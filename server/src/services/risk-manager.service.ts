@@ -25,6 +25,8 @@ export interface RiskMetrics {
   marginUsed: number;
   openPositions: number;
   winRate: number;
+  totalTrades: number;
+  profitFactor: number;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────
@@ -236,8 +238,30 @@ class RiskManagerService {
       }
       silentLogger.debug(`[RISK] calculateRiskMetrics: openRisk=${openRisk.toFixed(2)}, positions=${positions.length}`);
 
-      // Get daily metrics from DB
-      const todayMetrics = await this.getDailyMetrics(userId);
+      // Get daily metrics from DB (scoped to this MT5 account login)
+      const accountId = accountInfo.login;
+      const todayMetrics = await this.getDailyMetrics(userId, accountId);
+
+      // ── AI Trade stats (AITradeLog scoped to this account) ──
+      let totalTrades = 0;
+      let profitFactor = 0;
+      try {
+        const aiTrades = await AITradeLog.find({
+          userId,
+          accountId: String(accountId),
+          closed: true,
+          pnl: { $exists: true },
+          isPendingOrder: { $ne: true },
+        }).lean();
+        totalTrades = aiTrades.length;
+        if (totalTrades > 0) {
+          const grossProfit = aiTrades.reduce((s, t) => s + (t.pnl > 0 ? t.pnl : 0), 0);
+          const grossLoss = aiTrades.reduce((s, t) => s + (t.pnl < 0 ? Math.abs(t.pnl) : 0), 0);
+          profitFactor = grossLoss > 0 ? parseFloat((grossProfit / grossLoss).toFixed(2)) : parseFloat(grossProfit.toFixed(2));
+        }
+      } catch (err: any) {
+        silentLogger.error(`[RISK] AI trade stats error: ${err.message}`);
+      }
 
       return {
         dailyPnL: todayMetrics?.dailyPnL ?? accountInfo.profit ?? 0,
@@ -250,6 +274,8 @@ class RiskManagerService {
         marginUsed: accountInfo.margin,
         openPositions: positions.length,
         winRate: todayMetrics?.winRate ?? 0,
+        totalTrades,
+        profitFactor,
       };
     } catch (err: any) {
       silentLogger.error(`[RISK] calculateRiskMetrics failed: ${err.message}`, err);
@@ -260,7 +286,7 @@ class RiskManagerService {
   /**
    * Calculate daily PnL from MT5 history + trade log.
    */
-  async getDailyMetrics(userId: string): Promise<{
+  async getDailyMetrics(userId: string, accountId?: string | number): Promise<{
     dailyPnL: number;
     weeklyPnL: number;
     dailyDrawdown: number;
@@ -312,17 +338,19 @@ class RiskManagerService {
       let winRate = 0;
       try {
         const account = await TradingAccount.findOne({ userId });
-        // First try tradeService
+        // First try tradeService (filters by TradingAccount._id)
         if (account) {
           const summary = await tradeService.getSummary(userId, account._id.toString());
           if (summary.totalTrades > 0) {
             winRate = summary.winRate;
           }
         }
-        // Fallback: query AITradeLog directly
-        if (winRate === 0) {
+        // Fallback: query AITradeLog directly — MUST filter by accountId (MT5 login)
+        // to avoid mixing trades from different MT5 accounts.
+        if (winRate === 0 && accountId) {
           const closedTrades = await AITradeLog.find({
             userId,
+            accountId: String(accountId),
             closed: true,
             pnl: { $exists: true },
             isPendingOrder: { $ne: true },

@@ -465,11 +465,13 @@ export function TradingPanel({
         </div>
       )}
 
-      {skillConfig && (
-        <SkillDisplay key={skillVersion} server={accountInfo?.server} onApplySkill={(skill) => {
+      <SkillDisplay 
+        key={skillVersion} 
+        server={accountInfo?.server} 
+        onApplySkill={(skill) => {
           setSkillConfig(skill);
-        }} />
-      )}
+        }} 
+      />
 
       {/* LLM Visualization Config */}
       <LlmConsensusConfig

@@ -51,26 +51,28 @@ def main():
         mt5.shutdown()
         print(json.dumps({"error": f"Missing argument for mode '{mode}'"}))
         return
+    except Exception as e:
+        mt5.shutdown()
+        print(json.dumps({"error": f"Failed to retrieve rates: {str(e)}"}))
+        return
     mt5.shutdown()
 
     if rates is None:
-        print(json.dumps({"error": "Failed to retrieve rates"}))
-        return
-
-    result = []
-    for r in rates:
-        result.append({
-            "time": int(r['time']),
-            "open": float(r['open']),
-            "high": float(r['high']),
-            "low": float(r['low']),
-            "close": float(r['close']),
-            "tick_volume": int(r['tick_volume']),
-            "spread": int(r['spread']),
-            "real_volume": int(r['real_volume'])
-        })
-
-    print(json.dumps({"rates": result}))
+        print(json.dumps({"rates": []}))
+    else:
+        result = []
+        for r in rates:
+            result.append({
+                "time": int(r['time']),
+                "open": float(r['open']),
+                "high": float(r['high']),
+                "low": float(r['low']),
+                "close": float(r['close']),
+                "tick_volume": int(r['tick_volume']),
+                "spread": int(r['spread']),
+                "real_volume": int(r['real_volume'])
+            })
+        print(json.dumps({"rates": result}))
 
 if __name__ == "__main__":
     main()

@@ -31,6 +31,8 @@ export interface ACCOUNTInfo {
   openPositions: number;
   weeklyPnL: number;
   winRate: number;
+  totalTrades: number;
+  profitFactor: number;
 }
 
 export interface Position {

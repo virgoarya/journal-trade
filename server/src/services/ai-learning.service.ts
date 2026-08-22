@@ -1,6 +1,8 @@
 import { BacktestExperience } from "../models/BacktestExperience";
 import { tradingPipelineService, type PipelineConfig } from "./trading-pipeline.service";
 import { backtestService } from "./backtest.service";
+import { aiBacktestSkillService } from "./ai-backtest-skill.service";
+import { mt5McpService } from "./mt5-mcp.service";
 import { MT5Connection } from "../models/MT5Connection";
 import { silentLogger } from "../utils/silent-logger";
 
@@ -527,6 +529,78 @@ class AILearningService {
 
     // Apply to pipeline
     await tradingPipelineService.updateConfig(userId, updatedConfig);
+
+    // Aggregate this backtest into the AI Skill DB (per-broker isolation).
+    // Manual backtests must also feed the skill dataset so the HUD reflects them.
+    try {
+      // Use the LIVE account server (from normalizeAccountInfo) so it matches
+      // what the frontend sends in /skill?server=. MT5Connection.server can be
+      // stale (previous broker), causing skill to save under the wrong server.
+      const liveServer = mt5McpService.account?.server;
+      const conn = await MT5Connection.findOne({ userId }).lean();
+      const skillServer = liveServer || conn?.server || "unknown";
+      const r = experience.result as any;
+      const backtestResult: any = {
+        symbols: experience.symbols || [experience.symbol],
+        timeframe: experience.timeframe,
+        fromDate: experience.dateRange.from,
+        toDate: experience.dateRange.to,
+        config: {
+          symbols: experience.symbols || [experience.symbol],
+          timeframe: experience.timeframe,
+          fromDate: experience.dateRange.from,
+          toDate: experience.dateRange.to,
+          initialBalance: 10000,
+          entrySettings: experience.strategy?.params?.entrySettings || { rsiOversold: 30, rsiOverbought: 70, atrMultiplierSL: 1.5, atrMultiplierTP: 2.0 },
+          trailingStop: { enabled: true, activationATR: 1.0, trailATR: 0.5, breakEven: false },
+          maxRiskPerTrade: 1.0,
+          maxOpenPositions: 3,
+          leverage: 100,
+          signalInterval: 4,
+        },
+        totalCandles: 0,
+        totalTrades: r.totalTrades,
+        winningTrades: r.winningTrades,
+        losingTrades: r.losingTrades,
+        winRate: r.winRate,
+        totalPnL: r.totalPnL,
+        totalPnLPercent: r.totalPnLPercent,
+        maxDrawdown: 0,
+        maxDrawdownPercent: r.maxDrawdownPercent,
+        profitFactor: r.profitFactor,
+        recoveryFactor: r.recoveryFactor,
+        sharpeRatio: r.sharpeRatio,
+        averageWin: r.averageWin,
+        averageLoss: r.averageLoss,
+        largestWin: 0,
+        largestLoss: 0,
+        averageBarsHeld: 0,
+        equityCurve: [],
+        trades: [],
+        symbolStats: (r.symbolStats || []).map((s: any) => ({
+          symbol: s.symbol,
+          totalTrades: s.totalTrades,
+          winningTrades: s.winningTrades,
+          losingTrades: s.losingTrades,
+          breakEvenTrades: s.breakEvenTrades || 0,
+          totalPnL: s.totalPnL,
+          winRate: s.winRate,
+        })),
+        methodologyStats: (r.methodologyStats || []).map((m: any) => ({
+          methodology: m.methodology,
+          totalTrades: m.totalTrades,
+          winningTrades: m.winningTrades,
+          losingTrades: m.losingTrades,
+          totalPnL: m.totalPnL,
+          winRate: m.winRate,
+          avgConfidence: m.avgConfidence || 0,
+        })),
+      };
+      await aiBacktestSkillService.updateSkill(userId, backtestResult, skillServer);
+      silentLogger.info(`[AI-LEARN] Aggregated manual backtest ${backtestId} into skill DB (server=${skillServer})`);
+    } catch (skillErr: any) {
+      silentLogger.warn(`[AI-LEARN] Failed to aggregate skill on apply: ${skillErr.message}`);
+    }
 
     // Save persistently per-broker so config doesn't leak across brokers
     const { UserSettings } = require("../models/UserSettings");
