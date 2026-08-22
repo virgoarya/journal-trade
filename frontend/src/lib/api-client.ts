@@ -40,7 +40,7 @@ export class ApiClient {
       clearTimeout(timeoutId);
 
       const contentType = response.headers.get("content-type");
-      let data;
+      let data: any;
 
       if (contentType?.includes("application/json")) {
         data = await response.json();
@@ -55,14 +55,21 @@ export class ApiClient {
       }
 
       // Unwrap backend's { success, data } structure if it exists
-      const unwrappedData = (data && typeof data === 'object' && 'success' in data) 
-        ? (data as any).data 
-        : data;
+      const isWrapped = data && typeof data === "object" && "success" in data;
+      if (isWrapped && data.success === false) {
+        return {
+          success: false,
+          error: data.error || data.message || `Request failed (${endpoint})`,
+          data: data.data ?? null,
+        };
+      }
+
+      const unwrappedData = isWrapped ? data.data : data;
 
       return {
         success: true,
         data: unwrappedData ?? null,
-        message: (data as any)?.message,
+        message: data?.message,
       };
     } catch (error: any) {
       if (error.name === "AbortError") {
@@ -81,37 +88,49 @@ export class ApiClient {
   }
 
   // GET
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: "GET" });
+  async get<T>(endpoint: string, timeoutMs: number = 60000): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: "GET" }, timeoutMs);
   }
 
   // POST
-  async post<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+  async post<T>(endpoint: string, body: any, timeoutMs: number = 60000): Promise<ApiResponse<T>> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+      timeoutMs
+    );
   }
 
   // PATCH
-  async patch<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
+  async patch<T>(endpoint: string, body: any, timeoutMs: number = 60000): Promise<ApiResponse<T>> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+      timeoutMs
+    );
   }
 
   // PUT
-  async put<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
+  async put<T>(endpoint: string, body: any, timeoutMs: number = 60000): Promise<ApiResponse<T>> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+      timeoutMs
+    );
   }
 
   // DELETE
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: "DELETE" });
+  async delete<T>(endpoint: string, timeoutMs: number = 60000): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: "DELETE" }, timeoutMs);
   }
 }
 

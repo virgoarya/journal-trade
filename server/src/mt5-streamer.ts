@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { broadcast } from "./ws-server";
 import { silentLogger } from "./utils/silent-logger";
 import { env } from "./config/env";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import path from "path";
 
@@ -154,10 +154,44 @@ function isMcpTradeBlocked(res: any): boolean {
 // chain agar manual close, pipeline AI, dan trailing stop tidak saling rebut.
 let pythonQueue: Promise<any> = Promise.resolve();
 
-function enqueuePython(args: string[], options: any): Promise<any> {
-  const run = pythonQueue.then(() => execFileAsync("python", args, options));
+function enqueuePython(args: string[], options: any = {}): Promise<{ stdout: string }> {
+  const run = pythonQueue.then(() => spawnPython(args, options));
   pythonQueue = run.then(() => undefined, () => undefined);
   return run;
+}
+
+/** Spawn python, stream stdout, resolve with { stdout } string (caller parses JSON). */
+function spawnPython(args: string[], options: any): Promise<{ stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const timeoutMs = options.timeout || 30000;
+    const timer = setTimeout(() => {
+      child.kill(options.killSignal || "SIGKILL");
+      reject(new Error(`Python process timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout.on("data", (data) => { stdout += data.toString(); });
+    child.stderr.on("data", (data) => { stderr += data.toString(); });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`Python process exited with code ${code}: ${stderr || stdout}`));
+      } else {
+        resolve({ stdout });
+      }
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
 }
 
 /** Execute a trade operation via the Python MetaTrader5 API (bypasses native MCP trade restrictions). Serialized via pythonQueue. */
@@ -563,7 +597,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           payload.symbol,
           payload.timeframe,
           "count",
-          String(payload.count)
+          String(Math.min(payload.count || 1000, 1000)) // Batasi maksimal 1000 candle
         ], {});
         const result = JSON.parse(stdout);
         if (result.error) {

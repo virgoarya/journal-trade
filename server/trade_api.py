@@ -93,12 +93,15 @@ def order_to_dict(o):
     }
 
 def main():
-    if not ensure_mt5():
-        code = mt5.last_error()
-        fail(f"initialize() failed, error code = {code}. Pastikan MT5 terminal terbuka & authorized.")
+    if len(sys.argv) < 3:
+        print(json.dumps({"error": "Usage: python trade_api.py <action> <payload_json>"}))
+        return
 
     action = sys.argv[1]
     payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
+    if not ensure_mt5():
+        fail(f"initialize() failed, error code = {mt5.last_error()}. Pastikan MT5 terminal terbuka & authorized.")
 
     if action == "orders_get":
         symbol = payload.get("symbol")
