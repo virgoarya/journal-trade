@@ -1,11 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../middleware/auth";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { backtestService } from "../services/backtest.service";
 import { aiLearningService } from "../services/ai-learning.service";
 import { BacktestExperience } from "../models/BacktestExperience";
 import { backtestSessionManager } from "../services/backtest-session.manager";
 import { apiResponse } from "../utils/api-response";
+import { silentLogger } from "../utils/silent-logger";
 import {
   backtestRunSchema,
   backtestApplySchema,
@@ -339,14 +340,24 @@ router.post(
   validate({ body: backtestApplySchema }),
   async (req, res, next) => {
     try {
-      const result = await aiLearningService.applyToLivePipeline(
-        req.user.id,
-        req.body.backtestId,
-      );
+      const { backtestId } = req.body;
+      silentLogger.info(`[APIs] Apply to live pipeline requested for backtest ${backtestId}`);
+      
+      const result = await Promise.race([
+        aiLearningService.applyToLivePipeline(req.user.id, backtestId),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("applyToLivePipeline timeout")), 20000)
+        ),
+      ]);
+      silentLogger.info(`[APIs] Apply to live pipeline succeeded: ${JSON.stringify(result)}`);
       return apiResponse.success(res, result);
     } catch (error: any) {
+      silentLogger.error(`[APIs] Apply to live pipeline failed: ${error.message}`, error);
       if (error.message?.includes("not found")) {
         return apiResponse.error(res, error.message, "NOT_FOUND", 404);
+      }
+      if (error.message?.includes("timeout")) {
+        return apiResponse.error(res, "Apply to live pipeline timeout", "TIMEOUT", 504);
       }
       next(error);
     }

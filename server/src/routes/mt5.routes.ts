@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { mt5Service } from "../services/mt5.service";
 import { tradingAccountService } from "../services/trading-account.service";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { mt5ConnectSchema, mt5UpdateSettingsSchema, mt5SyncSchema } from "../validators/mt5.validator";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";

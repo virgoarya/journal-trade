@@ -8,24 +8,70 @@ import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.valida
 import { calculateRMultiple, calculateRiskAmount } from "../utils/calculations";
 import { DailySnapshot } from "../models/DailySnapshot";
 
-// Helper function to determine contract size based on trading pair
-function getContractSize(pair: string): number {
+// Helper function to determine contract size based on trading pair and size type
+// Uses CME/COMEX standard multipliers per research (micro = 1/10, mini = 1/2)
+function getContractSize(pair: string, sizeType: "standard" | "micro" | "mini" = "standard"): number {
   const normalizedPair = pair.toUpperCase();
-  if (normalizedPair.includes("XAU") || normalizedPair.includes("GOLD")) {
-    return 100; // Gold: 1 lot = 100 oz
+
+  // CME Index Futures (multipliers in USD per index point)
+  if (normalizedPair.includes("ES") || normalizedPair.includes("SPX") || normalizedPair.includes("SP500")) {
+    // Standard ES = $50, Mini ES = $25 (often E-mini), Micro MES = $5
+    if (sizeType === "micro") return 5;
+    if (sizeType === "mini") return 25;
+    return 50;
   }
-  if (normalizedPair.includes("BTC") || normalizedPair.includes("ETH")) {
-    return 1; // Crypto: 1 lot = 1 unit
+  if (normalizedPair.includes("NQ") || normalizedPair.includes("NAS100")) {
+    // Standard NQ = $20, Mini = $10, Micro MNQ = $2
+    if (sizeType === "micro") return 2;
+    if (sizeType === "mini") return 10;
+    return 20;
   }
-  if (
-    normalizedPair.includes("US30") ||
-    normalizedPair.includes("SPX") ||
-    normalizedPair.includes("NAS") ||
-    normalizedPair.includes("SP500")
-  ) {
-    return 1; // Indices: 1 lot = 1 contract
+  if (normalizedPair.includes("YM") || normalizedPair.includes("US30") || normalizedPair.includes("DOW")) {
+    // Standard YM = $5, Mini = $2.5, Micro MYM = $0.50
+    if (sizeType === "micro") return 0.5;
+    if (sizeType === "mini") return 2.5;
+    return 5;
   }
-  return 100000; // default forex standard lot
+  if (normalizedPair.includes("RTY") || normalizedPair.includes("RUSSELL")) {
+    // Standard RTY = $50, Micro M2K = $5
+    if (sizeType === "micro") return 5;
+    if (sizeType === "mini") return 25;
+    return 50;
+  }
+
+  // COMEX Precious Metals
+  if (normalizedPair.includes("GC") || normalizedPair.includes("GOLD") || normalizedPair.includes("XAU")) {
+    // Standard GC = 100 oz, E-mini QO = 50 oz, Micro MGC = 10 oz
+    if (sizeType === "micro") return 10;
+    if (sizeType === "mini") return 50;
+    return 100;
+  }
+  if (normalizedPair.includes("SI") || normalizedPair.includes("SILVER") || normalizedPair.includes("XAG")) {
+    // Standard SI = 5000 oz, E-mini QI = 2500 oz, Micro SIL = 1000 oz
+    if (sizeType === "micro") return 1000;
+    if (sizeType === "mini") return 2500;
+    return 5000;
+  }
+  if (normalizedPair.includes("HG") || normalizedPair.includes("COPPER")) {
+    // Standard HG = 25000 lbs, Micro MHG = 2500 lbs
+    if (sizeType === "micro") return 2500;
+    if (sizeType === "mini") return 12500;
+    return 25000;
+  }
+
+  // NYMEX Energy
+  if (normalizedPair.includes("CL") || normalizedPair.includes("WTI") || normalizedPair.includes("CRUDE")) {
+    // Standard CL = 1000 bbl, E-mini QM = 500 bbl, Micro MCL = 100 bbl
+    if (sizeType === "micro") return 100;
+    if (sizeType === "mini") return 500;
+    return 1000;
+  }
+
+  // Forex CFDs (fallback for non-futures)
+  // Standard lot = 100,000 units
+  if (sizeType === "micro") return 1000;  // Micro lot = 1,000 units
+  if (sizeType === "mini") return 10000;  // Mini lot = 10,000 units
+  return 100000;
 }
 
 // Helper function to calculate risk metrics
@@ -35,7 +81,8 @@ function calculateRiskMetrics(
   lotSize: number,
   pair: string,
   accountEquity: number,
-  actualPnl?: number
+  actualPnl?: number,
+  sizeType: "standard" | "micro" | "mini" = "standard"
 ): { riskPercent?: number; rMultiple?: number } {
   const riskPoints = Math.abs(entryPrice - stopLoss);
 
@@ -46,7 +93,7 @@ function calculateRiskMetrics(
     };
   }
 
-  const contractSize = getContractSize(pair);
+  const contractSize = getContractSize(pair, sizeType);
   const riskAmount = riskPoints * lotSize * contractSize;
   const riskPercent = (riskAmount / accountEquity) * 100;
 
@@ -89,17 +136,29 @@ export const tradeService = {
       }
 
       // Calculate risk metrics using helper function
-      const riskMetrics = calculateRiskMetrics(
-        data.entryPrice,
-        data.stopLoss,
-        data.lotSize,
-        data.pair,
-        account.currentEquity,
-        data.actualPnl
-      );
+                        const riskMetrics = calculateRiskMetrics(
+                          data.entryPrice,
+                          data.stopLoss,
+                          data.lotSize,
+                          data.pair,
+                          account.currentEquity,
+                          data.actualPnl,
+                          data.sizeType ?? "standard"
+                        );
 
-      const riskPercent = riskMetrics.riskPercent ?? null;
-      const rMult = data.rMultiple ?? riskMetrics.rMultiple ?? 0;
+                  // Calculate planned R-multiple if takeProfit is provided
+                  let plannedRMultiple: number | undefined;
+                  if (data.takeProfit) {
+                    const riskPoints = Math.abs(data.entryPrice - data.stopLoss);
+                    const rewardPoints = Math.abs(data.takeProfit - data.entryPrice);
+                    if (riskPoints > 0) {
+                      plannedRMultiple = parseFloat((rewardPoints / riskPoints).toFixed(2));
+                    }
+                  }
+
+                  const riskPercent = riskMetrics.riskPercent ?? null;
+                  // Use calculated rMultiple if not provided manually, otherwise use provided value
+                  const rMult = data.rMultiple !== undefined ? data.rMultiple : riskMetrics.rMultiple ?? 0;
 
       const newTrade = await Trade.create({
         userId,
@@ -114,7 +173,8 @@ export const tradeService = {
         lotSize: data.lotSize,
         actualPnl: data.actualPnl,
         rMultiple: rMult,
-        result: data.result.toUpperCase() as "WIN" | "LOSS" | "BREAKEVEN",
+                plannedRMultiple: plannedRMultiple,
+                result: data.result.toUpperCase() as "WIN" | "LOSS" | "BREAKEVEN",
         emotionalState: data.emotionalState,
         notes: data.notes,
         chartLink: data.chartLink,
@@ -289,22 +349,66 @@ export const tradeService = {
       }
 
       // 3. Check for AI review – prevent editing core trade details if AI review exists
-      const aiReview = await AiReview.findOne({ tradeId: existing._id });
-      const hasAIReview = !!aiReview;
+            const aiReview = await AiReview.findOne({ tradeId: existing._id });
+            const hasAIReview = !!aiReview;
 
-      if (hasAIReview) {
-        // List of fields that should NOT be edited if AI review exists
-        const restrictedFields = ['entryPrice', 'stopLoss', 'takeProfit', 'tradeDate', 'pair', 'direction', 'lotSize'];
-        const hasRestrictedUpdate = restrictedFields.some(field => updateData[field] !== undefined);
+            if (hasAIReview) {
+              // List of fields that should NOT be edited if AI review exists
+              const restrictedFields = ['entryPrice', 'stopLoss', 'takeProfit', 'tradeDate', 'pair', 'direction', 'lotSize'];
+              const hasRestrictedUpdate = restrictedFields.some(field => updateData[field] !== undefined);
 
-        if (hasRestrictedUpdate) {
-          throw new Error(
-            "Cannot edit core trade details (entry, stop loss, take profit, date, pair, direction, lot size) because an AI review has been generated. Please delete the AI review first or create a new trade."
-          );
-        }
-      }
+              if (hasRestrictedUpdate) {
+                throw new Error(
+                  "Cannot edit core trade details (entry, stop loss, take profit, date, pair, direction, lot size) because an AI review has been generated. Please delete the AI review first or create a new trade."
+                );
+              }
+            }
 
-      // 4. Protect sensitive fields from being updated
+            // 4. Recalculate rMultiple if actualPnl or risk-related fields changed
+                              // Only if no AI review exists (restricted fields would be blocked above)
+                              if (!hasAIReview && (
+                                updateData.actualPnl !== undefined ||
+                                updateData.entryPrice !== undefined ||
+                                updateData.stopLoss !== undefined ||
+                                updateData.lotSize !== undefined ||
+                                updateData.takeProfit !== undefined ||
+                                updateData.sizeType !== undefined
+                              )) {
+                                const account = await TradingAccount.findById(existing.tradingAccountId);
+                                if (account) {
+                                  const riskMetrics = calculateRiskMetrics(
+                                    updateData.entryPrice ?? existing.entryPrice,
+                                    updateData.stopLoss ?? existing.stopLoss,
+                                    updateData.lotSize ?? existing.lotSize,
+                                    existing.pair,
+                                    account.currentEquity,
+                                    updateData.actualPnl !== undefined ? updateData.actualPnl : existing.actualPnl,
+                                    updateData.sizeType ?? existing.sizeType ?? "standard"
+                                  );
+                                  if (riskMetrics.rMultiple !== undefined) {
+                                    updateData.rMultiple = riskMetrics.rMultiple;
+                                  }
+                                  if (riskMetrics.riskPercent !== undefined) {
+                                    updateData.riskPercent = riskMetrics.riskPercent;
+                                  }
+
+                                  // Recalculate planned R-multiple if takeProfit changed
+                                  if (updateData.takeProfit !== undefined || updateData.entryPrice !== undefined || updateData.stopLoss !== undefined) {
+                                    const entryPrice = updateData.entryPrice ?? existing.entryPrice;
+                                    const stopLoss = updateData.stopLoss ?? existing.stopLoss;
+                                    const takeProfit = updateData.takeProfit ?? existing.takeProfit;
+                                    if (takeProfit) {
+                                      const riskPoints = Math.abs(entryPrice - stopLoss);
+                                      const rewardPoints = Math.abs(takeProfit - entryPrice);
+                                      if (riskPoints > 0) {
+                                        updateData.plannedRMultiple = parseFloat((rewardPoints / riskPoints).toFixed(2));
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+
+            // 5. Protect sensitive fields from being updated
       const protectedFields = ['userId', 'tradingAccountId', 'createdAt', 'isDeleted', 'deletedAt', 'deletionReason'];
       const attemptedProtected = protectedFields.filter(field => updateData[field] !== undefined);
       if (attemptedProtected.length > 0) {

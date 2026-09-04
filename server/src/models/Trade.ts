@@ -12,7 +12,8 @@ export interface ITrade extends Document {
   takeProfit?: number;
   lotSize: number;
   actualPnl: number;
-  rMultiple?: number;
+  rMultiple?: number; // actual R-multiple (based on actual P&L)
+  plannedRMultiple?: number; // planned R-multiple (based on TP/SL)
   result: "WIN" | "LOSS" | "BREAKEVEN";
   emotionalState?: number;
   notes?: string;
@@ -25,6 +26,7 @@ export interface ITrade extends Document {
   source: "manual" | "mt5";
   mt5TicketId?: string;
   sizeUnit: "LOT" | "CONTRACT"; // Added
+  sizeType?: "standard" | "micro" | "mini"; // Added: for Futures CME/COMEX
   mt5OrderId?: number;
   isDeleted?: boolean;
   deletedAt?: Date;
@@ -46,8 +48,10 @@ const TradeSchema = new Schema<ITrade>({
   lotSize: { type: Number, required: true },
   actualPnl: { type: Number, required: true },
   rMultiple: { type: Number },
-  sizeUnit: { type: String, enum: ["LOT", "CONTRACT"], default: "LOT" },
-  result: { type: String, enum: ["WIN", "LOSS", "BREAKEVEN"], required: true },
+    plannedRMultiple: { type: Number },
+    sizeUnit: { type: String, enum: ["LOT", "CONTRACT"], default: "LOT" },
+      sizeType: { type: String, enum: ["standard", "micro", "mini"], default: "standard" },
+      result: { type: String, enum: ["WIN", "LOSS", "BREAKEVEN"], required: true },
   emotionalState: { type: Number, min: 1, max: 5 },
   notes: { type: String },
   chartLink: { type: String },

@@ -15,6 +15,11 @@ export interface AuthenticatedWebSocket extends WebSocket {
 let wss: WebSocketServer | undefined;
 let pingInterval: NodeJS.Timeout | undefined;
 
+// Backpressure: skip slow clients whose outgoing buffer exceeds this byte threshold.
+// Prevents OOM on the server when a client cannot drain ticks fast enough
+// (e.g. during high-volatility market bursts).
+export const MAX_BUFFER = 1_048_576; // 1 MB
+
 export const setWebSocketServer = (server: WebSocketServer) => {
   wss = server;
 };
@@ -144,6 +149,7 @@ export const getActiveChannels = (): Set<MacroChannel> => {
 
 export const broadcast = (type: string, data: any, channel?: MacroChannel) => {
   if (wss) {
+    const payload = JSON.stringify({ type, data });
     wss.clients.forEach((client) => {
       const ws = client as AuthenticatedWebSocket;
       if (
@@ -151,7 +157,13 @@ export const broadcast = (type: string, data: any, channel?: MacroChannel) => {
         ws.isAuthenticated &&
         (!channel || ws.channels.has(channel) || ws.channels.has("all"))
       ) {
-        client.send(JSON.stringify({ type, data }));
+        // Backpressure guard: skip slow clients whose send buffer is full
+        // to prevent OOM on the server during high-volatility tick storms.
+        if ((ws as any).bufferedAmount > MAX_BUFFER) {
+          silentLogger.warn(`[WS] Skipping tick for client ${ws.userId}: buffer full (${ws.bufferedAmount} bytes)`);
+          return;
+        }
+        client.send(payload);
       }
     });
   }

@@ -7,7 +7,7 @@ import { ALL_LLM_PROVIDERS } from "../types";
  * Default providers to use when no user providers are configured
  */
 const DEFAULT_PROVIDERS: LlmProviderConfig[] = [
-  { name: "deepseek", label: "DeepSeek V4", model: "deepseek-v4", color: MODEL_COLORS.deepseek, status: "active" },
+  { name: "deepseek", label: "Qwen 3.6 27B", model: "deepseek-v4", color: MODEL_COLORS.deepseek, status: "active" },
   { name: "gpt", label: "GPT OSS 120B", model: "groq/openai/gpt-oss-120b", color: MODEL_COLORS.gpt, status: "active" },
   { name: "gemini", label: "Gemini 2.5 Flash", model: "gemini-2.5-flash", color: MODEL_COLORS.gemini, status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral-large-2402", color: MODEL_COLORS.mistral, status: "active" },
@@ -35,7 +35,6 @@ class ProviderRegistryService {
   initialize() {
     if (this.initialized) return;
 
-    // Try to load from localStorage
     try {
       // Always load defaults first so new providers are automatically added
       DEFAULT_PROVIDERS.forEach((p) => this.providers.set(p.name, { ...p }));
@@ -43,10 +42,12 @@ class ProviderRegistryService {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (stored) {
         const parsed: LlmProviderConfig[] = JSON.parse(stored);
-        // Override defaults with saved settings
+        // Override defaults with saved settings, BUT keep the latest labels from DEFAULT_PROVIDERS
+        // (prevents stale "DeepSeek V4" labels from old localStorage data)
         parsed.forEach((p) => {
-          if (this.providers.has(p.name)) {
-            this.providers.set(p.name, { ...this.providers.get(p.name)!, ...p });
+          const defaultProvider = this.providers.get(p.name);
+          if (defaultProvider) {
+            this.providers.set(p.name, { ...p, label: defaultProvider.label, model: defaultProvider.model });
           } else {
             this.providers.set(p.name, p);
           }

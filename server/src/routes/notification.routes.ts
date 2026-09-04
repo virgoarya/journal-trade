@@ -2,7 +2,7 @@ import { Router } from "express";
 import { notificationService } from "../services/notification.service";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { z } from "zod";
 
 const router = Router();

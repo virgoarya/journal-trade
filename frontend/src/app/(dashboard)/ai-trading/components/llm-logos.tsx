@@ -16,20 +16,19 @@ interface LogoProps {
   className?: string;
 }
 
-/** DeepSeek — two nested downward V-shapes suggesting depth / data layers */
-function DeepSeekLogo({ size = 40, className }: LogoProps) {
+/** Qwen — Alibaba Qwen model */
+function QwenLogo({ size = 40, className }: LogoProps) {
   return (
     <div 
-      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#4d6bfe] shadow-[0_0_15px_rgba(77,107,254,0.5)] border border-[#4d6bfe]/50", className)} 
+      className={cls("rounded-md overflow-hidden flex-shrink-0 bg-[#6236ff] shadow-[0_0_15px_rgba(98,54,255,0.5)] border border-[#6236ff]/50", className)} 
       style={{ width: size, height: size }}
     >
       <img 
-        src="/deepseek.png" 
-        alt="DeepSeek" 
+        src="/qwen.png" 
+        alt="Qwen" 
         className="w-full h-full object-cover p-1.5"
         onError={(e) => {
-          // Fallback to official deepseek logo if the user hasn't saved the file yet
-          (e.target as HTMLImageElement).src = "https://chat.deepseek.com/favicon.svg";
+          (e.target as HTMLImageElement).src = "https://qwen.readthedocs.io/en/latest/qwen.png";
         }}
       />
     </div>
@@ -155,7 +154,7 @@ function GenericAILogo({ size = 40, className }: LogoProps) {
 }
 
 const LOGO_MAP: Record<string, React.FC<LogoProps>> = {
-  deepseek: DeepSeekLogo,
+  deepseek: QwenLogo,
   gpt: GptLogo,
   gemini: GeminiLogo,
   mistral: MistralLogo,
@@ -169,5 +168,5 @@ export function LLMProviderLogo({ provider, size = 40, className }: LogoProps & 
   return <Component size={size} className={className} />;
 }
 
-export { DeepSeekLogo, GptLogo, GeminiLogo, MistralLogo, NemotronLogo, ClaudeLogo, GenericAILogo };
+export { QwenLogo, GptLogo, GeminiLogo, MistralLogo, NemotronLogo, ClaudeLogo, GenericAILogo };
 export type { LogoProps };

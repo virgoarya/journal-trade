@@ -14,9 +14,11 @@ export interface Trade {
   takeProfit?: number;
   lotSize: number;
   sizeUnit?: "LOT" | "CONTRACT";
+  sizeType?: "standard" | "micro" | "mini";
   actualPnl: number;
   pnl: number;  // Alias for actualPnl for UI convenience
-  rMultiple?: number;
+  rMultiple?: number; // actual R-multiple
+  plannedRMultiple?: number; // planned R-multiple (based on TP/SL)
   result: "win" | "loss" | "breakeven";  // UI-friendly case
   emotionalState?: number;
   notes?: string;
@@ -30,6 +32,7 @@ export interface Trade {
   deletionReason?: string;
   createdAt: string;
   updatedAt: string;
+  source?: "ai" | "manual"; // Source of trade
 }
 
 export interface CreateTradeDto {
@@ -43,6 +46,7 @@ export interface CreateTradeDto {
   takeProfit?: number;
   lotSize: number;
   sizeUnit?: "LOT" | "CONTRACT";
+  sizeType?: "standard" | "micro" | "mini";
   actualPnl?: number;
   rMultiple?: number;
   result?: "WIN" | "LOSS" | "BREAKEVEN";  // Send uppercase to backend
@@ -86,35 +90,38 @@ export class TradeService {
     }
 
     return {
-      id: trade._id || trade.id,
-      userId: trade.userId,
-      tradingAccountId: trade.tradingAccountId,
-      playbookId,
-      playbookName,
-      tradeDate: trade.tradeDate,
-      pair: trade.pair,
-      direction: trade.direction === "LONG" ? "Long" : trade.direction === "SHORT" ? "Short" : trade.direction,
-      entryPrice: trade.entryPrice,
-      stopLoss: trade.stopLoss,
-      takeProfit: trade.takeProfit,
-      lotSize: trade.lotSize,
-      actualPnl: trade.actualPnl,
-      pnl: trade.actualPnl,
-      rMultiple: trade.rMultiple,
-      result: trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven",
-      emotionalState: trade.emotionalState,
-      notes: trade.notes,
-      chartLink: trade.chartLink,
-      exitDate: trade.exitDate,
-      session: trade.session,
-      marketCondition: trade.marketCondition,
-      riskPercent: trade.riskPercent,
-      isDeleted: trade.isDeleted,
-      deletedAt: trade.deletedAt,
-      deletionReason: trade.deletionReason,
-      createdAt: trade.createdAt,
-      updatedAt: trade.updatedAt,
-    };
+          id: trade._id || trade.id,
+          userId: trade.userId,
+          tradingAccountId: trade.tradingAccountId,
+          playbookId,
+          playbookName,
+          tradeDate: trade.tradeDate,
+          pair: trade.pair,
+          direction: trade.direction === "LONG" ? "Long" : trade.direction === "SHORT" ? "Short" : trade.direction,
+          entryPrice: trade.entryPrice,
+          stopLoss: trade.stopLoss,
+          takeProfit: trade.takeProfit,
+          lotSize: trade.lotSize,
+          sizeUnit: trade.sizeUnit,
+          sizeType: trade.sizeType,
+          actualPnl: trade.actualPnl,
+          pnl: trade.actualPnl,
+          rMultiple: trade.rMultiple,
+          plannedRMultiple: trade.plannedRMultiple,
+          result: trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven",
+          emotionalState: trade.emotionalState,
+          notes: trade.notes,
+          chartLink: trade.chartLink,
+          exitDate: trade.exitDate,
+          session: trade.session,
+          marketCondition: trade.marketCondition,
+          riskPercent: trade.riskPercent,
+          isDeleted: trade.isDeleted,
+          deletedAt: trade.deletedAt,
+          deletionReason: trade.deletionReason,
+          createdAt: trade.createdAt,
+          updatedAt: trade.updatedAt,
+        };
   }
 
   async getAll(includeDeleted: boolean = false): Promise<ApiResponse<Trade[]>> {

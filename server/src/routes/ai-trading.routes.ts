@@ -1,7 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { requireAuth } from "../middleware/auth";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { mt5McpService } from "../services/mt5-mcp.service";
 import { aiTradingEngine } from "../services/ai-trading-engine.service";
 import { tradingPipelineService } from "../services/trading-pipeline.service";

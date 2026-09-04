@@ -35,40 +35,45 @@ describe("aiCoachService", () => {
 
   it("should compile correct trading context when trade logs exist", async () => {
     // Mock Active Account
-    vi.mocked(TradingAccount.findOne).mockResolvedValue({
-      name: "MetaTrader 5 Live",
-      balance: 10500.5,
-      currency: "USD",
-      riskTier: "CONSERVATIVE",
-    } as any);
+        vi.mocked(TradingAccount.findOne).mockReturnValue({
+          lean: vi.fn().mockResolvedValue({
+            name: "MetaTrader 5 Live",
+            balance: 10500.5,
+            currency: "USD",
+            riskTier: "CONSERVATIVE",
+          } as any),
+        } as any);
 
     // Mock Trades (2 wins, 1 loss, 1 breakeven)
     const mockTrades = [
-      { _id: { toString: () => "t1" }, pair: "EURUSD", direction: "LONG", result: "WIN", actualPnl: 150.0, rMultiple: 1.5, session: "London", emotionalState: 4, notes: "Good trade discipline" },
-      { _id: { toString: () => "t2" }, pair: "GBPUSD", direction: "SHORT", result: "LOSS", actualPnl: -100.0, rMultiple: -1.0, session: "NY AM", emotionalState: 2, notes: "FOMO on breakout" },
-      { _id: { toString: () => "t3" }, pair: "XAUUSD", direction: "LONG", result: "WIN", actualPnl: 250.0, rMultiple: 2.5, session: "NY PM", emotionalState: 5, notes: "Excellent execution" },
-      { _id: { toString: () => "t4" }, pair: "USDCAD", direction: "SHORT", result: "BREAKEVEN", actualPnl: 0.0, rMultiple: 0.0, session: "Asia", emotionalState: 3, notes: "No emotion" },
+      { _id: { toString: () => "t1" }, pair: "EURUSD", direction: "LONG", result: "WIN", actualPnl: 150.0, rMultiple: 1.5, session: "London", emotionalState: 4, notes: "Good trade discipline", pnl: 150.0, createdAt: new Date() },
+      { _id: { toString: () => "t2" }, pair: "GBPUSD", direction: "SHORT", result: "LOSS", actualPnl: -100.0, rMultiple: -1.0, session: "NY AM", emotionalState: 2, notes: "FOMO on breakout", pnl: -100.0, createdAt: new Date() },
+      { _id: { toString: () => "t3" }, pair: "XAUUSD", direction: "LONG", result: "WIN", actualPnl: 250.0, rMultiple: 2.5, session: "NY PM", emotionalState: 5, notes: "Excellent execution", pnl: 250.0, createdAt: new Date() },
+      { _id: { toString: () => "t4" }, pair: "USDCAD", direction: "SHORT", result: "BREAKEVEN", actualPnl: 0.0, rMultiple: 0.0, session: "Asia", emotionalState: 3, notes: "No emotion", pnl: 0.0, createdAt: new Date() },
     ];
 
-    // Set up mock chain: Trade.find().sort().limit()
-    const sortMock = vi.fn().mockReturnThis();
-    const limitMock = vi.fn().mockResolvedValue(mockTrades);
-    vi.mocked(Trade.find).mockReturnValue({
-      sort: sortMock,
-      limit: limitMock,
-    } as any);
+    // Set up mock chain: Trade.find().sort().lean()
+        const leanMock = vi.fn().mockResolvedValue(mockTrades);
+        const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
+        vi.mocked(Trade.find).mockReturnValue({
+          sort: sortMock,
+        } as any);
 
     // Mock Playbooks
-    vi.mocked(Playbook.find).mockResolvedValue([
-      {
-        _id: { toString: () => "p1" },
-        name: "ICT Silver Bullet",
-        methodology: "ICT",
-        marketCondition: "TRENDING",
-        rules: ["Rule 1", "Rule 2"],
-        stats: { totalTrades: 12, winRate: 66.7, totalPnL: 850 },
-      }
-    ] as any);
+        vi.mocked(Playbook.find).mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            lean: vi.fn().mockResolvedValue([
+              {
+                _id: { toString: () => "p1" },
+                name: "ICT Silver Bullet",
+                methodology: "ICT",
+                marketCondition: "TRENDING",
+                rules: ["Rule 1", "Rule 2"],
+                stats: { totalTrades: 12, winRate: 66.7, totalPnL: 850 },
+              }
+            ]),
+          }),
+        } as any);
 
     const context = await aiCoachService.getUserTradingContext("user-123");
 
@@ -95,16 +100,21 @@ describe("aiCoachService", () => {
   });
 
   it("should handle empty trading database gracefully", async () => {
-    vi.mocked(TradingAccount.findOne).mockResolvedValue(null);
+      vi.mocked(TradingAccount.findOne).mockReturnValue({
+        lean: vi.fn().mockResolvedValue(null),
+      } as any);
 
-    const sortMock = vi.fn().mockReturnThis();
-    const limitMock = vi.fn().mockResolvedValue([]);
-    vi.mocked(Trade.find).mockReturnValue({
-      sort: sortMock,
-      limit: limitMock,
-    } as any);
+      const leanMock = vi.fn().mockResolvedValue([]);
+      const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
+      vi.mocked(Trade.find).mockReturnValue({
+        sort: sortMock,
+      } as any);
 
-    vi.mocked(Playbook.find).mockResolvedValue([]);
+      vi.mocked(Playbook.find).mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              lean: vi.fn().mockResolvedValue([]),
+            }),
+          } as any);
 
     const context = await aiCoachService.getUserTradingContext("user-123");
 

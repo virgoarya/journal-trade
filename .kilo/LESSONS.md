@@ -20,6 +20,16 @@
 
 ## Lessons Log
 
+### [20260825] AI Trading Payment Model â€” Init vs Recurring Distinction
+**Area**: Backend / Payment / Midtrans
+**Root Cause**: Awalnya rancangan payment system keliru memahami `Initial Payment` 2jt IDR sebagai subscription berbayar bulanan. Padahal user requirement jelas: **Init Payment hanya sekali (one-time) saat registrasi awal**, sedangkan pembayaran berkelanjutan **hanya untuk topup token**.
+**Solusi**:
+1. `Initial Payment` 2.000.000 IDR (atau 1.800.000 IDR untuk Discord Booster) = **one-time registration/onboarding fee** untuk aktivasi akun, setup MT5 connection, dan akses AI trading engine.
+2. `Monthly Topup` 50.000 IDR = **recurring token refill** agar AI trading tetap berjalan. Token habis = wajib topup lagi.
+3. Midtrans flow: hanya ada 1 `Subscription` record per user (untuk token), bukan 2 subscription terpisah.
+4. DB schema: pisahkan `Registration` (one-time) dari `Subscription` (recurring token).
+**Hindari**: Jangan gabungkan registrasi dan token dalam satu subscription schema. Jangan pakai kata "subscription" untuk registrasi awal karena user akan bingung menganggapnya recurring.
+
 ### [20260806] Floating PnL not displaying in AccountOverview
 **Area**: Frontend / MT5 Integration
 **Root Cause**: `AccountOverview` component was using `accountInfo.profit` for "Floating P&L". In native MT5 MCP, `accountInfo.profit` represents the cumulative profit/loss from *closed* trades (or total account profit), not the floating PnL of *open* positions. The actual floating PnL needs to be calculated by summing the `profit` field from all active `positions`.
@@ -389,9 +399,9 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 **Area**: Python Client / MT5 Integration
 **Root Cause**: `trade_api.py` `position_close` hardcode `ORDER_FILLING_IOC`. XAUUSD di Exness-MT5Trial6 hanya mendukung FOK/RETURN ? retcode 10030 "Unsupported filling mode" ? fallback native MCP menampilkan pesan menyesatkan "trading not permitted".
 **Solusi**: Pilih filling mode dari `symbol_info(pos.symbol).filling_mode` (FOK ? IOC ? RETURN), sama seperti `order_send`. Juga: `mt5_streamer.ts` jangan anggap response string dari native MCP sebagai sukses; retcode Python 10016/10014 langsung tampil tanpa fallback.
-**Hindari**: Jangan hardcode `type_filling` di order MT5 — selalu baca `filling_mode` per symbol. Debug retcode MT5 dengan python langsung (`python trade_api.py position_close '{"ticket": X}'`) sebelum menyalahkan permission/broker.
+**Hindari**: Jangan hardcode `type_filling` di order MT5 ï¿½ selalu baca `filling_mode` per symbol. Debug retcode MT5 dengan python langsung (`python trade_api.py position_close '{"ticket": X}'`) sebelum menyalahkan permission/broker.
 
-### [20260811] Scan Arsitektur Menyeluruh — 30+ bug diperbaiki (3 batch)
+### [20260811] Scan Arsitektur Menyeluruh ï¿½ 30+ bug diperbaiki (3 batch)
 **Area**: Backend / Frontend / Python Client / Desktop
 **Root Cause**: Akumulasi bug lintas lapisan: (1) WS tanpa auth (isAuthenticated=true bypass), (2) kunci enkripsi hardcoded publik, (3) password broker plaintext di TradingAccount, (4) backdoor dev karena NODE_ENV default development, (5) OTA tanpa version gate + rollback merusak install, (6) satu koneksi MT5 global lintas user, (7) spawn trade_api.py paralel (MT5 hanya 1 koneksi Python), (8) backtest memutasi config live via singleton, (9) busySymbols lock bocor di pipeline, (10) settings frontend ter-wipe saat mount, (11) useMT5Stream isConnecting stuck ? WS mati permanen, (12) interval poll bocor tanpa guard.
 **Solusi**: 3 batch berturut: security (WS auth real + Origin check, ENCRYPTION_KEY fail-fast prod, password encrypt AES, NODE_ENV default production, OTA version gate + rollback rename-safe, triggerStart ownership), reliability (pythonQueue serialisasi spawn Python, busySymbols unlock per-tick, AsyncLocalStorage scoped config backtest, deviation/rounding/None-guard di trade_api.py, re-entrancy guard sync, reconnect fix frontend), kebersihan (index compound, execSync import, single-instance lock, restart cap, check-now nyata, upsert backtest + dateRange, error-handler 5xx generic, mcp kill on shutdown, trust proxy false).
@@ -401,7 +411,7 @@ Memanggil nama generic/lama memicu `MCP error -32602: tool not found`.
 **Area**: Desktop / Deployment
 **Root Cause**: (1) ENCRYPTION_KEY ditambahkan ke `server/.env` source, tapi EXE membaca `resources\server\.env` (salinan build) yang belum punya key ? backend crash di production. buildApp.js:79 memang menyalin .env, tapi build berjalan SEBELUM key ditambahkan. (2) Debug jadi kacau karena env sesi tooling punya `ELECTRON_RUN_AS_NODE=1` ? `electron.exe` jalan sebagai Node biasa: require('electron') resolve ke stub path string, main process crash diam-diam tanpa dialog, exit code 0.
 **Solusi**: Tambahkan ENCRYPTION_KEY (48 char, sama dengan source .env) langsung ke `dist-app\win-unpacked\resources\server\.env`; verifikasi dengan curl health :5000. Untuk debug: `Remove-Item Env:ELECTRON_RUN_AS_NODE` sebelum Start-Process EXE.
-**Hindari**: Saat menambah env baru, selalu cek resources build (bukan hanya source). Jangan percaya exit code 0 dari Electron saat ELECTRON_RUN_AS_NODE aktif — selalu verifikasi via /health atau main.log. Tambah log rotasi untuk main.log/backend.log yang tumbuh 180MB+ per hari.
+**Hindari**: Saat menambah env baru, selalu cek resources build (bukan hanya source). Jangan percaya exit code 0 dari Electron saat ELECTRON_RUN_AS_NODE aktif ï¿½ selalu verifikasi via /health atau main.log. Tambah log rotasi untuk main.log/backend.log yang tumbuh 180MB+ per hari.
 
 ### [20260818] Cleanup hapus root package.json rusak sidebar.tsx
 **Area**: Cleanup / Build Integrity
@@ -433,3 +443,13 @@ px tsc --noEmit di frontend & server untuk catch broken import.
 **Root Cause**: (1) Endpoint debug-sync-all-pnl tidak ada di server padahal frontend manggil aiTradingService.debugSyncAllPnl() ? tombol Sync PnL 404. (2) Icon lucide-react Sync tidak ada di versi ini ? pakai RotateCcw. (3) Strict TS errors: res.data possibly undefined di usePipeline setLogs callback (closure narrowing hilang), trade.riskPercent/emotionalState possibly undefined di log-trade, marketType string not assignable ke union di settings. (4) Waktu edit file besar (1600+ baris) pakai replace_file_content dengan TargetContent panjang, tool sering potong/miss-align ? file jadi corrupt (baris hilang, duplikat).
 **Solusi**: Tambah endpoint POST /api/v1/ai-trading/debug-sync-all-pnl di ai-trading.routes.ts pakai query mt5Ticket (bukan metadata.positionId yang tidak ada di model AITradeLog). Ganti Sync?RotateCcw. Fix TS: capture res.data ke var lokal sebelum setLogs callback; wrap optional field dengan ?? 0; cast marketType as union; tambah marketType di reset form. Build server (tsc) + frontend (next build) hijau.
 **Hindari**: JANGAN pakai replace_file_content/multi_replace untuk blok besar di file >1000 baris ? sering corrupt. Lebih aman: git checkout untuk revert, lalu edit blok kecil presisi (10-30 baris) satu per satu. Selalu jalan npm run build di server & frontend setelah edit TS. Cek grep pattern sederhana (hindari regex kompleks, ripgrep di Windows kadang no-match).
+### [20260827] Midtrans Payment Integration â€” Order ID Length & API Prefix
+**Area**: Backend / Frontend / Midtrans Integration
+**Root Cause**:
+1. **Order ID Length**: Midtrans API memiliki hard limit 50 karakter untuk `order_id`. Kode lama menghasilkan `registration_<userId>_<timestamp>` (51+ karakter) yang menyebabkan HTTP 400 `transaction_details.order_id is too long`.
+2. **API Prefix Missing**: Backend mount di `/api/v1/payment` (dari `server/src/routes/index.ts`), tapi frontend fetch ke `/api/payment/token` (tanpa `/v1`).
+**Solusi**:
+1. Shorten prefix `registration` â†’ `reg_` dan `token_topup` â†’ `top_` (42 char < 50 limit).
+2. Tambah `/v1` di semua URL fetch frontend.
+3. Tambah `enabled_payments` di `midtrans.service.ts` untuk menampilkan metode pembayaran yang benar.
+**Hindari**: Jangan mengasumsikan panjang `order_id` tidak masalah. Selalu verifikasi panjang string sebelum kirim ke Midtrans. Jangan lupa tambah `/v1` di semua URL fetch frontend.

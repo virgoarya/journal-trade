@@ -458,10 +458,17 @@ class MT5MCPService {
 
   /** Fetch OHLCV rates within a date range (for backtesting). */
   async getRatesRange(symbol: string, timeframe: string, from: number, to: number): Promise<MT5Rate[]> {
+    // Fail fast if MT5 is not connected
+    if (!mt5StreamCache.isConnected()) {
+      throw new Error("MT5 not connected. Call mt5_connect first or wait for stream to establish.");
+    }
     return withRetry(async () => {
-      const result = await this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to });
+      const result = await Promise.race([
+        this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("MT5 getRatesRange timeout (12s)")), 12000))
+      ]);
       return (result as any).rates ?? [];
-    }, 3, 500);
+    }, 2, 1000); // 2 retries, 1s delay
   }
 
   /** Get current tick. */
@@ -474,26 +481,12 @@ class MT5MCPService {
 
   /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
-    const cached = mt5StreamCache.getPositions();
-    if (cached && cached.length > 0) {
-      return cached as MT5Position[];
-    }
-    
-    // Fallback if cache is completely empty or hasn't received ticks yet
-    return withRetry(async () => {
-      const result = await this.callWithCircuit("mt5_positions_get", { includeOrders: true });
-      return (result as any).positions ?? [];
-    }, 3, 500);
+    return mt5StreamCache.getPositions() as MT5Position[];
   }
 
   /** Get all active pending (limit/stop) orders. */
   async getOrders(): Promise<any[]> {
-    const cached = mt5StreamCache.getOrders();
-    if (cached && cached.length > 0) {
-      return cached;
-    }
-    const result = await this.callWithCircuit("mt5_orders_get", { includeOrders: true });
-    return Array.isArray(result) ? result : [];
+    return mt5StreamCache.getOrders();
   }
 
   /** Debug — get raw MT5 diagnostic info about positions. */

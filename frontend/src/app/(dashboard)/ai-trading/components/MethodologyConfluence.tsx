@@ -107,7 +107,9 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
   };
 
   const currentChecklist = getActiveChecklist();
-  const allChecklistPassed = currentChecklist.length > 0 && currentChecklist.every(c => c.status === "PASSED");
+  // Valid jika ada checklist dan tidak ada step wajib yang FAILED
+  const hasFailedItems = currentChecklist.some(c => c.status === "FAILED");
+  const allChecklistPassed = currentChecklist.length > 0 && !hasFailedItems && currentChecklist.some(c => c.status === "PASSED");
 
   return (
     <div className="glass p-4 space-y-3">
@@ -271,14 +273,17 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
         {currentChecklist.length > 0 ? (
           <div className="space-y-1.5">
             {currentChecklist.map((item, idx) => {
+              const itemKey = item.id || `checklist-${idx}`;
               let icon = <CheckCircle2 className="w-3.5 h-3.5 text-neon-green flex-shrink-0" />;
               let textClass = "text-gray-200";
               let badgeBg = "bg-neon-green/10 text-neon-green border-neon-green/30";
 
               if (item.status === "WAITING") {
-                icon = <Clock className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0 animate-pulse" />;
-                textClass = "text-yellow-300";
-                badgeBg = "bg-yellow-500/10 text-yellow-400 border-yellow-500/30";
+                return (
+                  <span key={itemKey} className="px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/10 text-yellow-400">
+                    ⏳ {item.label}
+                  </span>
+                );
               } else if (item.status === "FAILED") {
                 icon = <XCircle className="w-3.5 h-3.5 text-neon-red flex-shrink-0" />;
                 textClass = "text-gray-400 line-through opacity-70";
@@ -316,10 +321,10 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
       </div>
 
       {/* Individual Methodology Breakdown Bars */}
-      {Object.keys(confluence.methodologyBreakdown).length > 0 && (
+      {confluence && Object.keys(confluence.methodologyBreakdown || {}).length > 0 && (
         <div className="space-y-1.5 pt-1">
           <span className="text-[9px] text-accent-gold-dim uppercase tracking-widest font-mono">Individual Methodology Scores</span>
-          {Object.entries(confluence.methodologyBreakdown)
+          {Object.entries(confluence.methodologyBreakdown || {})
             .filter(([key]) => key in METHODOLOGY_LABELS)
             .map(([key, data]) => {
             const method = key as MethodologyName;

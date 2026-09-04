@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { playbookService } from "../services/playbook.service";
 import { tradingAccountService } from "../services/trading-account.service";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { createPlaybookSchema, updatePlaybookSchema } from "../validators/playbook.validator";
 import { objectIdParamSchema } from "../validators/common.validator";
 import { apiResponse } from "../utils/api-response";

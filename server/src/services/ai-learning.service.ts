@@ -456,8 +456,12 @@ class AILearningService {
 
     // Get the analysis
     if (!experience.aiLearningSummary) {
-      // Run analysis first
-      await this.analyzeBacktest(backtestId, userId);
+      // Run analysis first (best-effort, do not fail the apply if it errors)
+      try {
+        await this.analyzeBacktest(backtestId, userId);
+      } catch (err: any) {
+        silentLogger.warn(`[AI-Learning] analyzeBacktest failed (non-fatal): ${err.message}`);
+      }
     }
 
     const snapshot = experience.pipelineConfigSnapshot as any;

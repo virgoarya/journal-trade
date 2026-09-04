@@ -38,17 +38,19 @@ export function evaluateWaterfall(
   const items: ChecklistItem[] = steps.map((step) => {
     let status: "PASSED" | "WAITING" | "FAILED";
 
-    if (step.isIndependent) {
-      status = step.condition ? "PASSED" : "WAITING";
-    } else if (step.isFailable) {
-      // Failable: evaluate independently regardless of prior state
+    if (step.isFailable) {
       status = step.condition ? "PASSED" : "FAILED";
       if (status !== "PASSED") {
-        priorAllPassed = false;
         hasFailed = true;
+        // If a failable step is NOT independent, its failure also cascades to subsequent steps.
+        if (!step.isIndependent) {
+          priorAllPassed = false;
+        }
       }
+    } else if (step.isIndependent) {
+      status = step.condition ? "PASSED" : "WAITING";
     } else {
-      // Non-failable: cascade WAITING if prior steps didn't pass
+      // Non-failable, non-independent: cascade WAITING if prior steps didn't pass
       if (!priorAllPassed) {
         status = "WAITING";
       } else if (step.condition) {

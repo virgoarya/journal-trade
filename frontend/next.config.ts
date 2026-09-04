@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${process.env.BACKEND_URL || "http://localhost:5000"}/api/:path*`,
       },
+      // Special rewrite for open-desktop endpoint
+      {
+        source: "/api/v1/mt5/open-desktop",
+        destination: `${process.env.BACKEND_URL || "http://localhost:5000"}/api/v1/mt5/open-desktop`,
+      },
     ];
   },
 };

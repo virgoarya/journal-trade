@@ -7,7 +7,7 @@ import type { LLMConsensusResult } from "../types";
 // ─── Constants ───────────────────────────────────────────────────
 
 const MODEL_ICONS: Record<string, string> = {
-  deepseek: "/deepseek.png",
+  deepseek: "/qwen.png",
   gpt: "/gpt.png",
   gemini: "/gemini.png",
   mistral: "/mistral.png",
@@ -70,7 +70,7 @@ export function Consensus2DFallback({ currentProviders, votes, showIndicators = 
             // Check alignment with final consensus
             // SKIP is neutral - calculate alignment only for GOOD/BAD verdicts
             const isAligned = vote && votes && vote.verdict !== "SKIP" && vote.verdict === votes.verdict;
-            const statusColor = !vote ? "#4B5563" : vote.verdict === "GOOD" ? "#39FF88" : vote.verdict === "BAD" ? "#FF3864" : "#EAB308";
+            const statusColor = !vote ? "#4B5563" : vote.verdict === "SKIP" ? "#EAB308" : isAligned ? "#39FF88" : "#FF3864";
 
             const lineOpacity = showIndicators ? (!vote ? "0.3" : isAligned ? "0.9" : "0.15") : "0.3";
             const lineWidth = showIndicators ? (!vote ? "1" : isAligned ? "3" : "1") : "1";
@@ -116,7 +116,7 @@ export function Consensus2DFallback({ currentProviders, votes, showIndicators = 
           // Check alignment with final consensus
           // SKIP is neutral - calculate alignment only for GOOD/BAD verdicts
           const isAligned = vote && votes && vote.verdict !== "SKIP" && vote.verdict === votes.verdict;
-          const statusColor = !vote ? "#4B5563" : vote.verdict === "GOOD" ? "#39FF88" : vote.verdict === "BAD" ? "#FF3864" : "#EAB308";
+          const statusColor = !vote ? "#4B5563" : vote.verdict === "SKIP" ? "#EAB308" : isAligned ? "#39FF88" : "#FF3864";
 
           const nodeGlowOpacity = !vote ? "30" : isAligned ? "60" : "10";
           const nodeGlowIntensity = !vote ? "15" : isAligned ? "25" : "5";

@@ -50,6 +50,13 @@ export default function DashboardLayout({
 
   // Guild membership verification
   useEffect(() => {
+    // In development we skip all verification to avoid blocking UI
+    if (process.env.NODE_ENV === "development") {
+      setIsGuildVerified(true);
+      setGuildCheckPending(false);
+      return;
+    }
+
     const verifyGuildMembership = async () => {
       // Skip if session still loading
       if (sessionPending) return;
@@ -66,14 +73,19 @@ export default function DashboardLayout({
       hasVerifiedRef.current = true;
 
       try {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 8000);
+
         const res = await fetch("/api/v1/auth/verify-guild", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
           credentials: "include",
+          signal: controller.signal,
         });
 
+        window.clearTimeout(timeout);
         const data = await res.json();
 
         if (!res.ok) {
@@ -107,8 +119,8 @@ export default function DashboardLayout({
     setMobileSidebarOpen(false);
   };
 
-  // Loading state while checking guild membership
-  if (sessionPending || guildCheckPending || isGuildVerified === null) {
+  // Loading state while checking guild membership (skip in development)
+  if (process.env.NODE_ENV !== "development" && (sessionPending || guildCheckPending || isGuildVerified === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-void text-text-primary">
         <div className="flex flex-col items-center gap-4">
@@ -120,7 +132,7 @@ export default function DashboardLayout({
   }
 
   // If not a guild member, don't render children (already redirected above)
-  if (!isGuildVerified) {
+  if (!isGuildVerified && process.env.NODE_ENV !== "development") {
     return null;
   }
 

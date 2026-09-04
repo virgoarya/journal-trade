@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, PlugZap, Eye, EyeOff, Key, ShieldCheck, ChevronDown, ChevronUp, Copy, CheckCircle2, Terminal } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 
 interface MT5Credentials {
   apiKey?: string;
@@ -34,6 +35,14 @@ export function ConnectionPanel({
     e.preventDefault();
     const cleanApiKey = apiKey.trim();
     const cleanUrl = mcpUrl.trim() || "http://127.0.0.1:22346/mcp";
+
+    if (process.env.NODE_ENV === "development" && navigator.userAgent.includes("Windows")) {
+      try {
+        await apiClient.get("/api/v1/mt5/open-desktop");
+      } catch (launchError) {
+        console.warn("Could not auto-open MT5 Desktop:", launchError);
+      }
+    }
 
     await onConnect({
       apiKey: cleanApiKey,

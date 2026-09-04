@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Sparkles, MessageSquare, TrendingUp, AlertTriangle, Lightbulb, Target, Clock, RefreshCw, Loader2, Trash2 } from "lucide-react";
+import { Bot, Sparkles, MessageSquare, TrendingUp, AlertTriangle, Lightbulb, Target, Clock, RefreshCw, Loader2, Trash2, SmilePlus } from "lucide-react";
 import { aiReviewService, type AIReview } from "@/services/ai-review.service";
 import { tradeService, type Trade } from "@/services/trade.service";
+import { aiCoachService } from "@/services/ai-coach.service";
 import { AiCoachChatPanel } from "@/components/macro-terminal/AiCoachChatPanel";
+import { AIAnalysisSection } from "@/components/ai-review/AIAnalysisSection";
+import { EmotionTagSelector } from "@/components/ai-review/EmotionTagSelector";
 import { toast } from "sonner";
 
 export default function AIReviewPage() {
@@ -15,6 +18,9 @@ export default function AIReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [clearingReviews, setClearingReviews] = useState(false);
+  const [showEmotionSelector, setShowEmotionSelector] = useState(false);
+  const [selectedTradeForEmotion, setSelectedTradeForEmotion] = useState<Trade | null>(null);
+  const [activeTab, setActiveTab] = useState<"reviews" | "psychology">("reviews");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -126,36 +132,138 @@ export default function AIReviewPage() {
           <h1 className="text-2xl font-bold text-text-primary tracking-[0.1em]">AI Review</h1>
           <p className="text-sm text-text-secondary mt-1">Machine-powered analysis of your trades</p>
         </div>
-        {trades.length > 0 && (
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={clearAllAiReviews}
-              disabled={clearingReviews || reviews.length === 0}
-              className="px-3 py-2 text-[10px] font-bold text-data-loss uppercase tracking-widest border border-data-loss/30 rounded-lg hover:bg-data-loss/10 transition-all disabled:opacity-30 flex items-center space-x-2"
-              title="Clear all AI reviews"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>{clearingReviews ? "Clearing..." : "Clear AI"}</span>
-            </button>
-            <select
-              onChange={(e) => {
-                if (e.target.value) handleRequestReview(e.target.value);
-              }}
-              defaultValue=""
-              className="bg-bg-elevated border border-border-subtle rounded-lg px-3 py-2 text-text-primary text-sm focus:border-accent-gold focus:outline-none"
-            >
-              <option value="" disabled>Analyze a trade...</option>
-              {trades.slice(0, 10).map((trade) => (
-                <option key={trade.id} value={trade.id}>
-                  {trade.pair} - {trade.direction} (${Math.abs(trade.pnl).toFixed(2)})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex items-center space-x-3">
+          {activeTab === "reviews" && trades.length > 0 && (
+            <>
+              <button
+                onClick={clearAllAiReviews}
+                disabled={clearingReviews || reviews.length === 0}
+                className="px-3 py-2 text-[10px] font-bold text-data-loss uppercase tracking-widest border border-data-loss/30 rounded-lg hover:bg-data-loss/10 transition-all disabled:opacity-30 flex items-center space-x-2"
+                title="Clear all AI reviews"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{clearingReviews ? "Clearing..." : "Clear AI"}</span>
+              </button>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) handleRequestReview(e.target.value);
+                }}
+                defaultValue=""
+                className="bg-bg-elevated border border-border-subtle rounded-lg px-3 py-2 text-text-primary text-sm focus:border-accent-gold focus:outline-none"
+              >
+                <option value="" disabled>Analyze a trade...</option>
+                {trades.slice(0, 10).map((trade) => (
+                  <option key={trade.id} value={trade.id}>
+                    {trade.pair} - {trade.direction} (${Math.abs(trade.pnl).toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Introduction Banner */}
+      {/* Tab Navigation */}
+      <div className="flex space-x-1 bg-bg-void/50 p-1 rounded-lg border border-border-subtle w-fit">
+        <button
+          onClick={() => setActiveTab("reviews")}
+          className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${
+            activeTab === "reviews"
+              ? "bg-accent-gold text-bg-void"
+              : "text-text-muted hover:text-text-primary"
+          }`}
+        >
+          Trade Reviews
+        </button>
+        <button
+          onClick={() => setActiveTab("psychology")}
+          className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${
+            activeTab === "psychology"
+              ? "bg-accent-gold text-bg-void"
+              : "text-text-muted hover:text-text-primary"
+          }`}
+        >
+          Psychology Journal
+        </button>
+      </div>
+
+      {/* Tab Content: Psychology Journal */}
+      {activeTab === "psychology" && (
+        <div className="space-y-6">
+          {/* Quick Emotion Log for recent trades */}
+          <div className="glass p-5">
+            <h3 className="text-sm font-bold text-text-primary mb-4">
+              Catat Emosi untuk Trade Terakhir
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {trades.slice(0, 6).map((trade) => (
+                <button
+                  key={trade.id}
+                  onClick={() => {
+                    setSelectedTradeForEmotion(trade);
+                    setShowEmotionSelector(true);
+                  }}
+                  className="flex items-center justify-between p-3 bg-bg-void/50 border border-border-subtle rounded-lg hover:border-accent-gold/30 transition-all text-left group"
+                >
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-text-primary">{trade.pair}</span>
+                      <span className={`text-[10px] font-bold uppercase ${
+                        trade.direction === "Long" ? "text-data-profit" : "text-data-loss"
+                      }`}>
+                        {trade.direction}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-text-muted mt-0.5">
+                      {trade.tradeDate} • {trade.result.toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${
+                      trade.pnl >= 0 ? "text-data-profit" : "text-data-loss"
+                    }`}>
+                      {trade.pnl >= 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                    </p>
+                    <SmilePlus className="w-4 h-4 text-text-muted group-hover:text-accent-gold transition-colors mt-1 ml-auto" />
+                  </div>
+                </button>
+              ))}
+            </div>
+            {trades.length === 0 && (
+              <p className="text-sm text-text-muted text-center py-4">
+                Belum ada trade. Tambahkan trade terlebih dahulu.
+              </p>
+            )}
+          </div>
+
+          {/* AI Analysis Section */}
+          <AIAnalysisSection />
+       </div>
+      )}
+
+            {/* Emotion Selector Modal */}
+            {showEmotionSelector && selectedTradeForEmotion && (
+              <EmotionTagSelector
+                tradeId={selectedTradeForEmotion.id}
+                symbol={selectedTradeForEmotion.pair}
+                pnl={selectedTradeForEmotion.actualPnl}
+                timeframe="M15"
+                session={selectedTradeForEmotion.session || "Other"}
+                tradeType={selectedTradeForEmotion.source === "ai" ? "market" : "pending"}
+                rMultiple={selectedTradeForEmotion.rMultiple}
+                defaultNotes={selectedTradeForEmotion.notes}
+                onSave={() => {
+                  setShowEmotionSelector(false);
+                  setSelectedTradeForEmotion(null);
+                }}
+                onClose={() => {
+                  setShowEmotionSelector(false);
+                  setSelectedTradeForEmotion(null);
+                }}
+              />
+            )}
+
+            {/* Introduction Banner */}
       <div className="glass p-6 border-l-4 border-accent-gold">
         <div className="flex items-start space-x-4">
           <div className="p-2 bg-accent-gold/10 rounded-lg">

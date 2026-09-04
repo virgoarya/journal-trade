@@ -12,6 +12,95 @@ import { PlaybookAssignmentModal } from "@/components/trade/PlaybookAssignmentMo
 
 export const dynamic = 'force-dynamic';
 
+// ============ FUTURES/CFD CONTRACT SIZE HELPER ============
+// Client-side mirror of server's getContractSize for real-time risk calculator
+function getContractSizeClient(pair: string, sizeType: "standard" | "micro" | "mini" = "standard"): number {
+  const p = pair.toUpperCase();
+  // CME Index Futures
+  if (p.includes("ES") || p.includes("SPX") || p.includes("SP500")) { return sizeType === "micro" ? 5 : sizeType === "mini" ? 25 : 50; }
+  if (p.includes("NQ") || p.includes("NAS100")) { return sizeType === "micro" ? 2 : sizeType === "mini" ? 10 : 20; }
+  if (p.includes("YM") || p.includes("US30") || p.includes("DOW")) { return sizeType === "micro" ? 0.5 : sizeType === "mini" ? 2.5 : 5; }
+  if (p.includes("RTY") || p.includes("RUSSELL")) { return sizeType === "micro" ? 5 : sizeType === "mini" ? 25 : 50; }
+  // COMEX Precious Metals
+  if (p.includes("GC") || p.includes("GOLD") || p.includes("XAU")) { return sizeType === "micro" ? 10 : sizeType === "mini" ? 50 : 100; }
+  if (p.includes("SI") || p.includes("SILVER") || p.includes("XAG")) { return sizeType === "micro" ? 1000 : sizeType === "mini" ? 2500 : 5000; }
+  if (p.includes("HG") || p.includes("COPPER")) { return sizeType === "micro" ? 2500 : sizeType === "mini" ? 12500 : 25000; }
+  // NYMEX Energy
+  if (p.includes("CL") || p.includes("WTI") || p.includes("CRUDE")) { return sizeType === "micro" ? 100 : sizeType === "mini" ? 500 : 1000; }
+  // Forex CFD fallback
+  if (sizeType === "micro") return 1000;
+  if (sizeType === "mini") return 10000;
+  return 100000;
+}
+
+// Futures CME/COMEX instruments by category
+const FUTURES_PAIRS = {
+  "Commodities (Micro)": [
+    { value: "MGC", label: "MGC - Micro Gold" },
+    { value: "SIL", label: "SIL - Micro Silver" },
+    { value: "MCL", label: "MCL - Micro Crude Oil" },
+    { value: "MHG", label: "MHG - Micro Copper" },
+  ],
+  "Commodities (Mini/Standard)": [
+    { value: "GC", label: "GC - Gold" },
+    { value: "SI", label: "SI - Silver" },
+    { value: "CL", label: "CL - Crude Oil" },
+    { value: "HG", label: "HG - Copper" },
+  ],
+  "Indices (Micro)": [
+    { value: "MES", label: "MES - Micro S&P 500" },
+    { value: "MNQ", label: "MNQ - Micro Nasdaq 100" },
+    { value: "MYM", label: "MYM - Micro Dow" },
+    { value: "M2K", label: "M2K - Micro Russell 2000" },
+  ],
+  "Indices (Mini/Standard)": [
+    { value: "ES", label: "ES - E-mini S&P 500" },
+    { value: "NQ", label: "NQ - E-mini Nasdaq 100" },
+    { value: "YM", label: "YM - E-mini Dow" },
+    { value: "RTY", label: "RTY - E-mini Russell 2000" },
+  ],
+};
+
+const CFD_PAIRS = {
+  "Commodities": [
+    { value: "XAUUSD", label: "XAUUSD (Gold)" },
+    { value: "XAGUSD", label: "XAGUSD (Silver)" },
+    { value: "USOIL", label: "USOIL (WTI)" },
+    { value: "UKOIL", label: "UKOIL (Brent)" },
+  ],
+  "Forex Major": [
+    { value: "EURUSD", label: "EURUSD" },
+    { value: "GBPUSD", label: "GBPUSD" },
+    { value: "USDJPY", label: "USDJPY" },
+    { value: "AUDUSD", label: "AUDUSD" },
+    { value: "USDCAD", label: "USDCAD" },
+    { value: "USDCHF", label: "USDCHF" },
+    { value: "NZDUSD", label: "NZDUSD" },
+  ],
+  "Forex Minor": [
+    { value: "EURJPY", label: "EURJPY" },
+    { value: "GBPJPY", label: "GBPJPY" },
+    { value: "AUDJPY", label: "AUDJPY" },
+    { value: "EURAUD", label: "EURAUD" },
+    { value: "GBPAUD", label: "GBPAUD" },
+  ],
+  "Indices": [
+    { value: "US30", label: "US30 (Dow Jones)" },
+    { value: "NAS100", label: "NAS100 (Nasdaq)" },
+    { value: "SPX500", label: "SPX500 (S&P 500)" },
+    { value: "GER40", label: "GER40 (DAX)" },
+    { value: "UK100", label: "UK100 (FTSE)" },
+  ],
+  "Crypto": [
+    { value: "BTCUSD", label: "BTCUSD" },
+    { value: "BTCUSDT", label: "BTCUSDT" },
+    { value: "ETHUSD", label: "ETHUSD" },
+    { value: "ETHUSDT", label: "ETHUSDT" },
+    { value: "SOLUSD", label: "SOLUSD" },
+    { value: "SOLUSDT", label: "SOLUSDT" },
+  ],
+};
+
 // ============ TIMEZONE HELPERS (New York) ============
 
 // Helper to calculate trade duration
@@ -133,6 +222,11 @@ function LogTradePageInner() {
   const [predictedR, setPredictedR] = useState<number | null>(null);
   const [riskPercent, setRiskPercent] = useState<number | null>(null);
 
+  // Size Unit & Size Type (Futures: CONTRACT, CFD: LOT)
+  const isFutures = activeAccount?.marketType === "FUTURES";
+  const [sizeUnit, setSizeUnit] = useState<"LOT" | "CONTRACT">("LOT");
+  const [sizeType, setSizeType] = useState<"standard" | "micro" | "mini">("standard");
+
   // Risk tier warning states
   const [riskWarning, setRiskWarning] = useState<string | null>(null);
   const [accountRiskLimit, setAccountRiskLimit] = useState<number>(1.0); // defaultRiskPercent from account
@@ -243,6 +337,13 @@ function LogTradePageInner() {
     }
   };
 
+  // Auto-set sizeUnit based on account marketType
+  useEffect(() => {
+    if (activeAccount) {
+      setSizeUnit(activeAccount.marketType === "FUTURES" ? "CONTRACT" : "LOT");
+    }
+  }, [activeAccount?.marketType]);
+
   // Real-time R-Multiple & Risk % Calculator Engine
   useEffect(() => {
     if (entryPrice && stopLoss) {
@@ -270,22 +371,11 @@ function LogTradePageInner() {
         setPredictedR(null);
       }
 
-      // Calculate Risk %
+      // Calculate Risk % using sizeType-aware contract sizes
       if (riskPoints > 0 && activeAccount?.currentEquity && lotSize) {
         const lotSizeVal = parseFloat(lotSize.toString()) || 0;
         if (lotSizeVal > 0) {
-          // Determine contract size based on pair (简单实现)
-          const currentPair = pair.toUpperCase();
-          let contractSize = 100000; // default forex
-
-          if (currentPair.includes("XAU") || currentPair.includes("GOLD")) {
-            contractSize = 100; // 1 lot = 100 oz for gold
-          } else if (currentPair.includes("BTC") || currentPair.includes("ETH")) {
-            contractSize = 1; // crypto通常1 lot = 1 unit
-          } else if (currentPair.includes("US30") || currentPair.includes("SPX") || currentPair.includes("NAS") || currentPair.includes("SP500")) {
-            contractSize = 1; // indices typically 1 lot = 1 contract
-          }
-
+          const contractSize = getContractSizeClient(pair, sizeType);
           const riskAmount = Math.abs(riskPoints) * contractSize * lotSizeVal;
           const equity = activeAccount.currentEquity || activeAccount.initialBalance || 0;
           const riskPct = (riskAmount / equity) * 100;
@@ -314,7 +404,7 @@ function LogTradePageInner() {
       setRiskPercent(null);
       setRiskWarning(null);
     }
-  }, [entryPrice, stopLoss, takeProfit, direction, lotSize, activeAccount, accountRiskLimit, pair]);
+  }, [entryPrice, stopLoss, takeProfit, direction, lotSize, activeAccount, accountRiskLimit, pair, sizeType]);
 
 
   // Deprecated: use formatToNYDateTimeLocal instead for New York timezone
@@ -331,6 +421,8 @@ function LogTradePageInner() {
     setPair(trade.pair);
     // Convert direction to uppercase (backend expects LONG/SHORT)
     setDirection(trade.direction.toUpperCase() as "LONG" | "SHORT");
+    setSizeUnit(trade.sizeUnit || (isFutures ? "CONTRACT" : "LOT"));
+    setSizeType(trade.sizeType || "standard");
     setRiskWarning(null);
     setAcknowledgeRisk(false);
     setShowForm(true); // Open the form modal
@@ -402,29 +494,19 @@ function LogTradePageInner() {
       riskPoints = stop - entry;
     }
 
-    // Calculate risk percent
+    // Calculate risk percent using sizeType
     let riskPercentCalc: number | undefined;
     if (riskPoints > 0 && activeAccount.currentEquity && lot > 0) {
-      const pair = formData.pair.toUpperCase();
-      let contractSize = 100000;
-      if (pair.includes("XAU") || pair.includes("GOLD")) contractSize = 100;
-      else if (pair.includes("BTC") || pair.includes("ETH")) contractSize = 1;
-      else if (pair.includes("US30") || pair.includes("SPX") || pair.includes("NAS") || pair.includes("SP500")) contractSize = 1;
-
+      const contractSize = getContractSizeClient(formData.pair, sizeType);
       const riskAmount = Math.abs(riskPoints) * contractSize * lot;
       const equity = activeAccount.currentEquity || activeAccount.initialBalance || 0;
       riskPercentCalc = parseFloat(((riskAmount / equity) * 100).toFixed(2));
     }
 
-    // Calculate Actual R multiple
+    // Calculate Actual R multiple using sizeType
     let rMult: number | undefined;
     if (riskPoints > 0 && lot > 0) {
-      const pair = formData.pair.toUpperCase();
-      let contractSize = 100000;
-      if (pair.includes("XAU") || pair.includes("GOLD")) contractSize = 100;
-      else if (pair.includes("BTC") || pair.includes("ETH")) contractSize = 1;
-      else if (pair.includes("US30") || pair.includes("SPX") || pair.includes("NAS") || pair.includes("SP500")) contractSize = 1;
-
+      const contractSize = getContractSizeClient(formData.pair, sizeType);
       const riskAmount = Math.abs(riskPoints) * contractSize * lot;
       if (riskAmount > 0) {
         rMult = parseFloat((actualPnl / riskAmount).toFixed(2));
@@ -450,6 +532,8 @@ function LogTradePageInner() {
       stopLoss: stop,
       takeProfit: takeProfit,
       lotSize: lot,
+      sizeUnit: sizeUnit,
+      sizeType: sizeType,
       actualPnl: actualPnl,
       result: resultStatus,
       emotionalState: parseInt(formData.emotionalState),
@@ -502,16 +586,20 @@ function LogTradePageInner() {
     const lot = parseFloat(formData.lotSize);
     const riskPoints = Math.abs(entry - stop);
     if (riskPoints > 0 && lot > 0) {
-      const pair = formData.pair.toUpperCase();
-      let contractSize = 100000;
-      if (pair.includes("XAU") || pair.includes("GOLD")) contractSize = 100;
-      else if (pair.includes("BTC") || pair.includes("ETH")) contractSize = 1;
-      else if (pair.includes("US30") || pair.includes("SPX") || pair.includes("NAS") || pair.includes("SP500")) contractSize = 1;
-
-      const riskAmount = riskPoints * contractSize * lot;
+      const contractSize = getContractSizeClient(formData.pair, sizeType);
+      const riskAmount = Math.abs(riskPoints) * contractSize * lot;
       if (riskAmount > 0) {
         rMult = parseFloat((actualPnl / riskAmount).toFixed(2));
       }
+    }
+
+    // Calculate risk percent
+    let riskPercentCalc: number | undefined;
+    if (riskPoints > 0 && activeAccount.currentEquity && lot > 0) {
+      const contractSize = getContractSizeClient(formData.pair, sizeType);
+      const riskAmount = Math.abs(riskPoints) * contractSize * lot;
+      const equity = activeAccount.currentEquity || activeAccount.initialBalance || 0;
+      riskPercentCalc = parseFloat(((riskAmount / equity) * 100).toFixed(2));
     }
 
     // Convert tradeDate from NY local datetime to UTC ISO
@@ -531,6 +619,8 @@ function LogTradePageInner() {
       stopLoss: parseFloat(formData.stopLoss),
       takeProfit: formData.takeProfit ? parseFloat(formData.takeProfit) : undefined,
       lotSize: parseFloat(formData.lotSize),
+      sizeUnit: sizeUnit,
+      sizeType: sizeType,
       actualPnl: actualPnl,
       result: resultStatus,
       emotionalState: parseInt(formData.emotionalState),
@@ -538,7 +628,7 @@ function LogTradePageInner() {
       chartLink: formData.chartLink || undefined,
       exitDate: formData.exitDate ? nyDateTimeToUTC(formData.exitDate) : undefined,
       session,
-      riskPercent: riskPercent ?? undefined,
+      riskPercent: riskPercentCalc ?? undefined,
       rMultiple: rMult,
       marketCondition: formData.marketCondition && formData.marketCondition !== "" ? formData.marketCondition : undefined,
     });
@@ -565,6 +655,8 @@ function LogTradePageInner() {
     setLotSize("");
     setDirection("LONG");
     setPredictedR(null);
+    setSizeUnit(isFutures ? "CONTRACT" : "LOT");
+    setSizeType("standard");
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -796,10 +888,11 @@ function LogTradePageInner() {
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Direction</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Playbook</th>
                 <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Setup (Entry/SL/TP)</th>
-                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Size</th>
-                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Risk %</th>
-                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">R-Ratio</th>
-                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Final P&L</th>
+                                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Size</th>
+                                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Risk %</th>
+                                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Planned R</th>
+                                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Actual R</th>
+                                <th className="text-right p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Final P&L</th>
                 <th className="text-center p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Psychology</th>
                 <th className="text-left p-4 text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">Data</th>
               </tr>
@@ -889,26 +982,38 @@ function LogTradePageInner() {
                     </div>
                   </td>
                   {/* Size */}
-                  <td className="p-4 text-right font-mono text-sm text-text-primary">{trade.lotSize}</td>
+                  <td className="p-4 text-right font-mono text-sm text-text-primary">
+                    {trade.lotSize} {trade.sizeUnit === "CONTRACT" ? trade.sizeType === "micro" ? "Micro" : trade.sizeType === "mini" ? "Mini" : "Std" : "Lot"}
+                  </td>
                   {/* Risk % */}
-                  <td className="p-4 text-right font-mono text-xs">
-                    {trade.riskPercent ? (
-                        <span className={trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : "text-data-profit"}>
-                          {trade.riskPercent.toFixed(2)}%
-                        </span>
-                    ) : (
-                        <span className="text-text-muted">-</span>
-                    )}
-                  </td>
-                  {/* R-Ratio */}
-                  <td className="p-4 text-right font-mono text-xs">
-                    {trade.rMultiple ? (
-                        <span className="text-accent-gold">{trade.rMultiple}R</span>
-                    ) : (
-                        <span className="text-text-muted">-</span>
-                    )}
-                  </td>
-                  {/* Final P&L */}
+                                    <td className="p-4 text-right font-mono text-xs">
+                                      {trade.riskPercent ? (
+                                          <span className={trade.riskPercent > 2 ? "text-data-loss" : trade.riskPercent >= 1 ? "text-accent-gold" : "text-data-profit"}>
+                                            {trade.riskPercent.toFixed(2)}%
+                                          </span>
+                                      ) : (
+                                          <span className="text-text-muted">-</span>
+                                      )}
+                                    </td>
+                                    {/* Planned R */}
+                                    <td className="p-4 text-right font-mono text-xs">
+                                      {trade.plannedRMultiple ? (
+                                          <span className="text-accent-gold">{trade.plannedRMultiple}R</span>
+                                      ) : (
+                                          <span className="text-text-muted">-</span>
+                                      )}
+                                    </td>
+                                    {/* Actual R */}
+                                    <td className="p-4 text-right font-mono text-xs">
+                                      {trade.rMultiple !== undefined && trade.rMultiple !== null ? (
+                                          <span className={trade.rMultiple >= 1 ? "text-data-profit" : trade.rMultiple > 0 ? "text-accent-gold" : "text-data-loss"}>
+                                            {trade.rMultiple.toFixed(2)}R
+                                          </span>
+                                      ) : (
+                                          <span className="text-text-muted">-</span>
+                                      )}
+                                    </td>
+                                    {/* Final P&L */}
                   <td className="p-4 text-right font-mono text-sm font-bold">
                     <span className={trade.result.toLowerCase() === "win" ? "text-data-profit" : trade.result.toLowerCase() === "loss" ? "text-data-loss" : "text-text-secondary"}>
                       {trade.pnl > 0 ? "+" : ""}${trade.pnl.toFixed(2)}
@@ -1068,7 +1173,7 @@ function LogTradePageInner() {
                       <div className="space-y-1.5">
                         <div>Entry: <span className="font-mono text-text-primary">{trade.entryPrice}</span></div>
                         <div>
-                          {activeAccount?.marketType === "FUTURES" ? "Contract Size" : "Lot Size"}: <span className="font-mono text-text-primary">{trade.lotSize}</span>
+                          {trade.sizeUnit === "CONTRACT" ? "Contract Size" : "Lot Size"}: <span className="font-mono text-text-primary">{trade.lotSize} {trade.sizeUnit === "CONTRACT" ? trade.sizeType === "micro" ? "Micro" : trade.sizeType === "mini" ? "Mini" : "Std" : ""}</span>
                         </div>
                         <div>Risk: <span className={`font-mono ${(trade.riskPercent ?? 0) > 2 ? "text-data-loss" : (trade.riskPercent ?? 0) >= 1 ? "text-accent-gold" : (trade.riskPercent ?? 0) ? "text-data-profit" : "text-text-primary"}`}>{trade.riskPercent ? Number(trade.riskPercent).toFixed(2) + '%' : '-'}</span></div>
                       </div>
@@ -1318,105 +1423,102 @@ function LogTradePageInner() {
                   <h3 className="text-xs sm:text-sm font-bold text-accent-gold uppercase tracking-[0.2em] border-b border-white/5 pb-2">Market Execution</h3>
 
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Instrument/Pair</label>
-                      <select
-                        name="pair"
-                        required
-                        value={pair}
-                        onChange={(e) => setPair(e.target.value)}
-                        className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none uppercase"
-                      >
-                         <option value="" disabled>Pilih Pair...</option>
-                         {/* Fallback IF pair from DB is not in the list below */}
-                         {pair && !["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","AUDJPY","EURAUD","GBPAUD","XAUUSD","XAGUSD","USOIL","UKOIL","US30","NAS100","SPX500","GER40","UK100","BTCUSD","BTCUSDT","ETHUSD","ETHUSDT","SOLUSD","SOLUSDT"].includes(pair) && (
-                           <option value={pair}>{pair}</option>
-                         )}
-                         <optgroup label="Commodities">
-                            <option value="XAUUSD">XAUUSD (Gold)</option>
-                            <option value="XAGUSD">XAGUSD (Silver)</option>
-                            <option value="USOIL">USOIL (WTI)</option>
-                            <option value="UKOIL">UKOIL (Brent)</option>
-                         </optgroup>
-                         <optgroup label="Forex Major">
-                            <option value="EURUSD">EURUSD</option>
-                            <option value="GBPUSD">GBPUSD</option>
-                            <option value="USDJPY">USDJPY</option>
-                            <option value="AUDUSD">AUDUSD</option>
-                            <option value="USDCAD">USDCAD</option>
-                            <option value="USDCHF">USDCHF</option>
-                            <option value="NZDUSD">NZDUSD</option>
-                         </optgroup>
-                         <optgroup label="Forex Minor">
-                            <option value="EURJPY">EURJPY</option>
-                            <option value="GBPJPY">GBPJPY</option>
-                            <option value="AUDJPY">AUDJPY</option>
-                            <option value="EURAUD">EURAUD</option>
-                            <option value="GBPAUD">GBPAUD</option>
-                         </optgroup>
-                         <optgroup label="Indices">
-                            <option value="US30">US30 (Dow Jones)</option>
-                            <option value="NAS100">NAS100 (Nasdaq)</option>
-                            <option value="SPX500">SPX500 (S&P 500)</option>
-                            <option value="GER40">GER40 (DAX)</option>
-                            <option value="UK100">UK100 (FTSE)</option>
-                         </optgroup>
-                         <optgroup label="Crypto">
-                            <option value="BTCUSD">BTCUSD</option>
-                            <option value="BTCUSDT">BTCUSDT</option>
-                            <option value="ETHUSD">ETHUSD</option>
-                            <option value="ETHUSDT">ETHUSDT</option>
-                            <option value="SOLUSD">SOLUSD</option>
-                            <option value="SOLUSDT">SOLUSDT</option>
-                         </optgroup>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Transaction Direction</label>
-                      <select 
-                        required 
-                        value={direction}
-                        onChange={(e) => setDirection(e.target.value as "LONG" | "SHORT")}
-                        className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
-                      >
-                        <option value="LONG">Long (Buy)</option>
-                        <option value="SHORT">Short (Sell)</option>
-                      </select>
-                    </div>
-                  </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Instrument/Pair</label>
+                                        <select
+                                          name="pair"
+                                          required
+                                          value={pair}
+                                          onChange={(e) => setPair(e.target.value)}
+                                          className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none uppercase"
+                                        >
+                                          <option value="" disabled>Pilih Pair...</option>
+                                          {/* Fallback IF pair from DB is not in the list below */}
+                                          {pair && !Object.values({...FUTURES_PAIRS, ...CFD_PAIRS}).flat().some(p => p.value === pair) && (
+                                            <option value={pair}>{pair}</option>
+                                          )}
+                                          {isFutures ? (
+                                            Object.entries(FUTURES_PAIRS).map(([category, pairs]) => (
+                                              <optgroup key={category} label={category}>
+                                                {pairs.map(p => (
+                                                  <option key={p.value} value={p.value}>{p.label}</option>
+                                                ))}
+                                              </optgroup>
+                                            ))
+                                          ) : (
+                                            Object.entries(CFD_PAIRS).map(([category, pairs]) => (
+                                              <optgroup key={category} label={category}>
+                                                {pairs.map(p => (
+                                                  <option key={p.value} value={p.value}>{p.label}</option>
+                                                ))}
+                                              </optgroup>
+                                            ))
+                                          )}
+                                        </select>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Transaction Direction</label>
+                                        <select 
+                                          required 
+                                          value={direction}
+                                          onChange={(e) => setDirection(e.target.value as "LONG" | "SHORT")}
+                                          className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
+                                        >
+                                          <option value="LONG">Long (Buy)</option>
+                                          <option value="SHORT">Short (Sell)</option>
+                                        </select>
+                                      </div>
+                                    </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Entry Price</label>
-                      <input
-                        name="entryPrice"
-                        type="number"
-                        step="any"
-                        placeholder="0.00"
-                        required
-                        value={entryPrice}
-                        onChange={(e) => setEntryPrice(e.target.value ? parseFloat(e.target.value) : "")}
-                        className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">
-                        {activeAccount?.marketType === "FUTURES" ? "Contract Size" : "Lot Size"}
-                      </label>
-                      <input
-                        name="lotSize"
-                        type="number"
-                        step={activeAccount?.marketType === "FUTURES" ? "1" : "0.01"}
-                        placeholder={activeAccount?.marketType === "FUTURES" ? "1" : "0.01"}
-                        required
-                        value={lotSize}
-                        onChange={(e) => setLotSize(e.target.value ? parseFloat(e.target.value) : "")}
-                        className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
-                      />
-                    </div>
-                  </div>
+                                    {/* Size Type - Full width, only show for Futures */}
+                                    {isFutures && (
+                                      <div className="space-y-1.5 pt-2">
+                                        <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Size Type</label>
+                                        <select
+                                          name="sizeType"
+                                          value={sizeType}
+                                          onChange={(e) => setSizeType(e.target.value as "standard" | "micro" | "mini")}
+                                          className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
+                                        >
+                                          <option value="micro">Micro (1/10 Standard)</option>
+                                          <option value="mini">Mini (1/2 Standard)</option>
+                                          <option value="standard">Standard</option>
+                                        </select>
+                                      </div>
+                                    )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Entry Price</label>
+                                        <input
+                                          name="entryPrice"
+                                          type="number"
+                                          step="any"
+                                          placeholder="0.00"
+                                          required
+                                          value={entryPrice}
+                                          onChange={(e) => setEntryPrice(e.target.value ? parseFloat(e.target.value) : "")}
+                                          className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">
+                                          {sizeUnit === "CONTRACT" ? "Contract Count" : "Lot Size"}
+                                        </label>
+                                        <input
+                                          name="lotSize"
+                                          type="number"
+                                          step={sizeUnit === "CONTRACT" ? "1" : "0.01"}
+                                          placeholder={sizeUnit === "CONTRACT" ? "1" : "0.01"}
+                                          required
+                                          value={lotSize}
+                                          onChange={(e) => setLotSize(e.target.value ? parseFloat(e.target.value) : "")}
+                                          className="w-full bg-bg-void/50 border border-white/10 rounded-lg px-3 py-2.5 text-text-primary font-mono text-sm focus:border-accent-gold focus:ring-1 focus:ring-accent-gold transition-all outline-none"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold text-data-loss uppercase tracking-wider">Stop Loss</label>
                       <input

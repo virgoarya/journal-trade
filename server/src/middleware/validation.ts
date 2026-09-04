@@ -38,3 +38,6 @@ export const validateRequest = (schema: ValidationSchema) => {
     }
   };
 };
+
+// Backward-compatible alias. Prefer validateRequest (async parseAsync).
+export const validate = validateRequest;

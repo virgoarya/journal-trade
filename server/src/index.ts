@@ -18,7 +18,7 @@ import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
-import { setWebSocketServer, startWebSocketHeartbeat, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
+import { setWebSocketServer, startWebSocketHeartbeat, stopWebSocketHeartbeat, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
 import { initMt5NativeMcp } from "./mt5-streamer";
 import { silentLogger } from "./utils/silent-logger";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
@@ -125,7 +125,21 @@ wss.on("connection", async (socket, req) => {
     return;
   }
 
-  // Real authentication — no more bypass. Unauthenticated sockets get nothing.
+  // Internal service (Python MT5 bridge) auth — localhost only, no Better Auth cookie.
+  const internalToken = req.headers["x-internal-token"];
+  const remote = req.socket.remoteAddress;
+  const isLocalhost = remote === "::1" || remote === "127.0.0.1" || remote === "::ffff:127.0.0.1";
+  if (isLocalhost && internalToken === process.env.INTERNAL_WS_TOKEN) {
+    ws.isAuthenticated = true;
+    ws.userId = "mt5-python-bridge";
+    ws.channels.add("mt5");
+    ws.channels.add("all");
+    socket.on("close", syncMacroMarketStream);
+    syncMacroMarketStream();
+    return;
+  }
+
+  // Real user authentication — no more bypass. Unauthenticated sockets get nothing.
   const { userId, isAuthenticated } = await authenticateWebSocket(req);
   if (!isAuthenticated || !userId) {
     silentLogger.warn("[WS] Rejected unauthenticated WebSocket connection");
@@ -261,6 +275,10 @@ const gracefulShutdown = () => {
 
   // Kill MCP child processes
   mcpService.shutdown().catch((e: any) => console.error("MCP shutdown error:", e));
+
+  // Clear reconnect timer and WS heartbeat to avoid leaks / double-connect on restart
+  // Removed clearReconnectTimer();
+  stopWebSocketHeartbeat();
 
   // Close WebSocket Server
   wss.close(() => {

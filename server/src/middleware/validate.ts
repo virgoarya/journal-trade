@@ -2,48 +2,68 @@ import { Request, Response, NextFunction } from "express";
 import { ZodSchema, ZodError } from "zod";
 import { apiResponse } from "../utils/api-response";
 
-interface ValidationSchemas {
+export interface ValidateTarget {
   body?: ZodSchema;
   query?: ZodSchema;
   params?: ZodSchema;
 }
 
-export const validate = (schemas: ValidationSchemas) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+/**
+ * Generic Zod validation middleware wrapper.
+ * Can validate body, query, or params individually or simultaneously.
+ *
+ * Usage:
+ *   router.post("/endpoint", validate({ body: myBodySchema }), controllerHandler);
+ *   router.get("/endpoint", validate({ query: myQuerySchema }), controllerHandler);
+ */
+export function validate(target: ValidateTarget) {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (schemas.body) {
-        const parsed = schemas.body.parse(req.body);
-        // Overwrite req.body with parsed body to ensure transformed data reaches the routes
-        req.body = parsed;
-        (req as any).validatedBody = parsed;
+      if (target.body) {
+        req.body = (await target.body.parseAsync(req.body)) as any;
       }
-
-      if (schemas.query) {
-        const parsed = schemas.query.parse(req.query);
-        // Overwrite req.query with parsed query
-        req.query = parsed as any;
-        (req as any).validatedQuery = parsed;
+      if (target.query) {
+        req.query = (await target.query.parseAsync(req.query)) as any;
       }
-
-      if (schemas.params) {
-        const parsed = schemas.params.parse(req.params);
-        // Overwrite req.params with parsed params
-        req.params = parsed as any;
-        (req as any).validatedParams = parsed;
+      if (target.params) {
+        req.params = (await target.params.parseAsync(req.params)) as any;
       }
-
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.issues.map(issue => ({
-          path: issue.path.join("."),
+        const issues = error.issues.map((issue) => ({
+          field: issue.path.join("."),
           message: issue.message,
         }));
-
-        return apiResponse.badRequest(res, "Gagal validasi input", errors);
+        return apiResponse.badRequest(res, "Validasi input gagal", issues);
       }
-
-      next(error);
+      return apiResponse.error(
+        res,
+        "Gagal memproses validasi input",
+        "VALIDATION_PROCESS_ERROR",
+        500
+      );
     }
   };
-};
+}
+
+/**
+ * Convenience helper to validate body only.
+ */
+export function validateBody(schema: ZodSchema) {
+  return validate({ body: schema });
+}
+
+/**
+ * Convenience helper to validate query only.
+ */
+export function validateQuery(schema: ZodSchema) {
+  return validate({ query: schema });
+}
+
+/**
+ * Convenience helper to validate params only.
+ */
+export function validateParams(schema: ZodSchema) {
+  return validate({ params: schema });
+}

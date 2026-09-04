@@ -20,6 +20,8 @@ import {
   DEFAULT_METHODOLOGY_WEIGHTS,
 } from "./strategies/index";
 
+import { areCorrelated } from "./strategies/smt-correlation.config";
+
 import { type Candle } from "./strategies/market-structure.service";
 export { type Candle };
 
@@ -227,6 +229,74 @@ class AITradingEngine {
         if (res) results.push(res);
       }
     }
+    
+    // ── SMT Divergence Check (Cross-Pair Comparison) ────────────────
+    // After all symbols analyzed, check for SMT divergence between correlated pairs
+    for (let i = 0; i < results.length; i++) {
+      const resultA = results[i];
+      const ictSignalsA = resultA.methodologySignals.ict;
+      
+      // Find ICT signals with SMT_DIVERGENCE type
+      const smtSignalsA = ictSignalsA.filter(sig => sig.signalType === "SMT_DIVERGENCE");
+      
+      if (smtSignalsA.length > 0) {
+        // Check against other analyzed symbols
+        for (let j = 0; j < results.length; j++) {
+          if (i === j) continue;
+          
+          const resultB = results[j];
+          const correlation = areCorrelated(resultA.symbol, resultB.symbol);
+          
+          if (correlation.correlated) {
+            // Both symbols at key level with SMT data - potential divergence
+            const ictSignalsB = resultB.methodologySignals.ict;
+            const smtSignalsB = ictSignalsB.filter(sig => sig.signalType === "SMT_DIVERGENCE");
+            
+            if (smtSignalsB.length > 0) {
+              // Compare internal structures
+              const stateA = smtSignalsA[0]; // Use first SMT signal
+              const stateB = smtSignalsB[0];
+              
+              // Divergence detection:
+              // If both at key level but internal structures differ = SMT Divergence
+              const aStructure = stateA.reason.includes("BULLISH") ? "BULLISH" : 
+                                 stateA.reason.includes("BEARISH") ? "BEARISH" : "NEUTRAL";
+              const bStructure = stateB.reason.includes("BULLISH") ? "BULLISH" : 
+                                 stateB.reason.includes("BEARISH") ? "BEARISH" : "NEUTRAL";
+              
+              // For positively correlated: divergence = structures differ
+              // For negatively correlated: divergence = structures same
+              let divergenceDetected = false;
+              
+              if (correlation.correlation === "POSITIVE") {
+                divergenceDetected = (aStructure === "BULLISH" && bStructure === "BEARISH") ||
+                                    (aStructure === "BEARISH" && bStructure === "BULLISH");
+              } else {
+                // Negative correlation: both should move opposite
+                // Divergence = both same direction (shouldn't happen)
+                divergenceDetected = (aStructure === bStructure) && aStructure !== "NEUTRAL";
+              }
+              
+              if (divergenceDetected) {
+                // Boost confidence for both symbols' SMT signals
+                for (const sig of smtSignalsA) {
+                  sig.confidence = Math.min(95, sig.confidence + 15);
+                  sig.reason += ` | SMT Confirmed: ${resultA.symbol} vs ${resultB.symbol} (${correlation.correlation})`;
+                }
+                for (const sig of smtSignalsB) {
+                  sig.confidence = Math.min(95, sig.confidence + 15);
+                  sig.reason += ` | SMT Confirmed: ${resultB.symbol} vs ${resultA.symbol} (${correlation.correlation})`;
+                }
+                
+                // Log the divergence detection
+                silentLogger.info(`[AI-Engine] SMT Divergence detected: ${resultA.symbol} (${aStructure}) vs ${resultB.symbol} (${bStructure})`);
+              }
+            }
+          }
+        }
+      }
+    }
+    
     return results;
   }
 

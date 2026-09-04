@@ -79,7 +79,8 @@ Direction: ${trade.direction}
 Result: ${trade.result}
 Pnl: ${trade.actualPnl}
 Risk %: ${trade.riskPercent ? trade.riskPercent + '%' : 'N/A'}
-R: ${trade.rMultiple || "N/A"}
+Planned R: ${trade.plannedRMultiple ? trade.plannedRMultiple + 'R' : 'N/A'}
+Actual R: ${trade.rMultiple !== undefined && trade.rMultiple !== null ? trade.rMultiple + 'R' : 'N/A'}
 Emotional State (1-5): ${trade.emotionalState || "N/A"}
 ${playbook ? `Strategy: ${playbook.name}, Category: ${playbook.category}` : ""}
 

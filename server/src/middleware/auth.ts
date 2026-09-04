@@ -14,8 +14,8 @@ declare global {
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // DEV-ONLY: integration test bypass (never active in production)
-    if (process.env.NODE_ENV === "development" && req.headers["x-integration-test"] === "1") {
+    // Strictly restricted to automated unit/integration test runner (NODE_ENV=test)
+    if (process.env.NODE_ENV === "test" && req.headers["x-integration-test"] === "1") {
       req.user = {
         id: "test_user_integration",
         name: "Integration Test",

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { aiTradingService } from "@/services/ai-trading.service";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 
 export interface MT5Credentials {
@@ -69,6 +70,10 @@ export function useMT5Connection() {
           } else if ((res.data as any)?.reconnecting) {
             setIsConnected(true);
             setIsReconnecting(true);
+            // Auto open MT5 Desktop if reconnecting in dev mode
+            if (process.env.NODE_ENV === "development") {
+              apiClient.get("/api/v1/mt5/open-desktop").catch(() => {});
+            }
           }
         }
       } catch {
