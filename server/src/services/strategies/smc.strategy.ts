@@ -303,6 +303,9 @@ class SMCStrategy {
           m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BULLISH").pop();
         }
 
+        // Tambahkan validasi sweep di M5 OB
+        if (!m5OB?.hasSweep) continue;
+
         const entry = m5OB ? m5OB.top : h1OB.top;
         const sl = m5OB ? m5OB.bottom - avgRange * 0.5 : h1OB.bottom - avgRange * 0.5;
         const targetPDH = dailyBias.pdh > entry ? dailyBias.pdh : entry + (entry - sl) * 3;
@@ -329,6 +332,9 @@ class SMCStrategy {
         if (!m5OB && m5Str.orderBlocks.length > 0) {
           m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BEARISH").pop();
         }
+
+        // Tambahkan validasi sweep di M5 OB
+        if (!m5OB?.hasSweep) continue;
 
         const entry = m5OB ? m5OB.bottom : h1OB.bottom;
         const sl = m5OB ? m5OB.top + avgRange * 0.5 : h1OB.top + avgRange * 0.5;

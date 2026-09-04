@@ -465,12 +465,12 @@ class MSNRStrategy {
         isIndependent: true,
       },
       {
-        id: "msnr-cisd",
-        label: (status, isPassed) => cisd ? `CISD ${cisd.type} at ${cisd.price.toFixed(5)}` : `CISD not detected`,
-        timeframe: htfTfLabel,
-        condition: !!cisd,
-        details: (status) => cisd ? `CISD price ${cisd.price.toFixed(5)}` : "",
+        id: "msnr-ltf-confirm",
+        label: (status, isPassed) => `⑤ MSNR LTF Confirmation (${entryTfLabel})`,
+        timeframe: entryTfLabel,
+        condition: this.confirmMSNRLTF(fractal),
         isIndependent: true,
+        details: (status) => "Konfirmasi MSNR di LTF.",
       },
       {
         id: "msnr-entry",
@@ -518,6 +518,15 @@ class MSNRStrategy {
       mk("msnr-entry", `⑤ Entry Retest OB (Pending ${sig.direction} Limit @ ${sig.entry.toFixed(5)})`, hasOB && isEntryRetested, { isFailable: true, isIndependent: true, value: hasOB && isEntryRetested ? "Retested" : "Not Retested", details: `Pending ${sig.direction} Limit di ${sig.entry.toFixed(5)}.` }),
       mk("msnr-rr", `⑥ Risk-to-Reward 1:2 ${isRRValid ? "terpenuhi" : "belum"}`, isRRValid, { isFailable: true, details: isRRValid ? `R:R 1:${rrRatio.toFixed(2)} | SL ${sig.sl.toFixed(5)} | TP ${sig.tp.toFixed(5)}` : "RR < 1:2, signal di-drop engine." }),
     ];
+  }
+
+  /** Validate MSNR confirmation di LTF (M15). */
+  private confirmMSNRLTF(fractal?: import("./market-structure.service").FractalContext): boolean {
+    if (!fractal || !fractal.entryStr) return false;
+    const ltfStr = fractal.entryStr;
+    const swingHighs = ltfStr.swingHighs || [];
+    const swingLows = ltfStr.swingLows || [];
+    return swingHighs.length > 0 || swingLows.length > 0;
   }
 }
 

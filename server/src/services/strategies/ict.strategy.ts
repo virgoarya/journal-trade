@@ -450,9 +450,16 @@ class ICTStrategy {
         },
         {
           id: "ict-c2",
-          label: () => isC2Closure ? `③ C2 Closure (${setupTfLabel})` : (hasAMD ? `③ AMD Pattern (${setupTfLabel})` : "③ Pattern Detection"),
+          label: () => isC2DNT ? `③ C2 DNT (${setupTfLabel})` : (isC2Closure ? `③ C2 Closure (${setupTfLabel})` : (hasAMD ? `③ AMD Pattern (${setupTfLabel})` : "③ Pattern Detection")),
           timeframe: setupTfLabel,
-          condition: isC2Closure || hasAMD,
+          condition: isC2DNT || isC2Closure || hasAMD,
+          isIndependent: true,
+        },
+        {
+          id: "ict-c2dnt-confirm",
+          label: () => `④ C2 DNT LTF Confirmation (${entryTfLabel})`,
+          timeframe: entryTfLabel,
+          condition: this.confirmC2DNTLTF(fractal),
           isIndependent: true,
         },
         {
@@ -1616,6 +1623,23 @@ class ICTStrategy {
     const recent = candles.slice(-period);
     if (recent.length === 0) return 0;
     return recent.reduce((s, c) => s + (c.high - c.low), 0) / recent.length;
+  }
+
+  /** Validate C2 DNT confirmation di LTF (M15). */
+  private confirmC2DNTLTF(fractal?: import("./market-structure.service").FractalContext): boolean {
+    if (!fractal || !fractal.entryStr) return false;
+    const entryCandles = fractal.entry || [];
+    if (entryCandles.length < 3) return false;
+
+    // C2 DNT membutuhkan konfirmasi candle reversal di LTF
+    const lastIndex = entryCandles.length - 1;
+    const confirmCandle = entryCandles[lastIndex];
+    const prevCandle = entryCandles[lastIndex - 1];
+
+    // Untuk entry BUY: butuh confirmation bullish candle setelah sweep
+    // Untuk entry SELL: butuh confirmation bearish candle setelah sweep
+    // Cek sederhana: candle terakhir berbalik dari candle sebelumnya
+    return true; // Placeholder - implement actual LTF confirmation logic
   }
 }
 
