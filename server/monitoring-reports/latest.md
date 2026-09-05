@@ -1,122 +1,141 @@
 # System Monitoring Report
 
-**Generated:** 5/9/2026, 12.17.26 WIB
-**Status:** 🟡 WARNING
+**Generated:** 6/9/2026, 02.21.38 WIB
+**Status:** 🔴 CRITICAL
 
 ---
 
 ## 🤖 AI Insights (9Router)
 
-Here's a thinking process:
+**Analisis Kesehatan Sistem Trading AI**
 
-1.  **Analyze User Input:**
-   - User is an AI System Reliability Engineer (based on system prompt context, but user is asking for analysis)
-   - Input is a health check report for an AI trading system
-   - Status: WARNING
-   - 6 warnings listed, specifically: `system_resources` High memory usage
-   - Metrics provided: CPU 4 cores, Memory 88.5% used (5.93GB total), Uptime 54.7h, Platform win32
-   - User wants: 3-5 actionable insights in Bahasa Indonesia
-   - Focus: root cause and immediate action
-   - Format constraints from system prompt: terse, bullet points, state the thing/action/reason, no filler, no pleasantries, keep grammar but drop fillers. Code blocks/paths/commands/errors kept exact. Security warnings/irreversible actions multi-step sequences written normal. But this is just analysis/insights, not code. Still need to follow the style: short, technical, direct, in Bahasa Indonesia since user wrote in English but system says "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User wrote English, reply English." User wrote English, so reply in English? Wait, user's message is mixed: "Sistem AI Trading Health Check Report:" then English text, then "Berikan 3-5 actionable insights dalam Bahasa Indonesia untuk perbaikan sistem." The user explicitly asks for Bahasa Indonesia. The system rule says: "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User wrote English, reply English." But the user is asking in English but requesting the answer in Bahasa Indonesia. The instruction overrides: "User wrote English, reply English." But the user said "Berikan 3-5 actionable insights dalam Bahasa Indonesia". I need to decide. The system rule is strong: "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User wrote English, reply English." However, the user's prompt contains "Berikan 3-5 actionable insights dalam Bahasa Indonesia". This is a direct request. I think I should follow the explicit language request since it's part of the prompt, but the system rule might conflict. Let's re-read carefully: "Preserve the user's dominant language. User wrote Vietnamese, reply Vietnamese. User
+*   **Koneksi MT5 hilang: Akar Masalah Utama.** Pipeline trading berhenti otomatis karena `connected: 0`. Langkah segera: Verifikasi kredensial dan status layanan broker MT5. Restart layanan koneksi MT5 atau switching ke backup endpoint jika tersedia.
+*   **Memory Usage 86.6% (5.93GB Total): Ambang Kritis.** Penggunaan memori tinggi berpotensi memicu OOM kill atau degradasi performa. Langkah segera: Identifikasi proses konsumen memori tertinggi (`top`/`htop`). Pertimbangkan untuk menurunkan beban atau menambah alokasi memori.
+*   **Provider LLM Hibernasi Massal (5/6).** Hanya 1 provider aktif untuk konsensus LLM, meningkatkan risiko single point of failure. Langkah segera: Evaluasi dan aktifkan kembali minimal 1 provider cadangan untuk ketersediaan konsensus.
+*   **Data Issues: 2.** Ada inkonsistensi data
 
 ---
 
 ## Executive Summary
 
-6 warning(s), no critical issues
+2 critical issue(s), 17 warning(s)
+
+## 🔴 Critical Issues
+
+- [mt5] MT5 connection lost
+-   -> MT5 tidak terhubung - pipeline auto-paused
 
 ## 🟡 Warnings
 
+- [llm_consensus] Insufficient LLM providers (1/2)
+-   -> 💤 Gemini 3.5 Flash Lite (gemini): hibernasi
+-   -> 💤 Mistral Medium (mistral): hibernasi
+-   -> 💤 GPT 5.5 (gpt): hibernasi
+-   -> 💤 Qwen 3.6 27B (deepseek): hibernasi
+-   -> 💤 Nemotron 3 Ultra 550B (nemotron): hibernasi
+-   -> ✅ Claude Opus 4.6 (claude-opus): active
+-   -> Hanya 1 provider aktif - konsensus mungkin tidak akurat
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 88.5% used (5.93GB total)
--   -> Uptime: 54.7h
+-   -> Memory: 86.6% used (5.93GB total)
+-   -> Uptime: 5.4h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 88.5% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 86.6% (threshold: 85%)
+- [data_quality] Data quality issues detected (2)
+-   -> [BTCUSD] MT5 not connected - cannot query rates
+-   -> [XAUUSD] MT5 not connected - cannot query rates
+
+## Recommended Actions
+
+| # | Action | Component |
+|---|--------|-----------|
+| 1 | Restart MT5 MCP service | - |
+| 2 | Verify MT5 terminal is running on broker VPS | - |
+| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 1 |
+| connected | 0 |
 | circuitState | CLOSED |
-| balance | 98.04 |
-| equity | 98.04 |
-| marginLevel | 0 |
 | activePipelines | 1 |
-| 6a26146a9cad211ba0631027.running | 1 |
+| 6a26146a9cad211ba0631027.running | 0 |
 | 6a26146a9cad211ba0631027.paused | 0 |
 | 6a26146a9cad211ba0631027.error | 0 |
-| 6a26146a9cad211ba0631027.totalTrades | 23 |
-| 6a26146a9cad211ba0631027.pnl | -45.14 |
+| 6a26146a9cad211ba0631027.totalTrades | 0 |
+| 6a26146a9cad211ba0631027.pnl | 0 |
 | 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 3 |
-| hibernasiProviders | 3 |
+| activeProviders | 1 |
+| hibernasiProviders | 5 |
 | circuitOpenProviders | 0 |
-| provider.gemini | active |
+| provider.gemini | hibernasi |
 | provider.mistral | hibernasi |
 | provider.gpt | hibernasi |
-| provider.deepseek | active |
-| provider.nemotron | active |
-| provider.claude-opus | hibernasi |
-| availableForConsensus | 3 |
+| provider.deepseek | hibernasi |
+| provider.nemotron | hibernasi |
+| provider.claude-opus | active |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 88.5 |
-| uptimeHours | 54.7 |
+| memoryUsagePercent | 86.6 |
+| uptimeHours | 5.4 |
 | checkedPipelines | 1 |
-| dataIssues | 0 |
+| dataIssues | 2 |
 
 ## Detailed Health Checks
 
-### 🟢 MT5
+### 🔴 MT5
 
-- **Severity:** healthy
-- **Summary:** MT5 connected and operational
-- **Time:** 2026-09-05T05:17:25.590Z
+- **Severity:** critical
+- **Summary:** MT5 connection lost
+- **Time:** 2026-09-05T19:21:38.712Z
 
-- Balance: $98.04, Equity: $98.04
+- MT5 tidak terhubung - pipeline auto-paused
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
 - **Summary:** 1 pipeline(s) running
-- **Time:** 2026-09-05T05:17:25.704Z
+- **Time:** 2026-09-05T19:21:38.736Z
 
 - Found 1 active pipeline(s)
 
-### 🟢 LLM_CONSENSUS
+### 🟡 LLM_CONSENSUS
 
-- **Severity:** healthy
-- **Summary:** 3 provider(s) available for consensus
-- **Time:** 2026-09-05T05:17:25.589Z
+- **Severity:** warning
+- **Summary:** Insufficient LLM providers (1/2)
+- **Time:** 2026-09-05T19:21:38.712Z
 
-- ✅ Gemini 3.5 Flash Lite (gemini): active
+- 💤 Gemini 3.5 Flash Lite (gemini): hibernasi
 - 💤 Mistral Medium (mistral): hibernasi
 - 💤 GPT 5.5 (gpt): hibernasi
-- ✅ Qwen 3.6 27B (deepseek): active
-- ✅ Nemotron 3 Ultra 550B (nemotron): active
-- 💤 Claude Opus 4.6 (claude-opus): hibernasi
+- 💤 Qwen 3.6 27B (deepseek): hibernasi
+- 💤 Nemotron 3 Ultra 550B (nemotron): hibernasi
+- ✅ Claude Opus 4.6 (claude-opus): active
+- Hanya 1 provider aktif - konsensus mungkin tidak akurat
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-09-05T05:17:25.589Z
+- **Time:** 2026-09-05T19:21:38.712Z
 
 - CPU: 4 cores
-- Memory: 88.5% used (5.93GB total)
-- Uptime: 54.7h
+- Memory: 86.6% used (5.93GB total)
+- Uptime: 5.4h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 88.5% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 86.6% (threshold: 85%)
 
-### 🟢 DATA_QUALITY
+### 🟡 DATA_QUALITY
 
-- **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-09-05T05:17:26.204Z
+- **Severity:** warning
+- **Summary:** Data quality issues detected (2)
+- **Time:** 2026-09-05T19:21:38.736Z
+
+- [BTCUSD] MT5 not connected - cannot query rates
+- [XAUUSD] MT5 not connected - cannot query rates
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 5/9/2026, 13.17.31 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 6/9/2026, 03.21.56 WIB*
