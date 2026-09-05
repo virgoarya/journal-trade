@@ -378,14 +378,15 @@ class ICTStrategy {
   }
 
   private buildICTChecklist(
-      sig: ICTSignal,
-      killzone: KillzoneType,
-      fractal?: import("./market-structure.service").FractalContext
-    ): { items: ChecklistItem[], passed: boolean } {
-      const isBuy = sig.direction === "BUY";
-      const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
+        sig: ICTSignal,
+        killzone: KillzoneType,
+        fractal?: import("./market-structure.service").FractalContext
+      ): { items: ChecklistItem[], passed: boolean } {
+        const isBuy = sig.direction === "BUY";
+        const kzLabel = killzone !== "NONE" ? `${killzone} Killzone aktif` : "Outside Killzone (Session)";
 
-      const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+        const avgRange = fractal?.entry ? this.avgRange(fractal.entry, 5) : 0;
+        const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
       const setupTfLabel = fractal?.setupTimeframeStr || "H1";
       const htfTfLabel = fractal?.directionTimeframeStr || "H4";
       const entryTfLabel = fractal?.entryTimeframeStr || "M15";
@@ -423,7 +424,7 @@ class ICTStrategy {
       const bosValidation = htfStr ? validateStructuralShift(isBuy, htfStr, htfTfLabel, relHigh, relLow) : { id: "ctx-bos", label: "Unconfirmed", timeframe: htfTfLabel, condition: false, isFailable: true };
       const liquidityValidation = validateInducement(hasRecentSweepICT, sig.entry.toFixed(5), relLow, setupTfLabel, isBuy);
       const poiValidation = validatePOI(breachType, hasOB, hasFVGForPOI, "N/A", "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
-      const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel);
+      const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel, avgRange * 0.5);
 
       // Get new structural elements for ICT checklist
       const ifvg = fractal?.ifvgs?.find(i => i.type === (isBuy ? "BULLISH" : "BEARISH"));
@@ -521,7 +522,9 @@ class ICTStrategy {
       const hasFVG = sig.signalType.includes("FVG") || isC2Closure || isSMTDiv || isDCM;
       const hasSweep = sig.signalType.includes("SWEEP") || hasAMD || isC2DNT || isSMR;
       const hasIFVG = sig.signalType === "IFVG_RETEST";
-      const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+      const hasPattern = isC2Closure || isC2DNT || hasAMD || isDCM || isSMR;
+      const avgRange = fractal?.entry ? this.avgRange(fractal.entry, 5) : 0;
+      const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
       const setupTfLabel = fractal?.setupTimeframeStr || "H1";
       const htfTfLabel = fractal?.directionTimeframeStr || "H4";
       const entryTfLabel = fractal?.entryTimeframeStr || "M15";
@@ -538,14 +541,14 @@ class ICTStrategy {
         return { id, label, status, value: opts?.value, timeframe: opts?.timeframe, details: opts?.details };
       };
       return [
-        mk("ict-kz", `① Sesi & Waktu: ${kzLabel}`, killzone !== "NONE", { isIndependent: true, value: killzone !== "NONE" ? killzone : "None", details: "ICT setups prefer London/NY killzone windows.", timeframe: entryTfLabel }),
+        mk("ict-kz", `① Sesi & Waktu: ${kzLabel}`, killzone === "LONDON" || killzone === "NEW_YORK", { isIndependent: true, value: killzone !== "NONE" ? killzone : "None", details: "ICT setups prefer London/NY killzone windows. Asian = konsolidasi, bukan eksekusi.", timeframe: entryTfLabel }),
         mk("ict-bos", `② HTF Structure (${htfTfLabel}) : ${isHtfDirectional ? (isBuy ? "Bullish BOS" : "Bearish BOS") : "Unconfirmed"}`, !!isHtfDirectional, { isFailable: true, value: isHtfDirectional ? "Aligned" : "Misaligned", details: "Trend HTF harus searah signal.", timeframe: htfTfLabel }),
         mk("ict-sweep", (hasSweep || hasIFVG || isC2Closure || isC2DNT || isDCM || isSMR) ? `③ Liquidity Sweep / Inducement (${setupTfLabel})` : `③ Liquidity Sweep Menunggu @ ${targetSweep}`, hasSweep || hasIFVG || isC2Closure || isC2DNT || isDCM || isSMR, { isFailable: true, value: (hasSweep || hasIFVG || isC2Closure || isC2DNT || isDCM || isSMR) ? "Valid" : `Target @ ${targetSweep}`, details: "Swing liquidity disapu + inducement confirmation.", timeframe: setupTfLabel }),
-        mk("ict-c2", isC2DNT ? `④ C2 DNT Detected (${setupTfLabel})${sig.isFomoDetected ? ' [FOMO Confirmed]' : ''}` : (isC2Closure ? `④ C2 Closure Detected (${setupTfLabel})` : (hasAMD ? `④ 3-Candle AMD Pattern (${setupTfLabel})` : (isDCM ? `④ DCM MTF Expansion (${setupTfLabel})` : (isSMR ? `④ SMR Composite (${setupTfLabel})${sig.isSmrComplete ? ' [Full 4/4]' : ''}` : `④ Pattern Detection (${setupTfLabel})`)))), isC2Closure || isC2DNT || hasAMD || isDCM || isSMR, { isIndependent: true, value: isC2DNT ? "C2 DNT" : (isC2Closure ? "C2 Closure" : hasAMD ? "AMD" : isDCM ? "DCM" : isSMR ? "SMR" : "N/A"), details: isC2DNT ? "Reversal into expansion langsung di candle kedua." : (isC2Closure ? "Lanjutan tren: candle pelanjutan dengan continuation gap." : (isDCM ? "MTF expansion + retrace ke imbalance." : (isSMR ? "Composite reversal (TS+CISD+PDA+SMT)." : "Manipulation (sweep) + reverse close."))), timeframe: setupTfLabel }),
+        mk("ict-c2", isC2DNT ? `④ C2 DNT Detected (${setupTfLabel})${sig.isFomoDetected ? ' [FOMO Confirmed]' : ''}` : (isC2Closure ? `④ C2 Closure Detected (${setupTfLabel})` : (hasAMD ? `④ 3-Candle AMD Pattern (${setupTfLabel})` : (isDCM ? `④ DCM MTF Expansion (${setupTfLabel})` : (isSMR ? `④ SMR Composite (${setupTfLabel})${sig.isSmrComplete ? ' [Full 4/4]' : ''}` : `④ Pattern Detection (${setupTfLabel})`)))), hasPattern, { isIndependent: true, value: isC2DNT ? "C2 DNT" : (isC2Closure ? "C2 Closure" : hasAMD ? "AMD" : isDCM ? "DCM" : isSMR ? "SMR" : "N/A"), details: isC2DNT ? "Reversal into expansion langsung di candle kedua." : (isC2Closure ? "Lanjutan tren: candle pelanjutan dengan continuation gap." : (isDCM ? "MTF expansion + retrace ke imbalance." : (isSMR ? "Composite reversal (TS+CISD+PDA+SMT)." : "Menunggu pattern terbentuk."))), timeframe: setupTfLabel }),
         mk("ict-smt", isSMTDiv ? `⑤ SMT Divergence Confirmed (${setupTfLabel})` : `⑤ SMT Check (${setupTfLabel})`, isSMTDiv, { isIndependent: true, value: isSMTDiv ? "Divergence" : "N/A", details: "SMT Divergence antar pair terdeteksi di area POI.", timeframe: setupTfLabel }),
-        mk("ict-fvg-ote", isC2DNT ? `⑥ DNT Execution Level (${entryTfLabel})` : (isC2Closure ? `⑥ FVG dalam C2 Zone (${entryTfLabel})` : (hasOTE ? `⑥ OTE Zone (${entryTfLabel})` : (isDCM ? `⑥ DCM Retrace Imbalance (${entryTfLabel})` : `⑥ FVG (${entryTfLabel})`))), hasFVG || hasOTE || isC2DNT || isDCM, { isIndependent: true, value: hasFVG || hasOTE || isC2DNT || isDCM ? "Detected" : "N/A", details: "Fair Value Gap / OTE zone / DNT level tervalidasi.", timeframe: entryTfLabel }),
-        mk("ict-entry", `⑦ Entry Retest (${sig.entry.toFixed(5)})`, isHtfDirectional && (isEntryRetested || isC2DNT), { isIndependent: true, isFailable: true, value: isHtfDirectional && (isEntryRetested || isC2DNT) ? "Ready" : "Not Ready", details: isC2DNT ? `Market execution C2 DNT at ${sig.entry.toFixed(5)}.` : `Harga retest level entry ${sig.entry.toFixed(5)}.`, timeframe: entryTfLabel }),
-        mk("ict-rr", `⑧ Risk-to-Reward 1:2 ${isRRValid ? "terpenuhi" : "belum"}`, isRRValid, { isFailable: true, details: isRRValid ? `R:R 1:${rrRatio.toFixed(2)} | SL ${sig.sl.toFixed(5)} | TP ${sig.tp.toFixed(5)}` : "RR < 1:2, signal di-drop engine." }),
+        mk("ict-fvg-ote", isC2DNT ? `⑥ DNT Execution Level (${entryTfLabel})` : (isC2Closure ? `⑥ FVG dalam C2 Zone (${entryTfLabel})` : (hasOTE ? `⑥ OTE Zone (${entryTfLabel})` : (isDCM ? `⑥ DCM Retrace Imbalance (${entryTfLabel})` : `⑥ FVG (${entryTfLabel})`))), hasPattern && (hasFVG || hasOTE || isC2DNT || isDCM), { isIndependent: true, value: hasPattern && (hasFVG || hasOTE || isC2DNT || isDCM) ? "Detected" : "N/A", details: hasPattern ? "Fair Value Gap / OTE zone / DNT level tervalidasi." : "Menunggu pattern sebelum scan FVG/OTE.", timeframe: entryTfLabel }),
+        mk("ict-entry", `⑦ Entry Retest (${sig.entry.toFixed(5)})`, hasPattern && isHtfDirectional && (isEntryRetested || isC2DNT), { isIndependent: true, isFailable: true, value: hasPattern && isHtfDirectional && (isEntryRetested || isC2DNT) ? "Ready" : "Not Ready", details: isC2DNT ? `Market execution C2 DNT at ${sig.entry.toFixed(5)}.` : `Harga retest level entry ${sig.entry.toFixed(5)}.`, timeframe: entryTfLabel }),
+        mk("ict-rr", `⑧ Risk-to-Reward 1:2 ${isRRValid ? "terpenuhi" : "belum"}`, hasPattern && isRRValid, { isFailable: true, details: isRRValid ? `R:R 1:${rrRatio.toFixed(2)} | SL ${sig.sl.toFixed(5)} | TP ${sig.tp.toFixed(5)}` : "RR < 1:2, signal di-drop engine." }),
       ];
     }
 

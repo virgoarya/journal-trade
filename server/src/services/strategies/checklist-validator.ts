@@ -209,13 +209,13 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
 /**
  * Calculates Risk-to-Reward ratio dynamically.
  */
-export function calculateRR(entry: number, sl: number, tp: number): { rrRatio: number; isRRValid: boolean } {
+export function calculateRR(entry: number, sl: number, tp: number, minSlDist: number = 0): { rrRatio: number; isRRValid: boolean } {
   const slDist = Math.abs(entry - sl);
   const tpDist = Math.abs(tp - entry);
   const rrRatio = slDist > 0 ? tpDist / slDist : 0;
   return {
     rrRatio,
-    isRRValid: rrRatio >= 2.0,
+    isRRValid: rrRatio >= 2.0 && slDist >= minSlDist,
   };
 }
 
@@ -338,13 +338,14 @@ export function validateEntryAndRisk(
   slPrice: number,
   tpPrice: number,
   entryTfLabel: string,
+  minSlDist: number = 0,
 ): { entryOk: boolean; rrOk: boolean; rrRatio: number } {
   const entryOk = isEntryRetested;
 
   const slDist = Math.abs(entryPrice - slPrice);
   const tpDist = Math.abs(tpPrice - entryPrice);
   const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-  const rrOk = rrRatio >= 2.0;
+  const rrOk = rrRatio >= 2.0 && slDist >= minSlDist;
 
   return { entryOk, rrOk, rrRatio };
 }
