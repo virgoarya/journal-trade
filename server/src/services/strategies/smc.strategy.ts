@@ -306,7 +306,7 @@ class SMCStrategy {
         }
 
         // Tambahkan validasi sweep di M5 OB
-        if (!m5OB?.hasSweep) continue;
+        if (m5OB && !m5OB.hasSweep) continue;
 
         const entry = m5OB ? m5OB.top : h1OB.top;
         const sl = m5OB ? m5OB.bottom - avgRange * 0.5 : h1OB.bottom - avgRange * 0.5;
@@ -336,7 +336,7 @@ class SMCStrategy {
         }
 
         // Tambahkan validasi sweep di M5 OB
-        if (!m5OB?.hasSweep) continue;
+        if (m5OB && !m5OB.hasSweep) continue;
 
         const entry = m5OB ? m5OB.bottom : h1OB.bottom;
         const sl = m5OB ? m5OB.top + avgRange * 0.5 : h1OB.top + avgRange * 0.5;
