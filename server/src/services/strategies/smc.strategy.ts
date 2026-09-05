@@ -130,7 +130,8 @@ class SMCStrategy {
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
     const dailyBias = analyzeDaily3CandleBias(fractal.daily || fractal.direction);
 
-    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+    const avgRange = fractal?.entry ? this.avgCandleRange(fractal.entry, 5) : 0;
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
     const entryTfLabel = fractal.entryTimeframeStr || "M15";
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
@@ -239,7 +240,8 @@ class SMCStrategy {
     const isBuy = sig.direction === "BUY";
     const htfStr = fractal.directionStr || fractal.dailyStr;
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
-    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+    const avgRange = fractal?.entry ? this.avgCandleRange(fractal.entry, 5) : 0;
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
     const entryTfLabel = fractal.entryTimeframeStr || "M15";
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";

@@ -421,7 +421,7 @@ class ICTStrategy {
 
       // Validate key components using new helpers
       const ctxValidation = validateContext(isBuy, htfTrend, dailyBias);
-      const bosValidation = htfStr ? validateStructuralShift(isBuy, htfStr, htfTfLabel, relHigh, relLow) : { id: "ctx-bos", label: "Unconfirmed", timeframe: htfTfLabel, condition: false, isFailable: true };
+      const bosValidation = htfStr ? validateStructuralShift(isBuy, htfStr, htfTfLabel, relHigh, relLow) : { id: "ctx-bos", label: "Unconfirmed", timeframe: htfTfLabel, condition: false, isFailable: true, isIndependent: true };
       const liquidityValidation = validateInducement(hasRecentSweepICT, sig.entry.toFixed(5), relLow, setupTfLabel, isBuy);
       const poiValidation = validatePOI(breachType, hasOB, hasFVGForPOI, "N/A", "N/A", isBuy ? "BULLISH" : "BEARISH", relLow, relHigh, setupTfLabel, htfTfLabel);
       const entryRiskValidation = validateEntryAndRisk(isBuy, isEntryRetested, sig.entry, sig.sl, sig.tp, entryTfLabel, avgRange * 0.5);
@@ -448,6 +448,7 @@ class ICTStrategy {
           timeframe: htfTfLabel,
           condition: htfStr ? (isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR") : false,
           isFailable: true,
+          isIndependent: true,
         },
         {
           id: "ict-c2",
@@ -1628,21 +1629,37 @@ class ICTStrategy {
     return recent.reduce((s, c) => s + (c.high - c.low), 0) / recent.length;
   }
 
-  /** Validate C2 DNT confirmation di LTF (M15). */
+  /** Validate C2 DNT confirmation di LTF (M15).
+   *  C2 DNT = Reversal into Expansion: candle berbalik DAN expand dalam 1 candle.
+   *  LTF confirmation: harus ada CISD (Change in State of Delivery) atau MSS
+   *  yang menunjukkan shift dari bearish → bullish (atau sebaliknya) setelah sweep. */
   private confirmC2DNTLTF(fractal?: import("./market-structure.service").FractalContext): boolean {
     if (!fractal || !fractal.entryStr) return false;
     const entryCandles = fractal.entry || [];
-    if (entryCandles.length < 3) return false;
+    const entryStr = fractal.entryStr;
+    if (entryCandles.length < 5) return false;
 
-    // C2 DNT membutuhkan konfirmasi candle reversal di LTF
-    const lastIndex = entryCandles.length - 1;
-    const confirmCandle = entryCandles[lastIndex];
-    const prevCandle = entryCandles[lastIndex - 1];
+    // Check for recent swing structure shift (MSS) in LTF
+    const recentHighs = entryStr.swingHighs.slice(-5);
+    const recentLows = entryStr.swingLows.slice(-5);
+    if (recentHighs.length === 0 && recentLows.length === 0) return false;
 
-    // Untuk entry BUY: butuh confirmation bullish candle setelah sweep
-    // Untuk entry SELL: butuh confirmation bearish candle setelah sweep
-    // Cek sederhana: candle terakhir berbalik dari candle sebelumnya
-    return true; // Placeholder - implement actual LTF confirmation logic
+    const last = entryCandles[entryCandles.length - 1];
+    const prev = entryCandles[entryCandles.length - 2];
+
+    // Confirmation: last candle must show reversal (bullish close after bearish, or vice versa)
+    // AND close beyond a recent swing (structure shift)
+    const isBullishReversal = last.close > last.open && last.close > prev.high;
+    const isBearishReversal = last.close < last.open && last.close < prev.low;
+
+    if (!isBullishReversal && !isBearishReversal) return false;
+
+    // Further confirm: displacement candle (body >= 1.0 × ATR)
+    const atr = atrService.calculate(entryCandles);
+    const bodySize = Math.abs(last.close - last.open);
+    const hasDisplacement = atr > 0 ? bodySize >= atr : bodySize >= (last.high - last.low) * 0.5;
+
+    return hasDisplacement;
   }
 }
 

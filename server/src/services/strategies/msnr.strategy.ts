@@ -520,13 +520,45 @@ class MSNRStrategy {
     ];
   }
 
-  /** Validate MSNR confirmation di LTF (M15). */
+  /** Validate MSNR confirmation di LTF (M15).
+   *  MSNR = Turtle Soup (sweep) + MSS (Market Structure Shift) + displacement.
+   *  LTF confirmation: harus ada swing break dengan displacement candle
+   *  (body close ≥ min ATR) yang mengonfirmasi reversal setelah sweep. */
   private confirmMSNRLTF(fractal?: import("./market-structure.service").FractalContext): boolean {
     if (!fractal || !fractal.entryStr) return false;
+    const ltfCandles = fractal.entry || [];
     const ltfStr = fractal.entryStr;
+    if (ltfCandles.length < 5) return false;
+
     const swingHighs = ltfStr.swingHighs || [];
     const swingLows = ltfStr.swingLows || [];
-    return swingHighs.length > 0 || swingLows.length > 0;
+    if (swingHighs.length === 0 && swingLows.length === 0) return false;
+
+    const atr = atrService.calculate(ltfCandles);
+    const last = ltfCandles[ltfCandles.length - 1];
+
+    // Check for MSS: last candle breaks a recent swing with displacement
+    // BUY: bullish candle closes above recent swing high
+    const recentHighs = swingHighs.slice(-5);
+    for (const swing of recentHighs) {
+      if (last.close > swing.price && last.close > last.open) {
+        const bodySize = Math.abs(last.close - last.open);
+        const hasDisplacement = atr > 0 ? bodySize >= atr * 0.8 : bodySize >= (last.high - last.low) * 0.4;
+        if (hasDisplacement) return true;
+      }
+    }
+
+    // SELL: bearish candle closes below recent swing low
+    const recentLows = swingLows.slice(-5);
+    for (const swing of recentLows) {
+      if (last.close < swing.price && last.close < last.open) {
+        const bodySize = Math.abs(last.close - last.open);
+        const hasDisplacement = atr > 0 ? bodySize >= atr * 0.8 : bodySize >= (last.high - last.low) * 0.4;
+        if (hasDisplacement) return true;
+      }
+    }
+
+    return false;
   }
 }
 
