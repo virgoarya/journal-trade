@@ -29,6 +29,8 @@ export type MethodologyName = keyof MethodologyWeights;
 
 export type MethodologyDirection = "BUY" | "SELL" | "NEUTRAL";
 
+export enum CandleState { CLOSED = "CLOSED", FORMING = "FORMING" }
+
 export interface ChecklistItem {
   id: string;
   label: string;
@@ -83,6 +85,23 @@ export interface ConfluenceResult {
   checklistItems?: ChecklistItem[];
   /** Checklist from the primary (highest confidence) methodology only — used by NET tab */
   priorityChecklist?: ChecklistItem[];
+  spread?: number;
+  point?: number;
+  scores?: {
+    smc: number;
+    ict: number;
+    msnr: number;
+    total: number;
+    passed: boolean;
+  };
+  htfBias?: "BULLISH" | "BEARISH" | "SIDEWAYS";
+  m15Structure?: {
+    valid: boolean;
+    direction: "BULL" | "BEAR" | null;
+    candleState: CandleState;
+  };
+  validationSteps?: string[];
+  guardrailFlags?: string[];
 }
 
 // Each methodology's signal type
@@ -114,7 +133,9 @@ class ConfluenceEngine {
     weights: MethodologyWeights = DEFAULT_METHODOLOGY_WEIGHTS,
     activeMethodologies: MethodologyName[] = Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
     minConfidence: number = MIN_CONFIDENCE,
-    marketStructure?: { direction: "BULL" | "BEAR" | "SIDEWAYS", strength: number }
+    marketStructure?: { direction: "BULL" | "BEAR" | "SIDEWAYS", strength: number },
+    spread?: number,
+    point?: number
   ): ConfluenceResult {
     // ── 1. Collect & filter signals ─────────────────────────────────
     const allMethodologySignals: MethodologySignal[] = [];
@@ -201,6 +222,8 @@ class ConfluenceEngine {
         reason: "No methodology generated a valid signal above minimum confidence",
         checklistByMethodology,
         checklistItems: mergedChecklist,
+        spread,
+        point,
       };
     }
 
@@ -236,7 +259,6 @@ class ConfluenceEngine {
     const agreeCount = winningSignals.length;
     let boost = 0;
     if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
-    else if (agreeCount >= 3) boost = confluenceConfig.agree3Boost;  // 3 agree → +10
     else if (agreeCount >= 2) boost = confluenceConfig.agree2Boost;  // 2 agree → +5
 
     // Daily Direction Context Boost
@@ -281,6 +303,26 @@ class ConfluenceEngine {
       ? [...primary.checklistItems]
       : checklistByMethodology[primary?.methodology] || [];
 
+    // ── Build scores per methodology ──────────────────────────────────
+    const smcSig = allMethodologySignals.find(s => s.methodology === "smc");
+    const ictSig = allMethodologySignals.find(s => s.methodology === "ict");
+    const msnrSig = allMethodologySignals.find(s => s.methodology === "msnr");
+
+    const scores = {
+      smc: smcSig ? smcSig.confidence : 0,
+      ict: ictSig ? ictSig.confidence : 0,
+      msnr: msnrSig ? msnrSig.confidence : 0,
+      total: Math.round(baseScore),
+      passed: finalConfidence >= MIN_CONFIDENCE,
+    };
+
+    const validationSteps: string[] = [];
+    validationSteps.push(`HTF bias: ${marketStructure?.direction ?? "SIDEWAYS"} (${marketStructure?.strength ?? 0})`);
+    validationSteps.push(`M15 structure: ${agreeCount} methodologies agree`);
+    validationSteps.push(`M5 trigger: ${primary.methodology.toUpperCase()} confidence=${primary.confidence}%`);
+    validationSteps.push(`Confluence: score=${Math.round(baseScore)} boost=${boost} final=${Math.round(finalConfidence)} ${finalConfidence >= MIN_CONFIDENCE ? "PASS" : "FAIL"}`);
+    if (conflictDetected) validationSteps.push("CONFLICT penalty applied");
+
     return {
       finalSignal: {
         direction: winningDirection,
@@ -303,6 +345,17 @@ class ConfluenceEngine {
       priorityChecklist,
       conflictDetected,
       reason: `Confluence: ${winningDirection} with ${agreeCount} methodologies agreeing (score: ${Math.round(baseScore)} + ${boost} boost = ${Math.round(finalConfidence)})${conflictDetected ? " [CONFLICT PENALTY APPLIED]" : ""}`,
+      spread,
+      point,
+      scores,
+      htfBias: marketStructure?.direction === "BULL" ? "BULLISH" : marketStructure?.direction === "BEAR" ? "BEARISH" : "SIDEWAYS",
+      m15Structure: {
+        valid: agreeCount >= 2,
+        direction: winningDirection === "BUY" ? "BULL" : winningDirection === "SELL" ? "BEAR" : null,
+        candleState: CandleState.CLOSED,
+      },
+      validationSteps,
+      guardrailFlags: [],
     };
   }
 

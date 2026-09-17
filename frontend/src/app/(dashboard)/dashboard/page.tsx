@@ -18,6 +18,7 @@ import { Trophy, Target, TrendingUp, TrendingDown, Activity, Zap, Wallet, Shield
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
+  console.log("[DASHBOARD] Session debug:", { isPending, hasSession: !!session });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);

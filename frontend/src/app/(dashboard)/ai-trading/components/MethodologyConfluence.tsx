@@ -107,12 +107,23 @@ export function MethodologyConfluence({ confluence, marketStructure, symbol, isR
           <Brain className="w-4 h-4" />
           Methodology Confluence {symbol ? <span className="text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30">{symbol}</span> : ""}
         </h3>
-        {confluence.conflictDetected && (
-          <span className="text-[10px] text-yellow-400 flex items-center gap-1 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/30">
-            <AlertTriangle className="w-3 h-3" />
-            Conflict
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {confluence.spread !== undefined && (
+            <span className="text-[10px] text-accent-gold/90 font-mono bg-accent-gold/10 px-2 py-0.5 rounded border border-accent-gold/30 flex items-center gap-1 shadow-[0_0_8px_rgba(212,175,55,0.15)]">
+              <span className="text-gray-400">SPREAD:</span>
+              <span className="font-bold text-accent-gold">
+                {confluence.point ? (confluence.spread * confluence.point >= 0.0001 ? (confluence.spread / 10).toFixed(1) : confluence.spread.toFixed(1)) : confluence.spread}
+              </span>
+              <span className="text-[9px] text-gray-400">PIPS</span>
+            </span>
+          )}
+          {confluence.conflictDetected && (
+            <span className="text-[10px] text-yellow-400 flex items-center gap-1 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/30">
+              <AlertTriangle className="w-3 h-3" />
+              Conflict
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Market Structure Summary */}

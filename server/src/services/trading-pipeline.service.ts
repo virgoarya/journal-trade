@@ -12,6 +12,7 @@ import { UserSettings } from "../models/UserSettings";
 import { MT5Connection } from "../models/MT5Connection";
 import type { MethodologyWeights, MethodologyName } from "./strategies/index";
 import { DEFAULT_METHODOLOGY_WEIGHTS } from "./strategies/index";
+import { aiBacktestSkillService } from "./ai-backtest-skill.service";
 
 
 
@@ -25,6 +26,8 @@ export interface PipelineConfig {
   maxRiskPerTrade: number;
   /** % of account — resolved from applied/smart-risk settings, NOT hardcoded. */
   maxDailyRisk?: number;
+  spreadPips?: number;
+  slippagePips?: number;
   tradingHours?: {
     start: string; // "HH:mm"
     end: string;
@@ -135,6 +138,7 @@ interface ActivePipeline {
   running: boolean;
   circuitBreakerReason?: string;
   isBusy: boolean;
+  lastSyncDealTime?: number; // incremental deal sync timestamp
   cachedMetrics?: {
     totalTrades: number;
     winningTrades: number;
@@ -186,14 +190,14 @@ class TradingPipelineService {
 
   // ─── Cache ────────────────────────────────────────────────────────────
   private regimeCache = new Map<string, { regime: string; multipliers: Record<string, number>; timestamp: number }>();
-  private readonly REGIME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+  private readonly REGIME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   /** Temporary store for circuit breaker reasons after pipeline stops (max 60s) */
   private circuitBreakerCache = new Map<string, { reason: string; at: number }>();
 
   /** Cache for status responses to avoid spamming DB/MT5 on high frequency polling */
   private statusCache = new Map<string, { status: PipelineStatus; timestamp: number }>();
-  private readonly STATUS_CACHE_TTL_MS = 5_000; // 5 seconds TTL
+  private readonly STATUS_CACHE_TTL_MS = 10_000; // 10 seconds TTL
 
   private getCachedRegime(key: string): { regime: string; multipliers: Record<string, number> } | null {
     const cached = this.regimeCache.get(key);
@@ -625,14 +629,18 @@ busySymbols: new Set<string>(),
         if (accountId) query.accountId = accountId;
 
         const closedTrades = await AITradeLog.find(query).lean();
-
-        let tTrades = closedTrades.length;
+        // Filter to AI‑generated trades only (comment starts with "AI-" or contains "ai-")
+        const aiClosedTrades = closedTrades.filter((t: any) => {
+          const cmt = (t.comment || '').toString().toLowerCase();
+          return cmt.startsWith('ai-') || cmt.includes('ai-');
+        });
+        let tTrades = aiClosedTrades.length;
         let aPnL = 0;
         let dPnL = 0;
         let wTrades = 0;
         let lTrades = 0;
 
-        for (const t of closedTrades) {
+        for (const t of aiClosedTrades) {
           const pnl = (t as any).pnl || 0;
           aPnL += pnl;
           if (t.executionTime && new Date(t.executionTime) >= today) {
@@ -1031,7 +1039,6 @@ busySymbols: new Set<string>(),
         }
 
         try {
-          const { aiBacktestSkillService } = require("./ai-backtest-skill.service");
           currentSymbol = analysis.symbol;
           const skill = await aiBacktestSkillService.getSkill(userId);
           if (skill) {
@@ -1121,13 +1128,60 @@ busySymbols: new Set<string>(),
           continue;
         }
 
+        // ── STAGE 1.5: REAL-TIME GUARDRAILS (Spread, Session, Daily DD) ─────────
+        try {
+          const guardrailFlags: string[] = [];
+          const symInfo = await mt5McpService.getSymbolInfo(analysis.symbol);
+          if (symInfo && symInfo.spread && symInfo.point) {
+            const spreadVal = symInfo.spread * symInfo.point;
+            const atrVal = signal.indicators?.atr ?? 0;
+            // Max spread check: if spread > 15% ATR, skip
+            if (atrVal > 0 && spreadVal > atrVal * 0.15) {
+              guardrailFlags.push(`SPREAD ${spreadVal.toFixed(5)} > ATR×0.15 (${(atrVal * 0.15).toFixed(5)})`);
+            }
+          }
+
+          // Session filter: prefer London/NY (UTC 07-16)
+          const now = new Date();
+          const utcHour = now.getUTCHours();
+          if (utcHour < 7 || utcHour > 16) {
+            guardrailFlags.push(`OFF-SESSION (UTC ${utcHour}:00) — London/NY preferred`);
+          }
+
+          // Max open AI positions
+          const positions = await mt5McpService.getPositions();
+          const aiPositions = positions.filter(p => p.comment?.startsWith("AI-"));
+          if (aiPositions.length >= pipeline.config.maxOpenPositions) {
+            guardrailFlags.push(`MAX POSITIONS ${aiPositions.length}/${pipeline.config.maxOpenPositions}`);
+          }
+
+          // Attach guardrail flags to confluence result for frontend display
+          if (guardrailFlags.length > 0) {
+            analysis.confluence.guardrailFlags = guardrailFlags;
+          }
+
+          if (guardrailFlags.some(f => f.startsWith("SPREAD") || f.startsWith("MAX POS"))) {
+            this.addLog(userId, "WARN",
+              `[1/4] [${analysis.symbol}] BLOCKED (GUARDRAIL): ${guardrailFlags.join(" | ")}`,
+              { guardrailFlags }
+            );
+            continue;
+          }
+        } catch (guardErr: any) {
+          silentLogger.warn(`[PIPELINE] Guardrail check error: ${guardErr.message}`);
+        }
+
         this.addLog(userId, "SIGNAL",
           `[1/4] [${analysis.symbol}] SIGNAL FORMED: ${finalSig.direction} | ` +
           `Score: ${finalSig.confluenceScore}% → ${finalSig.confidence}% | ` +
           `Primary: ${finalSig.primaryMethodology.toUpperCase()} | ` +
           `Agreeing: ${finalSig.totalAgreeing}/${pipeline.config.activeMethodologies?.length ?? 0} | ` +
           `R:R 1:${rrInitial.toFixed(2)}`,
-          analysis.confluence.methodologyBreakdown,
+          {
+            ...analysis.confluence.methodologyBreakdown,
+            validationSteps: analysis.confluence.validationSteps,
+            guardrailFlags: analysis.confluence.guardrailFlags,
+          },
         );
 
         // ── STAGE 2: POSITION GATE & LLM CONSENSUS VOTING ─────────────────────
@@ -1144,6 +1198,10 @@ busySymbols: new Set<string>(),
         if (symbolPosCount > 0 || symbolPendingCount > 0) {
           this.addLog(userId, "CANDIDATE",
             `[1/4] [${analysis.symbol}] SKIP LLM: Already ${symbolPosCount} position + ${symbolPendingCount} pending on ${signal.symbol}. Waiting for close.`,
+            {
+              validationSteps: analysis.confluence.validationSteps,
+              guardrailFlags: analysis.confluence.guardrailFlags,
+            }
           );
           continue;
         }
@@ -1183,7 +1241,7 @@ busySymbols: new Set<string>(),
             let llmMethV: string | undefined;
             let llmMethWR: number | undefined;
             let llmMethPnL: number | undefined;
-            try { const { aiBacktestSkillService } = require("./ai-backtest-skill.service"); const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
+            try { const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
 
             const activeMeth = pipeline.config.activeMethodologies || ["smc", "ict", "msnr"];
             const checklist = analysis.confluence.finalSignal?.checklistItems || [];
@@ -1212,7 +1270,6 @@ busySymbols: new Set<string>(),
                 methodologyPnL: llmMethPnL,
                 pattern: analysis.confluence.finalSignal?.pattern,
                 checklist: methChecklist,
-
               },
               pipeline.config.llmConsensus,
             );
@@ -1387,10 +1444,19 @@ busySymbols: new Set<string>(),
         this.addLog(userId, "INFO", `[3/4] [${signal.symbol}] ORDER VALIDATED: Action: ${finalAction} | Vol: ${volume} | Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp}`);
 
         // ── STAGE 3 EXECUTION: ORDER EXECUTION ───────────────────────────────
-        // Offset SL by broker spread: BUY SL in BID, SELL SL in ASK
-        // SL di-offset supaya spread tidak eat SL distance saat entry
+        // Use real-time spread from MT5 broker for entry-price adjustment
+        // (slippage remains a static buffer from config, default 0.5 pips)
         const sym = symbolInfo;
-        const spreadPrice = sym ? sym.spread * sym.point : 0;
+        const realSpreadPrice = sym ? sym.spread * sym.point : 0;
+        const slippagePips = (pipeline.config as any)?.slippagePips ?? 0.5;
+        const slippageValue = slippagePips * 0.0001;
+        const simulatedEntry = signal.direction === "BUY"
+          ? signal.entry + realSpreadPrice + slippageValue
+          : signal.entry - realSpreadPrice - slippageValue;
+        signal.entry = simulatedEntry;
+
+        // Offset SL by broker spread (tetap seperti sebelumnya)
+        const spreadPrice = realSpreadPrice;
         const adjustedSl = spreadPrice > 0 && signal.sl > 0
           ? (finalAction.startsWith("BUY") ? signal.sl - spreadPrice : signal.sl + spreadPrice)
           : signal.sl;
@@ -1764,10 +1830,15 @@ busySymbols: new Set<string>(),
       const activeTickets = new Set(activePositions.map(p => p.ticket));
       silentLogger.debug(`[PIPELINE] syncClosedPositions: ${openLogs.length} open logs, ${activePositions.length} active positions`);
 
-      // 2b. Fetch deal history (fast path: 7 days) — needed to bridge pending
+      // 2b. Fetch deal history (incremental path: use lastDealTime or fallback to 24 hours) — needed to bridge pending
       // order tickets (log.mt5Ticket) to position tickets (deals carry both).
-      const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-      const deals = await mt5McpService.getHistory(sevenDaysAgo);
+      const oneDayAgo = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+      const syncFrom = pipeline?.lastSyncDealTime ? Math.max(pipeline.lastSyncDealTime - 3600, oneDayAgo) : oneDayAgo;
+      const deals = await mt5McpService.getHistory(syncFrom);
+      if (pipeline && deals.length > 0) {
+        const latestDealTime = Math.max(...deals.map(d => d.time || 0));
+        if (latestDealTime > 0) pipeline.lastSyncDealTime = latestDealTime;
+      }
       silentLogger.debug(`[SYNC-DEBUG] Deals fetched: ${deals.length}, sample: ${JSON.stringify(deals.slice(0, 3))}`);
       const orderToPosition = new Map<string, string>();
       for (const d of deals) {
@@ -1916,7 +1987,7 @@ busySymbols: new Set<string>(),
     switch (timeframe) {
       case "M1": return 15_000;    // 15s — check 4× per M1 candle
       case "M5": return 60_000;    // 60s — check ~5× per M5 candle
-      case "M15": return 120_000;  // 120s — check ~7× per M15 candle
+      case "M15": return 30_000;  // 30s — check ~3× per M15 candle
       case "M30": return 180_000;  // 180s — check ~10× per M30 candle
       case "H1": return 300_000;   // 300s — check ~12× per H1 candle
       case "H4": return 600_000;   // 600s — check ~24× per H4 candle

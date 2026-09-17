@@ -22,6 +22,10 @@ export const createAuth = () => {
       "http://localhost:3000",
       "http://127.0.0.1:5000",
       "http://127.0.0.1:3000",
+      // Allow Cloudflare quick tunnels and custom tunnels
+      // Allow local LAN IPs (e.g. for accessing from phone on same WiFi)
+      "http://192.168.100.3:3000", // Explicitly allow gadget IP
+      "http://192.168.100.3:5000",
     ],
     socialProviders: {
       discord: {
@@ -30,9 +34,17 @@ export const createAuth = () => {
         scope: ["identify", "email", "guilds.members.read", "guilds"],
       },
     },
+    oauthConfig: {
+      // Reverting to default state strategy (cookies)
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 1, // refresh every 1 hour
+      cookie: {
+        sameSite: "lax", 
+        secure: false,
+        httpOnly: true,
+      },
     },
     advanced: {
       // Disable CSRF for localhost (desktop app) — safe because it runs locally

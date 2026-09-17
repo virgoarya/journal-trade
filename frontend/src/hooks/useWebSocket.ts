@@ -41,7 +41,7 @@ export function useWebSocket(
   const getWebSocketUrl = useCallback(() => {
     if (typeof window === "undefined") return "";
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${protocol}://${window.location.host}`;
+    return process.env.NEXT_PUBLIC_WS_URL || `${protocol}://${window.location.host}`;
   }, []);
 
   const connect = useCallback(() => {

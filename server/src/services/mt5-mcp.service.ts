@@ -440,12 +440,29 @@ class MT5MCPService {
     return (result as any).symbols ?? [];
   }
 
-  /** Get symbol details. */
+  private symbolInfoCache: Map<string, { info: MT5Symbol; timestamp: number }> = new Map();
+  private readonly SYMBOL_INFO_TTL = 30_000; // 30s cache for static symbol specs
+  private readonly TICK_TTL = 5_000; // 5s cache for real-time tick data
+
+  /** Clear cached symbol info */
+  public clearSymbolCache(): void {
+    this.symbolInfoCache.clear();
+  }
+
+  /** Get symbol details with in-memory 30s cache for static specs. */
   async getSymbolInfo(symbol: string): Promise<MT5Symbol | null> {
+    const cached = this.symbolInfoCache.get(symbol);
+    if (cached && Date.now() - cached.timestamp < this.SYMBOL_INFO_TTL) {
+      return cached.info;
+    }
+
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_info", { symbol });
+      if (result) {
+        this.symbolInfoCache.set(symbol, { info: result as MT5Symbol, timestamp: Date.now() });
+      }
       return result as MT5Symbol;
-    }, 3, 500);
+    }, 1, 300); // 1 retry for read-only
   }
 
   /** Fetch OHLCV rates. */
@@ -453,7 +470,7 @@ class MT5MCPService {
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_copy_rates", { symbol, timeframe, count });
       return (result as any).rates ?? [];
-    }, 3, 500);
+    }, 2, 500); // 2 retries (reduced from 3)
   }
 
   /** Fetch OHLCV rates within a date range (for backtesting). */
@@ -471,12 +488,12 @@ class MT5MCPService {
     }, 2, 1000); // 2 retries, 1s delay
   }
 
-  /** Get current tick. */
+  /** Get current tick with fail-fast retry (real-time, not cached). */
   async getTick(symbol: string): Promise<MT5Tick | null> {
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_tick", { symbol });
       return result as MT5Tick;
-    }, 3, 500);
+    }, 1, 200); // 1 retry, fail-fast
   }
 
   /** Get all open positions with retry on transient failure. */

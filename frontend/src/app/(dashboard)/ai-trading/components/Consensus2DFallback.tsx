@@ -1,6 +1,7 @@
 "use client";
 
 import { BrainCircuit } from "lucide-react";
+import { useState, useEffect } from "react";
 import { MODEL_COLORS, type LlmModelNode } from "../types";
 import type { LLMConsensusResult } from "../types";
 
@@ -24,6 +25,15 @@ interface Consensus2DFallbackProps {
 // ─── 2D Fallback Component ─────────────────────────────────────
 
 export function Consensus2DFallback({ currentProviders, votes, showIndicators = true }: Consensus2DFallbackProps) {
+  const [isTabVisible, setIsTabVisible] = useState(true);
+  useEffect(() => {
+    const handleVisibility = () => setIsTabVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+  const spinClass = isTabVisible ? "animate-[spin_4s_linear_infinite]" : "";
+  const spinSlowClass = isTabVisible ? "animate-[spin_40s_linear_infinite]" : "";
+
   return (
     <div className="flex items-center justify-center h-full p-8 relative">
       {/* CSS Animation for data flow */}
@@ -44,13 +54,13 @@ export function Consensus2DFallback({ currentProviders, votes, showIndicators = 
         {/* Background Radar Scanning Sweep (Perfectly centered behind core) */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full pointer-events-none opacity-40 flex items-center justify-center z-0">
           {/* Radar Sweep Animation */}
-          <div className="absolute inset-0 rounded-full animate-[spin_4s_linear_infinite]"
+          <div className={`absolute inset-0 rounded-full ${spinClass}`}
                style={{ background: "conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(212,175,55,0.4) 360deg)" }}>
           </div>
 
           {/* Concentric Grid Lines */}
           <div className="absolute inset-0 border border-accent-gold/30 rounded-full shadow-[inset_0_0_20px_rgba(212,175,55,0.1)]"></div>
-          <div className="absolute inset-0 m-auto w-[360px] h-[360px] border border-accent-gold/20 border-dashed animate-[spin_40s_linear_infinite] rounded-full"></div>
+          <div className={`absolute inset-0 m-auto w-[360px] h-[360px] border border-accent-gold/20 border-dashed ${spinSlowClass} rounded-full`}></div>
           <div className="absolute inset-0 m-auto w-[280px] h-[280px] border border-accent-gold/10 rounded-full"></div>
 
           {/* Crosshairs */}

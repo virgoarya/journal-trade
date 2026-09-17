@@ -156,7 +156,8 @@ function enqueuePython(args: string[], options: any = {}): Promise<{ stdout: str
 /** Spawn python, stream stdout, resolve with { stdout } string (caller parses JSON). */
 function spawnPython(args: string[], options: any): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn("python", args, {
+    const pythonExecutable = process.env.PYTHON_PATH || "C:\\Python314\\python.exe";
+    const child = spawn(pythonExecutable, args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
 

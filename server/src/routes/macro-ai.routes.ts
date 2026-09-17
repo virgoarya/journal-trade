@@ -3,6 +3,7 @@ import { macroAiService } from "../services/macro-ai.service";
 import { requireAuth } from "../middleware/auth";
 import { silentLogger } from "../utils/silent-logger";
 import { marketDataService } from "../services/market-data.service";
+import { userMemoryService } from "../services/user-memory.service";
 
 const router = Router();
 
@@ -45,7 +46,30 @@ router.post("/chat", requireAuth, async (req, res) => {
       return;
     }
 
+    const userId = req.user?.id;
+    const userName = req.user?.name || req.user?.email || "";
     res.setHeader("Content-Type", "application/json");
+
+    // Auto-save user name if not yet stored
+    if (userId && userName) {
+      userMemoryService.ensureName(userId, userName).catch(() => {});
+    }
+
+    // If user explicitly specifies a preferred name in message
+    if (userId && messages && messages.length > 0) {
+      const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+      if (lastUserMsg) {
+        const text = String(lastUserMsg.content);
+        const nameMatch = text.match(/(?:panggil\s+aku|nama(?:ku)?\s+(?:adalah\s+)?|call\s+me)\s+([A-Za-z0-9\s]+?)(?:[,.]|\s+dan|\s+ya|\s*$)/i);
+        if (nameMatch && nameMatch[1]) {
+          const detectedName = nameMatch[1].trim();
+          if (detectedName && detectedName.length < 30) {
+            await userMemoryService.updateName(userId, detectedName);
+            await userMemoryService.learnFact(userId, `User minta dipanggil '${detectedName}'`);
+          }
+        }
+      }
+    }
 
     const groqResponse = await macroAiService.chatStream(
       messages,
@@ -53,6 +77,7 @@ router.post("/chat", requireAuth, async (req, res) => {
       assets,
       liquidityStatus,
       personaId,
+      userId,
       context,
     );
 

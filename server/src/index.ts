@@ -7,6 +7,7 @@ import { env } from "./config/env";
 import { corsMiddleware } from "./config/cors";
 import { MARKET_SYMBOLS } from "./config/market.config";
 import apiRoutes from "./routes";
+import agentConsensusRoutes from "./routes/agent-consensus.routes";
 import { errorHandler } from "./middleware/error-handler";
 import { connectDB } from "./db/mongoose";
 import { createAuth } from "./auth";
@@ -17,11 +18,13 @@ import { marketDataService } from "./services/market-data.service";
 import { quantService } from "./services/quant.service";
 import { mcpService } from "./services/mcp.service";
 import { mt5McpService } from "./services/mt5-mcp.service";
+import { registerInternalTools } from "./services/internal-tools.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, startWebSocketHeartbeat, stopWebSocketHeartbeat, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
 import { initMt5NativeMcp } from "./mt5-streamer";
 import { silentLogger } from "./utils/silent-logger";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
+import { proactiveAlertService } from "./services/proactive-alert.service";
 import { apiLimiter, authLimiter } from "./middleware/rate-limit";
 import { initAutoBacktestCron } from "./cron/auto-backtest.cron";
 import path from "node:path";
@@ -108,7 +111,8 @@ app.use((req, res, next) => {
 });
 
 // Apply general API rate limiter to all API routes
-app.use("/api", apiLimiter, apiRoutes);
+app.use("/api", apiRoutes);
+app.use("/api", agentConsensusRoutes); // Register agent‑consensus endpoint
 app.use(errorHandler);
 
 const server = createServer(app);
@@ -119,7 +123,8 @@ wss.on("connection", async (socket, req) => {
 
   // Reject connections from unexpected origins (Electron loads file:// or localhost)
   const origin = req.headers.origin;
-  if (origin && !/^(https?:\/\/localhost(:\d+)?|file:\/\/.*|null)$/i.test(origin)) {
+  const allowedOriginRegex = /^(https?:\/\/(localhost(:\d+)?|127\.0\.0\.1(:\d+)?|[\w-]+\.trycloudflare\.com)|file:\/\/.*|null)$/i;
+  if (origin && !allowedOriginRegex.test(origin)) {
     silentLogger.warn(`[WS] Rejected connection from origin: ${origin}`);
     socket.close(4003, "origin not allowed");
     return;
@@ -228,6 +233,12 @@ try {
     }
     console.log("[STARTUP] Additional MCP servers registration complete.");
 
+    // Register internal native tools (market-data, geo-risk, etc.)
+    console.log("[STARTUP] Registering internal native tools...");
+    registerInternalTools()
+      .then(() => console.log("[STARTUP] Internal native tools registered."))
+      .catch(e => console.error("[STARTUP] Internal tools registration failed:", e));
+
     // Auto-reconnect MT5 with saved credentials if any and restore active pipelines
     console.log("[STARTUP] Attempting MT5 auto-reconnect and pipeline recovery...");
     mt5McpService.tryAutoReconnect()
@@ -252,6 +263,16 @@ try {
     console.log("[STARTUP] Starting System Monitor Agent...");
     await systemMonitorAgent.start();
     console.log("[STARTUP] System Monitor Agent started.");
+
+    // Proactive Agent Analysis — Hawk/Dove/Contrarian auto-analyze berkala
+    console.log("[STARTUP] Starting Proactive Agent Alert Service...");
+    proactiveAlertService.setWsBroadcast((event: string, data: any) => {
+      // Broadcast ke semua ws-client yang subscribe channel "agent"
+      const { broadcast } = require("./ws-server");
+      if (broadcast) broadcast(event, data);
+    });
+    proactiveAlertService.start();
+    console.log("[STARTUP] Proactive Agent Alert Service started.");
 
   } catch (e) {
     console.error("❌ [STARTUP] Critical backend initialization failed:", e);
@@ -300,6 +321,16 @@ const gracefulShutdown = () => {
 
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
+
+// ─── CRASH PROTECTION: Prevent background service errors from killing the process ───
+process.on("uncaughtException", (err) => {
+  silentLogger.error(`[FATAL] Uncaught Exception (non-fatal handler): ${err.message}`, err);
+  // Do NOT exit — keep serving requests
+});
+process.on("unhandledRejection", (reason: any) => {
+  silentLogger.error(`[FATAL] Unhandled Rejection (non-fatal handler): ${reason?.message || reason}`);
+  // Do NOT exit — keep serving requests
+});
 
 // Trigger tsx watch restart
 

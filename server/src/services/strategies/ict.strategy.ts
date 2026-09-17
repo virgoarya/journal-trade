@@ -168,8 +168,8 @@ class ICTStrategy {
           const entry = (c2Result.fvgTop + c2Result.fvgBottom) / 2;
           // SL at the manipulation wick (C2 low for bullish, C2 high for bearish)
           const sl = c2Result.direction === "BUY"
-            ? c2Result.fvgBottom - avgRange * 0.5
-            : c2Result.fvgTop + avgRange * 0.5;
+              ? c2Result.fvgBottom - avgRange * 1.5
+              : c2Result.fvgTop + avgRange * 1.5;
           const h1Str = fractal.setupStr || fractal.directionStr;
           const htfStr = fractal.dailyStr;
           const tp = marketStructureService.findDynamicTarget(c2Result.direction, entry, sl, h1Str, 2.0, htfStr, fractal.daily);
@@ -727,7 +727,7 @@ class ICTStrategy {
         return {
           direction: "BUY",
           entry: ote705, // 70.5% mean threshold — the precise ICT entry
-          sl: latestLow.price - avgRange * 0.25, // beyond the swept wick (100%)
+          sl: latestLow.price - avgRange * 1.0, // beyond the swept wick (100%)
           tp: latestHigh.price, // TP at displacement high
           orderType: "PENDING_LIMIT",
           limitPrice: ote705, // Limit order at sweet spot
@@ -756,7 +756,7 @@ class ICTStrategy {
         return {
           direction: "SELL",
           entry: ote705, // 70.5% mean threshold — the precise ICT entry
-          sl: latestHigh.price + avgRange * 0.25, // beyond the swept wick (100%)
+          sl: latestHigh.price + avgRange * 1.0, // beyond the swept wick (100%)
           tp: latestLow.price, // TP at displacement low
           orderType: "PENDING_LIMIT",
           limitPrice: ote705, // Limit order at sweet spot
@@ -1003,7 +1003,7 @@ class ICTStrategy {
           return {
             direction: "BUY",
             entry: ote705, // 70.5% mean threshold — the precise ICT entry
-            sl: latestLow.price - avgRange * 0.25, // beyond the sweep/impulse wick
+            sl: latestLow.price - avgRange * 1.0, // beyond the sweep/impulse wick
             tp,
             orderType: "PENDING_LIMIT",
             limitPrice: ote705,
@@ -1036,7 +1036,7 @@ class ICTStrategy {
           return {
             direction: "SELL",
             entry: ote705, // 70.5% mean threshold — the precise ICT entry
-            sl: latestHigh.price + avgRange * 0.25, // beyond the sweep/impulse wick
+            sl: latestHigh.price + avgRange * 1.0, // beyond the sweep/impulse wick
             tp,
             orderType: "PENDING_LIMIT",
             limitPrice: ote705,

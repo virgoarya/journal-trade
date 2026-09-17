@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hunter Trades — Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: { void: '#020202', surface: '#111116', elevated: '#151520', input: '#0A0A10' },
+                        accent: { gold: '#D4AF37', goldDim: '#8B7722', goldGlow: 'rgba(212,175,55,0.15)' },
+                        neon: { green: '#39FF88', orange: '#FF6A00', red: '#FF3864' },
+                        text: { primary: '#E5E7EB', secondary: '#CBD5E1', muted: '#94A3B8' }
+                    },
+                    fontFamily: { mono: ['JetBrains Mono', 'monospace'], sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        body { background-color: #020202; font-family: 'Inter', sans-serif; }
+
+        /* terminal scanline effect */
+        .scanlines::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.03) 2px,
+                rgba(0,0,0,0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* glow on focus */
+        .input-glow:focus {
+            box-shadow: 0 0 0 1px #D4AF37, 0 0 20px rgba(212,175,55,0.08);
+        }
+
+        /* cursor blink */
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+        .cursor-blink::after {
+            content: '_';
+            color: #D4AF37;
+            animation: blink 1s step-end infinite;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* button press */
+        .btn-press:active { transform: scale(0.97); }
+
+        /* fade-in */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.5s ease-out forwards; }
+        .fade-up-delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .fade-up-delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .fade-up-delay-3 { animation-delay: 0.3s; opacity: 0; }
+    </style>
+</head>
+<body class="scanlines min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm">
+        <!-- Logo / Brand -->
+        <div class="text-center mb-8 fade-up">
+            <div class="inline-flex items-center gap-2 mb-3">
+                <svg class="w-8 h-8 text-accent-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+                <span class="font-mono text-xl font-bold text-accent-gold tracking-wider">HUNTER TRADES</span>
+            </div>
+            <p class="text-text-muted text-sm font-mono">JOURNAL TERMINAL v1.0</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-bg-surface border border-white/5 rounded-lg p-6 fade-up fade-up-delay-1">
+            <!-- Terminal header bar -->
+            <div class="flex items-center gap-2 mb-6 pb-3 border-b border-white/5">
+                <div class="w-2.5 h-2.5 rounded-full bg-neon-red/60"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-neon-orange/60"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-neon-green/60"></div>
+                <span class="ml-2 text-xs font-mono text-text-muted cursor-blink">auth</span>
+            </div>
+
+            <form id="loginForm" autocomplete="off">
+                <!-- Username -->
+                <div class="mb-4">
+                    <label class="block text-xs font-mono text-text-muted mb-1.5 tracking-wider uppercase">Username</label>
+                    <input
+                        id="username"
+                        type="text"
+                        placeholder="operator_id"
+                        class="input-glow w-full bg-bg-input border border-white/10 rounded px-3 py-2.5 text-sm text-text-primary font-mono placeholder:text-text-muted/40 outline-none transition-all duration-200"
+                        autocomplete="off"
+                    />
+                </div>
+
+                <!-- Password -->
+                <div class="mb-4">
+                    <label class="block text-xs font-mono text-text-muted mb-1.5 tracking-wider uppercase">Password</label>
+                    <div class="relative">
+                        <input
+                            id="password"
+                            type="password"
+                            placeholder="••••••••"
+                            class="input-glow w-full bg-bg-input border border-white/10 rounded px-3 py-2.5 text-sm text-text-primary font-mono placeholder:text-text-muted/40 outline-none transition-all duration-200 pr-10"
+                            autocomplete="off"
+                        />
+                        <button
+                            type="button"
+                            onclick="togglePassword()"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-accent-gold transition-colors"
+                        >
+                            <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
+                                <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                                <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                                <line x1="1" y1="1" x2="23" y2="23"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error message (hidden by default) -->
+                <div id="errorMsg" class="hidden mb-4 px-3 py-2 rounded bg-neon-red/10 border border-neon-red/20 text-neon-red text-xs font-mono">
+                    ACCESS DENIED — Invalid credentials
+                </div>
+
+                <!-- Submit -->
+                <button
+                    type="submit"
+                    id="submitBtn"
+                    class="btn-press w-full bg-accent-gold/10 hover:bg-accent-gold/20 border border-accent-gold/30 hover:border-accent-gold/50 text-accent-gold font-mono font-bold text-sm py-2.5 rounded transition-all duration-200 tracking-wider uppercase"
+                >
+                    Initialize Session
+                </button>
+            </form>
+
+            <!-- Divider -->
+            <div class="flex items-center gap-3 my-5">
+                <div class="flex-1 h-px bg-white/5"></div>
+                <span class="text-xs font-mono text-text-muted/50">OR</span>
+                <div class="flex-1 h-px bg-white/5"></div>
+            </div>
+
+            <!-- Biometric hint -->
+            <button
+                type="button"
+                class="btn-press w-full flex items-center justify-center gap-2 bg-bg-elevated hover:bg-white/5 border border-white/5 rounded py-2.5 transition-all duration-200 text-text-secondary text-sm font-mono"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path d="M12 11c0-1.1-.9-2-2-2s-2 .9-2 2 2 4 2 4"/>
+                    <path d="M14 13c0 2.21-1.79 4-4 4"/>
+                    <circle cx="12" cy="15" r="1"/>
+                    <path d="M7.5 7.5C8.5 6 10.15 5 12 5c3.31 0 6 2.69 6 6 0 2.5-1.5 4.5-3.5 5.5"/>
+                    <path d="M15.5 9.5c.5.5.5 1.5.5 2.5 0 1.5-.5 2.5-1.5 3.5"/>
+                </svg>
+                Biometric Auth
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-6 fade-up fade-up-delay-3">
+            <p class="text-xs font-mono text-text-muted/40">
+                <span class="text-neon-green/50">&#9679;</span> SYSTEM ONLINE
+                <span class="mx-2 text-white/10">|</span>
+                ENCRYPTED
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Password visibility toggle
+        function togglePassword() {
+            const pwd = document.getElementById('password');
+            const icon = document.getElementById('eyeIcon');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22"/>';
+            } else {
+                pwd.type = 'password';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
+            }
+        }
+
+        // Mock login handler
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const err = document.getElementById('errorMsg');
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            // Reset
+            err.classList.add('hidden');
+            btn.textContent = 'AUTHENTICATING...';
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            // Simulate auth delay
+            setTimeout(() => {
+                if (username === 'admin' && password === 'hunter') {
+                    btn.textContent = 'SESSION ESTABLISHED';
+                    btn.classList.remove('opacity-50', 'bg-accent-gold/10', 'text-accent-gold');
+                    btn.classList.add('bg-neon-green/20', 'text-neon-green', 'border-neon-green/30');
+
+                    setTimeout(() => {
+                        // redirect to dashboard mock
+                        document.querySelector('.max-w-sm').innerHTML = `
+                            <div class="text-center fade-up">
+                                <div class="inline-flex items-center gap-2 mb-4">
+                                    <div class="w-3 h-3 rounded-full bg-neon-green animate-pulse"></div>
+                                    <span class="font-mono text-neon-green text-sm">CONNECTED</span>
+                                </div>
+                                <h2 class="font-mono text-accent-gold text-lg mb-2">Welcome, ${username}</h2>
+                                <p class="text-text-muted text-sm font-mono mb-6">Session initialized. Redirecting to journal...</p>
+                                <div class="text-xs font-mono text-text-muted/40">
+                                    <span class="text-neon-green/50">&#9679;</span> Terminal ready
+                                </div>
+                            </div>
+                        `;
+                    }, 800);
+                } else {
+                    btn.textContent = 'Initialize Session';
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    err.classList.remove('hidden');
+                    // shake effect
+                    err.classList.add('shake');
+                    setTimeout(() => err.classList.remove('shake'), 500);
+                }
+            }, 1200);
+        });
+
+        // Shake animation
+        const style = document.createElement('style');
+        style.textContent = '@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}.shake{animation:shake .4s ease}';
+        document.head.appendChild(style);
+
+        // Focus first input on load
+        setTimeout(() => document.getElementById('username').focus(), 600);
+    </script>
+</body>
+</html>

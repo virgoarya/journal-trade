@@ -26,6 +26,13 @@ export function useRegimeAnalysis() {
         });
 
         const contentType = response.headers.get("content-type");
+        if (!response.ok) {
+          const text = await response.text();
+          console.warn("[RegimeAnalysis] HTTP Error:", response.status, text.substring(0, 200));
+          setReasoning(`Error API: Server error ${response.status} (${params.regime})`);
+          setIsAnalyzing(false);
+          return;
+        }
         let data: any = null;
         if (contentType?.includes("application/json")) {
           data = await response.json();
@@ -58,6 +65,7 @@ export function useRegimeAnalysis() {
     async (params: {
       nodesData: Record<string, unknown>;
       context: Record<string, unknown>;
+      regime?: string; // Optional regime parameter
     }) => {
       setIsAnalyzing(true);
       setReasoning(null);
@@ -70,6 +78,13 @@ export function useRegimeAnalysis() {
         });
 
         const contentType = response.headers.get("content-type");
+        if (!response.ok) {
+          const text = await response.text();
+          console.warn("[RegimeAnalysis] HTTP Error:", response.status, text.substring(0, 200));
+          setReasoning(`Error API: Server error ${response.status} (${params.regime})`);
+          setIsAnalyzing(false);
+          return;
+        }
         let data: any = null;
         if (contentType?.includes("application/json")) {
           data = await response.json();

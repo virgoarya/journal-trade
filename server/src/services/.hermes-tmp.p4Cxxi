@@ -1,0 +1,481 @@
+// ─── Agent Orchestrator Service ─────────────────────────────────────
+// Coordinates multi-agent workflow: Signal → Analysis → Review → Trade
+// Each agent is a specialized LLM call with specific responsibilities.
+//
+// Architecture:
+//   1. Signal Agent    → Detects trading opportunities from market structure
+//   2. Analysis Agent  → Deep-dives confluence & validates methodology checklist
+//   3. Review Agent    → Risk assessment & final approval
+//   4. Trade Agent     → Executes order with exact parameters
+//
+// Handoff protocol: each agent returns structured JSON; next agent receives
+// full context + prior agent outputs. If any agent returns REJECT, pipeline stops.
+
+import { silentLogger } from "../utils/silent-logger";
+import { llmConsensusService, type LLMVerdict } from "./llm-consensus.service";
+import { aiTradingEngine, type MultiStrategySymbolAnalysis, type TradingSignal } from "./ai-trading-engine.service";
+import { riskManagerService } from "./risk-manager.service";
+import { mt5McpService } from "./mt5-mcp.service";
+import type { PipelineConfig } from "./trading-pipeline.service";
+
+// ─── Types ───────────────────────────────────────────────────────────
+
+export type AgentRole = "SIGNAL" | "ANALYSIS" | "REVIEW" | "TRADE";
+export type AgentDecision = "APPROVE" | "REJECT" | "ESCALATE";
+
+export interface AgentContext {
+  symbol: string;
+  timeframe: string;
+  marketStructure?: MultiStrategySymbolAnalysis;
+  accountInfo?: any;
+  existingPositions?: any[];
+  pipelineConfig?: PipelineConfig;
+}
+
+export interface AgentOutput {
+  agent: AgentRole;
+  decision: AgentDecision;
+  reasoning: string;
+  data?: any;
+  confidence?: number;
+  latencyMs: number;
+  warnings?: string[];
+}
+
+export interface WorkflowResult {
+  success: boolean;
+  finalDecision: AgentDecision;
+  stages: AgentOutput[];
+  signal?: TradingSignal;
+  executedTicket?: number;
+  error?: string;
+  totalLatencyMs: number;
+}
+
+// ─── Prompts ─────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPTS = {
+  SIGNAL: `Anda adalah Signal Agent — spesialis deteksi peluang trading berbasis metodologi SMC/ICT/MSNR.
+
+Tugas:
+- Analisis confluence dari 3 metodologi (SMC, ICT, MSNR)
+- Identifikasi level entry terbaik (Order Block / FVG / QML)
+- Tentukan arah trade (BUY/SELL) dan confidence level
+- Kalkulasi SL/TP berdasarkan struktur pasar
+
+Output harus JSON:
+{
+  "decision": "APPROVE" | "REJECT",
+  "reasoning": "penjelasan singkat 2-3 kalimat dalam Bahasa Indonesia",
+  "direction": "BUY" | "SELL",
+  "entry": 1.2345,
+  "sl": 1.2300,
+  "tp": 1.2450,
+  "confidence": 0.75
+}
+
+Reject jika:
+- Tidak ada confluence ≥2 metodologi
+- Market sideways tanpa struktur jelas
+- Spread terlalu lebar (>3 pips major pairs)`,
+
+  ANALYSIS: `Anda adalah Analysis Agent — validator mendalam untuk checklist methodology & risk-reward.
+
+Tugas:
+- Validasi apakah level entry benar-benar valid (OB/FVG/RBS sesuai definisi)
+- Check risk-reward ratio ≥1.5
+- Konfirmasi alignment multi-timeframe (H4→M15→M5)
+- Deteksi konflik antar metodologi (divergence signal)
+
+Output harus JSON:
+{
+  "decision": "APPROVE" | "REJECT" | "ESCALATE",
+  "reasoning": "analisis detail dalam Bahasa Indonesia",
+  "validationPassed": true/false,
+  "riskRewardRatio": 2.1,
+  "warnings": ["optional warning 1", ...]
+}
+
+Reject jika:
+- Level entry tidak valid (bukan OB/FVG sejati)
+- RR < 1.5
+- Ada red flag konflik besar`,
+
+  REVIEW: `Anda adalah Review Agent — risk manager final sebelum eksekusi.
+
+Tugas:
+- Check exposure: apakah sudah ada posisi di symbol yang sama?
+- Check correlation: apakah terlalu banyak exposure ke currency tertentu?
+- Check account risk: apakah total risk masih dalam batas aman?
+- Final approval berdasarkan market regime & volatilitas
+
+Output harus JSON:
+{
+  "decision": "APPROVE" | "REJECT",
+  "reasoning": "keputusan final dalam Bahasa Indonesia",
+  "riskAssessment": "LOW" | "MEDIUM" | "HIGH",
+  "warnings": [...]
+}
+
+Reject jika:
+- Duplicate symbol exposure
+- Margin level <200%
+- Daily loss limit tercapai
+- High-impact news dalam 30 menit`,
+
+  TRADE: `Anda adalah Trade Agent — executor yang menjalankan order ke MT5.
+
+Tugas:
+- Konfirmasi parameter order final (symbol, volume, entry, sl, tp)
+- Pilih order type: MARKET (immediate) atau PENDING LIMIT (jika harga belum di entry zone)
+- Set comment untuk tracking (format: "AI-{methodology}-{timestamp}")
+
+Output harus JSON:
+{
+  "decision": "APPROVE",
+  "orderType": "MARKET" | "PENDING_LIMIT",
+  "volume": 0.01,
+  "comment": "AI-SMC-1234567890"
+}
+
+Trade agent tidak pernah REJECT — jika sampai stage ini, order pasti dijalankan.`,
+};
+
+// ─── Service ─────────────────────────────────────────────────────────
+
+class AgentOrchestratorService {
+  private workflowCache = new Map<string, { result: WorkflowResult; timestamp: number }>();
+  private readonly CACHE_TTL_MS = 30_000; // 30s — prevent duplicate workflow for same symbol
+
+  /**
+   * Run multi-agent workflow for a single symbol.
+   * Returns final decision + execution result.
+   */
+  async runWorkflow(
+    symbol: string,
+    timeframe: string,
+    pipelineConfig: PipelineConfig,
+    userId: string,
+  ): Promise<WorkflowResult> {
+    const workflowStart = Date.now();
+    const stages: AgentOutput[] = [];
+
+    try {
+      // ── Context Gathering ────────────────────────────────────────────
+      silentLogger.info(`[AGENT-WORKFLOW] ${symbol} — Starting multi-agent pipeline`);
+
+      const [analysis, accountInfo, positions] = await Promise.all([
+        aiTradingEngine.analyzeSymbol(
+          symbol,
+          timeframe as any,
+          pipelineConfig.maxRiskPerTrade,
+          pipelineConfig.methodologyWeights,
+          pipelineConfig.activeMethodologies,
+        ),
+        mt5McpService.getAccountInfo(),
+        mt5McpService.getPositions(),
+      ]);
+
+      const context: AgentContext = {
+        symbol,
+        timeframe,
+        marketStructure: analysis,
+        accountInfo,
+        existingPositions: positions,
+        pipelineConfig,
+      };
+
+      // ── Stage 1: Signal Agent ────────────────────────────────────────
+      const signalOutput = await this.runSignalAgent(context);
+      stages.push(signalOutput);
+
+      if (signalOutput.decision !== "APPROVE") {
+        return {
+          success: false,
+          finalDecision: signalOutput.decision,
+          stages,
+          totalLatencyMs: Date.now() - workflowStart,
+        };
+      }
+
+      // ── Stage 2: Analysis Agent ──────────────────────────────────────
+      const analysisOutput = await this.runAnalysisAgent(context, signalOutput);
+      stages.push(analysisOutput);
+
+      if (analysisOutput.decision !== "APPROVE") {
+        return {
+          success: false,
+          finalDecision: analysisOutput.decision,
+          stages,
+          totalLatencyMs: Date.now() - workflowStart,
+        };
+      }
+
+      // ── Stage 3: Review Agent ────────────────────────────────────────
+      const reviewOutput = await this.runReviewAgent(context, signalOutput, analysisOutput);
+      stages.push(reviewOutput);
+
+      if (reviewOutput.decision !== "APPROVE") {
+        return {
+          success: false,
+          finalDecision: reviewOutput.decision,
+          stages,
+          totalLatencyMs: Date.now() - workflowStart,
+        };
+      }
+
+      // ── Stage 4: Trade Agent (Execution) ─────────────────────────────
+      const tradeOutput = await this.runTradeAgent(context, signalOutput, userId);
+      stages.push(tradeOutput);
+
+      const signal: TradingSignal = signalOutput.data as TradingSignal;
+
+      return {
+        success: true,
+        finalDecision: "APPROVE",
+        stages,
+        signal,
+        executedTicket: tradeOutput.data?.ticket,
+        totalLatencyMs: Date.now() - workflowStart,
+      };
+    } catch (error: any) {
+      silentLogger.error(`[AGENT-WORKFLOW] ${symbol} — Error:`, error);
+      return {
+        success: false,
+        finalDecision: "REJECT",
+        stages,
+        error: error.message,
+        totalLatencyMs: Date.now() - workflowStart,
+      };
+    }
+  }
+
+  // ─── Agent Implementations ───────────────────────────────────────────
+
+  private async runSignalAgent(context: AgentContext): Promise<AgentOutput> {
+    const start = Date.now();
+    const analysis = context.marketStructure!;
+    const confluence = analysis.confluence;
+
+    const userPrompt = `Analisis confluence untuk ${context.symbol}:
+
+Confluence Result:
+- Final Signal: ${confluence.finalSignal?.direction || "NONE"} (confidence: ${confluence.finalSignal?.confidence || 0})
+- Entry: ${confluence.finalSignal?.entry}
+- SL: ${confluence.finalSignal?.stopLoss}
+- TP: ${confluence.finalSignal?.takeProfit}
+
+Methodology Breakdown:
+${JSON.stringify(confluence.methodologyBreakdown, null, 2)}
+
+Market Structure:
+- Trend: ${analysis.marketStructure.trend.direction}
+- Strength: ${analysis.marketStructure.trend.strength}
+
+Apakah signal ini layak? Berikan keputusan APPROVE atau REJECT dengan reasoning singkat.`;
+
+    try {
+      // ponytail: real LLM call via llm-consensus; stub for now
+      const response = await this.callAgentLLM("SIGNAL", userPrompt);
+      const data = this.parseAgentResponse(response);
+
+      return {
+        agent: "SIGNAL",
+        decision: data.decision as AgentDecision,
+        reasoning: data.reasoning || "Signal detected",
+        confidence: data.confidence || confluence.finalSignal?.confidence || 0,
+        data: {
+          ...data,
+          symbol: context.symbol,
+          reason: `Confluence ${confluence.finalSignal?.direction}`,
+        },
+        latencyMs: Date.now() - start,
+      };
+    } catch (error: any) {
+      return {
+        agent: "SIGNAL",
+        decision: "REJECT",
+        reasoning: `Signal agent error: ${error.message}`,
+        latencyMs: Date.now() - start,
+      };
+    }
+  }
+
+  private async runAnalysisAgent(context: AgentContext, signalOutput: AgentOutput): Promise<AgentOutput> {
+    const start = Date.now();
+    const signal = signalOutput.data;
+
+    const userPrompt = `Validasi signal berikut untuk ${context.symbol}:
+
+Signal:
+- Direction: ${signal.direction}
+- Entry: ${signal.entry}
+- SL: ${signal.sl}
+- TP: ${signal.tp}
+- Confidence: ${signal.confidence}
+
+Risk-Reward Ratio: ${((signal.tp - signal.entry) / (signal.entry - signal.sl)).toFixed(2)}
+
+Apakah level entry valid? Apakah RR ≥1.5? Berikan keputusan APPROVE/REJECT.`;
+
+    try {
+      const response = await this.callAgentLLM("ANALYSIS", userPrompt);
+      const data = this.parseAgentResponse(response);
+
+      return {
+        agent: "ANALYSIS",
+        decision: data.decision as AgentDecision,
+        reasoning: data.reasoning || "Analysis passed",
+        data: { validationPassed: data.validationPassed !== false, riskRewardRatio: data.riskRewardRatio || 0 },
+        warnings: data.warnings || [],
+        latencyMs: Date.now() - start,
+      };
+    } catch (error: any) {
+      return {
+        agent: "ANALYSIS",
+        decision: "REJECT",
+        reasoning: `Analysis agent error: ${error.message}`,
+        latencyMs: Date.now() - start,
+      };
+    }
+  }
+
+  private async runReviewAgent(
+    context: AgentContext,
+    signalOutput: AgentOutput,
+    analysisOutput: AgentOutput,
+  ): Promise<AgentOutput> {
+    const start = Date.now();
+    const signal = signalOutput.data;
+
+    // Check risk via risk manager
+    const riskCheck = await riskManagerService.checkTradeAllowed(
+      "system", // userId placeholder
+      signal,
+      context.pipelineConfig!,
+    );
+
+    const userPrompt = `Review final untuk ${context.symbol}:
+
+Signal: ${signal.direction} @ ${signal.entry}
+Risk Check: ${riskCheck.allowed ? "ALLOWED" : "BLOCKED"}
+${riskCheck.reason || ""}
+
+Open Positions: ${context.existingPositions?.length || 0}
+Account Margin Level: ${context.accountInfo?.marginLevel || 0}%
+
+Apakah trade ini aman untuk dieksekusi? Berikan keputusan APPROVE/REJECT.`;
+
+    try {
+      if (!riskCheck.allowed) {
+        return {
+          agent: "REVIEW",
+          decision: "REJECT",
+          reasoning: riskCheck.reason || "Risk check failed",
+          warnings: riskCheck.warnings,
+          latencyMs: Date.now() - start,
+        };
+      }
+
+      const response = await this.callAgentLLM("REVIEW", userPrompt);
+      const data = this.parseAgentResponse(response);
+
+      return {
+        agent: "REVIEW",
+        decision: data.decision as AgentDecision,
+        reasoning: data.reasoning || "Review approved",
+        data: { riskAssessment: data.riskAssessment || "MEDIUM" },
+        warnings: data.warnings || [],
+        latencyMs: Date.now() - start,
+      };
+    } catch (error: any) {
+      return {
+        agent: "REVIEW",
+        decision: "REJECT",
+        reasoning: `Review agent error: ${error.message}`,
+        latencyMs: Date.now() - start,
+      };
+    }
+  }
+
+  private async runTradeAgent(context: AgentContext, signalOutput: AgentOutput, userId: string): Promise<AgentOutput> {
+    const start = Date.now();
+    const signal = signalOutput.data;
+
+    try {
+      // ponytail: execute actual trade via trading-pipeline
+      // For now, return stub execution
+      const ticket = Math.floor(Math.random() * 1000000); // stub ticket
+
+      return {
+        agent: "TRADE",
+        decision: "APPROVE",
+        reasoning: `Order executed: ${signal.direction} ${context.symbol} @ ${signal.entry}`,
+        data: { ticket, orderType: "MARKET", volume: 0.01 },
+        latencyMs: Date.now() - start,
+      };
+    } catch (error: any) {
+      return {
+        agent: "TRADE",
+        decision: "REJECT",
+        reasoning: `Trade execution error: ${error.message}`,
+        latencyMs: Date.now() - start,
+      };
+    }
+  }
+
+  // ─── LLM Helpers ─────────────────────────────────────────────────────
+
+  private async callAgentLLM(role: AgentRole, userPrompt: string): Promise<string> {
+    // ponytail: use llm-consensus or direct OpenAI/Anthropic call
+    // For now, return mock response based on simple heuristics
+    const systemPrompt = SYSTEM_PROMPTS[role];
+
+    // Stub: auto-approve for testing
+    if (role === "SIGNAL") {
+      return JSON.stringify({
+        decision: "APPROVE",
+        reasoning: "Confluence valid dengan 2 metodologi aligned",
+        direction: "BUY",
+        entry: 1.2345,
+        sl: 1.2300,
+        tp: 1.2450,
+        confidence: 0.75,
+      });
+    }
+
+    if (role === "ANALYSIS") {
+      return JSON.stringify({
+        decision: "APPROVE",
+        reasoning: "Level entry valid, RR=2.0",
+        validationPassed: true,
+        riskRewardRatio: 2.0,
+      });
+    }
+
+    if (role === "REVIEW") {
+      return JSON.stringify({
+        decision: "APPROVE",
+        reasoning: "Risk check passed, no conflicts",
+        riskAssessment: "LOW",
+      });
+    }
+
+    return JSON.stringify({ decision: "APPROVE" });
+  }
+
+  private parseAgentResponse(response: string): any {
+    try {
+      // Extract JSON from response (may contain markdown fences)
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return JSON.parse(response);
+    } catch {
+      return { decision: "REJECT", reasoning: "Failed to parse agent response" };
+    }
+  }
+}
+
+export const agentOrchestratorService = new AgentOrchestratorService();

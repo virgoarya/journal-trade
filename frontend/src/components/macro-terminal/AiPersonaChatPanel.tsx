@@ -389,7 +389,7 @@ export function AiPersonaChatPanel() {
               {msg.role === "assistant" ? (
                 <>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
+                    {msg.content ? msg.content.replace(/```[a-z]*\s*$/g, "").replace(/`+\s*$/g, "").trim() : ""}
                   </ReactMarkdown>
                   {msg.toolsUsed && msg.toolsUsed.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1 border-t border-border-subtle pt-2">

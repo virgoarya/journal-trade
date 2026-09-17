@@ -26,8 +26,8 @@ let wsRef: WebSocket | null = null;
 let attempt = 0;
 
 function getWsUrl(): string {
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${window.location.hostname}:5000`;
+  if (typeof window === "undefined") return "";
+  return process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:5000";
 }
 
 function broadcastToSubscribers(message: any) {

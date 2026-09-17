@@ -61,8 +61,8 @@ export interface MultiStrategySymbolAnalysis {
 class AITradingEngine {
   private candleCache = new Map<string, { rates: MT5Rate[]; timestamp: number }>();
   private symbolCache = new Map<string, { analysis: MultiStrategySymbolAnalysis; timestamp: number }>();
-  private readonly SYMBOL_CACHE_TTL_MS = 60 * 1000; // 1 minute cache for symbol analysis
-  private readonly CACHE_TTL_MS = 5000;
+  private readonly CACHE_TTL_MS = 1000; // 1s candle cache for ultra-fresh price action
+  private readonly SYMBOL_CACHE_TTL_MS = 5000; // 5s symbol cache (faster reaction)
 
   private async getCachedRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
     const key = `${symbol}_${timeframe}_${count}`;
@@ -126,7 +126,10 @@ class AITradingEngine {
 
     const dailyCandles: Candle[] = (dailyRates.length > 0 ? dailyRates : directionRates).map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const directionCandles: Candle[] = directionRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    // M15 structure: CLOSED candles only (exclude forming candle at index -1)
+    const setupCandlesClosed: Candle[] = setupRates.slice(0, -1).map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const setupCandles: Candle[] = setupRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    // M5 entry: allow forming candle (real-time trigger)
     const entryCandles: Candle[] = entryRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
 
     // ── 1. Market Structure Analysis & Alignment ───────────────────
@@ -134,7 +137,8 @@ class AITradingEngine {
     // Use Pure Price Action for Daily Trend (Intraday Bias) instead of Macro Swing Structure
     dailyStructure.trend = marketStructureService.analyzeDailyPriceAction(dailyCandles);
     const directionStructure = marketStructureService.analyzeMarketStructure(directionCandles);
-    const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
+    // M15 structure: use CLOSED candles only (exclude forming candle)
+    const setupStructure = marketStructureService.analyzeMarketStructure(setupCandlesClosed);
     const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);
 
     // Relax alignment: allow 2-of-3 TF aligned OR direction TF aligned (major trend dominates)
@@ -185,9 +189,12 @@ class AITradingEngine {
       methodologyWeights,
       activeMethodologies,
       undefined, // minConfidence (use default)
-      directionStructure.trend
+      directionStructure.trend,
+      // Real-time spread from broker (symbolInfo already fetched earlier)
+      // We pass spread (in points) and point size for the frontend to display.
+      (symbolInfo as any)?.spread,
+      (symbolInfo as any)?.point
     );
-
     const result: MultiStrategySymbolAnalysis = {
       symbol,
       marketStructure: directionStructure,

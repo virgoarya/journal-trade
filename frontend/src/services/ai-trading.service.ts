@@ -52,6 +52,9 @@ export interface Position {
   time: number;
   magic: number;
   state?: string;
+  // Enhanced fields for spread display & latency tracking
+  spread?: number;
+  pendingLatency?: number; // ms since pending order was created
 }
 
 export interface SymbolInfo {
@@ -215,7 +218,7 @@ export interface OrderResult {
 
 export interface PipelineLog {
   time: string;
-  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE" | "IPDA";
+  type: "INFO" | "SIGNAL" | "TRADE" | "ERROR" | "TRAILING" | "CONFLUENCE" | "IPDA" | "WARN";
   message: string;
   data?: any;
 }
@@ -282,6 +285,8 @@ export interface ConfluenceResult {
   reason: string;
   checklistItems?: ChecklistItem[];
   priorityChecklist?: ChecklistItem[];
+  spread?: number;
+  point?: number;
 }
 
 export interface MarketStructureSummary {

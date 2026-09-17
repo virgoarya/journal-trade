@@ -4,6 +4,7 @@ import path from "node:path";
 const nextConfig: NextConfig = {
   output: 'standalone', // Self-contained server for Electron desktop packaging
   devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
+  allowedDevOrigins: ["192.168.100.3"], // Allow gadget to access dev server (HMR/assets)
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
