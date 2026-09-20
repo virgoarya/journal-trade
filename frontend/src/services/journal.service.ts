@@ -46,7 +46,7 @@ class JournalService {
   async getPatterns(period: "week" | "month" = "month"): Promise<{ success: boolean; data: PatternData | null; error?: string }> {
     try {
       const response = await apiClient.get(`/analytics/patterns?period=${period}`);
-      return response.data;
+      return response.data as { success: boolean; data: PatternData | null; error?: string };
     } catch (error: any) {
       console.error("[JournalService] getPatterns error:", error);
       return { success: false, data: null, error: error.message || "Failed to fetch patterns" };

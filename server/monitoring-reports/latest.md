@@ -1,113 +1,138 @@
 # System Monitoring Report
 
-**Generated:** 17/9/2026, 16.14.01 WIB
-**Status:** 🟡 WARNING
+**Generated:** 20/9/2026, 10.16.19 WIB
+**Status:** 🔴 CRITICAL
+
+---
+
+## 🤖 AI Insights (9Router)
+
+1. **MT5 Connection Lost**:
+   - **Action**: Restart MT5 service and verify connection.
+   - **Reason**: MT5 connection lost, causing pipeline auto-pause.
+   - **Next Step**: Check MT5 logs for errors and network connectivity.
+
+2. **High Memory Usage**:
+   - **Action**: Identify and terminate memory-intensive processes.
+   - **Reason**: Memory usage at 97.8%, risking system instability.
+   - **Next Step**: Use task manager to analyze memory usage by process.
+
+3. **Provider Status**:
+   - **Action**: Investigate hibernating providers (4 out of 6).
+   - **Reason**: Only 2 providers active, reducing consensus availability.
+   - **Next Step**: Check provider logs for hibernation reasons.
+
+4. **Uptime Monitoring**:
+   - **Action**: Set up alerts for uptime monitoring.
+   - **Reason**: System has been up for only 8 hours.
+   - **Next Step**: Configure monitoring tools to track uptime and set thresholds.
+
+5. **Resource Allocation**:
+   - **Action**: Optimize resource allocation for active providers.
+   - **Reason**: High memory usage and limited active providers.
+   - **Next Step**: Review and adjust resource allocation settings.
 
 ---
 
 ## Executive Summary
 
-13 warning(s), no critical issues
+2 critical issue(s), 6 warning(s)
+
+## 🔴 Critical Issues
+
+- [mt5] MT5 connection lost
+-   -> MT5 tidak terhubung - pipeline auto-paused
 
 ## 🟡 Warnings
 
-- [llm_consensus] 1 provider(s) available for consensus
--   -> ✅ Gemini 3.5 Flash Lite (gemini): active
--   -> 🔴 Mistral Medium (mistral): circuit_open
--   -> ✅ GPT 5.5 (gpt): active
--   -> ✅ Qwen 3.6 27B (deepseek): active
--   -> ✅ Nemotron 3 Ultra 550B (nemotron): active
--   -> ✅ Claude Opus 4.6 (claude-opus): active
 - [system_resources] High memory usage
 -   -> CPU: 4 cores
--   -> Memory: 95.5% used (5.93GB total)
--   -> Uptime: 67.7h
+-   -> Memory: 97.8% used (5.93GB total)
+-   -> Uptime: 8h
 -   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 95.5% (threshold: 85%)
+-   -> ⚠️ Memory usage tinggi: 97.8% (threshold: 85%)
+
+## Recommended Actions
+
+| # | Action | Component |
+|---|--------|-----------|
+| 1 | Restart MT5 MCP service | - |
+| 2 | Verify MT5 terminal is running on broker VPS | - |
+| 3 | Check MT5 MCP server logs in logs/mt5-errors.log | - |
 
 ## Metrics Dashboard
 
 | Metric | Value |
 |--------|-------|
-| connected | 1 |
+| connected | 0 |
 | circuitState | CLOSED |
-| balance | 0 |
-| equity | 0 |
-| marginLevel | 0 |
-| activePipelines | 1 |
-| 6a26146a9cad211ba0631027.running | 1 |
-| 6a26146a9cad211ba0631027.paused | 0 |
-| 6a26146a9cad211ba0631027.error | 0 |
-| 6a26146a9cad211ba0631027.totalTrades | 0 |
-| 6a26146a9cad211ba0631027.pnl | 0 |
-| 6a26146a9cad211ba0631027.errors1h | 0 |
+| activePipelines | 0 |
 | totalProviders | 6 |
-| activeProviders | 5 |
-| hibernasiProviders | 0 |
-| circuitOpenProviders | 1 |
+| activeProviders | 2 |
+| hibernasiProviders | 4 |
+| circuitOpenProviders | 0 |
 | provider.gemini | active |
-| provider.mistral | circuit_open |
-| provider.gpt | active |
-| provider.deepseek | active |
-| provider.nemotron | active |
+| provider.mistral | hibernasi |
+| provider.gpt | hibernasi |
+| provider.deepseek | hibernasi |
+| provider.nemotron | hibernasi |
 | provider.claude-opus | active |
-| availableForConsensus | 1 |
+| availableForConsensus | 2 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 95.5 |
-| uptimeHours | 67.7 |
-| checkedPipelines | 1 |
-| dataIssues | 0 |
+| memoryUsagePercent | 97.8 |
+| uptimeHours | 8 |
+| checkedPipelines | 0 |
 
 ## Detailed Health Checks
 
-### 🟢 MT5
+### 🔴 MT5
 
-- **Severity:** healthy
-- **Summary:** MT5 connected and operational
-- **Time:** 2026-09-17T09:13:59.840Z
+- **Severity:** critical
+- **Summary:** MT5 connection lost
+- **Time:** 2026-09-20T03:16:18.985Z
 
-- Balance: $0.00, Equity: $0.00
+- MT5 tidak terhubung - pipeline auto-paused
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
-- **Summary:** 1 pipeline(s) running
-- **Time:** 2026-09-17T09:14:01.859Z
+- **Summary:** No active pipelines
+- **Time:** 2026-09-20T03:16:19.021Z
 
-- Found 1 active pipeline(s)
+- Tidak ada pipeline yang aktif saat ini
 
-### 🟡 LLM_CONSENSUS
+### 🟢 LLM_CONSENSUS
 
-- **Severity:** warning
-- **Summary:** 1 provider(s) available for consensus
-- **Time:** 2026-09-17T09:13:59.839Z
+- **Severity:** healthy
+- **Summary:** 2 provider(s) available for consensus
+- **Time:** 2026-09-20T03:16:18.986Z
 
 - ✅ Gemini 3.5 Flash Lite (gemini): active
-- 🔴 Mistral Medium (mistral): circuit_open
-- ✅ GPT 5.5 (gpt): active
-- ✅ Qwen 3.6 27B (deepseek): active
-- ✅ Nemotron 3 Ultra 550B (nemotron): active
+- 💤 Mistral Medium (mistral): hibernasi
+- 💤 GPT 5.5 (gpt): hibernasi
+- 💤 Qwen 3.6 27B (deepseek): hibernasi
+- 💤 Nemotron 3 Ultra 550B (nemotron): hibernasi
 - ✅ Claude Opus 4.6 (claude-opus): active
 
 ### 🟡 SYSTEM_RESOURCES
 
 - **Severity:** warning
 - **Summary:** High memory usage
-- **Time:** 2026-09-17T09:13:59.840Z
+- **Time:** 2026-09-20T03:16:18.986Z
 
 - CPU: 4 cores
-- Memory: 95.5% used (5.93GB total)
-- Uptime: 67.7h
+- Memory: 97.8% used (5.93GB total)
+- Uptime: 8h
 - Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 95.5% (threshold: 85%)
+- ⚠️ Memory usage tinggi: 97.8% (threshold: 85%)
 
 ### 🟢 DATA_QUALITY
 
 - **Severity:** healthy
-- **Summary:** All data feeds operational
-- **Time:** 2026-09-17T09:14:01.479Z
+- **Summary:** No active pipelines to check
+- **Time:** 2026-09-20T03:16:19.021Z
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 17/9/2026, 17.14.05 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 20/9/2026, 11.16.23 WIB*

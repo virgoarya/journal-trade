@@ -267,6 +267,7 @@ export function AgentIntelligencePanel() {
   const [loading, setLoading] = useState(false);
   const [inputPrompt, setInputPrompt] = useState<string>("");
   const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
+  const [deepResearchResults, setDeepResearchResults] = useState<any[]>([]);
 
   useEffect(() => {
     const wsUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
@@ -310,7 +311,7 @@ export function AgentIntelligencePanel() {
         const res = await fetch(`${BACKEND_URL}/api/v1/agent-consensus/proactive/latest`);
         if (res.ok) {
           const data = await res.json();
-          const insightsArray = Object.values(data.data || {});
+          const insightsArray = Object.values(data.data || {}) as AgentInsight[];
           setProactiveInsights(insightsArray);
         }
       } catch (e) {
@@ -354,6 +355,34 @@ export function AgentIntelligencePanel() {
       }
     } catch (e) {
       console.error("[UI] Debate error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeepResearch = async () => {
+    setLoading(true);
+    setDeepResearchResults([]);
+    setHawkReply("");
+    setDoveReply("");
+    setContrarianReply("");
+    setConsensus("");
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/v1/agent-consensus/deep-research`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+          setDeepResearchResults(result.data);
+          setActiveTab("dashboard");
+        }
+      }
+    } catch (e) {
+      console.error("[UI] Deep research error:", e);
     } finally {
       setLoading(false);
     }
@@ -544,6 +573,36 @@ export function AgentIntelligencePanel() {
                 </div>
               )}
 
+              {/* Deep Research Results */}
+              {deepResearchResults.length > 0 && (
+                <div className="space-y-4">
+                  <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-mono text-[10px] flex items-center justify-between">
+                    <span>🧠 Deep Research & Self-Improvement Cycle Complete</span>
+                    <span className="text-[9px] text-text-muted">Data Overview + Post-Hoc Analysis</span>
+                  </div>
+                  {deepResearchResults.map((res, idx) => (
+                    <div key={idx} className="p-3 rounded border border-border-subtle bg-card/60 space-y-2">
+                      <div className="flex items-center justify-between border-b border-border-subtle pb-1">
+                        <span className="font-mono text-xs font-bold text-accent-gold uppercase">{res.personaId} Deep Research</span>
+                        <span className={`font-mono text-[10px] font-bold ${res.conviction === 'TINGGI' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          Conviction: {res.conviction}
+                        </span>
+                      </div>
+                      <div className="space-y-2 text-xs font-mono text-text-muted">
+                        <div>
+                          <span className="text-text-main font-bold block mb-0.5">1. Post-Hoc Analysis (Self-Improvement):</span>
+                          <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.selfImprovement}</p>
+                        </div>
+                        <div>
+                          <span className="text-text-main font-bold block mb-0.5">2. Critical Synthesis:</span>
+                          <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.marketComparison}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {hawkReply && (
                 <AgentReplyCard
                   title="Hawk — Quant & Tightening Analysis"
@@ -635,6 +694,14 @@ export function AgentIntelligencePanel() {
                 >
                   <Bot size={12} />
                   <span>Sequential Chain</span>
+                </button>
+                <button
+                  onClick={handleDeepResearch}
+                  disabled={loading}
+                  className="flex-1 py-2 px-3 rounded bg-purple-500/15 border border-purple-500/30 font-mono text-xs font-bold text-purple-400 hover:bg-purple-500/25 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                >
+                  <Activity size={12} />
+                  <span>Deep Research</span>
                 </button>
               </div>
 

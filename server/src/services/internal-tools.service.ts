@@ -96,7 +96,7 @@ export async function executeInternalTool(name: string, args: Record<string, any
         return {
           value: liq?.value,
           change: liq?.change,
-          displayValue: liq?.displayValue || "",
+          displayValue: (liq as any)?.displayValue || "",
           status: liq?.change > 0 ? "Liquidity Drain (menyedot)" : liq?.change < 0 ? "Liquidity Inject (menyuntik)" : "Flat",
         };
       }
@@ -114,11 +114,11 @@ export async function executeInternalTool(name: string, args: Record<string, any
 
       case "get_geo_risk": {
         const { geoRiskService } = await import("./geo-risk.service");
-        const snapshot = await geoRiskService.getLatestSnapshot();
+        const snapshot = await geoRiskService.getScores();
         return {
-          overall: snapshot?.overall || "N/A",
-          topDriver: snapshot?.topDriver || "N/A",
-          eventForecast: snapshot?.eventForecast?.headline || "N/A",
+          overall: (snapshot as any)?.overall || "N/A",
+          topDriver: (snapshot as any)?.topDriver || "N/A",
+          eventForecast: (snapshot as any)?.eventForecast?.headline || "N/A",
           scores: snapshot?.scores || {},
         };
       }

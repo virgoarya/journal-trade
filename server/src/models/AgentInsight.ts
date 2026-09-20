@@ -22,7 +22,7 @@ const AgentInsightSchema = new Schema<IAgentInsight>(
     },
     insightType: {
       type: String,
-      enum: ["proactive", "debate", "alert"],
+      enum: ["proactive", "debate", "alert", "deep_research"],
       required: true,
       index: true,
     },

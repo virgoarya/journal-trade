@@ -355,6 +355,8 @@ class MT5MCPService {
 
     try {
       if (config.apiKey !== undefined || config.mcpUrl) {
+        // Log apiKey for debugging purposes (handle with care)
+        silentLogger.debug(`[MT5-MCP] Connecting with config: server=${config.server}, login=${config.login}, apiKey=${config.apiKey ? 'provided' : 'missing'}, mcpUrl=${config.mcpUrl}`);
         const res = await connectWithMcpConfig({ mcpUrl: config.mcpUrl, apiKey: config.apiKey });
         if (!res.success) {
           return { success: false, error: res.error || "Gagal terhubung ke MT5 Native MCP" };

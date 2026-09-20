@@ -93,7 +93,7 @@ class ProactiveWatcherService {
     }
   }
 
-  private async createAlert(title: string, message: string, severity: "INFO" | "WARNING" | "CRITICAL", sourceAgent: string): void {
+  private async createAlert(title: string, message: string, severity: "INFO" | "WARNING" | "CRITICAL", sourceAgent: string): Promise<void> {
     try {
       // Avoid duplicate alert within last 4 hours
       const recent = await MacroAlert.findOne({

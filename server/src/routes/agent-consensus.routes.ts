@@ -1,9 +1,47 @@
 import { Router, Request, Response } from "express";
 import { agentConsensusService } from "../services/agent-consensus.service";
 import { proactiveAlertService } from "../services/proactive-alert.service";
+import { deepResearchService } from "../services/deep-research.service";
 import { silentLogger } from "../utils/silent-logger";
 
 const router = Router();
+
+/**
+ * POST /v1/agent-consensus/deep-research
+ * Jalankan siklus thinking kritis tingkat tinggi.
+ */
+router.post("/v1/agent-consensus/deep-research", async (req: Request, res: Response) => {
+  try {
+    silentLogger.info(`[API] Triggering Deep Research cycle`);
+    const results = await deepResearchService.runDeepResearch();
+    return res.status(200).json({ success: true, data: results });
+  } catch (error: any) {
+    silentLogger.error(`[API] Deep Research error: ${error.message}`);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /v1/agent-consensus/insights
+ * Ambil riwayat insight terbaru
+ */
+router.get("/v1/agent-consensus/insights", async (req: Request, res: Response) => {
+  try {
+    const { type = "proactive", personaId, limit = 10 } = req.query;
+    const filter: any = {};
+    if (type) filter.insightType = type;
+    if (personaId) filter.personaId = personaId;
+
+    const insights = await (await import("../models/AgentInsight")).AgentInsight.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .lean();
+
+    return res.status(200).json({ success: true, data: insights });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * POST /v1/agent-consensus
@@ -94,12 +132,12 @@ router.post("/v1/agent-consensus/single/:persona", async (req: Request, res: Res
     if (!prompt) {
       return res.status(400).json({ error: "Prompt is required" });
     }
-    if (!["hawk", "dove", "contrarian"].includes(persona)) {
+    if (!["hawk", "dove", "contrarian"].includes(persona as string)) {
       return res.status(400).json({ error: "Persona harus: hawk, dove, atau contrarian" });
     }
 
     silentLogger.info(`[API] Single agent request: ${persona}`);
-    const result = await agentConsensusService.runSingleAgent(persona, prompt, context || {});
+    const result = await agentConsensusService.runSingleAgent(persona as string, prompt, context || {});
     return res.status(200).json(result);
   } catch (error: any) {
     silentLogger.error(`[API] Single agent error: ${error.message}`);

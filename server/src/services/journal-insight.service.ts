@@ -1,8 +1,20 @@
 import { TradeEmotion } from "../models/TradeEmotion";
 import { AITradeLog } from "../models/AITradeLog";
 import { AIBacktestSkill } from "../models/AIBacktestSkill";
-import { llmConsensusService } from "./llm-consensus.service";
 import { silentLogger } from "../utils/silent-logger";
+import axios from "axios";
+import { env } from "../config/env";
+
+interface LLMInsightResult {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  actionItems: Array<{
+    priority: "high" | "medium" | "low";
+    action: string;
+    reason: string;
+  }>;
+}
 
 export interface PatternInsight {
   emotionPatterns: Array<{
@@ -148,7 +160,7 @@ class JournalInsightService {
     const skill = await AIBacktestSkill.findOne({ userId });
     if (!skill) return [];
 
-    const result = [];
+    const result: { methodology: string; backtestWR: number; realWR: number; delta: number; recommendation: string; }[] = [];
     for (const methRank of skill.methodologyRankings) {
       const realTrades = aiTrades.filter(
         t => t.signal.primaryMethodology === methRank.methodology
@@ -176,20 +188,25 @@ class JournalInsightService {
     return result;
   }
 
-  private async getLLMInsights(data: any) {
+  private async getLLMInsights(data: any): Promise<LLMInsightResult> {
     const prompt = this.buildPrompt(data);
     
     try {
-      // AXIS: Reuse llm-consensus voting mechanism
+      // AXIS: Call via agent-consensus endpoint with journal-analyzer persona
       // VERA: Timeout > 5s → fallback
-      const result = await llmConsensusService.callSingleProvider(
-        "9router",
-        "auto-free-model",
-        prompt,
-        { timeoutMs: 25000 } // VERA: LLM response time ≤ 2s, but give a generous timeout for 9router
+      const response = await axios.post(
+        "http://localhost:5000/api/v1/agent-consensus/single/journal-analyzer",
+        { prompt, context: data },
+        { timeout: 25000 }
       );
       
-      return this.parseInsights(result.reasoning);
+      const result = response.data;
+      return {
+        summary: result.reasoning || result?.content?.split("\n")[0] || "Tidak ada ringkasan",
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        actionItems: result.actionItems || []
+      };
     } catch (err: any) {
       silentLogger.error(`[JOURNAL-INSIGHT] LLM call failed: ${err.message}`);
       return { // VERA: Fallback message

@@ -9,6 +9,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { mcpService } from "./mcp.service";
 import { userMemoryService } from "./user-memory.service";
+import { MacroIndicator } from "../models/MacroIndicator";
+import { GeoRiskSnapshot } from "../models/GeoRiskSnapshot";
 
 const GEMINI_API_URL_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
@@ -38,7 +40,6 @@ function clearPlaybookCache() {
  */
 async function getCpiReleaseDate(): Promise<string> {
   try {
-    const { MacroIndicator } = await import("../db/mongoose");
     const cpiDoc = await MacroIndicator.findOne({
       indicatorName: "CPI",
       country: "US"
@@ -55,7 +56,6 @@ async function getCpiReleaseDate(): Promise<string> {
   }
   // Fallback: GeoRiskSnapshot terbaru
   try {
-    const { GeoRiskSnapshot } = await import("../db/mongoose");
     const snapshot = await GeoRiskSnapshot.findOne({}).sort({ fetchedAt: -1 }).lean();
     if (snapshot?.fetchedAt) {
       return new Date(snapshot.fetchedAt).toLocaleDateString("id-ID", {

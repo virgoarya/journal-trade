@@ -1,0 +1,71 @@
+import axios from "axios";
+import { env } from "../config/env";
+import { NINE_ROUTER_MODELS, TOOL_CAPABLE_MODELS } from "../config/llm-models.config";
+import { selfImprovementService } from "./self-improvement.service";
+import { silentLogger } from "../utils/silent-logger";
+import { geoRiskService } from "./geo-risk.service";
+import { generateText, tool, jsonSchema } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { mcpService } from "./mcp.service";
+import { userMemoryService } from "./user-memory.service";
+import { MacroIndicator } from "../models/MacroIndicator";
+import { GeoRiskSnapshot } from "../models/GeoRiskSnapshot";
+
+const GEMINI_API_URL_BASE =
+  "https://generativelanguage.googleapis.com/v1beta/models";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS = [env.GROQ_MODEL || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+// Cache for playbook per regime - cleared on regime change
+const playbookCache: Record<
+  string,
+  { playbook: Array<{ asset: string; desc: string }> }
+> = {};
+
+function clearPlaybookCache() {
+  for (const key of Object.keys(playbookCache)) {
+    delete playbookCache[key];
+  }
+}
+
+// (callGeminiDirect removed)
+
+
+/**
+ * Helper: dapatkan tanggal rilis CPI secara dinamis tanpa hardcode
+ * - Coba dari MacroIndicator.CPI (releaseDate)
+ * - Kalau tidak ada, gunakan GeoRiskSnapshot terbaru (fetchedAt)
+ * - Fallback: "terbaru"
+ */
+async function getCpiReleaseDate(): Promise<string> {
+  try {
+    const cpiDoc = await MacroIndicator.findOne({
+      indicatorName: "CPI",
+      country: "US"
+    }).sort({ releaseDate: -1 }).lean();
+    if (cpiDoc?.releaseDate) {
+      return new Date(cpiDoc.releaseDate).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    }
+  } catch (e) {
+    // ignore
+  }
+  // Fallback: GeoRiskSnapshot terbaru
+  try {
+    const snapshot = await GeoRiskSnapshot.findOne({}).sort({ fetchedAt: -1 }).lean();
+    if (snapshot?.fetchedAt) {
+      return new Date(snapshot.fetchedAt).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    }
+  } catch (e) {
+    // ignore
+  }
+  return "terbaru";
+}
