@@ -1,8 +1,8 @@
-# 📋 Project Scan — AI Trading & Backtest System
+# 📋 Project Scan — Hunter Trades AI Trading & Journal System
 
-> **Generated:** 2026-07-07  
-> **Stack:** Next.js 16 (App Router) + Express + TypeScript + MongoDB + Native MT5 MCP + 9Router + LLM Consensus  
-> **Total Services:** 40+ | **Frontend Components:** 20+ | **Models:** 15 | **Routes:** 21
+> **Generated:** 2026-09-26  
+> **Stack:** Next.js 16.2.1 (App Router) + React 19 + Tailwind v4 + Express 5.2.1 + Mongoose 9.3.3 / MongoDB 7.1.1 + Electron 35 + Native MT5 MCP / Python Bridge + 9Router + LLM Consensus  
+> **Total Services:** 51+ | **Backend Models:** 25 | **Backend Routes:** 25 | **Frontend Pages:** 20 | **Frontend Services:** 13
 
 ---
 
@@ -10,26 +10,30 @@
 
 ```
 D:\Journal Trade\
-├── frontend/                     # Next.js 16 (App Router, Turbopack)
+├── frontend/                     # Next.js 16.2.1 (App Router, Turbopack/Webpack)
 │   └── src/
-│       ├── app/(dashboard)/ai-trading/
-│       │   ├── components/       # UI components (13 files)
-│       │   ├── hooks/            # Custom React hooks (4 files)
-│       │   └── page.tsx          # Main AI Trading page
-│       └── services/             # API client services
-│           ├── ai-trading.service.ts
-│           └── backtest.service.ts
-├── server/                       # Express + TypeScript
+│       ├── app/(dashboard)/      # 20 Dashboard App Router pages
+│       │   ├── ai-trading/       # Pure AI Order Execution & Live Log
+│       │   ├── ai-review/        # Post-Trade AI Journal Analysis & Review
+│       │   ├── macro-terminal/   # Macro Hub (Overview, Intelligence, COT, Nexus, Quant Lab)
+│       │   ├── playbook/         # Strategy Playbook (ICT, MSNR, SMC)
+│       │   └── ...               # Analytics, Settings, Log-Trade, Onboarding
+│       ├── components/           # UI Components (8 directories: macro-terminal, trade, playbook, etc.)
+│       ├── services/             # 13 Frontend API Client Services
+│       └── hooks/                # Custom React Hooks
+├── server/                       # Node.js + Express 5.2.1 + TypeScript
 │   ├── src/
-│   │   ├── services/             # Business logic (40+ files)
-│   │   │   ├── strategies/       # 8 strategy modules
-│   │   │   └── ...               # Core services
-│   │   ├── routes/               # API routes (21 files)
-│   │   ├── models/               # Mongoose models (15 files)
-│   │   ├── middleware/            # Auth, validation, rate limiting
-│   │   └── config/               # Env, CORS, DB config
-│   └── mcp-mt5-server/           # Python client for Native MT5 MCP
-└── .claude/                      # AI assistant configuration
+│   │   ├── services/             # Business Logic (51+ service modules)
+│   │   │   ├── strategies/       # 14 Strategy modules (ICT, SMC, MSNR, ATR, Confluence, IPDA, etc.)
+│   │   │   └── ...               # Core Trading, Risk, Macro, AI & Memory services
+│   │   ├── routes/               # Express 5 API Routes (25 route files)
+│   │   ├── models/               # Mongoose 9.3.3 Models (25 model files)
+│   │   ├── agents/               # Autonomous AI System Agents (base, specific, system-monitor)
+│   │   ├── middleware/            # Auth, Zod Validation, Rate Limiting, Error Handler
+│   │   └── utils/                # API Response & Helper Utilities
+│   └── mcp-mt5-server/           # Python Client for Native MT5 MCP (`server.py`, `gui.py`, `build.bat`)
+├── desktop/                      # Electron 35 Main Process App (`main.js`, `preload.js`, splash, builder)
+└── .kilo/                        # Agent Memory, Lessons, Rules, & Local Skills
 ```
 
 ---
@@ -134,49 +138,65 @@ Navigasi tab di header: **Trading** (default) dan **Backtest**. Backtest tab men
 
 ---
 
-## 📦 Database Models (15 files)
+## 📦 Database Models (25 files)
 
-| Model | Collection | Key Fields |
+| Model | Collection | Key Fields / Purpose |
 |---|---|---|
-| **User** | users | name, email, image |
-| **AITradeLog** | ai_trade_logs | userId, signal (symbol, direction, confidence, entry, sl, tp, primaryMethodology, methodologyBreakdown), execution, pnl, closed |
-| **AITradingSession** | ai_trading_sessions | userId, status (RUNNING/STOPPED/PAUSED), pipelineConfig, methodologyWeights, llmConsensus |
-| **BacktestExperience** | backtest_experiences | userId, symbol, timeframe, result (trades, winRate, PnL, drawdown, profitFactor, recoveryFactor, sharpe, symbolStats, methodologyStats, equityCurve), aiLearningSummary, pipelineConfigSnapshot |
-| **AIBacktestSkill** | ai_backtest_skills | userId, symbolRankings (score, avgWinRate, avgProfitFactor, avgRecoveryFactor, totalPnL, recommendedParams), methodologyRankings (verdict: KEEP/ADJUST/DISABLE), globalRecoveryFactor, totalBacktests |
+| **User** | users | name, email, image, role, discordId |
+| **Trade** | trades | userId, tradingAccountId, symbol, direction, entry, exit, pnl, plannedR, actualR, tags |
+| **TradingAccount** | trading_accounts | userId, name, mt5Config, mt5AutoSyncEnabled, balance, equity |
 | **MT5Connection** | mt5_connections | userId, server, login, passwordEncrypted (AES-256-CBC), enabled |
-| **TradingAccount** | trading_accounts | userId, name, mt5Config, mt5AutoSyncEnabled |
-| **Trade** | trades | userId, tradingAccountId, symbol, direction, entry, exit, pnl, tags |
-| **Playbook** | playbooks | userId, trade entries with analysis |
-| **AiReview** | ai_reviews | userId, tradeId, analysis, grade |
-| **Notification** | notifications | userId, type, message, read |
+| **AITradeLog** | ai_trade_logs | userId, signal, execution, pnl, closed, llmReasoning |
+| **AITradingSession** | ai_trading_sessions | userId, status (RUNNING/STOPPED/PAUSED), pipelineConfig, methodologyWeights |
+| **AiReview** | ai_reviews | userId, tradeId, analysis, grade, psychologicalFactors |
+| **Playbook** | playbooks | userId, title, methodology (ICT, MSNR, SMC), rules, checklist |
+| **BacktestExperience** | backtest_experiences | userId, symbol, timeframe, result, aiLearningSummary, pipelineConfigSnapshot |
+| **AIBacktestSkill** | ai_backtest_skills | userId, symbolRankings, methodologyRankings (KEEP/ADJUST/DISABLE), globalRecoveryFactor |
+| **UserAgentMemory** | user_agent_memories | userId, persona, tradingStyle, psychologicalProfile, memoryEntries |
+| **VectorMemory** | vector_memories | userId, embedding, content, metadata (semantic search for trading journal) |
+| **ChatSession** | chat_sessions | userId, agentId, messages, summary, metadata |
+| **ReflectionLog** | reflection_logs | agent, prompt, insights, toolsUsed, timestamp |
+| **DailySnapshot** | daily_snapshots | userId, date, pnl, trades, winRate, metrics |
+| **MacroIndicator** | macro_indicators | symbol, data (CPI, NFP, Fed Funds), timestamp |
+| **YieldCurveSnapshot** | yield_curve_snapshots | tenors (2Y, 10Y, 30Y), inversionStatus, spread10Y2Y |
+| **GeoRiskSnapshot** | geo_risk_snapshots | region, riskScore, events, impactAssessment |
+| **AgentInsight** | agent_insights | agentName, sentiment, confidence, keyDrivers |
+| **Notification** | notifications | userId, type, message, read, actionUrl |
 | **UserSettings** | user_settings | userId, appearance, notifications, discord |
-| **MacroIndicator** | macro_indicators | symbol, data, timestamp |
-| **GeoRiskSnapshot** | geo_risk_snapshots | region, riskScore, events |
-| **DailySnapshot** | daily_snapshots | userId, date, pnl, trades |
+| **Registration** | registrations | name, email, phone, brokerAccount, status |
+| **Subscription** | subscriptions | userId, plan, status, expiresAt |
+| **TokenBalance** | token_balances | userId, balance, transactions |
+| **Transaction** | transactions | userId, amount, type, status, midtransId |
 
 ---
 
-## 🔌 API Routes (21 files)
+## 🔌 API Routes (25 files)
 
 | Mount Path | File | Key Endpoints |
 |---|---|---|
-| `/api/v1/ai-trading/*` | `ai-trading.routes.ts` | connect, disconnect, status, account, symbols, rates, positions, open/close/modify order, pipeline (start/stop/pause/resume/status/logs), analyze, analyze-multi, performance, skill, auto-backtest, news/upcoming, news/warnings |
-| `/api/v1/backtest/*` | `backtest.routes.ts` | run, stream (SSE), optimize, analyze, apply, history, getById, delete |
-| `/api/v1/auth/*` | `auth.routes.ts` | sign-in, sign-up, sign-out, session |
-| `/api/v1/playbook/*` | `playbook.routes.ts` | CRUD playbook entries |
-| `/api/v1/analytics/*` | `analytics.routes.ts` | Performance analytics |
-| `/api/v1/trade/*` | `trade.routes.ts` | Manual trade logging |
-| `/api/v1/ai-review/*` | `ai-review.routes.ts` | AI trade review |
-| `/api/v1/market-data/*` | `market-data.routes.ts` | Market data feeds |
-| `/api/v1/macro-regime/*` | `macro-regime.routes.ts` | Macro regime analysis |
-| `/api/v1/macro-ai/*` | `macro-ai.routes.ts` | AI macro predictions |
-| `/api/v1/nexus/*` | `nexus.routes.ts` | Nexus inter-market analysis |
-| `/api/v1/quant/*` | `quant.routes.ts` | Quantitative models |
-| `/api/v1/geo-risk/*` | `geo-risk.routes.ts` | Geopolitical risk |
-| `/api/v1/notification/*` | `notification.routes.ts` | User notifications |
-| `/api/v1/ai-coach/*` | `ai-coach.routes.ts` | AI trading coach |
-| `/api/v1/settings/*` | `settings.routes.ts` | User settings |
-| `/api/v1/trading-account/*` | `trading-account.routes.ts` | Account management |
+| `/api/v1/trade/*` | `trade.routes.ts` | CRUD trade log, restore, permanent delete, summary, recent |
+| `/api/v1/trading-account/*` | `trading-account.routes.ts` | CRUD trading account, active account, sync balance |
+| `/api/v1/mt5/*` | `mt5.routes.ts` | Connect, disconnect, symbols, quotes, orders, positions |
+| `/api/v1/playbook/*` | `playbook.routes.ts` | CRUD playbook entries, streamlined methodologies (ICT, MSNR, SMC) |
+| `/api/v1/ai-trading/*` | `ai-trading.routes.ts` | connect, status, pipeline (start/stop/pause/resume/logs), analyze, skill, auto-backtest |
+| `/api/v1/ai-review/*` | `ai-review.routes.ts` | Generate AI review, get review by tradeId, history |
+| `/api/v1/ai-coach/*` | `ai-coach.routes.ts` | Interactive AI trading coach chat, psychology advice |
+| `/api/v1/agent-consensus/*` | `agent-consensus.routes.ts` | Multi-agent consensus voting, deliberation stream |
+| `/api/v1/nexus/*` | `nexus.routes.ts` | Nexus inter-market analysis & macro correlation |
+| `/api/v1/macro-ai/*` | `macro-ai.routes.ts` | AI macro prediction, inflation & interest rate analysis |
+| `/api/v1/macro-regime/*` | `macro-regime.routes.ts` | Macro regime state (Stagflation, Reflation, Goldilocks, Deflation) |
+| `/api/v1/macro-ai-observer/*` | `macro-ai-observer.routes.ts` | Observer agent signals & news sentiment |
+| `/api/v1/geo-risk/*` | `geo-risk.routes.ts` | Geopolitical conflict tracking & risk scores |
+| `/api/v1/quant/*` | `quant.routes.ts` | Quantitative volatility modeling & risk metrics |
+| `/api/v1/analytics/*` | `analytics.routes.ts` | Win rate, profit factor, R-distribution, equity curve |
+| `/api/v1/market-data/*` | `market-data.routes.ts` | Real-time prices, VIX, DXY, US yields |
+| `/api/v1/backtest/*` | `backtest.routes.ts` | Run backtest, stream SSE, walk-forward, history |
+| `/api/v1/auth/*` | `auth.routes.ts` & `auth-v1.routes.ts` | Better-Auth Discord session, login, logout, refresh |
+| `/api/v1/settings/*` | `settings.routes.ts` | App preferences, MT5 defaults, notification config |
+| `/api/v1/notification/*` | `notification.routes.ts` | List, mark read, unread count |
+| `/api/v1/payment/*` | `payment.routes.ts` | Midtrans Snap token create, webhook notification |
+| `/api/v1/broker-registration-v1/*` | `broker-registration-v1.routes.ts` | Broker onboarding & verification |
+| `/api/v1/dev-test/*` | `dev-test.routes.ts` | Dev environment healthcheck & diagnostic endpoints |
 
 ---
 

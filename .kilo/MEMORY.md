@@ -3,13 +3,15 @@
 ## Project Identity
 - **Name**: Hunter Trades Journal & AI Trading
 - **User**: Bang Vir
-- **Tech Stack**:
-  - **Desktop App**: Electron (server manager + full UI window + system tray).
-  - **Frontend**: Next.js 16 (App Router, standalone output), Tailwind CSS, Lightweight Charts, React.
-  - **Backend**: Node.js (Express API + WebSocket server), Mongoose, Better Auth (Discord).
-  - **MT5 Integration**: Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via SSEClientTransport & EventSource polyfill.
+- **Tech Stack** (versi terverifikasi dari `package.json` — Sept 2026):
+  - **Desktop App**: Electron `^35.0.0` + `electron-builder ^26` (server orchestrator, multi-process manager, system tray, splash window, `electron-updater ^6.8.9`, patch distribution via `dist-patch/patch.zip`).
+  - **Frontend**: Next.js `16.2.1` (App Router, standalone output, build via `--webpack`), React `19.2.4`, Tailwind CSS v4, `lucide-react`, `recharts ^3.8.1`, `framer-motion ^12.38.0`, Three.js `^0.185.1` + `@react-three/fiber` (visualizer 3D), `react-markdown` + `remark-gfm`, `sonner` (toast).
+  - **Backend**: Node.js + Express `5.2.1` (REST API + WebSocket via `ws ^8.21.0`), Mongoose `9.3.3` / MongoDB `7.1.1`, Better Auth `1.5.6` + `@better-auth/mongo-adapter`, Zod `4.3.6` (validasi), `decimal.js` (akuransi R-multiple), `pino` (logging), `node-cron`, `express-rate-limit`, `puppeteer`, `yahoo-finance2`.
+  - **AI/LLM**: 9router (`http://localhost:20128/v1`, auto-free-model via provider `custom`) + Vercel AI SDK `ai ^7.0.14` dengan `@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/groq`, `@anthropic-ai/sdk`, `@google/generative-ai`. LLM Consensus = voting multi-model dengan threshold 70%.
+  - **Payment**: `midtrans-client` (Midtrans Snap).
+  - **MT5 Integration**: Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via `@modelcontextprotocol/sdk ^1.29.0` / `SSEClientTransport` + EventSource polyfill, DAN Python bridge (`server/mcp-mt5-server/server.py`, `gui.py`, build via `build.bat` → `Hunter Trades AI Trading.exe`).
 - **Design Philosophy**: Terminal Noir (Dark theme dengan Gold accent, premium UI/UX, responsive, micro-animations).
-- **Provider LLM**: 9router (`http://localhost:20128/v1`), auto-free-model, custom provider.
+- **Testing**: Vitest `^4.1.9` di kedua workspace (server pakai `--pool=forks --max-workers=1` karena native MT5 binding).
 
 ## Current Architecture State
 - **Desktop App**: Electron wrapper yang menjalankan backend + frontend sebagai child processes.
@@ -26,53 +28,51 @@
 - **Auth**: Better Auth + Discord OAuth (hanya member komunitas Discord yang bisa akses).
 - **Payment**: Midtrans (planned untuk versi berbayar).
 
-## Backend Services (server/src/services/) — 30+ layanan aktif
-| Service | Fungsi |
-|---------|--------|
-| mt5-mcp.service.ts | Koneksi langsung ke MT5 MCP Server |
-| mt5-scheduler.service.ts | Auto-sync data MT5 periodically |
-| ai-trading-engine.service.ts | Pipeline keputusan trading AI (pure AI order, tanpa toggle manual) |
-| llm-consensus.service.ts | Konsensus multi-LLM (voting berat, threshold 70%) |
-| risk.service.ts | Risk management, daily loss circuit breaker |
-| risk-manager.service.ts | Dynamic lot sizing, margin check |
-| backtest.service.ts | Backtesting engine |
-| auto-backtest.service.ts | Auto-backtest cron |
-| trading-pipeline.service.ts | End-to-end pipeline Signal → Analysis → Review → Trade |
-| market-data.service.ts | Market data (quotes, VIX) |
-| ai-coach.service.ts | AI coaching untuk trader |
-| ai-review.service.ts | Review otomatis posisi trading |
-| macro-ai.service.ts | Macro analysis (regime, yield curve, geo risk) |
-| playbook.service.ts | Trading playbook management |
-| nexus.service.ts | Nexus multi-agent orchestration |
-| notification.service.ts | Notifikasi ke user |
+## Backend Services (server/src/services/) — 51+ layanan aktif
+| Service | Fungsi Utama |
+|---------|--------------|
+| `mt5-mcp.service.ts` | SSE/WebSocket RPC Client ke MT5 MCP Server |
+| `mt5-scheduler.service.ts` | Auto-sync data tick & chart MT5 secara berkala |
+| `ai-trading-engine.service.ts` | Pipeline eksekusi order trading murni AI (BUY/SELL) |
+| `llm-consensus.service.ts` | Multi-LLM Consensus Voting (threshold 70%) |
+| `agent-consensus.service.ts` | Agent consensus pipeline orchestration |
+| `risk-manager.service.ts` | Dynamic lot sizing, margin check, circuit breaker |
+| `backtest.service.ts` & `auto-backtest.service.ts` | Backtesting engine & automated cron backtesting |
+| `trading-pipeline.service.ts` | End-to-end signal processing, analysis, & execution |
+| `macro-ai.service.ts` & `macro-regime.service.ts` | Deteksi rezim makro, yield curve, & kuantifikasi geo-risk |
+| `nexus.service.ts` | Multi-agent AI orchestration |
+| `ai-coach.service.ts` & `ai-review.service.ts` | Post-trade AI review & coaching psikologi trader |
+| `user-memory.service.ts` & `vector-memory.service.ts` | Persistent User Agent Memory & Vector store |
+| `proactive-alert.service.ts` & `proactive-watcher.service.ts` | Real-time market proactive alert monitor |
+| `playbook.service.ts` | Management Playbook Strategi (ICT, MSNR, SMC) |
+| `self-improvement.service.ts` | Agent self-learning loop (update LESSONS.md) |
+| `strategies/` | Strategy validation modules (ATR, SMC, ICT, MSNR, SMT correlation, IPDA, Context) |
 
-## Backend Models (server/src/models/) — 18 model Mongoose
-- Trade, AITradingSession, AITradeLog, AiReview
-- MT5Connection, TradingAccount
-- DailySnapshot, GeoRiskSnapshot, MacroIndicator, YieldCurveSnapshot
-- Playbook, BacktestExperience, AIBacktestSkill
-- TokenBalance, Subscription, Transaction
-- UserSettings, Notification, Registration
+## Backend Models (server/src/models/) — 25 Model Mongoose
+- **Trading Core**: `Trade`, `AITradingSession`, `AITradeLog`, `AiReview`, `TradingAccount`, `MT5Connection`
+- **Analytics & Snapshots**: `DailySnapshot`, `GeoRiskSnapshot`, `MacroIndicator`, `YieldCurveSnapshot`, `AgentInsight`
+- **Playbook & Knowledge**: `Playbook`, `BacktestExperience`, `AIBacktestSkill`
+- **Memory & Agent State**: `ChatSession`, `ReflectionLog`, `UserAgentMemory`, `UserSettings`, `VectorMemory`
+- **System & Billing**: `Notification`, `Registration`, `Subscription`, `TokenBalance`, `Transaction`
 
-## Backend Routes (server/src/routes/) — 20+ route files
-- auth.routes.ts, trade.routes.ts, mt5.routes.ts
-- ai-trading.routes.ts, ai-review.routes.ts, ai-coach.routes.ts
-- analytics.routes.ts, backtest.routes.ts, macro-ai.routes.ts
-- playbook.routes.ts, settings.routes.ts, notification.routes.ts
-- payment.routes.ts, trading-account.routes.ts
-- nexus.routes.ts, market-data.routes.ts, geo-risk.routes.ts
-- quant.routes.ts, macro-regime.routes.ts, broker-registration-v1.routes.ts
+## Backend Routes (server/src/routes/) — 25 Route Files
+- Core Trading: `trade.routes.ts`, `trading-account.routes.ts`, `mt5.routes.ts`, `playbook.routes.ts`
+- AI & Agents: `ai-trading.routes.ts`, `ai-review.routes.ts`, `ai-coach.routes.ts`, `agent-consensus.routes.ts`, `nexus.routes.ts`
+- Macro & Analytics: `macro-ai.routes.ts`, `macro-regime.routes.ts`, `macro-ai-observer.routes.ts`, `geo-risk.routes.ts`, `quant.routes.ts`, `analytics.routes.ts`, `market-data.routes.ts`
+- User & System: `auth.routes.ts`, `auth-v1.routes.ts`, `settings.routes.ts`, `notification.routes.ts`, `payment.routes.ts`, `backtest.routes.ts`, `broker-registration-v1.routes.ts`, `dev-test.routes.ts`
 
-## Frontend Services (frontend/src/services/)
-- ai-coach.service.ts, ai-review.service.ts, ai-trading.service.ts
-- analytics.service.ts, backtest.service.ts
-- mt5.service.ts, trade.service.ts, playbook.service.ts
-- settings.service.ts, notification.service.ts
-- broker-registration.service.ts, trading-account.service.ts
-
-## Frontend Components (frontend/src/components/)
-- DashboardCard.tsx, SignalChart.tsx, JournalEntryForm.tsx
-- PaymentModal.tsx, TokenRefillModal.tsx, OtaUpdaterModal.tsx
+## Frontend Structure (frontend/src/)
+- **Pages (20 Routes)**:
+  - `(dashboard)/dashboard`: Dashboard utama trading terminal
+  - `(dashboard)/ai-trading`: Dashboard AI Trading & Execution stream
+  - `(dashboard)/ai-review`: Post-trade AI Review & performance insights
+  - `(dashboard)/macro-terminal`: Macro Hub (Overview, Intelligence, COT, Nexus, Quant Lab)
+  - `(dashboard)/playbook` & `playbook-form`: Strategi & Checklist Management (streamlined ke ICT, MSNR, SMC)
+  - `(dashboard)/analytics`, `(dashboard)/log-trade`, `(dashboard)/settings`, `(dashboard)/onboarding`
+- **Components Categories (8 Dir)**:
+  - `macro-terminal`, `trade`, `playbook`, `ai-review`, `analytics`, `dashboard`, `layout`, `root`
+- **Services (13 Files)**:
+  - `ai-coach.service.ts`, `ai-review.service.ts`, `ai-trading.service.ts`, `analytics.service.ts`, `backtest.service.ts`, `broker-registration.service.ts`, `journal.service.ts`, `mt5.service.ts`, `notification.service.ts`, `playbook.service.ts`, `settings.service.ts`, `trade.service.ts`, `trading-account.service.ts`
 
 ## Key Features Already Working
 1. **Pure AI Order Decision** — AI memutuskan BUY/SELL tanpa toggle manual user

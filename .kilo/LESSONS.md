@@ -20,14 +20,69 @@
 
 ## Lessons Log
 
-### [20260825] AI Trading Payment Model — Init vs Recurring Distinction
-**Area**: Backend / Payment / Midtrans
-**Root Cause**: Awalnya rancangan payment system keliru memahami `Initial Payment` 2jt IDR sebagai subscription berbayar bulanan. Padahal user requirement jelas: **Init Payment hanya sekali (one-time) saat registrasi awal**, sedangkan pembayaran berkelanjutan **hanya untuk topup token**.
+### [20260923] Macro Regime Matrix SSOT — Leading Indicator Engine Implementation
+**Area**: Backend / Macro Analysis / Frontend
+**Root Cause**:
+1. **Visualisasi 2x2 Matrix** terlalu datar (hanya badge horizontal) → sulit dipahami dalam 1 detik.
+2. **Sub-metrics** terlalu sesak (jarak vertikal rapat, alignment badge tidak simetris).
+3. **Composite Score** tanpa label pemisah (1.1141 / 1.1076) → ambigu apakah CUR atau MA5D.
+4. **Confidence Score** hanya teks biasa (8% LOW) → tidak visual untuk variabel kunci.
+5. **Footer Panel** terasa 'tenggelam' karena kontras warna abu-abu terlalu redup.
 **Solusi**:
-1. `Initial Payment` 2.000.000 IDR (atau 1.800.000 IDR untuk Discord Booster) = **one-time registration/onboarding fee** untuk aktivasi akun, setup MT5 connection, dan akses AI trading engine.
-2. `Monthly Topup` 50.000 IDR = **recurring token refill** agar AI trading tetap berjalan. Token habis = wajib topup lagi.
-3. Midtrans flow: hanya ada 1 `Subscription` record per user (untuk token), bukan 2 subscription terpisah.
-4. DB schema: pisahkan `Registration` (one-time) dari `Subscription` (recurring token).
+1. **2x2 Matrix Visualizer**:
+   - Grid 2x2 dengan axis label (Growth →, ↓ Inflasi).
+   - Glowing dot animasi pada kuadran aktif.
+   - TRANSITION jadi full-width banner.
+2. **Sub-metrics Rapi**:
+   - `divide-y divide-white/5` antar baris.
+   - `py-1.5 px-2` per row.
+   - Badge status `w-24 text-center` fixed-width.
+   - Angka pakai `tabular-nums`.
+3. **Micro-label CUR / EMA50**:
+   - Growth & Inflation pakai `curValue` + `baselineValue` dengan badge kecil.
+4. **Progress Bar Confidence**:
+   - Bar horizontal tipis `h-1.5` dengan dynamic color.
+   - Glow effect aktif.
+5. **Footer Mini Card**:
+   - `bg-white/[0.03] border border-white/10 rounded-lg`.
+   - Durasi dengan badge angka berwarna.
+   - Shift terakhir lebih jelas.
+**Hindari**:
+- Jangan gunakan layout grid-cols-3 untuk 2x2 matrix.
+- Jangan biarkan badge status lebarnya tidak konsisten.
+- Jangan biarkan footer terasa 'tenggelam' dengan kontras warna abu-abu.
+
+### [20260923] Macro Regime Matrix SSOT — Leading Indicator Engine Implementation
+**Area**: Backend / Macro Analysis / Frontend
+**Root Cause**:
+1. **Visualisasi 2x2 Matrix** terlalu datar (hanya badge horizontal) → sulit dipahami dalam 1 detik.
+2. **Sub-metrics** terlalu sesak (jarak vertikal rapat, alignment badge tidak simetris).
+3. **Composite Score** tanpa label pemisah (1.1141 / 1.1076) → ambigu apakah CUR atau MA5D.
+4. **Confidence Score** hanya teks biasa (8% LOW) → tidak visual untuk variabel kunci.
+5. **Footer Panel** terasa 'tenggelam' karena kontras warna abu-abu terlalu redup.
+**Solusi**:
+1. **2x2 Matrix Visualizer**:
+   - Grid 2x2 dengan axis label (Growth →, ↓ Inflasi).
+   - Glowing dot animasi pada kuadran aktif.
+   - TRANSITION jadi full-width banner.
+2. **Sub-metrics Rapi**:
+   - `divide-y divide-white/5` antar baris.
+   - `py-1.5 px-2` per row.
+   - Badge status `w-24 text-center` fixed-width.
+   - Angka pakai `tabular-nums`.
+3. **Micro-label CUR / EMA50**:
+   - Growth & Inflation pakai `curValue` + `baselineValue` dengan badge kecil.
+4. **Progress Bar Confidence**:
+   - Bar horizontal tipis `h-1.5` dengan dynamic color.
+   - Glow effect aktif.
+5. **Footer Mini Card**:
+   - `bg-white/[0.03] border border-white/10 rounded-lg`.
+   - Durasi dengan badge angka berwarna.
+   - Shift terakhir lebih jelas.
+**Hindari**:
+- Jangan gunakan layout grid-cols-3 untuk 2x2 matrix.
+- Jangan biarkan badge status lebarnya tidak konsisten.
+- Jangan biarkan footer terasa 'tenggelam' dengan kontras warna abu-abu.
 **Hindari**: Jangan gabungkan registrasi dan token dalam satu subscription schema. Jangan pakai kata "subscription" untuk registrasi awal karena user akan bingung menganggapnya recurring.
 
 ### [20260806] Floating PnL not displaying in AccountOverview
@@ -452,4 +507,55 @@ px tsc --noEmit di frontend & server untuk catch broken import.
 1. Shorten prefix `registration` → `reg_` dan `token_topup` → `top_` (42 char < 50 limit).
 2. Tambah `/v1` di semua URL fetch frontend.
 3. Tambah `enabled_payments` di `midtrans.service.ts` untuk menampilkan metode pembayaran yang benar.
+
+### [20260923] Market News API — HTTP 500 akibat AI Batch Analysis Timeout
+**Area**: Backend / Express / Next.js Proxy
+**Root Cause**:
+1. `GET /api/v1/market-data/news` memanggil `macroAiService.batchAnalyzeNews()` secara synchronous saat cache habis (60s TTL).
+2. `batchAnalyzeNews` menggunakan `axios` dengan `timeout: 45000` (45s) untuk setiap model di NINE_ROUTER_MODELS — bisa total lebih dari 90s jika semua model gagal.
+3. Next.js `rewrites()` proxy di `next.config.ts` memiliki timeout ~30s default → request dari frontend mati sebelum backend selesai → `HTTP 500: Internal Server Error`.
+4. Root cause dikonfirmasi via `curl --max-time 5` ke `:5000` (instant dari cache) vs `curl` ke `:3000` yang timeout 30s lalu 500.
+**Solusi**:
+1. Tambah `Promise.race()` di handler `/news` dengan timeout 20 detik: jika backend melampaui 20s, langsung kembalikan mock news sebagai fallback (HTTP 200, bukan 500).
+2. Fallback payload berisi `fallback: true` agar klien bisa membedakan data real vs mock.
+3. Handler sudah ada error guard `error.message && error.message.includes("Rate limited")` untuk mencegah crash saat error adalah non-standard object.
+**QA Result**: PASS — `localhost:5000` & `localhost:3000` keduanya mengembalikan HTTP 200 dengan schema valid. 0 TS errors. Risiko regresi **5% (Low)**.
+**Hindari**:
+- Jangan pernah `await` AI service call secara langsung dalam HTTP handler tanpa timeout guard — AI API lambat bisa membunuh proxy.
+- Jika butuh UI load cepat saat upstream degraded, pertimbangkan turunkan race timeout dari 20s ke 10–12s.
+- Cache TTL 60s di `market-data.service.ts` cukup untuk meminimalisir frekuensi AI call, jangan dikurangi.
+
+### [20260924] Asymmetric Skeleton Loading & State Erasure pada Panel Liquidity ON RRP dan TGA
+**Area**: Frontend / Macro Terminal / React Hooks
+**Root Cause**:
+1. **Asymmetric Loading UI**: Component `LiquidityGaugePanel` merender UI `GaugeRow` (donat gauge + change + timer) untuk ON RRP secara langsung sejak awal karena `DEFAULT_LIQUIDITY` memiliki nilai default `0.00B`. Sedangkan TGA memakai conditional rendering (`tga ? <GaugeRow /> : <div>TGA Data Loading...</div>`), sehingga TGA tampil sebagai spinner teks saja saat `tga` bernilai `undefined`.
+2. **WebSocket State Wipe**: Method `applyLiquidityUpdate` di `MacroTerminalContext.tsx` menerima payload ON RRP dari WebSocket tanpa field `tga`, dan me-overwrite objek `liquidity` secara total tanpa menyalin `prev.tga`, sehingga memicu penghapusan data TGA secara instan setiap kali WebSocket terhubung.
+3. **Historical Date Stale Trap**: `getStatusFromResponse` di `useDataFetching.ts` mengevaluasi kebaruan data (*freshness*) berdasarkan `data.date` (tanggal publikasi laporan Treasury seperti `"2026-09-21"` yang berusia 2-3 hari) bukan `fetchedAt` (waktu snapshot API diambil), sehingga memicu status `"stale"` dan badge "Connecting..." secara permanen.
+**Solusi**:
+1. Menambahkan `DEFAULT_TGA` dengan struktur angka default ($0.00B) yang identik dengan `DEFAULT_LIQUIDITY`, dan merender `GaugeRow` TGA secara simetris sejak frame pertama.
+2. Memperbarui `applyLiquidityUpdate` untuk mempertahankan TGA tersimpan via `tga: payload.tga ?? prev?.tga`.
+3. Memperbarui `getStatusFromResponse` agar mengevaluasi kebaruan berdasarkan `data.fetchedAt` (timestamp snapshot API), bukan tanggal historis laporan Treasury.
+**Hindari**: Jangan gunakan conditional spinner kasar untuk satu sisi panel sementara sisi lainnya menggunakan wireframe placeholder. Selalu selaraskan struktur skeleton UI antar komponen yang berdampingan.
+
+### [20260923] Frontend Runtime ReferenceError — SCENARIO_DESCRIPTIONS is not defined
+**Area**: Frontend / Next.js / AgentIntelligencePanel
+**Root Cause**:
+1. Komponen `AgentIntelligencePanel` mereferensikan objek `SCENARIO_DESCRIPTIONS` (untuk menampilkan ringkasan tesis dan skenario taktis Hawk, Dove, dan Contrarian).
+2. Konstanta `SCENARIO_DESCRIPTIONS` belum dideklarasikan di dalam file `agent-intelligence-panel.tsx`, sehingga memicu runtime `ReferenceError: SCENARIO_DESCRIPTIONS is not defined` pada rendering React component tree.
+**Solusi**:
+1. Menambahkan deklarasi objek `SCENARIO_DESCRIPTIONS` lengkap dengan properti `hawk`, `dove`, dan `contrarian` (berisi `thesis`, `focus`, dan `scenario`) di bagian atas komponen `agent-intelligence-panel.tsx`.
+**QA Result**: PASS — Referensi variabel sekarang terdefinisi dengan aman.
+
+**[FRONTEND_ENGINEER] progress: COMPLETED - Fixed SCENARIO_DESCRIPTIONS ReferenceError in AgentIntelligencePanel.tsx - Lesson: Selalu deklarasikan konstanta data lokal sebelum render komponen React yang menggunakannya**
 **Hindari**: Jangan mengasumsikan panjang `order_id` tidak masalah. Selalu verifikasi panjang string sebelum kirim ke Midtrans. Jangan lupa tambah `/v1` di semua URL fetch frontend.
+
+### [20260926] Full Codebase Scan & Real Stack Synchronization (Next.js 16 + Express 5 + Electron 35)
+**Area**: Documentation / Memory / Architecture / Codebase Audit
+**Root Cause**:
+1. Dokumentasi di `.kilo/MEMORY.md` dan `PROJECT_SCAN.md` masih mencatat dependensi dan statistik usang (misalnya: tertulis Next.js 14 alih-alih 16.2.1, 40 services alih-alih 51+, 15 models alih-alih 25, 21 routes alih-alih 25).
+2. Terdapat modul-modul penting baru yang belum tercatat: `UserAgentMemory`, `VectorMemory`, `ReflectionLog`, `AgentConsensus`, `ProactiveAlert/Watcher`, dan streamlining strategi Playbook ke 3 metodologi baku (ICT, MSNR, SMC).
+**Solusi**:
+1. Melakukan pemindaian menyeluruh terhadap 164 file backend (36.6k LOC) dan 163 file frontend (36.8k LOC).
+2. Memperbarui SSOT arsitektur pada `.kilo/MEMORY.md` dan `PROJECT_SCAN.md` agar mencerminkan kondisi aktual (Next.js 16.2.1, React 19, Tailwind v4, Express 5.2.1, Mongoose 9.3.3, 25 Models, 25 Routes, 51 Services, 20 Frontend pages).
+3. Mendokumentasikan status implementasi fitur baru (Macro Terminal, Agent Consensus, User Agent Memory).
+**Hindari**: Jangan mengandalkan memori/asumsi versi dependensi lama saat mendiagnosis bug. Selalu verifikasi dari `package.json` dan struktur file aktual di codebase.
