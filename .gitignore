@@ -116,3 +116,7 @@ server/scripts/probe-*.mjs
 
 # Temp lesson files
 .kilo/temp_lesson.md
+
+# OTA Patch artifacts (contain build output, never commit)
+desktop/dist-patch/
+update/

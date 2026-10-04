@@ -99,6 +99,12 @@ jobs:
             exit 1
           fi
 
+
+      - name: Secret scanning with gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Auth bypass verification
         run: |
           if grep -r "x-integration-test" server/src/middleware/auth.ts | grep -v "NODE_ENV === \"test\""; then
