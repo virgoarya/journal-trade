@@ -121,6 +121,9 @@ server/scripts/probe-*.mjs
 desktop/dist-patch/
 update/
 
+# Runtime monitoring output (written by system-monitor-agent, contains live data)
+server/monitoring-reports/
+
 # Build artifacts
 *.tsbuildinfo
 

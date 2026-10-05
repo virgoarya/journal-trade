@@ -56,8 +56,7 @@ export function useWebSocket(
       ws.onopen = () => {
         connectingRef.current = false;
         setStatus("connected");
-        console.log("[Macro Terminal] WebSocket connected");
-      };
+              };
 
       ws.onmessage = (event) => {
         try {

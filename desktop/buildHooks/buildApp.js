@@ -76,7 +76,17 @@ const targetServer = path.join(resourcesDir, 'server');
 console.log(`[4/6] Bundling Backend Server to ${targetServer}...`);
 fs.mkdirSync(targetServer, { recursive: true });
 fs.copyFileSync(path.join(projectRoot, 'server', 'package.json'), path.join(targetServer, 'package.json'));
-fs.copyFileSync(path.join(projectRoot, 'server', '.env'), path.join(targetServer, '.env'));
+// Never ship the developer's .env. At runtime the packaged server resolves
+// its config from %APPDATA%/hunter-trades/server.env (see resolveEnvFile in
+// server/src/index.ts); this template is only the first-run seed and gets
+// freshly generated secrets on first launch. Shipping server/.env put 40
+// production credentials on every user's disk.
+const envExampleSrc = path.join(projectRoot, 'server', '.env.example');
+if (!fs.existsSync(envExampleSrc)) {
+    console.error('❌ server/.env.example is missing — refusing to build an installer without a config template.');
+    process.exit(1);
+}
+fs.copyFileSync(envExampleSrc, path.join(targetServer, '.env.example'));
 if (fs.existsSync(path.join(projectRoot, 'server', 'fetch_rates.py'))) {
     fs.copyFileSync(path.join(projectRoot, 'server', 'fetch_rates.py'), path.join(targetServer, 'fetch_rates.py'));
 }
@@ -85,15 +95,34 @@ if (fs.existsSync(path.join(projectRoot, 'server', 'trade_api.py'))) {
 }
 runRobocopy(path.join(projectRoot, 'server', 'dist'), path.join(targetServer, 'dist'));
 
-    // Use regular install instead of production to ensure devDependencies like 9router CLI are available
-    console.log(`[4.1/6] Installing dependencies for backend server...`);
-    try {
-        execSync('npm install', { cwd: targetServer, stdio: 'inherit' });
-    } catch (e) {
-        console.warn(`[buildApp] npm install failed for server: ${e.message}`);
-        // Fallback to robocopy
-        runRobocopy(path.join(projectRoot, 'server', 'node_modules'), path.join(targetServer, 'node_modules'));
-    }
+// Deterministic dependency install: the lockfile decides which bytes ship.
+// A bare `npm install` lets the registry decide at build time, so two builds of
+// the same commit could ship different code.
+const serverLockSrc = path.join(projectRoot, 'server', 'package-lock.json');
+if (!fs.existsSync(serverLockSrc)) {
+    console.error('❌ server/package-lock.json is missing — refusing to build a non-reproducible installer.');
+    process.exit(1);
+}
+fs.copyFileSync(serverLockSrc, path.join(targetServer, 'package-lock.json'));
+// Copy .npmrc so npm ci respects allowScripts (e.g. 9router postinstall)
+const serverNpmrcSrc = path.join(projectRoot, 'server', '.npmrc');
+if (fs.existsSync(serverNpmrcSrc)) {
+    fs.copyFileSync(serverNpmrcSrc, path.join(targetServer, '.npmrc'));
+}
+console.log(`[4.1/6] Installing backend dependencies (npm ci)...`);
+// Clean node_modules before npm ci to avoid ENOTEMPTY on Windows
+const targetNodeModules = path.join(targetServer, 'node_modules');
+if (fs.existsSync(targetNodeModules)) {
+    console.log('  Cleaning existing node_modules...');
+    fs.rmSync(targetNodeModules, { recursive: true, force: true });
+}
+try {
+    execSync('npm ci --ignore-scripts', { cwd: targetServer, stdio: 'inherit', env: { ...process.env, npm_config_allow_scripts: '9router' } });
+} catch (e) {
+    console.error(`[buildApp] npm ci failed for server: ${e.message}`);
+    console.error('[buildApp] Refusing to fall back to copying node_modules from the dev tree.');
+    process.exit(1);
+}
 
 
 // 6. Copy Frontend Files -> resources/frontend
@@ -112,7 +141,7 @@ if (fs.existsSync(nestedFrontendDir) && fs.existsSync(path.join(nestedFrontendDi
     actualSourceFrontendDir = nestedFrontendDir;
 }
 
-runRobocopy(actualSourceFrontendDir, targetFrontend);
+runRobocopy(actualSourceFrontendDir, targetFrontend, '.env');
 // Next.js standalone server reads static assets from .next/static relative to server.js
 runRobocopy(path.join(projectRoot, 'frontend', '.next', 'static'), path.join(targetFrontend, '.next', 'static'));
 runRobocopy(path.join(projectRoot, 'frontend', 'public'), path.join(targetFrontend, 'public')); // Public assets
@@ -124,8 +153,10 @@ const checks = [
     { name: 'Desktop App Entry (resources/app/main.js)', path: path.join(targetApp, 'main.js') },
     { name: 'Backend Entry (resources/server/dist/index.js)', path: path.join(targetServer, 'dist', 'index.js') },
     { name: 'Backend Express Module', path: path.join(targetServer, 'node_modules', 'express') },
+    { name: 'Backend 9Router CLI', path: path.join(targetServer, 'node_modules', '.bin', '9router.cmd') },
     { name: 'Frontend Entry (resources/frontend/server.js)', path: path.join(targetFrontend, 'server.js') },
     { name: 'Frontend Next Module', path: path.join(targetFrontend, 'node_modules', 'next') },
+    { name: 'Server config template (.env.example)', path: path.join(targetServer, '.env.example') },
 ];
 // Check for nested frontend server.js
 const nestedFrontendServerJs = path.join(targetFrontend, 'frontend', 'server.js');
@@ -138,6 +169,19 @@ for (const check of checks) {
     const exists = fs.existsSync(check.path);
     console.log(`  ${exists ? '✅' : '❌'} ${check.name}`);
     if (!exists) allPassed = false;
+}
+
+// Negative assertion: no real .env may exist anywhere in the bundle.
+const forbiddenEnv = [
+    path.join(targetServer, '.env'),
+    path.join(targetFrontend, '.env'),
+    path.join(targetFrontend, 'frontend', '.env'),
+].filter(fs.existsSync);
+if (forbiddenEnv.length) {
+    console.error('\n❌ Error: secret .env file(s) present in the bundle:');
+    for (const p of forbiddenEnv) console.error('   - ' + p);
+    console.error('   Installers must ship a .env.example template, never live credentials.');
+    process.exit(1);
 }
 
 if (!allPassed) {

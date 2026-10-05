@@ -248,8 +248,7 @@ function LogTradePageInner() {
       setLoading(true);
       setError(null);
       const result = await tradeService.getAll(includeDeleted);
-      console.log("FetchTrades result:", { includeDeleted, success: result.success, data: result.data, error: result.error });
-      if (result.success && Array.isArray(result.data)) {
+            if (result.success && Array.isArray(result.data)) {
         setTrades(result.data);
       } else {
         const errorMsg = result.error || "Failed to fetch trades";

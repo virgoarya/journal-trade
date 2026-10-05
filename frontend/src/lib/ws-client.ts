@@ -59,8 +59,7 @@ export class Mt5WebSocketClient {
   private handleOpen() {
     this.reconnectAttempts = 0;
     this.isReconnecting = false;
-    console.log("Connected to MT5 WebSocket");
-  }
+      }
 
   private handleClose(event: CloseEvent) {
     if (this.bufferMonitorInterval) {
@@ -79,8 +78,7 @@ export class Mt5WebSocketClient {
     const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 8000);
     this.reconnectAttempts++;
 
-    console.log(`Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`);
-    setTimeout(() => {
+        setTimeout(() => {
       this.connect();
     }, delay);
   }
@@ -111,18 +109,15 @@ export class Mt5WebSocketClient {
   }
 
   private handleTick(tick: Mt5Tick) {
-    console.log("Tick received:", tick);
-    // Implement tick handling logic
+        // Implement tick handling logic
   }
 
   private handlePosition(position: Mt5Position) {
-    console.log("Position update:", position);
-    // Implement position handling logic
+        // Implement position handling logic
   }
 
   private handleOrder(order: Mt5Order) {
-    console.log("Order update:", order);
-    // Implement order handling logic
+        // Implement order handling logic
   }
 
   public disconnect() {

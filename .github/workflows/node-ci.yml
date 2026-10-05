@@ -1,5 +1,9 @@
 name: Node.js CI
 
+# Monorepo layout: server/ (Express 5 + TS), frontend/ (Next.js), desktop/ (Electron).
+# There is no root application — every job installs and runs inside its subproject.
+# The root package.json only provides thin `npm run <x>` delegators.
+
 on:
   push:
     branches: [main]
@@ -11,7 +15,8 @@ env:
   NODE_ENV: test
 
 jobs:
-  test:
+  server:
+    name: Server (typecheck + build + tests)
     runs-on: ubuntu-latest
 
     services:
@@ -31,6 +36,10 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 3
 
+    defaults:
+      run:
+        working-directory: server
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,9 +49,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
 
       - name: Build TypeScript
         run: npm run build
@@ -51,14 +64,95 @@ jobs:
         run: npm run test
         timeout-minutes: 10
 
-      - name: Upload test coverage (if coverage provider available)
-        if: success()
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+  frontend:
+    name: Frontend (typecheck + lint + tests + build)
+    runs-on: ubuntu-latest
 
-  lint:
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test
+        timeout-minutes: 10
+
+      - name: Production build (standalone)
+        run: npm run build
+
+  security-scan:
+    name: Security (gitleaks + secret hygiene)
+    runs-on: ubuntu-latest
+    # NOTE: deliberately has NO `needs:` — this job must never be skipped
+    # because another job failed. A gated scanner that never runs is not a
+    # scanner. (A previous revision had `needs: test`; the test job died on
+    # `npm ci` at the repo root, so gitleaks never executed at all.)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scanning with gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auth bypass verification
+        run: |
+          if grep -rn "x-integration-test" server/src/middleware/auth.ts | grep -v 'NODE_ENV === "test"'; then
+            echo "❌ Auth bypass still active outside test environments"
+            exit 1
+          fi
+
+      - name: Legacy validation middleware must be gone
+        run: |
+          if [ -f "server/src/middleware/validate.ts" ]; then
+            echo "❌ Legacy validate.ts still exists"
+            exit 1
+          fi
+
+      - name: Dev secret files must not be tracked in git
+        run: |
+          leaked=$(git ls-files | grep -E '(^|/)\.env$' || true)
+          if [ -n "$leaked" ]; then
+            echo "❌ .env file(s) tracked in git:"
+            echo "$leaked"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Server dependency audit
+        working-directory: server
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  release-gate:
+    name: Release gate (dependency pins)
     runs-on: ubuntu-latest
 
     steps:
@@ -70,51 +164,5 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run linter (if configured)
-        run: |
-          if [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ]; then
-            npm run lint || echo "ESLint not configured, skipping"
-          else
-            echo "No ESLint configured, skipping"
-          fi
-
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Node.js Security Audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-
-      - name: Dependency Vulnerability Check
-        run: |
-          # Verify no hardcoded secrets
-          if grep -r --include="*.ts" --include="*.js" --include=".env*" "process.env\.[A-Z_]*SECRET\|process.env\.[A-Z_]*API_KEY" . && \
-             ! grep -r --include="*.ts" --include="*.js" --include=".env*" "process.env\.[A-Z_]*SECRET.*=.*['\"]\|process.env\.[A-Z_]*API_KEY.*=.*['\"]" .; then
-            echo "⚠️  Potential hardcoded secrets detected"
-            exit 1
-          fi
-
-
-      - name: Secret scanning with gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auth bypass verification
-        run: |
-          if grep -r "x-integration-test" server/src/middleware/auth.ts | grep -v "NODE_ENV === \"test\""; then
-            echo "❌ Auth bypass bypass still active in non-test environments"
-            exit 1
-          fi
-
-      - name: Validation consolidation verification
-        run: |
-          if [ -f "server/src/middleware/validate.ts" ]; then
-            echo "❌ Legacy validate.ts still exists"
-            exit 1
-          fi
+      - name: Desktop dependencies must be pinned to exact versions
+        run: node scripts/check-desktop-pins.mjs

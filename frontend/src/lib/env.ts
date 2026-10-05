@@ -3,4 +3,3 @@ export const env = {
   backendUrl: process.env.BACKEND_URL || "http://localhost:3001",
 };
 
-console.log("Current Backend URL:", env.backendUrl);

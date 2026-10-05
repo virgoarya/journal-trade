@@ -9,8 +9,7 @@ export async function GET(req: NextRequest) {
   const backendPath = pathSegments.slice(1).join("/"); // Exclude '/api/' prefix
   const finalBackendUrl = `${BACKEND_URL}/${backendPath}`;
 
-  console.log(`[Proxy GET] ${req.nextUrl.pathname} -> ${finalBackendUrl}`);
-  return proxyRequest(req, finalBackendUrl);
+    return proxyRequest(req, finalBackendUrl);
 }
 
 export async function POST(req: NextRequest) {
@@ -20,8 +19,7 @@ export async function POST(req: NextRequest) {
   const backendPath = pathSegments.slice(1).join("/"); // Exclude '/api/' prefix
   const finalBackendUrl = `${BACKEND_URL}/${backendPath}`;
 
-  console.log(`[Proxy POST] ${req.nextUrl.pathname} -> ${finalBackendUrl}`);
-  return proxyRequest(req, finalBackendUrl);
+    return proxyRequest(req, finalBackendUrl);
 }
 
 async function proxyRequest(req: NextRequest, url: string) {
@@ -45,8 +43,7 @@ async function proxyRequest(req: NextRequest, url: string) {
   try {
     const res = await fetch(url, init);
     const data = await res.json().catch(() => ({ error: "Backend returned invalid JSON" }));
-    console.log(`[Proxy Response] ${res.status}`, JSON.stringify(data).slice(0, 500));
-    return Response.json(data, { status: res.status });
+        return Response.json(data, { status: res.status });
   } catch (error: any) {
     console.error("[Proxy Fetch Error]", error.message);
     return Response.json({ error: "Proxy fetch error: " + error.message }, { status: 500 });

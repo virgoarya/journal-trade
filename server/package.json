@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "proxy": "npx 9router",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run --pool=forks --max-workers=1",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
@@ -15,6 +16,7 @@
     "prisma:studio": "prisma studio",
     "audit:data": "tsx src/scripts/audit-data-freshness.ts"
   },
+
   "keywords": [],
   "author": "",
   "license": "ISC",

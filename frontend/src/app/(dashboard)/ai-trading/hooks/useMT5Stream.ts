@@ -54,8 +54,7 @@ function connect() {
     isConnecting = false;
     attempt = 0;
     broadcastToSubscribers({ type: "mt5_status", data: { connected: true } });
-    console.log("[MT5 Stream] Connected to backend WS server.");
-  };
+      };
 
   ws.onmessage = (event) => {
     try {
@@ -69,10 +68,7 @@ function connect() {
   ws.onclose = (event) => {
     const code = event.code ?? "?";
     const reason = event.reason ?? "";
-    console.log(
-      `[MT5 Stream] Disconnected (code=${code}${reason ? `, reason=${reason}` : ""}). Reconnecting...`,
-    );
-    isConnecting = false;
+        isConnecting = false;
     wsRef = null;
     broadcastToSubscribers({ type: "mt5_status", data: { connected: false } });
     scheduleReconnect();
