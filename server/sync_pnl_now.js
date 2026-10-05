@@ -1,8 +1,9 @@
+require('dotenv').config({ path: './.env' });
 const mongoose = require('mongoose');
 const dns = require('dns');
 dns.setServers(["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]);
 
-const MONGODB_URI = 'mongodb+srv://virgoarya94_db_user:eFxSx5N81QMr6vMx@cluster0.7dzhhrn.mongodb.net/journal_trade_dev?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.DATABASE_URL || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/journal-trade-db';
 
 async function main() {
   await mongoose.connect(MONGODB_URI);

@@ -113,7 +113,7 @@ export function ConnectionPanel({
                   type={showApiKey ? "text" : "password"}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="e.g. 1oBaWtEsZuqVsfzLoHlALKBtNcTQuFHt5AHGrRS9Zw"
+                  placeholder="Paste your MT5 MCP API key"
                   className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/40 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm pr-12 font-mono text-sm"
                   required
                 />

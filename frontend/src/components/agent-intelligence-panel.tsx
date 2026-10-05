@@ -6,6 +6,24 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useMacroTerminal } from "@/components/macro-terminal/MacroTerminalContext";
 
+const SCENARIO_DESCRIPTIONS = {
+  hawk: {
+    thesis: "Inflasi tinggi & pengetatan likuiditas mendesak instrumen lindung nilai",
+    focus: "Kenaikan yield, penguatan mata uang utama, dan tekanan pada aset berisiko",
+    scenario: "Restriksi moneter ketat mempercepat aliran modal ke Safe Haven & Dollar"
+  },
+  dove: {
+    thesis: "Pelonggaran moneter & pemangkasan suku bunga mendorong ekspansi pasar",
+    focus: "Suntikan likuiditas, rotasi ke aset komoditas & ekuitas berisiko tinggi",
+    scenario: "Peluang rally pada komoditas & saham seiring penurunan real yields"
+  },
+  contrarian: {
+    thesis: "Kondisi pasar overextended / mispricing ekstrem dari konsensus umum",
+    focus: "Deteksi anomali harga, pola capitulation, dan potensi mean-reversion",
+    scenario: "Eksploitasi jebakan likuiditas dan pembalikan arah tajam saat konsensus salah"
+  }
+};
+
 interface AgentInsight {
   personaId: "hawk" | "dove" | "contrarian" | "consensus";
   conviction: "TINGGI" | "SEDANG" | "RENDAH";
@@ -130,17 +148,52 @@ function AgentReplyCard({
   );
 }
 
+const AGENT_WEIGHTS = {
+  hawk: 35,
+  dove: 35,
+  contrarian: 30,
+} as const;
+
 function ConsensusResult({ consensus }: { consensus: string }) {
   const cleanConsensus = consensus.replace(/```[a-z]*\s*$/g, "").replace(/`+\s*$/g, "").trim();
 
+  // Extract bias and conviction if available in the text
+  const biasMatch = cleanConsensus.match(/(?:bias(?:\s+akhir)?|sentimen|stance)\s*:\s*([^.\n]+)/i);
+  const biasText = biasMatch ? biasMatch[1].trim() : null;
+
   return (
-    <div className="p-4 rounded-lg border border-accent-gold/30 bg-accent-gold/5 space-y-2">
-      <div className="flex items-center gap-2 border-b border-accent-gold/20 pb-2">
-        <MessageCircle size={14} className="text-accent-gold" />
-        <h4 className="font-mono text-xs font-bold text-accent-gold uppercase tracking-wider">
-          Consensus & Action Plan
-        </h4>
+    <div className="p-4 rounded-lg border border-accent-gold/40 bg-accent-gold/5 space-y-3 shadow-md">
+      {/* Header & Conflict Gauge */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-accent-gold/20 pb-2.5">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={15} className="text-accent-gold" />
+          <h4 className="font-mono text-xs font-bold text-accent-gold uppercase tracking-wider">
+            Consensus & Action Plan
+          </h4>
+        </div>
+        
+        {/* Conflict / Agent Weights Gauge */}
+        <div className="flex items-center gap-1.5 font-mono text-[9px] bg-black/40 px-2 py-1 rounded border border-border-subtle/40 self-start sm:self-auto">
+          <span className="text-text-muted">Influence:</span>
+          <span className="text-red-300 font-bold">🦅 {AGENT_WEIGHTS.hawk}%</span>
+          <span className="text-text-muted">|</span>
+          <span className="text-emerald-300 font-bold">🕊️ {AGENT_WEIGHTS.dove}%</span>
+          <span className="text-text-muted">|</span>
+          <span className="text-purple-300 font-bold">🎯 {AGENT_WEIGHTS.contrarian}%</span>
+        </div>
       </div>
+
+      {/* Conviction / Bias Pill if detected */}
+      {biasText && (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-text-muted uppercase">Macro Bias:</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded border border-amber-500/50 bg-amber-950/40 text-amber-300 font-mono text-[10px] font-bold shadow-sm">
+            ⚡ {biasText}
+          </span>
+        </div>
+      )}
+
+      {/* Consensus Markdown Content */}
       <div className="text-xs font-mono text-text-primary leading-relaxed prose prose-invert max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanConsensus}</ReactMarkdown>
       </div>
@@ -180,17 +233,17 @@ function FormattedInsightContent({ content }: { content: string }) {
           const tagUpper = tag.toUpperCase();
           const badgeColor =
             tagUpper === "KONDISI"
-              ? "text-blue-400 bg-blue-500/10 border-blue-500/30"
+              ? "text-sky-300 bg-sky-950/40 border-sky-500/40"
               : tagUpper === "IMPLIKASI"
-              ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
-              : "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
+              ? "text-amber-300 bg-amber-950/40 border-amber-500/40"
+              : "text-emerald-300 bg-emerald-950/40 border-emerald-500/40";
 
           return (
-            <div key={idx} className="space-y-1">
-              <span className={`inline-block font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+            <div key={idx} className="space-y-1 bg-surface-elevated/20 p-2 rounded border border-border-subtle/50">
+              <span className={`inline-flex items-center font-mono text-[9px] font-bold px-2 py-0.5 rounded border tracking-wider shadow-sm ${badgeColor}`}>
                 {fullHeader}
               </span>
-              <p className="text-[11px] text-text-muted leading-relaxed pl-1">
+              <p className="text-[11px] font-mono text-slate-200 leading-relaxed pl-1">
                 {text.trim()}
               </p>
             </div>
@@ -219,39 +272,6 @@ const DEBATE_QUICK_PROMPTS = [
   {
     label: "Fed Pivot Risk",
     prompt: "Risiko Fed pivot Q4 — dampak pada Yield Obligasi, USD corridor, dan emas.",
-  },
-];
-
-const PERSONA_QUICK_GUIDES = [
-  {
-    id: "hawk" as const,
-    personaLabel: "Hawk · The Quant",
-    category: "Pengetatan & Likuiditas",
-    prompt: "Analisis risiko stagflasi, tekanan CPI YoY 3.71%, dan implikasi liquidity drain 93 terhadap aset berisiko.",
-    border: "border-red-500/20",
-    bg: "bg-red-500/5 hover:bg-red-500/10",
-    textColor: "text-red-400",
-    emoji: "🦅",
-  },
-  {
-    id: "dove" as const,
-    personaLabel: "Dove · The Strategist",
-    category: "Peluang & Pertumbuhan",
-    prompt: "Identifikasi peluang risk-on di tengah PMI ekspansif 55.6 dan potensi pelonggaran moneter bank sentral.",
-    border: "border-green-500/20",
-    bg: "bg-green-500/5 hover:bg-green-500/10",
-    textColor: "text-green-400",
-    emoji: "🕊️",
-  },
-  {
-    id: "contrarian" as const,
-    personaLabel: "Contrarian · The Maverick",
-    category: "Anomali & Tail Risk",
-    prompt: "Bongkar jebakan konsensus pasar, risiko likuidasi tersembunyi, dan pembalikan tren yang diabaikan.",
-    border: "border-purple-500/20",
-    bg: "bg-purple-500/5 hover:bg-purple-500/10",
-    textColor: "text-purple-400",
-    emoji: "🎯",
   },
 ];
 
@@ -337,12 +357,14 @@ export function AgentIntelligencePanel() {
     setContrarianReply("");
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/${mode}`, {
+      // FIX: Use correct endpoint that supports 'mode' parameter
+      const res = await fetch(`${BACKEND_URL}/api/v1/agent-consensus`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
           context: { currentRegime, liquidity, assets },
+          mode,
         }),
       });
 
@@ -378,7 +400,8 @@ export function AgentIntelligencePanel() {
         const result = await res.json();
         if (result.success && Array.isArray(result.data)) {
           setDeepResearchResults(result.data);
-          setActiveTab("dashboard");
+          // Tetap di tab debate, jangan lempar ke dashboard
+          setActiveTab("debate");
         }
       }
     } catch (e) {
@@ -393,9 +416,13 @@ export function AgentIntelligencePanel() {
 
     setLoading(true);
     try {
+      const authHeader = localStorage.getItem("auth_token") || "";
       const res = await fetch(`${BACKEND_URL}/api/v1/agent-consensus/single/${persona}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authHeader}`
+        },
         body: JSON.stringify({
           prompt,
           context: { currentRegime, liquidity, assets },
@@ -472,7 +499,7 @@ export function AgentIntelligencePanel() {
             </div>
 
             {/* Proactive Insights */}
-            <div className="space-y-1.5 max-h-[320px] overflow-y-auto pb-2 custom-scrollbar">
+            <div className="space-y-1.5 pb-2 pt-1">
               <h4 className="font-mono text-[10px] uppercase tracking-widest text-text-muted flex items-center gap-1">
                 <Zap size={10} className="text-accent-gold" />
                 Proactive Insights (Auto-Watcher)
@@ -507,99 +534,110 @@ export function AgentIntelligencePanel() {
               )}
             </div>
 
-            {/* Single Agent Quick Query */}
-            <div className="space-y-1.5 pt-1">
-              <h4 className="font-mono text-[10px] uppercase tracking-widest text-text-muted">
-                Single Agent Direct Query
-              </h4>
-              <div className="grid grid-cols-3 gap-2">
-                {PERSONAS.map((persona) => (
-                  <button
-                    key={persona.id}
-                    onClick={() => handleSingleAgent(persona.id)}
-                    disabled={loading}
-                    className={`py-2 px-3 rounded border font-mono text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                      persona.id === "hawk"
-                        ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
-                        : persona.id === "dove"
-                        ? "border-green-500/30 text-green-400 hover:bg-green-500/10"
-                        : "border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                    }`}
-                  >
-                    <span>{persona.emoji}</span>
-                    <span>{persona.label}</span>
-                  </button>
-                ))}
+            {/* Agent Market Stance & Real-time Biases */}
+            <div className="space-y-2 pt-2 border-t border-border-subtle">
+              <div className="flex items-center justify-between">
+                <h4 className="font-mono text-[10px] uppercase tracking-widest text-text-muted flex items-center gap-1.5">
+                  <Activity size={11} className="text-accent-gold" />
+                  Instant Agent Market Stance & Tactical Bias
+                </h4>
+                <span className="text-[9px] font-mono text-text-muted">Klik card untuk jalankan kueri mendalam</span>
               </div>
 
-              {/* Default Placeholder when no agent query has been executed yet */}
-              {!loading && !hawkReply && !doveReply && !contrarianReply && (
-                <div className="mt-3 p-3 rounded-lg border border-border-subtle bg-surface-elevated/30 font-mono text-xs space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-border-subtle pb-1.5">
-                    <span className="text-[10px] uppercase font-bold text-accent-gold tracking-wider">
-                      💡 Panduan Persona & Quick Prompts
-                    </span>
-                    <span className="text-[9px] text-text-muted">Klik untuk analisis instan</span>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                  <div className="space-y-2 text-[11px]">
-                    {PERSONA_QUICK_GUIDES.map((guide) => (
-                      <div key={guide.id}>
-                        <div
-                          onClick={() => handleSingleAgent(guide.id)}
-                          className={`p-2 rounded border ${guide.border} ${guide.bg} cursor-pointer transition-all flex items-start gap-2`}
-                        >
-                          <span className="text-base">{guide.emoji}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className={`font-bold ${guide.textColor}`}>{guide.personaLabel}</span>
-                              <span className="text-[9px] text-text-muted">{guide.category}</span>
-                            </div>
-                            <p className="text-[10px] text-text-muted mt-0.5">
-                              "{guide.prompt}"
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                {/* Hawk Tactical Stance Card */}
+                <div
+                  onClick={() => handleSingleAgent("hawk")}
+                  className="p-3 rounded-lg border border-red-500/40 bg-red-950/20 hover:bg-red-900/20 cursor-pointer transition-all space-y-2 group shadow-sm"
+                >
+                  <div className="flex items-center justify-between border-b border-red-500/30 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">🦅</span>
+                      <span className="font-mono text-xs font-bold text-red-300 group-hover:underline">Hawk Stance</span>
+                    </div>
+                    <span className="font-mono text-[9px] font-bold text-red-300 bg-red-500/20 px-2 py-0.5 rounded border border-red-500/40">
+                      HAWKISH / TIGHT
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-red-300 font-bold">Thesis:</span> {SCENARIO_DESCRIPTIONS.hawk.thesis}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-red-300 font-bold">Fokus:</span> {SCENARIO_DESCRIPTIONS.hawk.focus}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                    <span className="text-red-400 font-semibold">Scenario:</span> {SCENARIO_DESCRIPTIONS.hawk.scenario}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] font-mono pt-2 border-t border-red-500/20">
+                    <span className="text-slate-400">Liquidity drain via QT</span>
+                                        <span className="text-accent-gold font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 bg-white/5 hover:bg-accent-gold/20 px-2 py-0.5 rounded transition-colors">Jalankan &rarr;</span>
                   </div>
                 </div>
-              )}
+
+                {/* Dove Tactical Stance Card */}
+                <div
+                  onClick={() => handleSingleAgent("dove")}
+                  className="p-3 rounded-lg border border-emerald-500/40 bg-emerald-950/20 hover:bg-emerald-900/20 cursor-pointer transition-all space-y-2 group shadow-sm"
+                >
+                  <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">🕊️</span>
+                      <span className="font-mono text-xs font-bold text-emerald-300 group-hover:underline">Dove Stance</span>
+                    </div>
+                    <span className="font-mono text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/40">
+                      DOVISH / EASING
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-emerald-300 font-bold">Thesis:</span> {SCENARIO_DESCRIPTIONS.dove.thesis}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-emerald-300 font-bold">Fokus:</span> {SCENARIO_DESCRIPTIONS.dove.focus}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                    <span className="text-emerald-400 font-semibold">Scenario:</span> {SCENARIO_DESCRIPTIONS.dove.scenario}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] font-mono pt-2 border-t border-emerald-500/20">
+                    <span className="text-slate-400">Rotasi cyclically / commodities</span>
+                                        <span className="text-accent-gold font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 bg-white/5 hover:bg-accent-gold/20 px-2 py-0.5 rounded transition-colors">Jalankan &rarr;</span>
+                  </div>
+                </div>
+
+                {/* Contrarian Tactical Stance Card */}
+                <div
+                  onClick={() => handleSingleAgent("contrarian")}
+                  className="p-3 rounded-lg border border-purple-500/40 bg-purple-950/20 hover:bg-purple-900/20 cursor-pointer transition-all space-y-2 group shadow-sm"
+                >
+                  <div className="flex items-center justify-between border-b border-purple-500/30 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">🎯</span>
+                      <span className="font-mono text-xs font-bold text-purple-300 group-hover:underline">Contrarian Stance</span>
+                    </div>
+                    <span className="font-mono text-[9px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/40">
+                      MAVERICK / ANOMALY
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-purple-300 font-bold">Thesis:</span> {SCENARIO_DESCRIPTIONS.contrarian.thesis}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                    <span className="text-purple-300 font-bold">Fokus:</span> {SCENARIO_DESCRIPTIONS.contrarian.focus}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                    <span className="text-purple-400 font-semibold">Scenario:</span> {SCENARIO_DESCRIPTIONS.contrarian.scenario}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] font-mono pt-2 border-t border-purple-500/20">
+                    <span className="text-slate-400">Fade consensus & liquidation</span>
+                                        <span className="text-accent-gold font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 bg-white/5 hover:bg-accent-gold/20 px-2 py-0.5 rounded transition-colors">Jalankan &rarr;</span>
+                  </div>
+                </div>
+              </div>
 
               {/* Display Single Agent Response in the Dashboard tab */}
               {loading && (
                 <div className="p-3 rounded border border-border-subtle bg-card/20 text-center font-mono text-xs text-accent-gold animate-pulse">
                   Agent sedang memproses kueri...
-                </div>
-              )}
-
-              {/* Deep Research Results */}
-              {deepResearchResults.length > 0 && (
-                <div className="space-y-4">
-                  <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-mono text-[10px] flex items-center justify-between">
-                    <span>🧠 Deep Research & Self-Improvement Cycle Complete</span>
-                    <span className="text-[9px] text-text-muted">Data Overview + Post-Hoc Analysis</span>
-                  </div>
-                  {deepResearchResults.map((res, idx) => (
-                    <div key={idx} className="p-3 rounded border border-border-subtle bg-card/60 space-y-2">
-                      <div className="flex items-center justify-between border-b border-border-subtle pb-1">
-                        <span className="font-mono text-xs font-bold text-accent-gold uppercase">{res.personaId} Deep Research</span>
-                        <span className={`font-mono text-[10px] font-bold ${res.conviction === 'TINGGI' ? 'text-red-400' : 'text-yellow-400'}`}>
-                          Conviction: {res.conviction}
-                        </span>
-                      </div>
-                      <div className="space-y-2 text-xs font-mono text-text-muted">
-                        <div>
-                          <span className="text-text-main font-bold block mb-0.5">1. Post-Hoc Analysis (Self-Improvement):</span>
-                          <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.selfImprovement}</p>
-                        </div>
-                        <div>
-                          <span className="text-text-main font-bold block mb-0.5">2. Critical Synthesis:</span>
-                          <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.marketComparison}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
 
@@ -632,89 +670,129 @@ export function AgentIntelligencePanel() {
 
         {activeTab === "debate" && (
           <>
-            {/* Debate Setup Controls */}
-            <div className="space-y-2 p-3 rounded-lg border border-border-subtle bg-card/30">
-              {/* Quick Prompt Selector */}
+            {/* Debate Setup Controls / Institutional AI War Room */}
+            <div className="space-y-3 p-3.5 rounded-lg border border-border-subtle bg-card/30">
+              
+              {/* 1. Active Agents in War Room */}
               <div>
-                <label className="font-mono text-[10px] uppercase tracking-wider text-text-muted block mb-1.5">
-                  Quick Topics
+                <label className="font-mono text-[10px] uppercase tracking-widest text-text-muted flex items-center gap-1 mb-2">
+                  <Bot size={11} className="text-accent-gold" />
+                  Active Agents in War Room
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {DEBATE_QUICK_PROMPTS.map((qp, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (selectedPrompt === qp.prompt) {
-                          setSelectedPrompt(null);
-                        } else {
-                          setSelectedPrompt(qp.prompt);
-                          setInputPrompt("");
-                        }
-                      }}
-                      className={`px-2.5 py-1 font-mono text-[10px] rounded border transition-all ${
-                        selectedPrompt === qp.prompt
-                          ? "border-accent-gold bg-accent-gold/15 text-accent-gold font-bold"
-                          : "border-border-subtle text-text-muted hover:text-text-main hover:bg-surface-elevated"
-                      }`}
-                    >
-                      {qp.label}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded border border-red-500/30 bg-red-950/25 flex items-center gap-2">
+                    <span className="text-sm">🦅</span>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[11px] font-bold text-red-300">Hawk Agent</div>
+                      <div className="font-mono text-[9px] text-slate-400 truncate">Macro / Rates / QT</div>
+                    </div>
+                  </div>
+                  <div className="p-2 rounded border border-emerald-500/30 bg-emerald-950/25 flex items-center gap-2">
+                    <span className="text-sm">🕊️</span>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[11px] font-bold text-emerald-300">Dove Agent</div>
+                      <div className="font-mono text-[9px] text-slate-400 truncate">Liquidity / Easing</div>
+                    </div>
+                  </div>
+                  <div className="p-2 rounded border border-purple-500/30 bg-purple-950/25 flex items-center gap-2">
+                    <span className="text-sm">🎯</span>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[11px] font-bold text-purple-300">Contrarian</div>
+                      <div className="font-mono text-[9px] text-slate-400 truncate">Anomaly / Sizing</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Custom Input Textarea */}
+              {/* 2. Quick Scenarios with Sub-labels */}
               <div>
+                <label className="font-mono text-[10px] uppercase tracking-wider text-text-muted block mb-1.5">
+                  Debate Scenarios & Quick Topics
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {DEBATE_QUICK_PROMPTS.map((qp, idx) => {
+                    const subLabels = [
+                      "USD Liquidity vs Geo-Risk",
+                      "Hawkish Pause vs Recession",
+                      "Yield Corridor & Gold Flow"
+                    ];
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          if (selectedPrompt === qp.prompt) {
+                            setSelectedPrompt(null);
+                          } else {
+                            setSelectedPrompt(qp.prompt);
+                            setInputPrompt("");
+                          }
+                        }}
+                        className={`p-2 text-left font-mono rounded border transition-all ${
+                          selectedPrompt === qp.prompt
+                            ? "border-accent-gold bg-accent-gold/15 text-accent-gold"
+                            : "border-border-subtle bg-surface-elev_tertiary/40 text-text-muted hover:text-text-main hover:bg-surface-elevated"
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold">{qp.label}</div>
+                        <div className="text-[9px] opacity-75 truncate mt-0.5">{subLabels[idx] || "Macro Analysis"}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Custom Input Textarea */}
+              <div>
+                <label className="font-mono text-[10px] uppercase tracking-wider text-text-muted block mb-1">
+                  Custom Query / War Room Topic
+                </label>
                 <textarea
                   value={inputPrompt}
                   onChange={(e) => {
                     setInputPrompt(e.target.value);
                     if (selectedPrompt) setSelectedPrompt(null);
                   }}
-                  placeholder="Atau ketik topik debat & analisis spesifik..."
-                  className="w-full p-2.5 rounded border border-border-subtle bg-surface-elevated/50 font-mono text-xs text-text-primary focus:outline-none focus:border-accent-gold/50 resize-none"
+                  placeholder="Masukkan topik, instrumen, atau dilema makro untuk didebatkan agen..."
+                  className="w-full p-2.5 rounded border border-border-subtle bg-surface-elevated/50 font-mono text-xs text-text-primary focus:outline-none focus:border-accent-gold/50 resize-none shadow-inner"
                   rows={2}
                 />
               </div>
 
-              {/* Debate Action Buttons */}
-              <div className="flex gap-2 pt-1">
+              {/* 4. Segmented Action Modes & Execute */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
                 <button
                   onClick={() => handleDebate("parallel")}
                   disabled={loading || (!inputPrompt.trim() && !selectedPrompt)}
-                  className="flex-1 py-2 px-3 rounded bg-accent-gold/15 border border-accent-gold/30 font-mono text-xs font-bold text-accent-gold hover:bg-accent-gold/25 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                  className="py-2.5 px-3 rounded bg-accent-gold/15 border border-accent-gold/30 font-mono text-xs font-bold text-accent-gold hover:bg-accent-gold/25 transition-all disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 group shadow-sm"
                 >
-                  <Send size={12} />
-                  <span>Parallel Debate</span>
+                  <div className="flex items-center gap-1">
+                    <Send size={12} />
+                    <span>Parallel Debate</span>
+                  </div>
+                  <span className="text-[8px] opacity-75 font-normal">Jawab bersamaan & independen</span>
                 </button>
                 <button
                   onClick={() => handleDebate("sequential")}
                   disabled={loading || (!inputPrompt.trim() && !selectedPrompt)}
-                  className="flex-1 py-2 px-3 rounded bg-data-profit/15 border border-data-profit/30 font-mono text-xs font-bold text-data-profit hover:bg-data-profit/25 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                  className="py-2.5 px-3 rounded bg-data-profit/15 border border-data-profit/30 font-mono text-xs font-bold text-data-profit hover:bg-data-profit/25 transition-all disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 group shadow-sm"
                 >
-                  <Bot size={12} />
-                  <span>Sequential Chain</span>
+                  <div className="flex items-center gap-1">
+                    <Bot size={12} />
+                    <span>Sequential Chain</span>
+                  </div>
+                  <span className="text-[8px] opacity-75 font-normal">Estafet & saling koreksi</span>
                 </button>
                 <button
                   onClick={handleDeepResearch}
                   disabled={loading}
-                  className="flex-1 py-2 px-3 rounded bg-purple-500/15 border border-purple-500/30 font-mono text-xs font-bold text-purple-400 hover:bg-purple-500/25 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                  className="py-2.5 px-3 rounded bg-purple-500/15 border border-purple-500/30 font-mono text-xs font-bold text-purple-400 hover:bg-purple-500/25 transition-all disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 group shadow-sm"
                 >
-                  <Activity size={12} />
-                  <span>Deep Research</span>
+                  <div className="flex items-center gap-1">
+                    <Activity size={12} />
+                    <span>Deep Research</span>
+                  </div>
+                  <span className="text-[8px] opacity-75 font-normal">Multi-step web & data</span>
                 </button>
-              </div>
-
-              {/* Mode Explanation Card */}
-              <div className="p-2.5 rounded-lg border border-border-subtle bg-surface-elevated/40 font-mono text-[10px] space-y-1.5 text-text-muted">
-                <div className="flex items-start gap-1.5">
-                  <span className="text-accent-gold font-bold">⚡ Parallel:</span>
-                  <span>Agent menjawab <span className="text-text-main font-semibold">bersamaan & independen</span> (cepat, multi-sudut pandang murni).</span>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span className="text-data-profit font-bold">🌀 Sequential:</span>
-                  <span>Agent menjawab <span className="text-text-main font-semibold">berantai/estafet</span> (saling mengoreksi, analisis lebih tajam & mendalam).</span>
-                </div>
               </div>
             </div>
 
@@ -751,6 +829,36 @@ export function AgentIntelligencePanel() {
             )}
 
             {consensus && <ConsensusResult consensus={consensus} />}
+
+            {/* Deep Research Results */}
+            {deepResearchResults.length > 0 && (
+              <div className="space-y-4">
+                <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-mono text-[10px] flex items-center justify-between">
+                  <span>Deep Research & Self-Improvement Cycle Complete</span>
+                  <span className="text-[9px] text-text-muted">Data Overview + Post-Hoc Analysis</span>
+                </div>
+                {deepResearchResults.map((res, idx) => (
+                  <div key={idx} className="p-3 rounded border border-border-subtle bg-card/60 space-y-2">
+                    <div className="flex items-center justify-between border-b border-border-subtle pb-1">
+                      <span className="font-mono text-xs font-bold text-accent-gold uppercase">{res.personaId} Deep Research</span>
+                      <span className={`font-mono text-[10px] font-bold ${res.conviction === 'TINGGI' ? 'text-red-400' : 'text-yellow-400'}`}>
+                        Conviction: {res.conviction}
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-xs font-mono text-text-muted">
+                      <div>
+                        <span className="text-text-main font-bold block mb-0.5">1. Post-Hoc Analysis (Self-Improvement):</span>
+                        <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.selfImprovement}</p>
+                      </div>
+                      <div>
+                        <span className="text-text-main font-bold block mb-0.5">2. Critical Synthesis:</span>
+                        <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.marketComparison}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

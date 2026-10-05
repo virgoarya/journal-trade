@@ -2,7 +2,7 @@ import { TradeEmotion } from "../models/TradeEmotion";
 import { AITradeLog } from "../models/AITradeLog";
 import { AIBacktestSkill } from "../models/AIBacktestSkill";
 import { silentLogger } from "../utils/silent-logger";
-import axios from "axios";
+import { agentConsensusService } from "./agent-consensus.service";
 import { env } from "../config/env";
 
 interface LLMInsightResult {
@@ -127,8 +127,10 @@ class JournalInsightService {
     const grouped: Record<string, any[]> = {};
     for (const trade of aiTrades) {
       if (!trade.executionTime) continue;
-      const hour = new Date(trade.executionTime).getHours();
-      const key = `${hour}:${trade.signal.symbol}`;
+      // Convert to NY Time (UTC-4/UTC-5 with DST)
+      const date = new Date(trade.executionTime);
+      const nyHour = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
+      const key = `${nyHour}:${trade.signal?.symbol || 'UNKNOWN'}`;
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(trade);
     }
@@ -140,7 +142,9 @@ class JournalInsightService {
       const wins = trades.filter(t => (t.pnl || 0) > 0).length;
       const avgR = trades.length > 0
         ? trades.reduce((sum, t) => {
-            const risk = Math.abs(t.signal.entry - t.signal.sl);
+            const entry = t.signal?.entry ?? 0;
+            const sl = t.signal?.sl ?? 0;
+            const risk = Math.abs(entry - sl);
             const rMultiple = risk > 0 ? (t.pnl || 0) / risk : 0;
             return sum + rMultiple;
           }, 0) / trades.length
@@ -163,7 +167,7 @@ class JournalInsightService {
     const result: { methodology: string; backtestWR: number; realWR: number; delta: number; recommendation: string; }[] = [];
     for (const methRank of skill.methodologyRankings) {
       const realTrades = aiTrades.filter(
-        t => t.signal.primaryMethodology === methRank.methodology
+        t => t.signal?.primaryMethodology === methRank.methodology
       );
       if (realTrades.length < 5) continue; // VERA: Min sample ≥ 5 trades
 
@@ -192,25 +196,15 @@ class JournalInsightService {
     const prompt = this.buildPrompt(data);
     
     try {
-      // AXIS: Call via agent-consensus endpoint with journal-analyzer persona
-      // VERA: Timeout > 5s → fallback
-      const response = await axios.post(
-        "http://localhost:5000/api/v1/agent-consensus/single/journal-analyzer",
-        { prompt, context: data },
-        { timeout: 25000 }
-      );
-      
-      const result = response.data;
-      return {
-        summary: result.reasoning || result?.content?.split("\n")[0] || "Tidak ada ringkasan",
-        strengths: result.strengths || [],
-        weaknesses: result.weaknesses || [],
-        actionItems: result.actionItems || []
-      };
+      // AXIS: Direct service call, fallback on any error
+      silentLogger.info(`[JOURNAL-INSIGHT] Calling agent consensus: dove`);
+      const response = await agentConsensusService.runSingleAgent("dove", prompt, data);
+      const reply = typeof response.reply === 'string' ? response.reply : JSON.stringify(response.reply);
+      return this.parseInsights(reply);
     } catch (err: any) {
       silentLogger.error(`[JOURNAL-INSIGHT] LLM call failed: ${err.message}`);
       return { // VERA: Fallback message
-        summary: "LLM analysis unavailable. Please try again later.",
+        summary: "Analisis AI saat ini tidak tersedia. Coba lagi dalam beberapa menit.",
         strengths: [],
         weaknesses: [],
         actionItems: []
@@ -223,7 +217,9 @@ class JournalInsightService {
       `- ${t.symbol} jam ${t.hour}:00 NY (UTC-4): ${t.count} trades, win rate ${t.winRate.toFixed(1)}%`
     ).join("\n");
 
-    return `Analisis trading journal berikut, fokus pada pola kerugian dan insight yang dapat ditindaklanjuti untuk meningkatkan performa. Sajikan rekomendasi spesifik dan prioritas. Semua waktu adalah dalam New York Time (UTC-4).
+    return `Sebagai 'Dove Analyst', fokuslah pada analisis obyektif dan data-driven dari journal trading. Identifikasi pola, baik positif maupun negatif, berdasarkan metrik yang diberikan. Sajikan insight yang akurat dan rekomendasi yang rasional.
+
+Analisis trading journal berikut:
 
 Total trades yang dianalisis: ${data.totalTrades}
 

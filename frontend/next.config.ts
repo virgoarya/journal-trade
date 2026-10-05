@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false, // Type checking aktif: error TS akan gagalkan build, mencegah bug runtime
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.discordapp.com',
+        pathname: '/**',
+      },
+    ],
+  },
   async rewrites() {
     return [
       // Catch-all API proxy (handles Auth, V1, etc.)

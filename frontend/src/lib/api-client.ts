@@ -1,4 +1,5 @@
 import { authClient } from "./auth-client";
+import { logger } from "./logger";
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -21,6 +22,7 @@ export class ApiClient {
     timeoutMs: number = 60000
   ): Promise<ApiResponse<T>> {
     try {
+      // PRE-REQUEST: Check if session exists (optional validation)
       const headers: HeadersInit = {
         "Content-Type": "application/json",
         ...options.headers,
@@ -38,6 +40,12 @@ export class ApiClient {
       });
 
       clearTimeout(timeoutId);
+
+      // INTERCEPTOR: Handle 401 Unauthorized
+      if (response.status === 401) {
+        logger.error(`[ApiClient] Unauthorized (401) on ${endpoint}`);
+        // Optional: Redirect to login or clear session state
+      }
 
       const contentType = response.headers.get("content-type");
       let data: any;
@@ -73,13 +81,13 @@ export class ApiClient {
       };
     } catch (error: any) {
       if (error.name === "AbortError") {
-        console.warn(`API Request Aborted (${endpoint}): ${error.message}`);
+        logger.warn(`API Request Aborted (${endpoint}): ${error.message}`);
         return {
           success: false,
           error: "Request was aborted",
         };
       }
-      console.error(`API Error (${endpoint}):`, error);
+      logger.error(`API Error (${endpoint}):`, error);
       return {
         success: false,
         error: error.message || "Network error occurred",

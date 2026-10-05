@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { DownloadCloud, CheckCircle2, RefreshCw, X } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface UpdateStatus {
   status: "idle" | "checking" | "available" | "not-available" | "downloaded" | "error";
@@ -46,7 +47,7 @@ export function UpdateNotification() {
       setIsDesktop(true);
 
       const unsubStatus = desktopApi.updater.onStatus((data) => {
-        console.log("[UPDATER UI] Status received:", data);
+        logger.debug("[UPDATER UI] Status received:", data);
         setUpdateStatus(data);
         if (data.status === "available" || data.status === "downloaded") {
           setDismissed(false);
@@ -122,6 +123,7 @@ export function UpdateNotification() {
             onClick={() => setDismissed(true)}
             className="text-text-muted hover:text-text-primary p-1 rounded-md transition-colors"
             title="Sembunyikan notifikasi"
+            aria-label="Sembunyikan notifikasi"
           >
             <X className="w-4 h-4" />
           </button>

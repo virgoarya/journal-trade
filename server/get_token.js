@@ -3,7 +3,8 @@ const dns = require('dns');
 dns.setServers(["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]);
 (async () => {
   const mongoose = require('mongoose');
-  await mongoose.connect('mongodb+srv://virgoarya94_db_user:eFxSx5N81QMr6vMx@cluster0.7dzhhrn.mongodb.net/journal_trade_dev_local?retryWrites=true&w=majority&appName=Cluster0');
+  const mongoUri = process.env.DATABASE_URL || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/journal-trade-db';
+  await mongoose.connect(mongoUri);
   const db = mongoose.connection.db;
   const userId = '6a26146a9cad211ba0631027';
   // Find or create session for user

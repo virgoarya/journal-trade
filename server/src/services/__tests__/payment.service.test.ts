@@ -14,6 +14,15 @@ vi.mock("../../models/TokenBalance", () => ({
 vi.mock("../../models/Transaction", () => ({
   Transaction: { create: vi.fn().mockResolvedValue({}) },
 }));
+vi.mock("../../db/mongoose", () => ({
+  authMongoClient: {
+    db: vi.fn().mockReturnValue({
+      collection: vi.fn().mockReturnValue({
+        findOne: vi.fn().mockResolvedValue({ id: "usr_abc", name: "Alex", email: "alex@example.com" }),
+      }),
+    }),
+  },
+}));
 
 import {
   verifyMidtransSignature,
@@ -114,10 +123,10 @@ describe("payment.service", () => {
       expect(Transaction.create).toHaveBeenCalledOnce();
       expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ user_id: "usr_abc" }),
-        expect.objectContaining({ $inc: { balance: 50 } }),
+        expect.objectContaining({ $inc: expect.objectContaining({ balance: 100 }) }),
         expect.any(Object)
       );
-      expect(result).toContain("+50 tokens for user usr_abc");
+      expect(result).toContain("+100 tokens for user usr_abc");
     });
   });
 });

@@ -62,7 +62,7 @@ function NetBar({ long, short }: { long: number; short: number }) {
   if (total === 0) return null;
   const pct = Math.round((long / total) * 100);
   return (
-    <div className="h-1 w-full bg-red-400/30 rounded-full overflow-hidden mt-1">
+    <div className="h-1 w-full bg-zinc-900/60 rounded-full overflow-hidden mt-1 border-b border-zinc-900/20">
       <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pct}%` }} />
     </div>
   );
@@ -257,7 +257,7 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+            <div className="flex-1 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
         {cotData.length === 0 ? (
           <div className="flex items-center justify-center h-full text-text-muted text-sm">
             Data COT tidak tersedia

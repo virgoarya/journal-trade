@@ -684,13 +684,39 @@ function setupAutoUpdater() {
   setInterval(runUpdateCheck, 60 * 60 * 1000);
 }
 
+// IPC Handlers
+ipcMain.on("app:minimize-to-tray", () => {
+  if (mainWindow) mainWindow.hide();
+});
+
+ipcMain.on("app:launch-mt5", () => {
+  console.log("[APP] Launching MetaTrader 5...");
+  // Launch MT5 terminal if installed in default locations or configured path
+  const mt5Paths = [
+    "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
+    "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe",
+  ];
+  for (const p of mt5Paths) {
+    if (fs.existsSync(p)) {
+      spawn(p, [], { detached: true, stdio: "ignore" }).unref();
+      return;
+    }
+  }
+  console.warn("[APP] MetaTrader 5 terminal executable not found in default paths.");
+});
+
+ipcMain.on("app:open-browser", (event, url) => {
+  if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+    shell.openExternal(url);
+  }
+});
+
 // IPC Handlers for Updater
 ipcMain.handle("updater:check-now", async () => {
   return runUpdateCheck();
 });
 
 ipcMain.on("updater:quit-and-install", async (event) => {
-  console.log("[OTA-UPDATER] Applying OTA Patch...");
   
   const tempZipPath = path.join(app.getPath("temp"), "hunter_trades_patch.zip");
   const backupPath = process.resourcesPath + "_backup";
@@ -775,7 +801,19 @@ ipcMain.on("updater:quit-and-install", async (event) => {
     // 5. Write safety flag
     fs.writeFileSync(otaFlagPath, "updating");
 
-    // 6. Extract over resourcesPath
+    // 6. Stop child servers BEFORE touching resourcesPath.
+    // On Windows a live child holds its CWD (resources/server, resources/frontend)
+    // and loaded native addons (next/swc, better-sqlite3), so extracting over it
+    // fails halfway and leaves a corrupt hybrid install that still passes the
+    // post-restart health check. isQuitting=true also stops the exit handlers
+    // from auto-restarting the children mid-update.
+    console.log(`[OTA-UPDATER] Stopping child servers before extraction...`);
+    isQuitting = true;
+    await killChildGracefully(routerProcess);
+    await killChildGracefully(backendProcess);
+    await killChildGracefully(frontendProcess);
+
+    // 6b. Extract over resourcesPath
     console.log(`[OTA-UPDATER] Extracting patch to: ${process.resourcesPath}`);
     const zip = new AdmZip(tempZipPath);
     await new Promise((resolve, reject) => {
@@ -809,10 +847,50 @@ ipcMain.on("updater:quit-and-install", async (event) => {
 
   } catch (err) {
     console.error("[OTA-UPDATER] Failed to apply patch:", err);
+
+    // Rollback: children are already stopped and resourcesPath may be partially
+    // overwritten. Restore the pre-update backup so we never relaunch a hybrid.
+    let rolledBack = false;
+    try {
+      const corruptPath = process.resourcesPath + ".corrupt";
+      if (fs.existsSync(corruptPath)) {
+        fs.rmSync(corruptPath, { recursive: true, force: true });
+      }
+      if (fs.existsSync(backupPath)) {
+        if (fs.existsSync(process.resourcesPath)) {
+          fs.renameSync(process.resourcesPath, corruptPath);
+        }
+        fs.renameSync(backupPath, process.resourcesPath);
+        if (fs.existsSync(corruptPath)) {
+          fs.rmSync(corruptPath, { recursive: true, force: true });
+        }
+        rolledBack = true;
+        console.log("[OTA-UPDATER] Rollback to previous version complete.");
+      }
+    } catch (rbErr) {
+      console.error("[OTA-UPDATER] CRITICAL: rollback failed!", rbErr);
+    }
+
+    try {
+      if (fs.existsSync(otaFlagPath)) fs.unlinkSync(otaFlagPath);
+    } catch (e) {}
+
     sendToRenderer("updater:status", {
       status: "error",
-      message: "Gagal menerapkan update: " + err.message
+      message: rolledBack
+        ? "Gagal menerapkan update. Versi sebelumnya sudah dipulihkan otomatis."
+        : "Gagal menerapkan update: " + err.message
     });
+
+    if (rolledBack) {
+      isQuitting = true;
+      dialog.showErrorBox(
+        "Update Gagal",
+        "Patch pembaruan gagal diterapkan. Sistem sudah memulihkan versi sebelumnya secara otomatis."
+      );
+      app.relaunch();
+      app.exit(0);
+    }
   }
 });
 

@@ -22,6 +22,8 @@ import aiTradingRoutes from "./ai-trading.routes";
 import backtestRoutes from "./backtest.routes";
 import devTestRoutes from "./dev-test.routes";
 import paymentRoutes from "./payment.routes";
+import centralBankDifferentialsRoutes from "./central-bank-differentials.routes";
+
 import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
@@ -68,6 +70,7 @@ router.get("/v1/mt5/open-desktop", (_req, res) => {
 
 router.use("/v1/mt5", mt5Routes);
 router.use("/v1/macro-ai", aiLimiter, macroAiRoutes);
+router.use("/v1/chat", aiLimiter, macroAiRoutes); // Alias for 1-on-1 persona chat sessions & messages
 router.use("/v1/macro-ai-observer", aiLimiter, macroAiObserverRoutes);
 router.use("/v1/market-data", marketDataRoutes);
 router.use("/v1/geo-risk", geoRiskRoutes);
@@ -80,5 +83,7 @@ router.use("/v1/backtest", backtestRoutes);
 router.use("/v1/dev", devTestRoutes);
 router.use("/v1/broker-registration", brokerRegistrationRoutes);
 router.use("/v1/payment", paymentRoutes);
+router.use("/v1/central-bank-differentials", centralBankDifferentialsRoutes);
+
 
 export default router;

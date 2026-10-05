@@ -16,6 +16,11 @@ let mcpClient: Client | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
 let isConnected = false;
 let reconnectTimer: NodeJS.Timeout | null = null;
+// True from the moment a drop is detected until the transport is back. The
+// service's own reconnect flag is only set on its (unused) legacy path, so the
+// client would otherwise never see a "reconnecting" window and would eject the
+// user to the connect panel on every blip.
+let isReconnecting = false;
 
 const POLL_INTERVAL_MS = 1500;   // Poll every 1.5s
 const RECONNECT_DELAY_MS = 5000; // Retry connection every 5s
@@ -105,7 +110,35 @@ export const mt5StreamCache = {
   getOrders: () => cachedOrders,
   getAccountInfo: () => cachedAccountInfo,
   isConnected: () => isConnected,
+  isReconnecting: () => isReconnecting,
 };
+
+/**
+ * Drop the transport and immediately schedule a reconnect.
+ * Use when a caller detects a broken connection mid-operation: the streamer
+ * owns the transport, so a caller that only flips its own flag would leave the
+ * two layers disagreeing about whether MT5 is up.
+ */
+export function forceReconnect(): void {
+  if (mcpClient) {
+    try {
+      Promise.resolve(mcpClient.close()).catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
+  mcpClient = null;
+  isConnected = false;
+  isReconnecting = true;
+  stopPolling();
+  // Clear any pending attempt so this retry is prompt instead of waiting out
+  // an already-scheduled backoff window.
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  scheduleReconnect();
+}
 
 // ΓöÇΓöÇΓöÇ MCP Tool Call Helper ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 async function callTool(name: string, args: Record<string, any> = {}): Promise<any> {
@@ -156,8 +189,29 @@ function enqueuePython(args: string[], options: any = {}): Promise<{ stdout: str
 /** Spawn python, stream stdout, resolve with { stdout } string (caller parses JSON). */
 function spawnPython(args: string[], options: any): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
-    const pythonExecutable = process.env.PYTHON_PATH || "C:\\Python314\\python.exe";
-    const child = spawn(pythonExecutable, args, {
+    const pythonExecutable: string =
+      process.env.PYTHON_PATH ||
+      (() => {
+        // Try common Python paths in order
+        const candidates = [
+          process.env.PYTHON_PATH,
+          process.env.PYTHON,
+          "python",
+          "python3",
+          "python.exe",
+          "C:\\Python314\\python.exe",
+          "C:\\Python313\\python.exe",
+          "C:\\Python312\\python.exe",
+          "C:\\Python311\\python.exe",
+          "C:\\Python310\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        ].filter((c): c is string => Boolean(c));
+        return candidates[0] || "python";
+      })();
+    const child: any = spawn(pythonExecutable, args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -205,6 +259,30 @@ async function enqueuePythonTrade(action: string, payload: any = {}): Promise<an
 }
 
 // ΓöÇΓöÇΓöÇ Public RPC Interface (Unified with native MT5 MCP tools) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/**
+ * Normalizes MT5 position/order data for frontend consumption.
+ * Converts internal normalized format to Mt5Position frontend type.
+ */
+export function normalizePositionForFrontend(raw: any): { id: string; symbol: string; entryPrice: number; pnl: number; status: "open" | "closed" } {
+  if (!raw) {
+    return { id: "0", symbol: "", entryPrice: 0, pnl: 0, status: "open" };
+  }
+  const ticket = raw.ticket ?? raw.order_id ?? raw.position_id ?? raw.id ?? 0;
+  const symbol = String(raw.symbol ?? "");
+  const priceOpen = raw.priceOpen ?? raw.price_open ?? raw.price_order ?? raw.open_price ?? 0;
+  const profit = Number(raw.profit ?? 0);
+  const type = String(raw.type ?? "").toLowerCase();
+  const isPending = type.includes("limit") || type.includes("stop");
+  
+  return {
+    id: String(ticket),
+    symbol,
+    entryPrice: Number(priceOpen),
+    pnl: profit,
+    status: isPending ? "closed" : "open",
+  };
+}
+
 export const executeMt5Command = async (action: string, payload: any = {}): Promise<any> => {
   if (!isConnected || !mcpClient) {
     throw new Error("MT5 Streamer (Native MCP) is not connected.");
@@ -240,7 +318,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         return pyRes.orders;
       }
       const res = await callTool("get_trading_open_positions", { include_orders: true, ...(payload.symbol ? { symbol: payload.symbol } : {}) });
-      const raw = Array.isArray(res) ? res : res;
+      const raw = Array.isArray(res) ? res : (res?.orders ?? res?.result ?? res);
       const rawOrders = (raw?.orders ?? []).map(normalizePosition);
       cachedOrders = rawOrders;
       return rawOrders;
@@ -685,9 +763,10 @@ export async function disconnectMcp(): Promise<void> {
     mcpClient = null;
   }
   isConnected = false;
+  isReconnecting = false; // deliberate disconnect — not a reconnect window
   cachedPositions = [];
   cachedAccountInfo = null;
-  broadcast("mt5_status", { connected: false }, "mt5" as any);
+  broadcast("mt5_status", { connected: false, reconnecting: false }, "mt5" as any);
 }
 
 async function connectToNativeMcp(): Promise<void> {
@@ -720,13 +799,14 @@ async function connectToNativeMcp(): Promise<void> {
     );
     mcpClient = client;
     isConnected = true;
+    isReconnecting = false;
 
     silentLogger.info("[MT5-MCP] Γ£à Connected to native MT5 MCP server (Streamable HTTP).");
     broadcast("mt5_status", { connected: true, reconnecting: false }, "mt5" as any);
 
     // Initial fetch of account info
     try {
-      const initialAcct = await callTool("mt5_account_info", {});
+      const initialAcct = await callTool("get_trading_account_info", {});
       cachedAccountInfo = normalizeAccountInfo(initialAcct);
     } catch {
       // ignore
@@ -754,15 +834,22 @@ async function connectToNativeMcp(): Promise<void> {
 function handleDisconnect() {
   if (!isConnected) return;
   isConnected = false;
+  isReconnecting = true;
   mcpClient = null;
   stopPolling();
-  broadcast("mt5_status", { connected: false }, "mt5" as any);
+  // Emit reconnecting:true together with the drop so the client can switch to
+  // the "reconnecting" state immediately instead of waiting for a stale poll.
+  broadcast("mt5_status", { connected: false, reconnecting: true }, "mt5" as any);
   scheduleReconnect();
 }
 
 function scheduleReconnect() {
   if (reconnectTimer) return;
   silentLogger.info(`[MT5-MCP] Scheduling reconnect in ${RECONNECT_DELAY_MS}ms...`);
+  // Surface the reconnecting state even when the very first connect failed
+  // (handleDisconnect is skipped then, so nothing else would tell the client).
+  isReconnecting = true;
+  broadcast("mt5_status", { connected: false, reconnecting: true }, "mt5" as any);
   reconnectTimer = setTimeout(async () => {
     reconnectTimer = null;
     await connectToNativeMcp();

@@ -571,8 +571,11 @@ busySymbols: new Set<string>(),
 
     try {
       if (!mt5McpService.isConnected) {
+        // NOTE: this branch intentionally returns without populating the
+        // statusCache — a disconnected snapshot must not be replayed for the
+        // full 10s TTL after the connection recovers.
         return {
-          running: pipeline.running,
+          running: pipeline.intervals.size > 0 && !pipeline.paused,
           paused: pipeline.paused,
           startedAt: null,
           config: pipeline.config,
@@ -584,12 +587,20 @@ busySymbols: new Set<string>(),
             dailyPnL: 0,
             openPositions: 0,
             currentDrawdown: 0,
+            smartRisk: {
+              currentDrawdownPct: pipeline.currentDrawdownPct || 0,
+              currentGrowthPct: pipeline.currentGrowthPct || 0,
+              currentRiskMultiplier: pipeline.currentRiskMultiplier || 1,
+              dailyTradingBlocked: pipeline.dailyTradingBlocked || false,
+            },
           },
         lastSignal: pipeline.lastSignal,
         lastAnalysis: pipeline.lastAnalysis,
         allAnalyses: pipeline.allAnalyses || [],
         lastError: pipeline.lastError,
-        mt5CircuitState: "CONNECTED",
+        // Report the real breaker state — hardcoding "CONNECTED" here told the
+        // UI the link was fine at the exact moment it had dropped.
+        mt5CircuitState: mt5McpService.circuitBreakerState,
         llmCircuitStates: pipeline.llmCircuitStates,
         busySymbols: pipeline.busySymbols,
       };
@@ -815,11 +826,19 @@ busySymbols: new Set<string>(),
       const mt5CircuitState = mt5McpService.circuitBreakerState;
       pipeline.mt5CircuitOpen = mt5CircuitState === "OPEN";
       if (!mt5McpService.isConnected) {
-        pipeline.waitingReconnect = true;
-        if (pipeline.config.symbols[0] === symbol) {
-          this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
+        // Log only on the transition into the waiting state. Without this guard
+        // the ERROR is re-emitted on every tick (per symbol, per interval) while
+        // MT5 is down, flooding pipeline.logs and spamming a WS broadcast each
+        // time — a steady memory/CPU drain exactly when the box is already tight.
+        if (!pipeline.waitingReconnect) {
+          pipeline.waitingReconnect = true;
+          if (pipeline.config.symbols[0] === symbol) {
+            this.addLog(userId, "ERROR", `[PIPELINE] Koneksi MT5 terputus. Pipeline di-pause sementara sambil menunggu koneksi pulih (Auto-pause).`);
+          }
         }
-        pipeline.mt5CircuitOpen = true; // Set MT5 circuit breaker to OPEN
+        // Do NOT flag the breaker OPEN here: the transport layer already owns
+        // that state. Forcing it OPEN desynced the UI, which kept showing
+        // "circuit open" for up to 30s after MT5 had actually recovered.
         return; // Skip this tick silently
       } else if (pipeline.waitingReconnect) {
         pipeline.waitingReconnect = false;

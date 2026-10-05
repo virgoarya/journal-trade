@@ -4,6 +4,7 @@ import { NINE_ROUTER_MODELS } from "../config/llm-models.config";
 import { silentLogger } from "../utils/silent-logger";
 import { selfImprovementService } from "../services/self-improvement.service";
 import { userMemoryService } from "../services/user-memory.service";
+import { toolRegistryService } from "../services/tool-registry.service";
 
 export interface AgentContext {
   currentRegime?: string;
@@ -11,6 +12,7 @@ export interface AgentContext {
   assets?: any[];
   macroData?: any;
   userId?: string;
+  enrichedContext?: Record<string, any>;
 }
 
 export abstract class BaseAgent {
@@ -18,21 +20,26 @@ export abstract class BaseAgent {
   abstract personaId: string;
   abstract systemPrompt: string;
 
-  async think(userPrompt: string, context: AgentContext): Promise<{ reply: string; toolsUsed: string[] }> {
-    const toolsUsed: string[] = ["internal_data_fetch"];
-    
-    // Load user memory if userId provided
-    const userMemory = context.userId ? await userMemoryService.getPromptContext(context.userId) : "";
+  async think(userPrompt: string, context: AgentContext): Promise<{ reply: string; toolsUsed: string[]; failed?: boolean }> {
+    // Jalankan tools berdasarkan prompt secara otomatis
+    const { enrichedContext, toolsUsed } = await toolRegistryService.runToolsForPrompt(userPrompt, context);
 
-    // Build contextual prompt
+    // Load user memory (general + persona-specific)
+    const targetUserId = context.userId || "default_user";
+    const userMemory = await userMemoryService.getPromptContext(targetUserId, this.personaId);
+
+    // Build contextual prompt yang menyertakan hasil tool
     const enrichedPrompt = `
 [MEMORI USER]
 ${userMemory}
 
-[CONTEXT MAKRO]
+[CONTEXT MAKRO INTERNAL]
 Regime: ${context.currentRegime || "Unknown"}
 Liquidity: ${context.liquidityStatus || "Unknown"}
 Assets: ${JSON.stringify(context.assets || [])}
+
+[DATA TERBARU DARI TOOLS (MARKET PRICE, KALENDER, DLL)]
+${JSON.stringify(enrichedContext, null, 2)}
 
 [PERTANYAAN USER]
 ${userPrompt}
@@ -72,8 +79,12 @@ ${userPrompt}
       }
     }
 
+    // Kalau semua model gagal, JANGAN simpan pesan error sebagai insight.
+    // Pesan error bukan analisis — menyimpannya membuat feed penuh sampah
+    // dan user mengira agent benar-benar menganalisis.
     if (!replyText) {
-      replyText = "Agent mengalami kendala koneksi ke 9Router LLM consensus.";
+      silentLogger.warn(`[Agent ${this.name}] Semua model gagal — insight dilewati.`);
+      return { reply: "", toolsUsed, failed: true };
     }
 
     // Clean artifacts — aggressively strip ALL meta-language
@@ -104,8 +115,6 @@ ${userPrompt}
       personaId: this.personaId,
       prompt: userPrompt,
       finalReply: replyText,
-      toolsUsed,
-      toolOutputs: context
     });
 
     return { reply: replyText, toolsUsed };

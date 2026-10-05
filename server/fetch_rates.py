@@ -64,7 +64,9 @@ def main():
                 sys.exit(1)
             from_ts = int(sys.argv[4])
             to_ts = int(sys.argv[5])
-            rates = mt5.copy_rates_range(symbol, timeframe, from_ts, to_ts)
+            date_from = datetime.fromtimestamp(from_ts)
+            date_to = datetime.fromtimestamp(to_ts)
+            rates = mt5.copy_rates_range(symbol, timeframe, date_from, date_to)
 
         if rates is None or len(rates) == 0:
             print(json.dumps({"error": f"No rates for {symbol}", "last_error": str(mt5.last_error())}))

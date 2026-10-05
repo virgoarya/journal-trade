@@ -37,6 +37,37 @@ export const createAuth = () => {
     oauthConfig: {
       // Reverting to default state strategy (cookies)
     },
+    databaseHooks: {
+      account: {
+        update: {
+          after: async (account) => {
+            // Refresh Discord avatar setiap kali account diupdate (misal: token refresh saat login)
+            if (account.providerId === 'discord' && account.accessToken) {
+              try {
+                const res = await fetch('https://discord.com/api/v10/users/@me', {
+                  headers: { Authorization: `Bearer ${account.accessToken}` },
+                });
+                if (res.ok) {
+                  const discordUser = await res.json() as { id: string; avatar?: string };
+                  if (discordUser.avatar) {
+                    const ext = discordUser.avatar.startsWith('a_') ? 'gif' : 'png';
+                    const newImage = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.${ext}?size=256`;
+                    const db = authMongoClient.db(env.DATABASE_NAME);
+                    await db.collection('user').updateOne(
+                      { _id: account.userId as any },
+                      { $set: { image: newImage, updatedAt: new Date() } }
+                    );
+                  }
+                }
+              } catch (e) {
+                // Non-critical: jangan block login jika avatar refresh gagal
+                console.warn('[AUTH] Failed to refresh Discord avatar:', e);
+              }
+            }
+          },
+        },
+      },
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 1, // refresh every 1 hour

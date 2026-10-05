@@ -5,15 +5,42 @@ import { analyzeCotAsset } from "../services/macro-ai.service";
 
 const router = Router();
 
+/**
+ * GET /v1/market-data/ohlc-range?symbol=XAUUSD&from=ISO&to=ISO
+ * Returns { high, low } spanning [from, to] for MAE/MFE auto-calc.
+ */
+router.get("/ohlc-range", async (req, res) => {
+  try {
+    const { symbol, from, to } = req.query as Record<string, string>;
+    if (!symbol || !from || !to) {
+      return res.status(400).json({ success: false, error: "symbol, from, to are required" });
+    }
+    const range = await marketDataService.getOhlcRange(symbol, from, to);
+    if (!range) {
+      return res.status(404).json({ success: false, error: "No OHLC data available for the given range" });
+    }
+    res.json({ success: true, data: range });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get("/news", async (req, res) => {
   try {
-    const data = await marketDataService.getNews();
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timeout")), 20000)
+    );
+    const data = await Promise.race([
+      marketDataService.getNews(),
+      timeoutPromise
+    ]);
     res.json({ success: true, data, fetchedAt: new Date().toISOString(), rateLimited: false });
   } catch (error: any) {
-    if (error.message.includes("Rate limited")) {
+    if (error.message && error.message.includes("Rate limited")) {
       return res.status(429).json({ success: false, error: error.message, retryAfter: 60, rateLimited: true });
     }
-    res.status(503).json({ success: false, error: error.message, rateLimited: true });
+    const fallbackData = marketDataService.getMockNews();
+    res.json({ success: true, data: fallbackData, fetchedAt: new Date().toISOString(), rateLimited: false, fallback: true });
   }
 });
 

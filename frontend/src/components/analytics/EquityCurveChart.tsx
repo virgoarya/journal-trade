@@ -26,7 +26,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ data }) => {
+export const EquityCurveChart: React.FC<EquityCurveChartProps> = React.memo(function EquityCurveChart({ data }) {
   if (!data || data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center">
@@ -78,4 +78,4 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ data }) => {
       </ResponsiveContainer>
     </div>
   );
-};
+});

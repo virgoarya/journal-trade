@@ -18,6 +18,19 @@
   --color-data-loss: #FF3864;
   --color-data-warning: #FFA726;
 
+  /* Login Page (Discord-style palette) — tokenised so the login surface
+     respects theme changes instead of hardcoding hex in the component. */
+  --color-login-bg: #313338;
+  --color-login-text: #F2F3F5;
+  --color-login-secondary: #B5BAC1;
+  --color-login-muted: #949BA4;
+  --color-login-faint: #6D6F78;
+  --color-login-brand: #5865F2;
+  --color-login-brand-glow: rgba(88, 101, 242, 0.08);
+  --color-login-card-top: rgba(255, 255, 255, 0.06);
+  --color-login-card-mid: rgba(43, 45, 49, 0.6);
+  --color-login-card-bottom: rgba(30, 31, 34, 0.95);
+
   /* Access Denied Page Colors */
   --color-on-surface: #E5E1E7;
   --color-outline: #99907C;

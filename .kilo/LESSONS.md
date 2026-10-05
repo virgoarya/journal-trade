@@ -18,6 +18,593 @@
 
 ---
 
+### [20260929] Macro Terminal Data Freshness & Cache Tuning
+**Area**: Frontend & Backend (Next.js / Express / FRED / Market Data Services)
+**Root Cause**: Cache TTL FRED di frontend route sebelumnya 30 menit (`FRED_CACHE_TTL_MS = 30 * 60 * 1000`), yang membuat data makro lagging di Institutional Macro Terminal. Mekanisme `hasGoodDataRef` di `useDataFetching` sudah tepat mempertahankan data valid ketika rate limited (429), namun butuh balance antara frekuensi update dan kuota rate limit FRED/Yahoo.
+**Solusi**:
+1. Turunkan `FRED_CACHE_TTL_MS` dari 30 menit menjadi 10 menit untuk menjamin pembaruan data ekonomi yang lebih segar tanpa membebani limit FRED.
+2. Pertahankan `DATA_FRESH_MS = 60s` dan `DATA_STALE_MS = 5m` di `useDataFetching` serta tombol force REFRESH.
+**Hindari**: Jangan gunakan TTL cache lebih dari 15 menit pada dashboard makro institusional jika data ekonomi real-time dibutuhkan, dan jangan hilangkan fallback dummy jika koneksi pihak ketiga mengalami timeout.
+
+### [20261004] [QA-ENGINEER] progress: COMPLETED — QA Proactive Insight per-user & Akurasi Data Macro Terminal
+
+**Area**: QA / Backend (`agent-consensus.routes.ts`, `base.agent.ts`, `proactive-alert.service.ts`)
+
+**Metode**: 2 subagent QA paralel (delegate_task) + verifikasi independen. Recon → test plan → execute → report → verify.
+
+**BUG DITEMUKAN & DIPERBAIKI** (5 bug):
+
+| # | Severity | Bug | Root Cause | Fix |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | Filter per-user tidak bekerja — 3 user berbeda dapat insight IDENTIK | `agent-consensus.routes.ts` **tidak punya `requireAuth`** → `req.user` selalu undefined → `filter.userId` tidak pernah diterapkan | Tambah `router.use(requireAuth)` |
+| 2 | HIGH | Konten "Bang Vir" muncul untuk user lain | Nama di DB (`UserAgentMemory`) masih menyimpan hardcode lama + data lama tanpa `userId` | Kosongkan nama hardcode non-owner; migrasi 223 insight lama ke `userId="global"` |
+| 3 | MEDIUM | `userId="default_user"` muncul di insight | Fallback `|| "default_user"` terpakai karena `req.user` undefined | Teratasi otomatis setelah fix #1 |
+| 4 | HIGH | **50% insight berisi pesan error**, bukan analisis | `base.agent.ts` menulis `"Agent mengalami kendala koneksi..."` saat LLM gagal, lalu proactive-alert menyimpannya sebagai insight | Return `{failed: true}` → proactive-alert skip; hapus 37 insight sampah |
+| 5 | MEDIUM | 223 insight lama tanpa field `userId` (yatim) | Dibuat sebelum field `userId` ada di schema | Migrasi ke `userId="global"` + tandai `metadata.legacy` |
+
+**TEST RESULTS**:
+```
+[Task 1 — Identitas per-user]
+  Isolasi per-user      : ✅ owner 9 insight, user lain 0
+  Identitas sesuai profil: ✅ nama dari DB, bukan hardcode
+  Konten error          : ✅ 0 (dari 50% sebelumnya)
+  Fallback default_user : ✅ 0
+  /proactive/latest     : ✅ terfilter
+
+[Task 2 — Akurasi data FRED]
+  Fed Funds (DFF)       : API 3.88 = FRED 3.88  ✅
+  Treasury 3M/2Y/5Y/10Y/30Y : semua 0.000 delta ✅
+  Breakeven 10Y         : 2.36 = 2.36  ✅
+  Real Yield 10Y        : 2.88 = 2.88  ✅
+  ON RRP                : 1.50 = 1.50  ✅
+  Spread 10Y-3M         : 107 = 107    ✅
+  Konsistensi antar panel: Nexus 3.88 = GeoRisk 3.88  ✅
+  Supply chain          : calendar_db (bukan ipman_synthetic) ✅
+  → 11/11 PASS, 0 mismatch
+```
+
+**RISK QUANTIFICATION**: Sisa risiko **15%** — turun dari 70% (pra-QA). Risiko tersisa: (a) insight lama `userId="global"` (223) tidak muncul untuk user mana pun — disengaja sebagai arsip; (b) endpoint `/v1/agent-consensus/insights` belum diuji multi-user secara eksplisit; (c) MT5 MCP down (di luar scope QA ini).
+
+**VERIFICATION STATUS**: **PASS** — 5/5 bug diperbaiki & diverifikasi ulang. TypeScript 0 error. Tests 10/10 lulus.
+
+**Catatan proses**: Subagent QA Task 2 gagal karena model masuk repetition loop (bukan bug aplikasi) — saya jalankan ulang verifikasinya sendiri dan dapat 11/11 PASS.
+
+**Hindari**:
+- Route Express yang memakai `req.user` WAJIB punya `requireAuth` — tanpa itu filter per-user diam-diam tidak bekerja (gagal senyap, bukan error).
+- Jangan simpan pesan error sebagai data hasil — kalau LLM gagal, SKIP, jangan tulis placeholder yang terlihat seperti analisis.
+- Perbaikan kode TIDAK cukup kalau nilai di DATABASE masih menyimpan data hardcode lama — sediakan migrasi/cleanup.
+- Saat menambah field baru ke schema, migrasikan dokumen lama; kalau tidak, query filter tidak akan mencocokkannya (data "yatim").
+
+### [20261003] Proactive Insight Selalu Menyebut "Bang Vir" — Hardcode Nama User
+
+**Area**: Backend (`user-memory.service.ts`, `auth.ts`, `proactive-alert.service.ts`, `AgentInsight.ts`, `agent-consensus.routes.ts`)
+
+**Root Cause** (4 lapis masalah):
+1. **Hardcode di `user-memory.service.ts`** — `name: "Bang Vir"` dipakai saat create memory baru (baris 22) DAN sebagai fallback (baris 36 & 153). Setiap user baru otomatis diberi nama "Bang Vir".
+2. **Hardcode di `auth.ts`** — dev bypass menetapkan `name: "Bang Vir"` untuk semua request dev.
+3. **Proactive Insight tidak punya konteks user** — `proactive-alert.service.ts` memanggil `hawk.think(prompt, context)` **tanpa `userId`** → `base.agent.ts` jatuh ke `targetUserId = "default_user"` → dapat hardcode "Bang Vir".
+4. **`AgentInsight` tidak punya field `userId`** — insight bersifat GLOBAL (satu insight untuk semua user), jadi tidak mungkin per-user.
+
+**Solusi**:
+1. Hapus semua hardcode `"Bang Vir"` di `user-memory.service.ts` → `name: ""`.
+2. `auth.ts` dev bypass → `name: ""`, `email: ""`.
+3. `getPromptContext()`: kalau nama kosong → pakai placeholder **"Trader"** + instruksi eksplisit "JANGAN mengarang nama user".
+4. **Tambah field `userId`** ke model `AgentInsight` (default `"global"`) + index compound `{userId, personaId, insightType, createdAt}`.
+5. `proactive-alert.service.ts`: tambah `getActiveUserIds()` (ambil dari `UserAgentMemory`), lalu **loop per-user** — tiap user dapat 3 insight (hawk/dove/contrarian) dengan namanya sendiri.
+6. Route `agent-consensus.routes.ts`: filter insight by `req.user.id`.
+7. Bersihkan **702 insight lama** yang menyebut "Bang Vir" dari MongoDB.
+
+**Verifikasi**:
+```
+Tests      : 10 passed (termasuk 2 test baru: nama kosong & placeholder "Trader")
+TypeScript : 0 error
+DB cleanup : 925 → 223 insight (702 lama dihapus)
+Runtime    : 0 dari 20 insight terbaru menyebut "Bang Vir"
+```
+
+**Hindari**:
+- JANGAN hardcode nama/identitas user di service apa pun. Untuk app multi-user, SEMUA identitas harus dari session/profil.
+- Kalau sebuah background job memanggil agent yang butuh konteks user, WAJIB iterasi per-user — bukan pakai satu context global.
+- Kalau field user tidak ada di model, tambahkan — jangan biarkan data global untuk hal yang seharusnya per-user.
+- Data lama di DB tetap menampilkan nilai salah walau kode sudah diperbaiki — sediakan script cleanup.
+
+### [20261003] AI Yield Curve Explainer Terpotong: max_tokens Kurang + Data Prompt Tidak Lengkap
+
+**Area**: Backend (`ai-quant.service.ts`, `quant.service.ts`) + Frontend (`SensitivityMatrix.tsx`)
+
+**Root Cause** (3 masalah dari pemeriksaan prompt):
+
+1. **`max_tokens: 1500` terlalu kecil** — prompt meminta 4 poin analisis mendalam (standar Goldman/JPM), tapi output 6043 char (~1510 token) kena limit → **kalimat terakhir terpotong** di tengah: `"...dari optimisme moder"`. Tidak ada validasi bahwa output selesai.
+2. **Data prompt tidak lengkap** — snapshot punya 10 field, prompt hanya menyertakan 6. `y5`, `y30`, `spread30y5y`, `spread30y3m` **tidak dikirim**, padahal 30Y (5.61%) justru paling relevan untuk analisis Bear Steepener.
+3. **Label Sensitivity Matrix menyesatkan** — menampilkan `+2.88%` untuk 30Y-3M yang terlihat seperti spread salah (spread asli 144 bps). Padahal itu hasil rumus `(spread/100) × multiplier` = estimasi dampak harga, bukan spread. Label lama hanya `"Base: 2x"` tanpa penjelasan.
+
+**Solusi**:
+1. `max_tokens` 1500 → **4000** di ketiga provider (9Router, Anthropic fallback, Groq).
+2. Tambah `y5`, `y30`, `spread30y5y`, `spread30y3m` ke prompt + label deskriptif (`Long-end Steepness`, `Full Curve Steepness`).
+3. Instruksi prompt: batasi ~600 kata, **selesaikan setiap kalimat**, tiap poin diakhiri titik.
+4. Deteksi output terpotong di `quant.service.ts` — kalau `aiExplainer` tidak diakhiri `[.!?]`, paksa regenerasi:
+   ```ts
+   const looksTruncated = explainerText.length > 0 && !/[.!?]\s*$/.test(explainerText.trim());
+   ```
+5. Sensitivity Matrix: label `"Base: Nx"` → `"Sensitivitas: N×"` + footer penjelasan rumus.
+
+**Verifikasi**:
+```
+SEBELUM: 6043 char, terpotong ("...dari optimisme moder")
+SESUDAH: 3567 char, diakhiri titik ✅
+4 poin lengkap: 1✅ 2✅ 3✅ 4✅
+30Y & 5Y sekarang disebut dalam analisis ✅
+```
+
+**Hindari**:
+- Jangan set `max_tokens` kecil untuk prompt yang meminta output panjang — hitung dulu estimasi token (1 token ≈ 4 char).
+- Jangan kirim sebagian data ke prompt AI padahal tersedia — AI akan menganalisis tanpa konteks penting.
+- Jangan tampilkan angka hasil rumus dengan satuan yang sama seperti data mentah tanpa penjelasan — user akan mengira itu data yang salah.
+- Selalu validasi output LLM selesai (diakhiri tanda baca) sebelum disimpan ke cache.
+
+### [20261003] line-clamp Memotong Teks di Layar Sempit — Pakai Teks Pendek + title
+
+**Area**: Frontend (`YieldCurvePanel.tsx`)
+
+**Root Cause**: Untuk menekan tinggi kartu, subteks dipaksa 1 baris dengan `line-clamp-1`. Tapi **lebar kartu menyusut mengikuti viewport** — teks 20 char ("Fed Gauge · Ekspansi" = 108px) muat di 1920px (konten 125px) tapi **terpotong jadi ellipsis** di bawah ~1600px:
+
+| Viewport | Konten kartu | Teks 108px |
+|---|---|---|
+| 1920px | 125px | ✅ muat |
+| 1600px | 93px | ❌ terpotong 15px |
+| 1440px | 77px | ❌ terpotong 31px |
+| 1280px | 61px | ❌ terpotong 47px |
+
+`line-clamp` **menyembunyikan** masalahnya (ellipsis), bukan menyelesaikannya.
+
+**Solusi**:
+1. Hapus `line-clamp-1` — biarkan teks wrap natural dengan tinggi `min-h-[11px]` (kalau wrap, kartu memanjang sedikit, tapi teks tidak hilang)
+2. **Pendekkan subteks** agar muat di semua lebar: `"Fed Gauge · Ekspansi"` → `"Ekspansi"`, `"Leading · Ekspansi"` → `"Ekspansi"`, `"Normal · YAHOO"` → `"Normal"` (maks 9 char = 49px, muat di 1280px)
+3. Tambah prop `subTitle` pada StatCard → teks lengkap tetap bisa dibaca lewat tooltip (`title` attr), mis. `"Fed Recession Gauge · Ekspansi"`
+
+**Verifikasi**: Semua subteks ≤9 char (≤49px) muat di viewport 1280–1920px. Kartu tetap 73px. Chart 211px.
+
+**Hindari**:
+- Jangan pakai `line-clamp` untuk "menyelesaikan" teks yang tidak muat — itu menyembunyikan informasi. Kalau teks tidak muat di lebar terkecil yang didukung, pendekkan teksnya atau beri tooltip.
+- Selalu uji layout di beberapa lebar viewport (1280/1440/1920), bukan hanya di layar lebar — lebar kartu grid mengikuti viewport.
+- Sediakan `title` pada teks yang dipendekkan agar informasi lengkap tetap dapat diakses.
+
+### [20261003] Gauge vs StatCard: Padding & Struktur Harus Identik di Grid yang Sama
+
+**Area**: Frontend (`YieldCurvePanel.tsx`)
+
+**Root Cause**: Meski tinggi kartu di grid `items-stretch` sudah dipaksa sama oleh baris, **konten internal** tidak sejajar karena struktur berbeda:
+- StatCard: `p-3` (12px) + label 10px + `mb-1` (4px) + value 24px + `mt-1` (4px) + subteks 23px = **89px**
+- Gauge: `p-2.5` (10px) + label 10px + `mb-0.5` (2px) + svg 46px = **84px**
+
+Selisih padding (12 vs 10px) dan margin (4 vs 2px) membuat garis label kedua kartu tidak sejajar meski kotaknya sama tinggi.
+
+**Solusi**: Samakan struktur persis —
+1. Gauge `p-2.5` → `p-3` (sama dengan StatCard)
+2. Label gauge `mb-0.5` → `mb-1` (sama)
+3. Gauge SVG 80×46 → **86×51px** sehingga total = 24+10+4+51 = **89px**, identik StatCard
+
+**Verifikasi**: StatCard 89px, gauge 89px → **selisih 0px**. Chart tetap 195px.
+
+**Hindari**:
+- Di grid dengan `items-stretch`, menyamakan tinggi kotak saja TIDAK cukup — struktur internal (padding + margin + tinggi konten) harus dihitung agar garis elemen sejajar.
+- Saat mengganti elemen teks dengan elemen grafis (gauge/chart) di grid yang sama, hitung ulang total tingginya dengan rumus yang sama seperti elemen teks.
+
+### [20261003] Kartu Stat Tidak Seragam Tinggi: min-h Kurang dari Tinggi Teks Aktual
+
+**Area**: Frontend (`YieldCurvePanel.tsx`)
+
+**Root Cause**: Subteks kartu dipaksa 2 baris dengan `min-h-[20px]`, tapi tinggi teks 2 baris sebenarnya **22.5px** (`text-[9px]` × `leading-tight` 1.25 = 11.25px/baris × 2). Karena `min-h` lebih kecil dari tinggi konten, kartu dengan subteks 2 baris ("Fed Recession Gauge · Ekspansi" = 162px lebar → 2 baris di kolom 125px) memanjang **melebihi** kartu dengan subteks 1 baris ("Normal · YAHOO" = 75px → 1 baris). Grid `items-stretch` default membuat semua kartu mengikuti yang tertinggi, tapi selisih tinggi internal tetap terlihat.
+
+**Solusi**:
+1. `min-h-[20px]` → `min-h-[23px]` (2 × 11.25px + pembulatan)
+2. Tambah `line-clamp-2` — mencegah subteks sangat panjang jadi 3 baris dan merusak tinggi lagi
+3. Gauge SVG 74×42 → 80×46px agar proporsional dengan tinggi kartu baru (89px), tetap ≤ StatCard sehingga StatCard yang menentukan tinggi grid
+
+**Verifikasi**: Tinggi StatCard 89px, gauge 78px → grid stretch ke 89px, **selisih 0px**. Chart tetap 195px (≥ min-h 190).
+
+**Hindari**:
+- Hitung tinggi teks aktual (`font-size × line-height × jumlah baris`) sebelum menetapkan `min-h`; jangan menebak.
+- Selalu tambah `line-clamp-N` pada teks yang tingginya dikunci — konten tak terduga akan merusak layout.
+- Kalau ada elemen non-teks (gauge/chart) di grid yang sama, pastikan tingginya ≤ elemen tertinggi agar tidak jadi penentu.
+
+### [20261003] Quant Lab: Perapian UI Yield Curve & FX Differentials
+
+**Area**: Frontend (`YieldCurvePanel.tsx`, `CentralBankDifferentialsPanel.tsx`, `quant-lab/page.tsx`)
+
+**Masalah kerapian yang diperbaiki**:
+| Masalah | Fix |
+|---|---|
+| Kartu metrik tinggi tidak seragam (subteks 1 vs 2 baris) | `StatCard` pakai `flex flex-col h-full` + sub-area `min-h-[22px]` (kunci 2 baris) |
+| Bahasa campur ("Fed's Recession Gauge · Pertumbuhan") | Seragamkan: label EN, status ID (`Ekspansi`/`Kontraksi`), plus fallback "Data belum tersedia" |
+| Label "VIX Source" membingungkan (menampilkan nilai VIX) | Ganti jadi "VIX" + subteks menyertakan regime & sumber |
+| Ikon refresh nyaris tak terlihat (tanpa border, w-3) | `p-1.5 rounded-md border` + `w-3.5 h-3.5` + `title="Refresh data"` |
+| Tenor cards tinggi/spacing tidak konsisten | `min-h-[46px]` + `tabular-nums` + `leading-none` |
+| Area kosong di chart (margin `left: -20`) | `margin={{ top: 8, right: 16, bottom: 4, left: 0 }}` |
+| Footer sumber data usang ("Yahoo Finance + FRED") | `"Sumber: FRED"` — semua tenor kini dari FRED |
+| Label "FLAT" pakai warna bahaya (merah) | Warna netral (`text-text-muted`) — flat bukan kondisi buruk |
+| Chart terlalu pendek (180px) di proporsi 3:2 | Proporsi kolom kiri **5:3** → chart 200px, FX panel 294px |
+
+**Verifikasi**: TypeScript 0 error; halaman HTTP 200; proporsi 5:3 memberi chart 200px (≥ min-h) dan FX panel cukup untuk 7 baris tabel.
+
+**Hindari**:
+- Jangan biarkan subteks kartu dengan jumlah baris berbeda tanpa `min-h` — kartu jadi tidak sejajar.
+- Jangan campur bahasa dalam satu label (`"Fed's Recession Gauge · Pertumbuhan"`).
+- Jangan pakai warna bahaya untuk status netral (FLAT ≠ buruk).
+- Saat mengubah tinggi komponen dalam panel tinggi tetap, hitung ulang total agar child `flex-1` (chart) tidak kurang dari `min-h`.
+
+### [20261003] Quant Lab: Kartu AI Terpotong karena Konflik Tinggi Flex
+
+**Area**: Frontend (`CurveExplainerPanel.tsx`)
+
+**Root Cause**: Perbaikan layout sebelumnya menambahkan kombinasi kelas yang saling bertentangan:
+```
+induk : flex-1 overflow-y-auto        ← scrollable, tinggi terbatas (674px)
+grid  : flex-1 min-h-0 auto-rows-fr   ← memaksa isi memenuhi ruang tersisa
+kartu : h-full min-h-[260px]          ← minimum 260px per kartu
+```
+`auto-rows-fr` membagi ruang jadi 2 baris, tapi `min-h-[260px]` memaksa minimum **520px** untuk grid. Ditambah baris Quant (118px) + gap, total = **782px** sementara ruang hanya **674px** → overflow **108px**. Grid yang lebih tinggi dari container scrollable membuat kartu baris bawah terlihat terpotong di tepi area konten (tampak seperti "bertabrakan").
+
+**Solusi**: Buang pemaksaan tinggi (`flex-1 min-h-0 auto-rows-fr` + `h-full min-h-[260px]`), pakai tinggi tetap terhitung:
+- Grid: `grid grid-cols-1 md:grid-cols-2 gap-3`
+- Kartu: `h-[266px]` (4 kartu)
+
+Hitungan agar pas: `ruang tersedia 674px = baris Quant 118 + gap 12 + (2 × 266) + gap 12`.
+
+**Verifikasi**: Sebelum 320px → overflow 108px. Sesudah 266px → **674px, muat tepat, tanpa scroll, kartu utuh**.
+
+**Hindari**:
+- Jangan campur `flex-1`/`auto-rows-fr` (yang mengisi ruang tersisa) dengan `min-h-[N]` pada child — keduanya bisa memaksa tinggi melebihi container.
+- Saat container induk `overflow-y-auto` dan tinggi tetap, hitung total tinggi child agar tidak overflow. Kalau tidak, child terlihat terpotong.
+- Untuk layout dashboard tinggi tetap, tinggi eksplisit (`h-[Npx]`) lebih dapat diprediksi daripada `h-full` bertingkat.
+
+### [20261003] Recharts Warning "width(-1) height(-1)" di ResponsiveContainer
+
+**Area**: Frontend (`YieldCurvePanel.tsx`, `GeoRiskRadarPanel.tsx`)
+
+**Root Cause**: `ResponsiveContainer width="100%" height="100%"` mengukur dimensi container saat paint pertama. Pada render awal (dan React StrictMode double-render di dev), container flex belum punya tinggi terhitung → Recharts menerima `-1` dan menampilkan warning berulang. `minWidth={0} minHeight={200}` saja tidak cukup karena Recharts masih mengukur lewat ResizeObserver pada frame pertama.
+
+**Solusi**: Tambahkan `initialDimension={{ width: N, height: N }}` pada `ResponsiveContainer` — memberi dimensi awal yang valid sehingga chart bisa langsung render sebelum pengukuran selesai. Nilai menyesuaikan konteks:
+- Yield curve line chart: `{ width: 520, height: 220 }`
+- Radar chart geo-risk: `{ width: 420, height: 300 }`
+
+Kombinasi lengkap: `width="100%" height="100%" minWidth={0} minHeight={200} initialDimension={{...}}`.
+
+**Verifikasi**: Sebelum fix, warning muncul 2× setiap render halaman. Sesudah fix, log Next.js bersih di render berikutnya.
+
+**Hindari**: Jangan andalkan `minHeight` saja pada chart dalam flex container — selalu sertakan `initialDimension` (Recharts 3.x) supaya render pertama tidak menghasilkan dimensi `-1`.
+
+### [20261003] Quant Lab: Real Yield Pakai Inflasi Hardcoded 2.5%
+
+**Area**: Frontend (`RealYield.tsx`)
+
+**Root Cause**: `RealYield` punya `inflation = 2.5` sebagai default prop hardcoded, padahal breakeven inflation live (FRED `T10YIE`) = **2.36%** dan sudah tersedia di endpoint `/api/v1/nexus/snapshot` (field `breakeven10y`). Real yield jadi bias **+0.14 poin persen** — mis. 10Y nominal 5.24%: ditampilkan 2.74% (pakai 2.5) padahal sebenarnya 2.88% (pakai 2.36).
+
+**Solusi**:
+1. `RealYield` sekarang fetch `breakeven10y` sendiri dari `/api/v1/nexus/snapshot` kalau prop `inflation` tidak diberikan; fallback terakhir 2.36 (nilai FRED terkini, bukan tebakan).
+2. Tampilkan sumber inflasi di footer: `"Inflasi ekspektasi (breakeven 10Y): 2.36%"` — sebelumnya label `"Inflasi: 2.5%"` duplikat di kedua sub-card (10Y & 30Y).
+
+**Perbaikan UI lain di Quant Lab** (satu batch):
+| Masalah | Fix |
+|---|---|
+| Historical overlay nyaris tak terlihat (`#6B7280` stroke 2px) | `#94a3b8` stroke 2.5px + dot r:3; garis live diturunkan 4px → 3px |
+| Kartu AI teks padat & terpotong (`h-[280px]` + `max-h-[220px]`) | `h-full min-h-[260px]`, hapus `max-h`, `leading-[1.7]`, `prose-p:my-1.5` |
+| Whitespace besar di kolom kanan | grid kartu `flex-1 min-h-0 auto-rows-fr` |
+| Import `useMacroTerminal` mati di 3 komponen | Dihapus |
+| Tinggi sub-card Quant tidak sejajar | Tambah `h-full flex flex-col` di root |
+
+**Hindari**:
+- Jangan hardcode nilai ekonomi (inflasi, suku bunga, yield) yang tersedia live dari API — selalu fetch dan tampilkan sumbernya.
+- Jangan pakai `max-h` di dalam container yang sudah punya tinggi tetap; itu memotong konten. Pakai `flex-1 min-h-0` pada child scrollable.
+- Jangan biarkan import komponen tidak terpakai — menandakan refactor yang belum tuntas (props sudah di-drill dari parent, hook tidak diperlukan).
+
+### [20261001] Macro Terminal: Data Lagging karena Tidak Ada Auto-Refresh + Stub Data
+
+**Area**: Frontend (`useDataFetching.ts`, `MacroTerminalContext.tsx`) + Backend (cache TTL, `central-bank-differentials.service.ts`)
+
+**Root Cause** (4 masalah dari audit menyeluruh halaman Macro Terminal):
+
+1. **Data utama tidak pernah refresh** — `useDataFetching` memanggil `fetchSnapshot()` **hanya SEKALI saat mount**. Panel quotes/liquidity/regime/calendar/news/geoRisk/tga tidak pernah update sampai user reload manual → terlihat lagging.
+2. **Indikator freshness berbohong** — `getStatusFromResponse()` memakai `new Date().toISOString()` sebagai fallback `fetchedAt` ketika API tidak melaporkannya → data basi SELALU tampil "live".
+3. **TTL cache server terlalu panjang** untuk data yang update harian:
+   - ON RRP (liquidity): **1 jam** → bisa basi 1 jam setelah rilis
+   - Geo Risk: **1 jam**
+   - Macro Regime: **15 menit**
+4. **Central Bank Differentials = STUB DATA 100% hardcoded** dengan angka sangat usang (FOMC **5.25%** padahal aktual **4.00%**, ECB 3.75% vs aktual 2.50%). Panel polling 5 menit tapi server selalu mengembalikan angka statis yang sama → polling sia-sia.
+
+**Solusi**:
+1. `useDataFetching`: tambah `setInterval(fetchSnapshot, 60_000)` + refresh saat tab kembali aktif (`visibilitychange` — browser men-throttle timer di tab background).
+2. `getStatusFromResponse`: hapus fallback `new Date()`; kalau API tidak melaporkan `fetchedAt` → status `"cache"` (jujur), bukan `"live"`.
+3. Turunkan TTL: ON RRP 1 jam → **10 menit**; Geo Risk 1 jam → **10 menit**; Macro Regime 15 menit → **5 menit**. PMI 4 jam → 1 jam (data bulanan).
+4. **Tulis ulang `central-bank-differentials.service.ts`** — ganti stub dengan fetch FRED live per bank sentral:
+   - FOMC `DFEDTARU`, ECB `ECBDFR`, BoE `IUDSOIA`, BOJ/RBA/SNB/RBNZ `IR3TIB01*M156N`, BoC `IR3TIB01CAM156N`
+   - Pair dengan rate tidak lengkap → **dilewati** (jangan tampilkan angka palsu)
+5. `setLastUpdated()` dipanggil untuk semua snapshot (sebelumnya hanya geoRisk).
+6. Tambah 7 seri bank sentral ke script audit.
+
+**Verifikasi**:
+```
+Differentials SEBELUM: FOMC 5.25%, ECB 3.75%, BoE 5.00%  ← STUB, usang
+Differentials SESUDAH: FOMC 4.00%, ECB 2.50%, BoE 3.73%  ← FRED live
+USD/CAD: BoC 5.25% (data 2023!) → 2.28% (data 2026-08)
+Audit: ✅ SEMUA SERIES FRESH — tidak ada data lagging
+```
+
+**Temuan tambahan**: `IRSTCB01CAM156N` (Canada Policy Rate) **tidak diupdate FRED sejak Des 2023** (lag 1037 hari) → diganti `IR3TIB01CAM156N`. Pola yang sama dengan `NAPM` — seri FRED bisa berhenti diupdate tanpa peringatan.
+
+**Hindari**:
+- Jangan fetch data sekali saat mount untuk dashboard yang butuh data terkini — selalu sediakan polling + refresh saat tab aktif.
+- Jangan pakai `new Date()` sebagai fallback timestamp — itu menyembunyikan data basi.
+- Jangan samakan TTL cache untuk semua data; sesuaikan dengan frekuensi update sumbernya.
+- Jangan biarkan service mengembalikan stub data di production — kalau data gagal, tampilkan N/A.
+- Polling tidak ada gunanya kalau server mengembalikan data statis.
+
+### [20261001] Supply Chain: Angka PMI FABRIKASI dari IPMAN Synthetic
+
+**Area**: Backend / Data Source (`geo-risk.service.ts`) + Frontend (`GeoRiskRadarPanel.tsx`)
+
+**Root Cause**: Supply Chain score memakai `ipman_synthetic` → 48.7, yang merupakan **angka fabrikasi**. Rantai 4 sumber PMI semuanya gagal:
+1. MongoDB `MacroIndicator` — data kosong/basi >45 hari
+2. DBnomics ISM PMI — provider stop update, nilai korup (10-11 di luar range PMI)
+3. Trading Economics — **API key invalid** (`TE_API_KEY` ada tapi ditolak)
+4. FRED `IPMAN` — ADA, tapi **bukan PMI**
+
+**Masalah konseptual**: `IPMAN` = **indeks VOLUME produksi** (2017=100). PMI = **diffusion index survei**. Dua hal berbeda secara fundamental. Rumus `50 + (ipman - 100)` mengubah indeks produksi jadi angka yang kebetulan mirip PMI (~49-50) tapi **tidak punya makna statistik**. Karena IPMAN selalu 99–100, hasilnya selalu ~49–50 → supply chain seolah selalu "sedikit di bawah netral" apa pun kondisi nyatanya.
+
+**Solusi**:
+1. Ganti fallback ke **`GACDISA066MSFRBNY`** (Empire State Mfg General Business) — **diffusion index survei manufaktur**, netral = 0, konsep IDENTIK dengan PMI. Konversi: `PMI ≈ 50 + (index / 2)`.
+2. **Hapus `ipman_synthetic`** sepenuhnya — jangan fabrikasi angka.
+3. Kalau semua sumber gagal → return `null` → UI tampil **"N/A"** (jujur) daripada angka palsu.
+4. Label UI: `"ISM PMI"` → `"Mfg Activity"` (karena sumbernya proxy, bukan ISM resmi).
+5. Tambah badge source `EMPIRE` di UI + tipe `empire_state` di `PmiSource`.
+
+**Verifikasi**:
+```
+Sebelum: globalPmi=48.7, pmiSource=ipman_synthetic   ← FABRIKASI
+Sesudah: globalPmi=53.8, pmiSource=empire_state      ← Empire State 7.6 → 50+7.6/2=53.8
+supplyChain score: 56 → 31 (skor turun karena aktivitas manufaktur ternyata EKSPANSI)
+```
+
+**Pitfall**: `TE_API_KEY` ada di `.env` tapi **invalid** — respons `"You must provide valid credentials"`. Kode tidak memvalidasi respons non-JSON, jadi kegagalan ini silent. Perlu dicek terpisah.
+
+**Hindari**:
+- Jangan mengonversi satu jenis indikator jadi jenis lain dengan rumus arbitrer (indeks volume → diffusion index). Kalau butuh PMI, pakai PMI atau proksi yang konsepnya sama (regional Fed diffusion index).
+- Jangan fabrikasi angka saat data gagal — tampilkan N/A.
+- Jangan label data proxy sebagai nama resmi ("ISM PMI") — menyesatkan user.
+- Validasi API key pihak ketiga secara berkala; key yang ada di `.env` belum tentu masih valid.
+
+### [20261001] Audit Data Lagging: Series FRED Salah + Campur Sumber + Hardcoded Yield
+
+**Area**: Backend / Data Sources (`nexus.service.ts`, `quant.service.ts`, `macro-data.service.ts`)
+
+**Root Cause** (hasil audit menyeluruh semua series):
+1. **`PCECPI` tidak ada di FRED** — nama series yang benar `PCEPI`. Fallback inflasi PCE selalu gagal → silent null.
+2. **`NAPM` dihapus FRED sejak Juni 2016** (ISM menarik lisensi). Dipakai di Nexus → ISM PMI selalu `null`. Catatan ini SUDAH ADA di `geo-risk.service.ts` tapi Nexus tetap memakainya.
+3. **Spread 10Y-3M pakai hardcoded `3.5`** sebagai yield 3M, padahal `DGS3MO` asli = 4.25% → **error 75 bps** (176 vs 101 bps).
+4. **Quant panel mencampur sumber**: Yahoo (^IRX/^FVX/^TNX/^TYX) untuk 3M/5Y/10Y/30Y + FRED untuk 2Y. Yahoo `^IRX` = **discount rate** (4.03%), bukan yield setara obligasi (4.25%) → beda 22 bps → spread 10Y-3M salah 25 bps.
+
+**Solusi**:
+1. `PCECPI` → `PCEPI`.
+2. `NAPM` → `IPMAN` (Industrial Production: Manufacturing) sebagai proxy valid.
+3. Spread 3M pakai `DGS3MO` asli — hapus semua hardcoded `3.5`.
+4. Quant: ganti SEMUA tenor ke FRED (`DGS3MO/DGS5/DGS10/DGS30` + `DGS2`), hapus campur Yahoo.
+5. Tambah `breakeven10y` (`T10YIE`) di Nexus sebagai proksi inflasi ekspektasi harian — karena CPI resmi bulanan (lag 61 hari).
+6. Buat **script audit otomatis** `src/scripts/audit-data-freshness.ts` + npm script `audit:data` — cek semua series vs FRED, deteksi lagging/series-hilang.
+
+**Verifikasi** (semua vs ground truth FRED):
+```
+Quant spread 10Y-3M : 101 bps = FRED 101  ✅ (sebelumnya 126)
+Quant spread 10Y-2Y :  37 bps = FRED  37  ✅ (sebelumnya 40)
+GeoRisk fedfunds    : 3.88     = FRED DFF 3.88  ✅
+Nexus fedFundsRate  : 3.88     = FRED DFF 3.88  ✅
+Nexus breakeven10y  : 2.36     = FRED T10YIE 2.36  ✅
+Nexus ismPmi        : 99.1     = FRED IPMAN 99.0964  ✅
+```
+
+**Hindari**:
+- Jangan pakai series FRED tanpa verifikasi keberadaannya (`fred/series` metadata) — series bisa dihapus (NAPM 2016) atau salah nama (PCECPI vs PCEPI).
+- Jangan campur Yahoo dan FRED untuk instrumen yang sama — `^IRX` (discount rate) ≠ `DGS3MO` (bond-equivalent yield).
+- Jangan hardcode nilai pasar (mis. `3.5` sebagai yield) — selalu fetch.
+- Jalankan `npm run audit:data` secara berkala untuk deteksi dini.
+
+### [20261001] Fed Funds Rate Beda Antar Panel: Salah FRED Series (FEDFUNDS vs DFEDTARU)
+
+**Area**: Backend / Data Source (`geo-risk.service.ts`, `nexus.service.ts`, `macro-regime.service.ts`)
+
+**Root Cause**: Dua panel memakai FRED series BERBEDA untuk konsep yang sama:
+- **Geo Risk Radar** → `FEDFUNDS` = **rata-rata bulanan**, rilis lag ~2 bulan → menampilkan 3.63% (data Agustus)
+- **Nexus** → `DFEDTARU` = **target range upper bound** → menampilkan 4.00%
+
+Keduanya "benar" tapi menjawab pertanyaan berbeda: satu rate efektif basi, satu batas atas target (bukan rate efektif). Data FRED aktual: `DFF`/`EFFR` = **3.88%** (rate efektif harian) — inilah angka yang benar untuk "Fed Funds Rate".
+
+**Solusi**: Standarkan semua panel ke **`DFF`** (daily effective rate):
+1. `geo-risk.service.ts` — `FRED_SERIES.FEDFUNDS: "FEDFUNDS"` → `"DFF"`
+2. `nexus.service.ts` — `fetchFredWithDelta("DFEDTARU")` → `fetchFredWithDelta("DFF")`
+3. `macro-regime.service.ts` — samakan ke `"DFF"`
+4. Tambah `fedTargetRange` (`DFEDTARL`–`DFEDTARU`) di Nexus sebagai **info konteks**, bukan pengganti rate efektif
+5. Label UI Geo Risk: `"Fed Funds"` → `"Fed Funds (Effective)"`
+
+**Bersihkan fallback usang** (angka hardcoded yang tidak akurat):
+| File | Sebelum | Sesudah |
+|---|---|---|
+| `agent-tools.helper.ts` | `?? 5.25`, `?? 3.4`, `?? 48.7`, `?? 2.1` | `?? null` |
+| `macro-ai.service.ts` | fallback `"4.25"` | `"N/A"` |
+| `hermes-prompt.ts` | mock `fedFundsRate: 4.5` | `null` + tampil "N/A" |
+| `MacroSSOT` type | `fedFundsRate: number` | `number \| null` |
+
+**Verifikasi** (ground truth FRED: `DFF` = 3.88 @ 2026-09-29):
+```
+[Geo Risk Radar]  fedfunds_rate = 3.88  ✓
+[Nexus]           fedFundsRate  = 3.88  ✓ (targetRange 3.75–4.00 sebagai konteks)
+[FRED DFF]        3.88 (2026-09-29)
+```
+
+**Catatan**: `parseFloat("N/A")` = NaN → `|| fallback` akan menelan NaN dan memakai angka mock usang. Untuk field yang bisa gagal-fetch, pakai `Number.isFinite()` check dan biarkan `null`, jangan `||`.
+
+**Hindari**:
+- Jangan pakai series FRED **bulanan** (`FEDFUNDS`, `CPIAUCSL` mentah) untuk nilai yang butuh kesegaran harian — pakai varian harian (`DFF`, `DFEDTARU/L`, `EFFR`).
+- Jangan campur "target range" dengan "effective rate" — keduanya berbeda dan harus dilabeli jelas.
+- Jangan pakai `?? 5.25` gaya fallback angka; kegagalan data harus terlihat sebagai `null`/N/A.
+
+### [20261001] Persona Kaku: Agent Melenceng dari Pertanyaan → Sistem Skill Auto-Load
+
+**Area**: Backend / AI Prompt Engineering (`hermes-prompt.ts`, `skill-loader.ts`, `skills/*.md`)
+
+**Root Cause**: System prompt punya SATU persona besar (Hawk/Dove/Contrarian) yang selalu di-inject penuh, tapi TIDAK ada mekanisme untuk mengaktifkan panduan spesialis sesuai konteks. Akibatnya:
+- User tanya "berapa saldo ON RRP dan TGA?" → agent malah menjelaskan kerangka SMC/ICT, protokol eksekusi, dan mengaku "ada batasan data" padahal angka ada di blok SSOT.
+- Persona mendorong gaya "analis" terus-menerus, jadi pertanyaan faktual pun dijawab dengan esai analisis.
+
+**Solusi — Sistem Skill Auto-Load**:
+1. **`skill-loader.ts`** — loader markdown tanpa dependency eksternal:
+   - Parse frontmatter YAML sederhana (`name`, `description`, `triggers`, `priority`).
+   - Resolusi direktori multi-kandidat (`__dirname/skills`, `cwd/src/...`, `cwd/dist/...`) supaya jalan di dev (tsx) maupun production (node).
+   - Cache berdasarkan mtime direktori — file skill baru langsung terbaca tanpa restart.
+   - **Word-boundary matching** untuk trigger satu kata (regex lookaround `(?<![a-z0-9])…(?![a-z0-9])`), substring untuk frasa multi-kata.
+   - Skor = (jumlah trigger cocok × 10) + priority. Ambil top-3.
+2. **7 skill di `src/lib/agent/skills/`**: `data-reporting` (priority 20), `conversation-flow` (25), `liquidity-macro` (15), `risk-management` (12), `smc-ict-analysis` (10), `macro-regime` (10), `econ-calendar` (8).
+3. **Integrasi prompt**: skill terpilih disuntikkan sebagai blok `🎯 SKILL AKTIF` + instruksi #0 yang menyatakan skill = prioritas tertinggi dalam menentukan CARA menjawab.
+4. **Logging**: `[Hermes] Skills auto-loaded: <nama>(<trigger>)` untuk debugging.
+
+**Verifikasi**:
+| Pertanyaan | Skill ter-load | Hasil |
+|---|---|---|
+| "berapakah saldo ON RRP dan TGA sekarang?" | data-reporting + liquidity-macro | 59 char: `ON RRP: $11.54B / TGA: $936.6B (INJECTING)` ✓ |
+| "halo hawk" | conversation-flow | 135 char, tanya balik ✓ |
+| "berikan setup SMC XAUUSD" | smc-ict-analysis + liquidity-macro | 566 char, jujur bilang data harga belum ada ✓ |
+| "berapa position size?" | risk-management + data-reporting | 616 char, minta data SL & nilai/poin ✓ |
+
+**Pitfall yang ditemukan saat testing**:
+- Trigger pendek rawan false-positive dengan `includes()`: `"rr"` cocok di "seka**r**ang", `"hi"` cocok di "m**i**nggu **i**ni". Solusi: word-boundary regex + hapus trigger ambigu (`hi`, `rr`, `sl`, `tp`).
+- Trigger bersimbol (`1%`) tidak cocok dengan `\b` — pakai lookaround, bukan word boundary.
+
+**Hindari**:
+- Jangan menaruh semua panduan dalam satu persona besar — pecah jadi skill terpisah yang di-load kondisional.
+- Jangan pakai `String.includes()` untuk trigger pendek tanpa batas kata.
+- Jangan menambah skill tanpa `triggers` yang spesifik; trigger terlalu umum membuat skill salah ter-load.
+
+### [20260930] Mismatch Data AI vs Dashboard: Liquidity (ON RRP/TGA) Masih Pakai Mock
+
+**Area**: Backend / AI Prompt Engineering (`macro-ai.service.ts`, `hermes-prompt.ts`)
+
+**Root Cause**: Perbaikan `liveMacroSSOT` sebelumnya hanya meng-override `cpi`, `vix`, dan `fedFundsRate` — field `liquidity` **masih memakai nilai mock** dari `DEFAULT_MACRO_SSOT` (`ondRP: 69.8, tga: 0.0`). `chatStream` juga tidak pernah fetch ON RRP & TGA. Akibatnya AI menjawab "ON RRP $69.8 miliar, TGA $0" padahal dashboard menampilkan $11.54B / $959.6B. Field `yieldCurve` juga masih mock (0.28/-0.09), dan `context` yang dikirim frontend (berisi yieldCurve & VIX live) **tidak pernah dipakai** sama sekali.
+
+**Solusi**:
+1. Fetch `marketDataService.getLiquidity()` (ON RRP) & `getTGA()` di `chatStream` — sumber yang SAMA dengan dashboard UI.
+2. Override `liveMacroSSOT.liquidity.ondRP`/`tga` dengan nilai live (dibulatkan 2 desimal agar identik tampilan dashboard).
+3. Ubah tipe `MacroSSOT.liquidity.ondRP`/`tga` jadi `number | null` dan default mock jadi `null` — supaya prompt menampilkan "N/A (data tidak tersedia)" alih-alih angka palsu.
+4. Pakai `context.yieldCurve.spread10y2y` & `context.vix.value` dari frontend untuk mengisi `liveMacroSSOT` (sebelumnya parameter ini diabaikan).
+5. Tambahkan ON RRP/TGA/yield curve/regime live ke `macroDataContext` + `extraContext`.
+6. Instruksi prompt: angka ON RRP/TGA harus dari blok SSOT — sama dengan dashboard; jangan mengarang kalau "N/A".
+
+**Verifikasi**: Diambil berurutan (dashboard → AI): ON RRP `$11.54B` = AI `11.54B`; TGA `$936.6B` = AI `936.6B`. Sebelum fix: AI menjawab 69.8 / 0.
+
+**Pitfall saat verifikasi**: Nilai TGA berubah tiap hari (record harian Treasury). Saat membandingkan, ambil data dashboard & jawaban AI **berurutan dalam waktu dekat** — kalau tidak, perbedaan tanggal record (mis. 09-28 vs 09-29) akan terlihat seperti bug padahal data memang baru update.
+
+**Hindari**:
+- Jangan hanya override sebagian field SSOT — periksa SEMUA field (cpi, vix, fedFundsRate, yieldCurve, liquidity) apakah masih mock.
+- Jangan biarkan parameter `context` dari frontend tidak terpakai; kalau frontend sudah punya data live, pakai itu.
+- Jangan isi mock dengan angka yang terlihat masuk akal (69.8) — pakai `null` + "N/A" supaya kegagalan data terlihat jelas.
+
+### [20260930] Hardcoded Nama di Prisma @default — Bahaya untuk App Multi-User
+
+**Area**: Backend / Database Schema (`prisma/schema.prisma`)
+
+**Root Cause**: `UserProfile` punya `@default("Virga")` dan `@default("Virga Talita Ariyanto")` — sisa dari development single-user. Karena Hunter Trades Journal adalah app komunitas multi-user, SETIAP user baru yang dibuat tanpa `preferredName` eksplisit akan otomatis diberi nama "Virga". Ini bug identitas, bukan cuma soal estetika: AI akan memanggil semua user dengan nama yang salah.
+
+**Solusi**: Ganti default jadi netral (`"Trader"`, `legalName: ""`). Nama asli diisi lewat seed/onboarding. `prisma db push` tidak mengubah data existing — user lama tetap aman.
+
+**Hindari**:
+- Jangan pakai data personal spesifik sebagai `@default` di schema Prisma.
+- Bedakan **data seed** (wajar berisi nama user asli) dari **schema default** (harus netral).
+- Frontend JANGAN hardcode nama user — selalu fetch dari endpoint profile (`/api/v1/chat/profile`).
+
+### [20260930] Dual SSOT Conflict: Mock vs Live Macro Data di System Prompt
+
+**Area**: Backend / AI Prompt Engineering (`macro-ai.service.ts`, `hermes-prompt.ts`)
+
+**Root Cause**: `assembleHermesPrompt()` dipanggil dengan `macroSSOT: DEFAULT_MACRO_SSOT` — objek **mock hardcoded** (CPI 3.35%, Fed 4.5%, VIX 16.0) — PADAHAL data live sudah di-fetch (`cpiVal`, `fedRate`, `vixVal` dari GeoRisk/Regime snapshot) dan di-inject terpisah sebagai `macroDataContext`. Hasilnya prompt berisi **DUA sumber angka berbeda** untuk indikator yang sama (mock: Fed 4.5% vs live: Fed 3.63%). LLM memilih angka acak dari keduanya → jawaban tidak konsisten dengan header UI.
+
+**Solusi**:
+1. Hoist nilai live ke outer scope (`fedRateLive`, `vixLive`) lalu bangun `liveMacroSSOT` yang menggabungkan nilai live dengan fallback mock hanya untuk field yang tidak tersedia.
+2. Pakai `liveMacroSSOT` (bukan `DEFAULT_MACRO_SSOT`) saat memanggil `assembleHermesPrompt()`.
+3. Hapus header SSOT duplikat di `extraContext` — `macroDataContext` sudah punya header sendiri.
+4. Label `formatMacroSSOT()` jadi "MACRO SSOT SNAPSHOT (LIVE)" sebagai penanda otoritatif.
+5. Tambah instruksi #9 AKURASI DATA: pakai HANYA angka dari SSOT LIVE, jangan mengarang/memakai angka dari training, jangan sebut indikator yang nilainya N/A.
+
+**Verifikasi**: Sebelum fix, tanya "berapa Fed Funds?" → jawab 4.5% (mock). Setelah fix → jawab **3.63%** (live).
+
+**Hindari**: Jangan pernah inject mock/hardcoded data bersamaan dengan data live untuk indikator yang sama. Kalau ada data live, mock HARUS jadi fallback (bukan default yang selalu ikut terkirim).
+
+### [20260930] Upstream Error Message Bocor Sebagai Reply Chat
+
+**Area**: Backend / AI Service (`macro-ai.service.ts`)
+
+**Root Cause**: 9router kadang mengembalikan HTTP 200 dengan `content` berisi pesan error dari provider upstream (mis. *"Gemini 3.5 Flash is no longer available. Please switch to Gemini 3.7 Flash..."*). Karena status 200, kode menganggapnya jawaban valid dan menampilkannya ke user.
+
+**Solusi**: Setelah response diterima, deteksi pola pesan error upstream pada `content` (panjang < 300 char + match regex `no longer available|please switch to|deprecated|quota|rate limit` + bukan JSON) → perlakukan sebagai kegagalan, `continue` ke model fallback berikutnya.
+
+**Hindari**: Jangan percaya HTTP 200 saja dari LLM gateway; validasi bahwa `content` benar-benar jawaban (bukan pesan error provider).
+
+### [20260930] Chat AI Over-Answer: Sapaan Dibalas Analisis Penuh (Intent Calibration)
+
+**Area**: Backend / AI Prompt Engineering (`hermes-prompt.ts`, `macro-ai.service.ts`)
+
+**Root Cause**: System prompt Hermes hanya berisi instruksi analisis (kuantifikasi R:R, kerangka SMC, format JSON) tapi TIDAK ada aturan kalibrasi intent. Ditambah konteks yang di-inject selalu penuh (SSOT makro, agent tools result, news, calendar, memory notes) dengan label "TRADING CONTEXT" — LLM menginterpretasikan konteks itu sebagai perintah untuk dianalisis, sehingga sapaan "halo hawk" dibalas dump analisis pasar lengkap + setup XAUUSD yang tidak diminta.
+
+**Solusi**:
+1. Tambah blok **KALIBRASI INTENT** di INSTRUKSI RESPON — klasifikasi pesan user jadi 3 kategori sebelum menjawab: (a) sapaan → balas 1–3 kalimat + tanyakan apa yang mau dibahas; (b) pertanyaan spesifik → jawab HANYA topik itu; (c) minta briefing → baru analisis komprehensif.
+2. Ubah label konteks dari `📈 TRADING CONTEXT (30 hari terakhir)` → `📈 KONTEKS DATA (REFERENSI SAJA — pakai HANYA jika relevan dengan pertanyaan user, jangan dibahas otomatis)`.
+3. Aturan eksplisit: "Panjang jawaban HARUS proporsional dengan permintaan user" dan "Jangan pernah mengarang pertanyaan user".
+
+**Temuan tambahan**:
+- `max_tokens: 2048` tidak cukup untuk briefing → JSON terpotong → parse gagal → JSON mentah bocor ke `reply`. Naikkan ke **4096**.
+- Wajib ada **regex salvage** untuk JSON terpotong: ekstrak field `reasoning`/`content` pakai regex kalau `JSON.parse` gagal total, supaya UI tidak pernah menampilkan JSON mentah.
+
+**Hindari**:
+- Jangan inject konteks data tanpa instruksi eksplisit bahwa itu referensi pasif — LLM akan membahasnya otomatis.
+- Jangan set `max_tokens` kecil untuk endpoint yang bisa diminta output panjang; selalu sediakan parser yang tahan terhadap output terpotong.
+
+### [20260930] Hermes 1-on-1 Chat: [object Object] & Validasi Input Gagal
+
+**Area**: Backend (Express/Zod/9Router) + Frontend (Next.js proxy / AiPersonaChatPanel)
+
+**Root Cause** (5 bug berlapis, semuanya harus diperbaiki berurutan):
+1. **Schema mismatch** — `ai-coach.routes.ts` punya `chatRequestBodySchema` yang mengharapkan `{message, history}`, tapi frontend kirim `{messages[], currentRegime, assets, personaId, context}` → Zod menolak → error "Validasi input gagal".
+2. **Response shape mismatch** — `apiResponse.success(res, {reply})` membungkus jadi `{success, data:{reply}}`, tapi frontend baca `data.reply` di top level → `undefined`.
+3. **`response_format: {type:"json_object"}` tidak didukung** 9router model `free` → HTTP 400/410 → chat selalu gagal.
+4. **While-loop membuang system prompt** — `while (formattedMessages[0].role !== "user") shift()` menghapus system prompt Hermes (array dimulai `[system, ...]`), sehingga injeksi identitas/memori hilang total.
+5. **Nested error object** — auth middleware return `{error:{code,message}}`; frontend `new Error(errData?.error)` → `"[object Object]"`.
+
+**Solusi**:
+1. Selaraskan Zod schema dengan payload frontend sebenarnya (`messages[]` + field opsional; `assets: z.array(z.any())` karena Asset = object, bukan string; `context: z.any()`).
+2. Return `res.json({success:true, reply, reasoning, toolsUsed})` di top level (bukan dibungkus `data`).
+3. Hapus `response_format`; minta JSON lewat instruksi di system prompt + parser toleran yang strip markdown fence ```` ```json ````.
+4. Ganti while-loop dengan pengecekan `hasUserMessage` — JANGAN pernah shift dari depan array yang berisi system prompt.
+5. Error handling frontend harus handle nested object: `errData.error.message` (object) / `errData.error` (string) / `errData.message`.
+
+**Temuan tambahan**:
+- 9router model `free` **intermittent 410 Gone** (upstream habis) → wajib model fallback chain (`free` → `auto-free-model` → `claude-opus-4.6`).
+- Dev bypass auth: Next.js proxy harus kirim header `x-dev-user-id` (auth middleware hanya bypass kalau `NODE_ENV=development`).
+- `resolveProfileForUser()` — dev fallback: kalau profile userId tidak ada & NODE_ENV=development, pakai profile pertama (seed `virga`) supaya identitas tetap terpakai walau session pakai ObjectId MongoDB.
+- Frontend harus fetch `/api/v1/chat/profile` untuk badge identitas & facts count, jangan hardcode.
+- Next.js 16 Turbopack di drive D: (slow filesystem) bisa stuck "Compiling..." >10 menit → hapus `.next/dev` lalu restart.
+
+**Hindari**:
+- Jangan asumsikan shape payload/response antara frontend ↔ proxy ↔ Express sama tanpa verifikasi ketiga layer.
+- Jangan pakai `response_format` json_object pada 9router.
+- Jangan shift dari array messages yang diawali system prompt.
+- Jangan hardcode identitas user di komponen frontend.
+
+### [20260929] 9Router Model 500 Error & Upstream Timeout Recovery
+**Area**: Backend Express / AI Services (9Router Integration / Macro AI)
+**Root Cause**: 9Router model config menggunakan nama model lama yang 404/invalid (`cx/gpt-5.5`, `nvidia/nemotron`) dan timeout terlalu singkat (12s) yang memicu error 500 pada route `/analyze-regime` dan `analyzeMacroFeed`.
+**Solusi**:
+1. Menyelaraskan `NINE_ROUTER_MODELS` dengan model aktif dari `http://localhost:20128/v1/models` (`jev-1.13`, `qwen2.5-coder-32b-instruct`, `llama-3.1-8b-instruct-fp8-fast`, dll).
+2. Menaikkan timeout dari 12s ke 35s untuk non-stream dan 45s untuk stream.
+3. Menambahkan `NINE_ROUTER_EMERGENCY_FALLBACK` (`auto-free-model`) sebagai lapis pertahanan terakhir ketika semua model named gagal.
+4. Menambahkan fallback note deterministik di `analyzeRegime` agar route tidak pernah melempar HTTP 500 unhandled.
+**Hindari**: Jangan biarkan service AI melempar unhandled error yang merusak UI terminal; selalu sediakan fallback deterministik berbasis state lokal.
+
 ## Lessons Log
 
 ### [20260923] Macro Regime Matrix SSOT — Leading Indicator Engine Implementation
@@ -549,7 +1136,18 @@ px tsc --noEmit di frontend & server untuk catch broken import.
 **[FRONTEND_ENGINEER] progress: COMPLETED - Fixed SCENARIO_DESCRIPTIONS ReferenceError in AgentIntelligencePanel.tsx - Lesson: Selalu deklarasikan konstanta data lokal sebelum render komponen React yang menggunakannya**
 **Hindari**: Jangan mengasumsikan panjang `order_id` tidak masalah. Selalu verifikasi panjang string sebelum kirim ke Midtrans. Jangan lupa tambah `/v1` di semua URL fetch frontend.
 
-### [20260926] Full Codebase Scan & Real Stack Synchronization (Next.js 16 + Express 5 + Electron 35)
+### [20260929] SettingsPage & Header Profile Avatar Hydration Mismatch & Discord CDN Referrer Policy
+**Area**: Frontend / Hydration / Profile & Settings UI
+**Root Cause**:
+1. **Hydration Mismatch di SettingsPage**: Pada SSR, `session` bernilai undefined/null, sehingga elemen placeholder spinner `<Loader2 className="w-6 h-6 text-accent-gold animate-spin" />` di-render. Sementara saat client hydration, `useSession()` memuat data dan merender `<img>` avatar Discord. Karena ketiadaan guard state `mounted`, terjadi mismatch DOM tree antara SSR vs Client.
+2. **Missing Referrer Policy pada Discord CDN Avatar**: Komponen `<img>` avatar pengguna di `SettingsPage` dan `Header` tidak memiliki properti `referrerPolicy="no-referrer"`. Discord CDN (`cdn.discordapp.com`) memerlukan peniadaan referer header dari domain/localhost lain untuk mencegah error HTTP 403 Forbidden atau gambar gagal termuat (*broken image*).
+**Solusi**:
+1. Menambahkan state `mounted` dengan `useEffect` di `SettingsPage` (`frontend/src/app/(dashboard)/settings/page.tsx`), lalu membungkus kondisi avatar dengan `!mounted || sessionPending ? <Loader2 /> : ...`.
+2. Menambahkan atribut `referrerPolicy="no-referrer"` pada elemen `<img>` avatar pengguna baik di `SettingsPage` maupun `Header` (`frontend/src/components/layout/header.tsx`).
+**Hindari**: Jangan merender elemen yang bergantung pada state client/session langsung pada render awal tanpa pengecekan `mounted`. Selalu sertakan `referrerPolicy="no-referrer"` saat memuat avatar dari CDN eksternal seperti Discord.
+
+**[QA_ENGINEER] progress: COMPLETED - Verified hydration guard & referrerPolicy fixes on SettingsPage and Header - Lessons: Ensure mounted guard & no-referrer policy on external avatars**
+
 **Area**: Documentation / Memory / Architecture / Codebase Audit
 **Root Cause**:
 1. Dokumentasi di `.kilo/MEMORY.md` dan `PROJECT_SCAN.md` masih mencatat dependensi dan statistik usang (misalnya: tertulis Next.js 14 alih-alih 16.2.1, 40 services alih-alih 51+, 15 models alih-alih 25, 21 routes alih-alih 25).
@@ -559,3 +1157,88 @@ px tsc --noEmit di frontend & server untuk catch broken import.
 2. Memperbarui SSOT arsitektur pada `.kilo/MEMORY.md` dan `PROJECT_SCAN.md` agar mencerminkan kondisi aktual (Next.js 16.2.1, React 19, Tailwind v4, Express 5.2.1, Mongoose 9.3.3, 25 Models, 25 Routes, 51 Services, 20 Frontend pages).
 3. Mendokumentasikan status implementasi fitur baru (Macro Terminal, Agent Consensus, User Agent Memory).
 **Hindari**: Jangan mengandalkan memori/asumsi versi dependensi lama saat mendiagnosis bug. Selalu verifikasi dari `package.json` dan struktur file aktual di codebase.
+
+### [20261005] OTA Patch Leak `.env` ke Repo Publik + Update Path Korup (Desktop/Electron)
+**Area**: Desktop / Electron / OTA Updater / Build Pipeline / Security
+**Root Cause**:
+1. **Secret leak**: `buildPatch.js` mem-pack seluruh `resources/server` — termasuk `server/.env` (33 key: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `DISCORD_CLIENT_SECRET`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `DASHSCOPE_API_KEY`, `AITRADOS_SECRET_KEY`, `TAVILY_API_KEY`, `NINE_ROUTER_API_KEY`, `MT5_MCP_API_KEY`) dan `server/logs/mt5-errors.log` (1.9 MB) ke `patch.zip`. Zip itu ter-commit (`desktop/dist-patch/patch.zip`, dan sebelumnya `update/patch.zip`) ke repo **public** `virgoarya/journal-trade`, sehingga secrets tetap reachable dari history `origin/main` walau tracking sudah dihapus.
+2. **Update path korup**: handler `updater:quit-and-install` (main.js) meng-extract zip ke `process.resourcesPath` **sementara backend/frontend/9Router masih hidup**. Di Windows, child memegang CWD (`resources/server`, `resources/frontend`) dan native addon (next/swc, better-sqlite3) → extract gagal separuh → app relaunch → health check lolos (server.js lama masih ada) → backup dihapus → install hybrid tanpa rollback.
+3. **Update channel mati**: `OTA_VERSION_URL` menunjuk `main/update/version.json` → HTTP 404 (folder `update/` dihapus, artifact nyata di `desktop/dist-patch/`); `buildPatch.js` menulis ke `update/` tapi pesan Next Steps menyuruh push `desktop/dist-patch`. Path mismatch + folder hilang = semua client diam-diam tidak pernah update.
+**Solusi**:
+1. `buildPatch.js`: tambah allowlist-blokir `FORBIDDEN` (`.env*`, `logs/`, `*.log`, `monitoring-reports/`, `node_modules/`) yang men-skip saat add DAN **build-time assertion** yang menghapus zip + `process.exit(1)` kalau masih ada yang lolos. Verifikasi: rebuild patch dari fixture nyata → `unzip -l update/patch.zip | grep -iE "\.env|/logs?/|\.log$|monitoring-reports"` = 0 baris, sementara `server/dist/index.js`, `app/main.js`, `frontend/server.js` tetap ada.
+2. `main.js` update path: set `isQuitting = true` lalu `await killChildGracefully(routerProcess/backendProcess/frontendProcess)` **sebelum** extract; catch block sekarang melakukan rollback nyata (rename resources → `.corrupt`, restore backup → resources, hapus flag, `dialog` + `app.relaunch()`), bukan sekadar kirim status error.
+3. `git rm --cached` patch.zip + `.gitignore` `desktop/dist-patch/` dan `update/` + gitleaks di CI (dikerjakan @forge di `b915065`).
+**Verifikasi**: `node --check` OK untuk main.js & buildPatch.js; unit test regex exclusion (14 case, ALL PASS); rebuild patch nyata bersih dari forbidden entry.
+**Hindari**:
+- Jangan pernah pack `.env`/`logs` ke artifact yang di-commit; `.env` dikirim lewat `extraResources` installer saja. Selalu tambah assertion build-time, bukan hanya exclude diam-diam.
+- Jangan menulis ke `process.resourcesPath` saat child process masih hidup di Windows — kill child dulu (CWD + native addon lock). Rollback path lama sudah benar; jadikan pola untuk SEMUA path yang menyentuh resources.
+- Jangan hapus backup sebelum health check pasca-restart lolos.
+- Jangan pernah commit `patch.zip`; simpan di folder yang di-ignore dan distribusikan via release asset/CDN.
+
+### [20261005] MT5 Reconnect Tak Terdeteksi — Poll Berhenti Saat Disconnected (Frontend/AI Trading)
+**Area**: Frontend / React Hooks / MT5 Connection Lifecycle
+**Root Cause**:
+1. `useMT5Connection` memasang `useEffect` poll dengan guard `if (!isConnected) return;`. Artinya poll HANYA jalan saat sudah terhubung — begitu MT5 putus (mis. pipeline auto-paused seperti laporan AXIS), tidak ada satu pun request `/status` yang dikirim lagi, sehingga UI tetap menampilkan "connected" walau backend sudah lepas koneksi. User harus reload halaman untuk sadar.
+2. Mount check dan interval poll menduplikasi logika status, dan keduanya TIDAK identik: mount check mengabaikan `connectionStatus`, sedangkan poll men-set-nya. Akibatnya banner "broker menolak order / Algo Trading tidak aktif" tidak muncul selama interval pertama setelah load.
+3. `aiTradingService.getStatus()` tidak men-declare field `reconnecting` walau backend (`ai-trading.routes.ts` → `mt5McpService.isReconnectingStatus`) mengirimnya, memaksa `(res.data as any)` di konsumer.
+**Solusi**:
+1. Poll sekarang selalu aktif; cadence adaptif — 15s saat disconnected, 5s saat connected (memakai `isConnected ? 5000 : 15000` sebagai dependency interval), jadi recovery MT5 terdeteksi tanpa interaksi user.
+2. Ekstrak satu `applyStatus(data)` yang dipakai bersama oleh mount check dan poll sebagai single source of truth untuk 3 state (`connected` / `reconnecting` / `trading_disabled`).
+3. Tambah field `reconnecting: boolean` di type response `getStatus()` dan buang semua cast `any`.
+4. Tambah regression test `useMT5Connection.test.ts` (4 case) yang menangkap interval yang didaftarkan hook lalu memanggilnya manual.
+**Verifikasi**: `npx vitest run` → 41/41 pass (6 file); `npx tsc --noEmit` → 0 error; eslint pada file yang diubah bersih.
+**Hindari**:
+- Jangan pakai `if (!isConnected) return;` di effect yang bertugas MEMULIHKAN koneksi — itu circular: state yang mau diperbaiki justru jadi syarat untuk mulai memperbaikinya. Guard recovery harus selalu jalan, cukup atur cadence-nya.
+- Jangan menduplikasi derivasi state koneksi di dua tempat (mount vs interval). Satu fungsi `applyStatus`, dipakai berdua.
+- Jangan `vi.spyOn(globalThis, "setInterval").mockImplementation(...)` tanpa meneruskan ke implementasi asli saat memakai `waitFor` dari @testing-library — `waitFor` sendiri polling lewat `setInterval`, sehingga mock total membuatnya deadlock/timeout. Rekam callback sambil tetap memanggil `real(fn, ms)`.
+- Jangan jadikan `reconnecting: true` sebagai "tidak terhubung" di `isConnected`: halaman AI Trading hanya merender overlay reconnect saat `isConnected === true`; kalau di-set false, user terlempar ke ConnectionPanel di tengah proses reconnect. Pakai `connected || reconnecting`.
+
+### [20261005] MT5 Auto-Resume Macet — Flag Koneksi Service Basi vs Streamer (Backend/Infra)
+**Area**: Backend / MT5 Connection Lifecycle / Pipeline Recovery
+**Root Cause**:
+1. `MT5MCPService.connected` HANYA di-set oleh pemanggilan eksplisit `connectToMT5()`. Setelah `initMt5NativeMcp()` mengambil alih transport, auto-reconnect nyata dijalankan oleh `mt5-streamer.ts` (`scheduleReconnect` → `connectToNativeMcp`), yang men-set `isConnected` lokal streamer TAPI tidak pernah memberi tahu service. Jadi setelah MT5 pulih sendiri, `mt5McpService.isConnected` tetap `false`.
+2. Efeknya berantai: `pipelineLoop` menahan `waitingReconnect = true` selamanya (auto-resume tidak pernah jalan), `/api/ai-trading/status` melaporkan `connected: false`, `checkMT5Health` menulis CRITICAL "MT5 connection lost" walau transport sehat, dan `callWithCircuit` melempar "MT5 not connected" untuk semua tool — padahal streamer siap.
+3. `isReconnectingStatus` membaca flag service yang hanya di-set jalur legacy (tidak pernah tercapai) → `reconnecting` SELALU `false`, sehingga perbaikan sisi client (yang membaca flag ini untuk overlay reconnect) tidak pernah bisa melihat jendela reconnect.
+4. `mt5StreamCache` tidak mengekspos `isReconnecting` sama sekali; broadcast `mt5_status` hanya mengirim `{ connected: false }` tanpa `reconnecting`.
+5. Di `pipelineLoop`, blok disconnect memanggil `addLog(...)` TANPA guard transisi → log ERROR + broadcast WS di-emit SETIAP tick per symbol selama MT5 down (interval 1m × 2 symbol = puluhan ribu log/jam) — tepat saat memory box sudah ketat.
+6. `pipeline.mt5CircuitOpen = true` dipaksa di blok yang sama walau breaker transport sendiri masih `CLOSED`, membuat UI menampilkan "circuit open" sampai 30s setelah MT5 pulih.
+7. Cabang `!isConnected` di `getPipelineStatus` mengembalikan `mt5CircuitState: "CONNECTED"` hardcoded (kebalikan dari kebenaran) dan tidak mengembalikan `smartRisk`.
+**Solusi**:
+1. `MT5MCPService.isConnected` → `this.connected || mt5StreamCache.isConnected()`. Streamer adalah sumber kebenaran transport; service hanya mencerminkan percobaan connect eksplisit.
+2. Tambah state `isReconnecting` di streamer + ekspos lewat `mt5StreamCache.isReconnecting()`; `isReconnectingStatus` → `this.isReconnecting || mt5StreamCache.isReconnecting()`.
+3. Set `isReconnecting = true` saat `handleDisconnect`/`scheduleReconnect`, `false` saat connect sukses dan saat `disconnectMcp()` (disconnect sengaja ≠ jendela reconnect). Broadcast `mt5_status` sekarang selalu menyertakan `reconnecting`.
+4. Guard transisi di blok disconnect pipeline: `if (!pipeline.waitingReconnect) { pipeline.waitingReconnect = true; addLog(...) }`.
+5. Buang `pipeline.mt5CircuitOpen = true` paksa; serahkan state breaker ke layer transport.
+6. `getPipelineStatus` cabang disconnect: `mt5CircuitState` diambil dari `circuitBreakerState` asli, `smartRisk` ikut dikembalikan, `running` dihitung dari `intervals.size > 0 && !paused` (bukan field `running` yang bisa basi), dan TIDAK di-cache agar snapshot "disconnected" tidak diputar ulang 10s setelah pulih.
+**Verifikasi**: `npx tsc --noEmit` → 0 error; `npx vitest run` backend → 81/81 pass (termasuk 5 case regresi baru `mt5-connection-state.test.ts`); `npx vitest run` frontend → 42/42 pass.
+**Hindari**:
+- Jangan menyimpan state koneksi di DUA tempat (service + streamer) tanpa salah satunya jadi sumber kebenaran eksplisit. Kalau transport dimiliki modul lain, getter harus membaca modul itu — bukan field lokal yang hanya di-set di jalur yang sudah tidak dipakai.
+- Jangan `addLog`/broadcast di dalam blok yang dieksekusi tiap tick tanpa guard transisi state. Selalu: `if (!flag) { flag = true; log(); }`.
+- Jangan men-set state breaker milik layer lain secara paksa dari layer atas; itu menciptakan desinkronisasi yang baru terlihat 30s kemudian.
+- Jangan mengembalikan nilai "sehat" hardcoded (mis. `mt5CircuitState: "CONNECTED"`) di cabang error. Cabang error harus melaporkan kondisi error.
+- Jangan cache respons status yang menggambarkan kondisi sementara (disconnected) untuk TTL penuh; cache hanya kondisi stabil.
+- `server/src/mt5-streamer.ts.bak` masih ter-track di git dan cocok dengan `tsconfig.include` (`src/**/*`) — file itu ikut ke-build/ke-lint. Hapus dari tracking.
+
+### [20261005] Frontend Audit — Console Leak, Hardcoded Login Colors, A11y, Poll Tanpa Visibility Check (Frontend)
+**Area**: Frontend / Logging, Design Tokens, Accessibility, Performance
+**Root Cause**:
+1. `console.log/warn/error` tersebar di banyak file client (`api-client.ts`, `useDataFetching.ts`, `layout.tsx`, `dashboard/page.tsx`, `NotificationDropdown.tsx`, `UpdateNotification.tsx`, `ChecklistModal.tsx`) — di production bocor ke console user dan memperlambat hot path.
+2. `app/page.tsx` (login) meng-hardcode 15+ hex color (`#313338`, `#5865F2`, `#F2F3F5`, `#949BA4`, `#6D6F78`) di luar design token — theme/accent swap tidak berpengaruh, dan `#949BA4` di `#313338` hanya ~4.1:1 (di bawah WCAG AA 4.5:1).
+3. A11y: tombol login tanpa focus-visible, nav sidebar tanpa `aria-current="page"`, tombol icon-only (notifikasi, dismiss update) tanpa `aria-label`, toggle sidebar pakai `<div onClick>` tanpa keyboard handling.
+4. `dashboard/page.tsx` `setInterval(fetchData, 30000)` memanggil 5 endpoint tiap 30s tanpa cek `document.visibilityState` — sia-sia di background tab.
+5. `SignalChart`, `EquityCurveChart`, dan `EquityLineChart` (inline di dashboard) tidak di-memoize; parent re-render tiap poll ikut menghitung ulang.
+6. Tidak ada ErrorBoundary di level dashboard — satu render error bisa mem-blank seluruh halaman.
+**Solusi**:
+1. Buat `src/lib/logger.ts` (level-based; dev = semua, production = hanya `error`, override `NEXT_PUBLIC_LOG_LEVEL`) dan ganti semua console call dengan `logger.*`.
+2. Tambah token `--color-login-*` di `globals.css` dan migrasi semua hardcoded hex login ke `var(--color-login-*)`; naikkan kontras teks muted.
+3. `aria-current="page"` di nav aktif, `aria-label`/`aria-haspopup`/`aria-expanded` pada trigger, `focus-visible:ring-2` pada tombol login, toggle sidebar `role="button"` + `tabIndex` + handler Enter/Space.
+4. Auto-refresh dashboard hanya saat tab visible + refetch saat `visibilitychange` kembali visible.
+5. Wrap `SignalChart`, `EquityCurveChart`, `EquityLineChart` dengan `React.memo` (chart equity dashboard diekstrak ke module scope).
+6. Tambah `src/components/ErrorBoundary.tsx` + pasang di `(dashboard)/layout.tsx`; error di-route ke `logger.error`.
+**Verifikasi**: `npx tsc --noEmit` → 0 error; `npx vitest run` → 45/45 pass (7 file, termasuk 3 case baru `logger.test.ts`); eslint bersih di file baru (sisa error `any`/`set-state-in-effect` sudah ada sebelumnya).
+**Hindari**:
+- Jangan pakai `console.*` langsung di bundle client; lewat `logger` supaya level produksi bisa dibisukan.
+- Jangan hardcode hex di komponen; tambah token di `@theme` `globals.css`.
+- Jangan pasang polling yang sama-sama jalan di background tab; selalu gate dengan `document.visibilityState`.
+- Jangan taruh komponen berat (chart) di dalam body komponen induk tanpa memo — parent re-render akan menghitung ulang tiap kali.
+- Jangan biarkan satu render error mem-blank seluruh app; bungkus surface dengan ErrorBoundary.

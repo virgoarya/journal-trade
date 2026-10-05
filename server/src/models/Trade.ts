@@ -28,6 +28,22 @@ export interface ITrade extends Document {
   sizeUnit: "LOT" | "CONTRACT"; // Added
   sizeType?: "standard" | "micro" | "mini"; // Added: for Futures CME/COMEX
   mt5OrderId?: number;
+  // Institutional Prop-firm fields
+  grossPnl?: number;
+  commission?: number;
+  swap?: number;
+  maeR?: number;
+  mfeR?: number;
+  worstPriceReached?: number;
+  bestPriceReached?: number;
+  ruleViolations?: string[];
+  macroSnapshot?: {
+    regime?: string;
+    liquidityRisk?: string;
+    vix?: number;
+    yieldCurveSpread?: number;
+    capturedAt?: Date;
+  };
   isDeleted?: boolean;
   deletedAt?: Date;
   deletionReason?: string;
@@ -73,6 +89,25 @@ const TradeSchema = new Schema<ITrade>({
   },
   mt5TicketId: { type: String },
   mt5OrderId: { type: Number },
+  // Institutional Prop-firm fields
+  grossPnl: { type: Number },
+  commission: { type: Number, default: 0 },
+  swap: { type: Number, default: 0 },
+  maeR: { type: Number },
+  mfeR: { type: Number },
+  worstPriceReached: { type: Number },
+  bestPriceReached: { type: Number },
+  ruleViolations: [{ type: String, enum: [
+    "Moved SL", "Overleveraged", "Revenge Trade", "FOMO Entry",
+    "Exited Early", "Skipped SL", "Ignored Playbook", "Overtraded"
+  ]}],
+  macroSnapshot: {
+    regime: { type: String },
+    liquidityRisk: { type: String },
+    vix: { type: Number },
+    yieldCurveSpread: { type: Number },
+    capturedAt: { type: Date },
+  },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },
   deletionReason: { type: String }

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Bell, Check, ExternalLink } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { notificationService, Notification } from "@/services/notification.service";
+import { logger } from "@/lib/logger";
 
 interface NotificationDropdownProps {
   className?: string;
@@ -96,7 +97,7 @@ export default function NotificationDropdown({ className = "" }: NotificationDro
         setNotifications(result.data);
       }
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
+      logger.error("Failed to fetch notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -136,7 +137,7 @@ export default function NotificationDropdown({ className = "" }: NotificationDro
           prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
         );
       } catch (error) {
-        console.error("Failed to mark as read:", error);
+        logger.error("Failed to mark as read:", error);
       }
     }
   }, [allNotifications, refreshSystemReadIds]);
@@ -157,7 +158,7 @@ export default function NotificationDropdown({ className = "" }: NotificationDro
       // Refresh ref
       systemReadIdsRef.current = notificationService.getSystemReadIds();
     } catch (error) {
-      console.error("Failed to mark all as read:", error);
+      logger.error("Failed to mark all as read:", error);
     }
   }, [macroNotifications, notifications]);
 
@@ -194,6 +195,9 @@ export default function NotificationDropdown({ className = "" }: NotificationDro
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-lg text-text-secondary hover:text-accent-gold hover:bg-white/5 transition-all"
         data-notification-trigger
+        aria-label={`Notifikasi${allUnreadCount > 0 ? `, ${allUnreadCount} belum dibaca` : ""}`}
+        aria-haspopup="true"
+        aria-expanded={isOpen}
       >
         <Bell className="w-5 h-5" />
         {allUnreadCount > 0 && (

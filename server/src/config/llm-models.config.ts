@@ -19,13 +19,18 @@ export interface LLMModelConfig {
 // Verify all models have priority set:
 // gemini: 1, mistral: 2, gpt: 3, deepseek: 4, nemotron: 5, claude-opus: 6
 export const NINE_ROUTER_MODELS: LLMModelConfig[] = [
-  { name: "gemini",      label: "Gemini 3.5 Flash Lite", model: "gemini/gemini-3.5-flash-lite",       fallbackModel: "claude-opus-4.6", priority: 1, supportsTools: true,  maxTokens: 1024 },
+  { name: "gemini",      label: "Gemini 3.5 Flash Lite", model: "gemini/gemini-3.5-flash-lite",       fallbackModel: "claude-opus-4.6", priority: 1, supportsTools: true,  maxTokens: 2500 },
   { name: "mistral",     label: "Mistral Medium",        model: "mistral/mistral-medium-latest",      fallbackModel: "claude-opus-4.6", priority: 2, supportsTools: true,  maxTokens: 1024 },
-  { name: "gpt",         label: "GPT 5.5",               model: "cx/gpt-5.5",                         fallbackModel: "claude-opus-4.6", priority: 3, supportsTools: true,  maxTokens: 1024 },
-  { name: "deepseek",    label: "Qwen 3.6 27B",          model: "groq/qwen/qwen3.6-27b",              fallbackModel: "claude-opus-4.6", priority: 4, supportsTools: false, maxTokens: 1024 },
-  { name: "nemotron",    label: "Nemotron 3 Ultra 550B", model: "nvidia/nvidia/nemotron-3-ultra-550b-a55b", fallbackModel: "claude-opus-4.6", priority: 5, supportsTools: false, maxTokens: 1024 },
-  { name: "claude-opus", label: "Claude Opus 4.6",       model: "claude-opus-4.6",                    fallbackModel: undefined, priority: 6, supportsTools: true,  maxTokens: 1024 },
+  { name: "gpt",         label: "JEV 1.13",              model: "openrouter/typesafe/jev-1.13",       fallbackModel: "claude-opus-4.6", priority: 3, supportsTools: true,  maxTokens: 1024 },
+  { name: "deepseek",    label: "Qwen 2.5 Coder 32B",    model: "cf/@cf/qwen/qwen2.5-coder-32b-instruct", fallbackModel: "claude-opus-4.6", priority: 4, supportsTools: false, maxTokens: 1024 },
+  { name: "nemotron",    label: "Llama 3.1 8B FP8",      model: "cf/@cf/meta/llama-3.1-8b-instruct-fp8-fast", fallbackModel: "claude-opus-4.6", priority: 5, supportsTools: false, maxTokens: 1024 },
+  { name: "claude-opus", label: "Claude Opus 4.6",       model: "claude-opus-4.6",                    fallbackModel: "gemini/gemini-3.5-flash-lite", priority: 6, supportsTools: true,  maxTokens: 2500 },
 ];
+
+/** Last-resort: 9Router meta-router yang otomatis pilih model free yang hidup. Dipakai
+ *  HANYA di callDualEngine (non-tool), tidak masuk TOOL_CAPABLE_MODELS karena
+ *  9router auto-routing tidak menjamin tool-calling stabil. */
+export const NINE_ROUTER_EMERGENCY_FALLBACK = "auto-free-model";
 
 /** Model yang mendukung function calling, diurutkan prioritas */
 export const TOOL_CAPABLE_MODELS = NINE_ROUTER_MODELS.filter(m => m.supportsTools);

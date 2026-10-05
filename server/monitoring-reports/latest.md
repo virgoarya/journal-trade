@@ -1,42 +1,13 @@
 # System Monitoring Report
 
-**Generated:** 20/9/2026, 10.16.19 WIB
+**Generated:** 4/10/2026, 22.23.57 WIB
 **Status:** 🔴 CRITICAL
-
----
-
-## 🤖 AI Insights (9Router)
-
-1. **MT5 Connection Lost**:
-   - **Action**: Restart MT5 service and verify connection.
-   - **Reason**: MT5 connection lost, causing pipeline auto-pause.
-   - **Next Step**: Check MT5 logs for errors and network connectivity.
-
-2. **High Memory Usage**:
-   - **Action**: Identify and terminate memory-intensive processes.
-   - **Reason**: Memory usage at 97.8%, risking system instability.
-   - **Next Step**: Use task manager to analyze memory usage by process.
-
-3. **Provider Status**:
-   - **Action**: Investigate hibernating providers (4 out of 6).
-   - **Reason**: Only 2 providers active, reducing consensus availability.
-   - **Next Step**: Check provider logs for hibernation reasons.
-
-4. **Uptime Monitoring**:
-   - **Action**: Set up alerts for uptime monitoring.
-   - **Reason**: System has been up for only 8 hours.
-   - **Next Step**: Configure monitoring tools to track uptime and set thresholds.
-
-5. **Resource Allocation**:
-   - **Action**: Optimize resource allocation for active providers.
-   - **Reason**: High memory usage and limited active providers.
-   - **Next Step**: Review and adjust resource allocation settings.
 
 ---
 
 ## Executive Summary
 
-2 critical issue(s), 6 warning(s)
+2 critical issue(s), 3 warning(s)
 
 ## 🔴 Critical Issues
 
@@ -45,12 +16,9 @@
 
 ## 🟡 Warnings
 
-- [system_resources] High memory usage
--   -> CPU: 4 cores
--   -> Memory: 97.8% used (5.93GB total)
--   -> Uptime: 8h
--   -> Platform: win32 10.0.19045
--   -> ⚠️ Memory usage tinggi: 97.8% (threshold: 85%)
+- [data_quality] Data quality issues detected (2)
+-   -> [XAUUSD] MT5 not connected - cannot query rates
+-   -> [BTCUSD] MT5 not connected - cannot query rates
 
 ## Recommended Actions
 
@@ -66,23 +34,30 @@
 |--------|-------|
 | connected | 0 |
 | circuitState | CLOSED |
-| activePipelines | 0 |
+| activePipelines | 1 |
+| 6a26146a9cad211ba0631027.running | 0 |
+| 6a26146a9cad211ba0631027.paused | 0 |
+| 6a26146a9cad211ba0631027.error | 0 |
+| 6a26146a9cad211ba0631027.totalTrades | 0 |
+| 6a26146a9cad211ba0631027.pnl | 0 |
+| 6a26146a9cad211ba0631027.errors1h | 0 |
 | totalProviders | 6 |
-| activeProviders | 2 |
-| hibernasiProviders | 4 |
+| activeProviders | 3 |
+| hibernasiProviders | 3 |
 | circuitOpenProviders | 0 |
 | provider.gemini | active |
 | provider.mistral | hibernasi |
 | provider.gpt | hibernasi |
-| provider.deepseek | hibernasi |
-| provider.nemotron | hibernasi |
-| provider.claude-opus | active |
-| availableForConsensus | 2 |
+| provider.deepseek | active |
+| provider.nemotron | active |
+| provider.claude-opus | hibernasi |
+| availableForConsensus | 3 |
 | cpuCount | 4 |
 | memoryTotalGB | 5.93 |
-| memoryUsagePercent | 97.8 |
-| uptimeHours | 8 |
-| checkedPipelines | 0 |
+| memoryUsagePercent | 78.9 |
+| uptimeHours | 1 |
+| checkedPipelines | 1 |
+| dataIssues | 2 |
 
 ## Detailed Health Checks
 
@@ -90,49 +65,51 @@
 
 - **Severity:** critical
 - **Summary:** MT5 connection lost
-- **Time:** 2026-09-20T03:16:18.985Z
+- **Time:** 2026-10-04T15:23:57.795Z
 
 - MT5 tidak terhubung - pipeline auto-paused
 
 ### 🟢 PIPELINE
 
 - **Severity:** healthy
-- **Summary:** No active pipelines
-- **Time:** 2026-09-20T03:16:19.021Z
+- **Summary:** 1 pipeline(s) running
+- **Time:** 2026-10-04T15:23:57.837Z
 
-- Tidak ada pipeline yang aktif saat ini
+- Found 1 active pipeline(s)
 
 ### 🟢 LLM_CONSENSUS
 
 - **Severity:** healthy
-- **Summary:** 2 provider(s) available for consensus
-- **Time:** 2026-09-20T03:16:18.986Z
+- **Summary:** 3 provider(s) available for consensus
+- **Time:** 2026-10-04T15:23:57.795Z
 
 - ✅ Gemini 3.5 Flash Lite (gemini): active
 - 💤 Mistral Medium (mistral): hibernasi
-- 💤 GPT 5.5 (gpt): hibernasi
-- 💤 Qwen 3.6 27B (deepseek): hibernasi
-- 💤 Nemotron 3 Ultra 550B (nemotron): hibernasi
-- ✅ Claude Opus 4.6 (claude-opus): active
+- 💤 JEV 1.13 (gpt): hibernasi
+- ✅ Qwen 2.5 Coder 32B (deepseek): active
+- ✅ Llama 3.1 8B FP8 (nemotron): active
+- 💤 Claude Opus 4.6 (claude-opus): hibernasi
 
-### 🟡 SYSTEM_RESOURCES
-
-- **Severity:** warning
-- **Summary:** High memory usage
-- **Time:** 2026-09-20T03:16:18.986Z
-
-- CPU: 4 cores
-- Memory: 97.8% used (5.93GB total)
-- Uptime: 8h
-- Platform: win32 10.0.19045
-- ⚠️ Memory usage tinggi: 97.8% (threshold: 85%)
-
-### 🟢 DATA_QUALITY
+### 🟢 SYSTEM_RESOURCES
 
 - **Severity:** healthy
-- **Summary:** No active pipelines to check
-- **Time:** 2026-09-20T03:16:19.021Z
+- **Summary:** System resources normal
+- **Time:** 2026-10-04T15:23:57.795Z
+
+- CPU: 4 cores
+- Memory: 78.9% used (5.93GB total)
+- Uptime: 1h
+- Platform: win32 10.0.19045
+
+### 🟡 DATA_QUALITY
+
+- **Severity:** warning
+- **Summary:** Data quality issues detected (2)
+- **Time:** 2026-10-04T15:23:57.837Z
+
+- [XAUUSD] MT5 not connected - cannot query rates
+- [BTCUSD] MT5 not connected - cannot query rates
 
 ---
 
-*Report generated by SystemMonitorAgent v1.0 | Next report: 20/9/2026, 11.16.23 WIB*
+*Report generated by SystemMonitorAgent v1.0 | Next report: 4/10/2026, 23.23.59 WIB*

@@ -763,17 +763,19 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
                     print(f"[MT5-WARN] Filling mode {filling_mode} failed for {symbol}, retrying with {try_mode}...", file=sys.stderr)
                     request["type_filling"] = try_mode
                     result = mt5.order_send(request)
-                    if result.retcode == mt5.TRADE_RETCODE_DONE:
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                         break  # success!
                 else:
                     # All modes exhausted — report last error with comprehensive details
                     sym_info = mt5.symbol_info(symbol)
                     filling_mask = sym_info.filling_mode if sym_info else "N/A"
+                    ret_code = result.retcode if result else "None"
+                    comment = result.comment if result else "order_send returned None"
                     return _err(
-                        f"Order failed: retcode={result.retcode} "
+                        f"Order failed: retcode={ret_code} "
                         f"filling_mode_attempted={request['type_filling']} "
                         f"symbol_filling_mask={filling_mask} "
-                        f"comment={result.comment}"
+                        f"comment={comment}"
                     )
             else:
                 # Map common retcodes to human-readable messages
@@ -957,7 +959,7 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
             "sl": sl,
             "tp": tp,
             "tick": {"bid": tick.bid, "ask": tick.ask, "spread": tick.ask - tick.bid},
-            "symbol": {
+            "symbolInfo": {
                 "name": info.name,
                 "digits": info.digits,
                 "point": info.point,

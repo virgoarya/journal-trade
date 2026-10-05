@@ -7,6 +7,8 @@ import { z } from "zod";
 import { logTradeSchema, getTradesQuerySchema } from "../validators/trade.validator";
 import { calculateRMultiple, calculateRiskAmount } from "../utils/calculations";
 import { DailySnapshot } from "../models/DailySnapshot";
+import { maeMfeService } from "./mae-mfe.service";
+import { journalMacroBridgeService } from "./journal-macro-bridge.service";
 
 // Helper function to determine contract size based on trading pair and size type
 // Uses CME/COMEX standard multipliers per research (micro = 1/10, mini = 1/2)
@@ -160,21 +162,56 @@ export const tradeService = {
                   // Use calculated rMultiple if not provided manually, otherwise use provided value
                   const rMult = data.rMultiple !== undefined ? data.rMultiple : riskMetrics.rMultiple ?? 0;
 
+                  // Prop-firm Gross vs Net PnL calculation
+                  const commission = data.commission ?? 0;
+                  const swap = data.swap ?? 0;
+                  const grossPnl = data.grossPnl !== undefined && data.grossPnl !== null
+                    ? data.grossPnl
+                    : data.actualPnl;
+                  const finalActualPnl = data.grossPnl !== undefined && data.grossPnl !== null
+                    ? parseFloat((grossPnl - commission - swap).toFixed(2))
+                    : data.actualPnl;
+
+                  // Compute MAE / MFE (Manual or Candle-based)
+                  const maeMfe = await maeMfeService.calculate({
+                    direction: data.direction.toUpperCase() as "LONG" | "SHORT",
+                    entryPrice: data.entryPrice,
+                    stopLoss: data.stopLoss,
+                    worstPriceReached: data.worstPriceReached ?? undefined,
+                    bestPriceReached: data.bestPriceReached ?? undefined,
+                    pair: data.pair,
+                    entryDate: data.tradeDate,
+                    exitDate: data.exitDate ?? undefined,
+                  });
+
+                  // Auto Macro Snapshot at Trade Entry (Journal-Macro Bridge)
+                  const macroSnapshot = await journalMacroBridgeService.captureSnapshot();
+
       const newTrade = await Trade.create({
         userId,
         tradingAccountId: account._id,
         playbookId: data.playbookId ?? null,
         tradeDate: new Date(data.tradeDate),
+        exitDate: data.exitDate ? new Date(data.exitDate) : undefined,
         pair: data.pair,
         direction: data.direction.toUpperCase() as "LONG" | "SHORT",
         entryPrice: data.entryPrice,
         stopLoss: data.stopLoss,
         takeProfit: data.takeProfit,
         lotSize: data.lotSize,
-        actualPnl: data.actualPnl,
+        actualPnl: finalActualPnl,
+        grossPnl: grossPnl,
+        commission: commission,
+        swap: swap,
+        maeR: maeMfe.maeR ?? undefined,
+        mfeR: maeMfe.mfeR ?? undefined,
+        worstPriceReached: maeMfe.worstPriceReached ?? undefined,
+        bestPriceReached: maeMfe.bestPriceReached ?? undefined,
+        ruleViolations: data.ruleViolations ?? [],
+        macroSnapshot: macroSnapshot ?? undefined,
         rMultiple: rMult,
-                plannedRMultiple: plannedRMultiple,
-                result: data.result.toUpperCase() as "WIN" | "LOSS" | "BREAKEVEN",
+        plannedRMultiple: plannedRMultiple,
+        result: data.result.toUpperCase() as "WIN" | "LOSS" | "BREAKEVEN",
         emotionalState: data.emotionalState,
         notes: data.notes,
         chartLink: data.chartLink,
@@ -183,7 +220,7 @@ export const tradeService = {
         riskPercent: riskPercent,
       });
 
-      const newEquity = account.currentEquity + data.actualPnl;
+      const newEquity = account.currentEquity + finalActualPnl;
       const newHwm = Math.max(account.highWaterMark, newEquity);
 
       account.currentEquity = newEquity;

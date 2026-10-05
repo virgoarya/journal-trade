@@ -14,6 +14,19 @@ declare global {
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Development bypass for easy testing
+    if (process.env.NODE_ENV === "development" && req.headers["x-dev-user-id"]) {
+      req.user = {
+        id: req.headers["x-dev-user-id"],
+        // JANGAN hardcode nama user. Nama diambil dari profil/memory DB,
+        // supaya identitas mengikuti user yang sebenarnya (bukan "Bang Vir").
+        name: "",
+        email: "",
+      };
+      req.session = {};
+      return next();
+    }
+
     // Strictly restricted to automated unit/integration test runner (NODE_ENV=test)
     if (process.env.NODE_ENV === "test" && req.headers["x-integration-test"] === "1") {
       req.user = {

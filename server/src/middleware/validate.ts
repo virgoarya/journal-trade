@@ -23,7 +23,9 @@ export function validate(target: ValidateTarget) {
         req.body = (await target.body.parseAsync(req.body)) as any;
       }
       if (target.query) {
-        req.query = (await target.query.parseAsync(req.query)) as any;
+        const parsedQuery = (await target.query.parseAsync(req.query)) as any;
+        req.query = parsedQuery;
+        (req as any).validatedQuery = parsedQuery;
       }
       if (target.params) {
         req.params = (await target.params.parseAsync(req.params)) as any;

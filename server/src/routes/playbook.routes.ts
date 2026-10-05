@@ -127,4 +127,16 @@ router.post("/:id/assign-trade", validate({ params: objectIdParamSchema, body: z
   } catch (error) { next(error); }
 });
 
+router.get("/matrix", async (req, res, next) => {
+  try {
+    const account = await tradingAccountService.getActiveAccount(req.user.id);
+    if (!account) return apiResponse.success(res, []);
+    
+    const matrix = await playbookService.getPlaybookMatrix(req.user.id, account.id);
+    return apiResponse.success(res, matrix);
+  } catch (error) { next(error); }
+});
+
 export default router;
+
+

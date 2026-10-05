@@ -1,7 +1,7 @@
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
-import { mt5StreamCache, executeMt5Command, connectWithMcpConfig, disconnectMcp } from "../mt5-streamer";
+import { mt5StreamCache, executeMt5Command, connectWithMcpConfig, disconnectMcp, forceReconnect } from "../mt5-streamer";
 import { execSync } from 'child_process';
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
@@ -270,11 +270,22 @@ class MT5MCPService {
   }
 
   get isConnected(): boolean {
-    return this.connected;
+    // The native MCP streamer (mt5-streamer.ts) owns the real transport and its
+    // own auto-reconnect loop. `this.connected` only reflects the last explicit
+    // connectToMT5() call, so it goes stale (stays false) after a drop that the
+    // streamer later healed on its own — which froze the pipeline in
+    // waitingReconnect and made /status report "disconnected" forever.
+    // The streamer is authoritative: trust either source.
+    return this.connected || mt5StreamCache.isConnected();
   }
 
   get isReconnectingStatus(): boolean {
-    return this.isReconnecting;
+    // The native streamer owns the reconnect loop, so its flag is the real one.
+    // this.isReconnecting is only set by the legacy auto-reconnect path, which
+    // is never reached once the streamer is the transport — reading it alone
+    // made /status.reconnecting permanently false and broke the client's
+    // reconnect overlay (it would eject the user to the connect panel on a blip).
+    return this.isReconnecting || mt5StreamCache.isReconnecting();
   }
 
   get circuitBreakerState(): string {
@@ -289,6 +300,10 @@ class MT5MCPService {
     this.stopAutoReconnect();
     this.stopKeepAlive();
     this.connected = false;
+    // The streamer owns the transport — drop it there too, otherwise the two
+    // layers disagree and isConnected (which trusts the streamer) would keep
+    // reporting the stale transport as healthy.
+    forceReconnect();
   }
 
   private startAutoReconnect() {
@@ -322,7 +337,7 @@ class MT5MCPService {
     this.stopKeepAlive();
     // Ping every 30 seconds to keep connection alive
     this.keepAliveTimer = setInterval(() => {
-      if (this.connected) {
+      if (this.isConnected) {
         this.callWithCircuit("mt5_account_info", {}).catch((err) => {
           silentLogger.debug(`[MT5-MCP] Keep-alive ping failed: ${err.message}`);
         });
@@ -610,7 +625,7 @@ class MT5MCPService {
     try {
       const result = await withRetry(
         async () => {
-          if (!this.connected && tool !== "mt5_connect") {
+          if (!this.isConnected && tool !== "mt5_connect") {
             throw new Error("MT5 not connected");
           }
           return await executeMt5Command(tool, args);

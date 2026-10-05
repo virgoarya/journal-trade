@@ -14,6 +14,7 @@ import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
+import { TradingDisabledBanner } from "./components/TradingDisabledBanner";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain, Loader2 } from "lucide-react";
@@ -85,6 +86,7 @@ function AITradingPageContent() {
     connectError,
     connectMT5,
     disconnectMT5,
+    connectionStatus,
     accountInfo,
     accountLoading,
     refetchAccountInfo,

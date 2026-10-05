@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import {
   AreaChart,
   Area,
@@ -49,7 +49,7 @@ const COLORS = {
   tooltipBorder: "rgba(212, 175, 55, 0.3)",
 };
 
-export function SignalChart({
+export const SignalChart = memo(function SignalChart({
   data,
   symbol,
   timeframe,
@@ -281,4 +281,4 @@ export function SignalChart({
       </div>
     </div>
   );
-}
+});

@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_AGENT")
+}
+
+// ─────────────────────────────────────────────────────────────
+// UserProfile — identitas & preferensi trading user
+// CATATAN: default di sini harus NETRAL (bukan nama spesifik), karena app ini
+// multi-user. Profil user diisi lewat onboarding / seed, bukan lewat @default.
+// ─────────────────────────────────────────────────────────────
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  displayName     String   @default("Trader")
+  legalName       String   @default("")
+  preferredName   String   @default("Trader")
+  tradingStyles   String[]
+  favoriteAssets  String[]
+  riskTolerance   String   @default("Selective / High R:R")
+  agentPersona    String   @default("hawk") // "hawk" | "dove" | "contrarian"
+  memoryNotes     UserMemoryNote[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+// ─────────────────────────────────────────────────────────────
+// UserMemoryNote — fakta jangka panjang yang di-extract dari chat
+// ─────────────────────────────────────────────────────────────
+model UserMemoryNote {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  category   String   // "IDENTITY" | "TRADING_RULE" | "RISK_PREFERENCE"
+  content    String
+  confidence Float    // 0.0 – 1.0; hanya yang > 0.8 yang disimpan
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([category])
+  @@map("user_memory_notes")
+}

@@ -16,7 +16,7 @@ import {
   MethodologyName,
   MethodologyWeights,
 } from "../types";
-import { useMT5Connection } from "../hooks/useMT5Connection";
+import { useMT5Connection, type MT5ConnectionStatus } from "../hooks/useMT5Connection";
 import { useAccountInfo } from "../hooks/useAccountInfo";
 import { usePositions } from "../hooks/usePositions";
 import { usePipeline } from "../hooks/usePipeline";
@@ -33,6 +33,7 @@ interface AiTradingContextType {
   connectError: string | null;
   connectMT5: (payload: MT5Credentials) => Promise<boolean>;
   disconnectMT5: () => Promise<void>;
+  connectionStatus: MT5ConnectionStatus;
 
   // Account Info
   accountInfo: ACCOUNTInfo | null;
@@ -119,7 +120,7 @@ const AiTradingContext = createContext<AiTradingContextType | undefined>(undefin
 
 export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   // MT5 Connection
-  const { isConnected, isReconnecting, isConnecting, isCheckingSession, error: connectError, connect, disconnect } = useMT5Connection();
+  const { isConnected, isReconnecting, isConnecting, isCheckingSession, error: connectError, connect, disconnect, connectionStatus } = useMT5Connection();
 
   // Account Info
   const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(isConnected, 10000);
@@ -295,6 +296,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       connectError,
       connectMT5,
       disconnectMT5,
+      connectionStatus,
 
       accountInfo,
       accountLoading,
@@ -369,6 +371,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       connectError,
       connectMT5,
       disconnectMT5,
+      connectionStatus,
       accountInfo,
       accountLoading,
       refetchAccount,

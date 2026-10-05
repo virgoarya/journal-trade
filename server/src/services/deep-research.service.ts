@@ -2,7 +2,7 @@ import { HawkAgent, DoveAgent, ContrarianAgent } from "../agents/specific.agents
 import { AgentInsight } from "../models/AgentInsight";
 import { silentLogger } from "../utils/silent-logger";
 import axios from "axios";
-import { env } from "../config/env";
+import { env, selfApiUrl } from "../config/env";
 
 export interface DeepResearchResult {
   personaId: "hawk" | "dove" | "contrarian";
@@ -127,11 +127,11 @@ Format Output Wajib (Plain Text, Bahasa Indonesia):
   private async fetchAllOverviewData() {
     try {
       const [geoResp, regimeResp, newsResp, heatmapResp, calResp] = await Promise.all([
-        axios.get("http://localhost:5000/api/v1/geo-risk", { timeout: 5000 }).catch(() => null),
-        axios.get("http://localhost:5000/api/v1/macro-regime/snapshot", { timeout: 5000 }).catch(() => null),
-        axios.get("http://localhost:5000/api/v1/market-data/news", { timeout: 5000 }).catch(() => null),
-        axios.get("http://localhost:5000/api/v1/market-data/quotes?symbols=XAUUSD,USDJPY,EURUSD,GBPUSD,BTCUSD,NDX,SPX", { timeout: 5000 }).catch(() => null),
-        axios.get("http://localhost:5000/api/v1/market-data/economic-calendar", { timeout: 5000 }).catch(() => null),
+        axios.get(`${selfApiUrl}/api/v1/geo-risk`, { timeout: 5000 }).catch(() => null),
+        axios.get(`${selfApiUrl}/api/v1/macro-regime/snapshot`, { timeout: 5000 }).catch(() => null),
+        axios.get(`${selfApiUrl}/api/v1/market-data/news`, { timeout: 5000 }).catch(() => null),
+        axios.get(`${selfApiUrl}/api/v1/market-data/quotes?symbols=XAUUSD,USDJPY,EURUSD,GBPUSD,BTCUSD,NDX,SPX`, { timeout: 5000 }).catch(() => null),
+        axios.get(`${selfApiUrl}/api/v1/market-data/economic-calendar`, { timeout: 5000 }).catch(() => null),
       ]);
 
       const geoRaw = geoResp?.data?.data?.raw || {};

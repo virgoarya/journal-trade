@@ -3,6 +3,8 @@ import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
 import { API_LIMITS } from "../utils/rate-limiter";
 import { MacroIndicator } from "../models/MacroIndicator";
+import { mt5McpService } from "./mt5-mcp.service";
+import { mt5StreamCache } from "../mt5-streamer";
 
 export interface MarketQuote {
   symbol: string;
@@ -89,9 +91,7 @@ export const macroDataService = {
       return { data: cached, fromCache: true, rateLimited: false };
     }
 
-    const finnhubKey = env.FINNHUB_API_KEY;
-    const twelveDataKey = env.TWELVE_DATA_API_KEY;
-
+    // ── Yahoo Finance (primary) ──────────────────────────────────────────
     const fetchYahoo = async (syms: string[]) => {
       const fetchWithTimeout = (symbol: string) =>
         Promise.race([
@@ -115,81 +115,48 @@ export const macroDataService = {
       return results;
     };
 
-    if (!finnhubKey && !twelveDataKey) {
-      const data = await fetchYahoo(symbols);
-      if (data.length > 0) {
-        setCache(cacheKey, data, 120000);
-      }
-      return { data, fromCache: false, rateLimited: false };
-    }
-
-    if (finnhubKey) {
-      const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.FINNHUB, async () => {
-        const finnhubNeeded = symbols.filter(s => !(s === "CL=F" || s === "GC=F" || s.includes("=F")));
-        const yahooNeeded = symbols.filter(s => s === "CL=F" || s === "GC=F" || s.includes("=F"));
-
-        const finnhubPromises = finnhubNeeded.map(async (symbol) => {
-          try {
-            const resp = await axios.get(
-              `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${finnhubKey}`,
-              { timeout: 5000 }
-            );
-            return {
-              symbol,
-              price: resp.data.c,
-              change: resp.data.d,
-              changePercent: resp.data.dp,
-              timestamp: resp.data.t * 1000,
-            };
-          } catch {
-            return { symbol, price: null, change: null, changePercent: null, timestamp: 0 };
-          }
-        });
-
-        let results: MarketQuote[] = await Promise.all(finnhubPromises);
-
-        if (yahooNeeded.length > 0) {
-          const yahooRes = await fetchYahoo(yahooNeeded);
-          results.push(...yahooRes);
+    // ── MT5 MCP fallback (per-symbol) ────────────────────────────────────
+    const fetchFromMT5 = async (symbol: string): Promise<MarketQuote> => {
+      try {
+        if (!mt5StreamCache.isConnected()) {
+          return { symbol, price: null, change: null, changePercent: null, timestamp: 0 };
         }
-
-        return results;
-      });
-      if (data) {
-        setCache(cacheKey, data, 120000);
-        return { data: data!, fromCache: false, rateLimited };
-      }
-    }
-
-    if (twelveDataKey) {
-      const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.TWELVE_DATA, async () => {
-        const results: MarketQuote[] = [];
-        for (const symbol of symbols) {
-          try {
-            const resp = await axios.get(
-              `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${twelveDataKey}`,
-              { timeout: 5000 }
-            );
-            results.push({
-              symbol,
-              price: parseFloat(resp.data.price),
-              change: null,
-              changePercent: null,
-              timestamp: Date.now(),
-            });
-          } catch {
-            results.push({ symbol, price: null, change: null, changePercent: null, timestamp: 0 });
-          }
+        const tick = await mt5McpService.getTick(symbol);
+        if (tick && tick.bid > 0) {
+          return {
+            symbol,
+            price: tick.bid,
+            change: null,       // MT5 tick doesn't carry prev close
+            changePercent: null,
+            timestamp: tick.time ? tick.time * 1000 : Date.now(),
+          };
         }
-        return results;
-      });
-      if (data) {
-        setCache(cacheKey, data, 60000);
-        return { data: data!, fromCache: false, rateLimited };
+      } catch (e: any) {
+        silentLogger.warn(`[MacroData] MT5 fallback failed for ${symbol}: ${e.message}`);
+      }
+      return { symbol, price: null, change: null, changePercent: null, timestamp: 0 };
+    };
+
+    // ── Execution: Yahoo → MT5 fallback for nulls ───────────────────────
+    let data = await fetchYahoo(symbols);
+
+    // Symbols that Yahoo missed — try MT5
+    const failedSyms = data.filter(q => q.price === null).map(q => q.symbol);
+    if (failedSyms.length > 0 && mt5StreamCache.isConnected()) {
+      const mt5Results = await Promise.all(failedSyms.map(fetchFromMT5));
+      // Patch failed entries with MT5 data
+      for (const mt5q of mt5Results) {
+        const idx = data.findIndex(q => q.symbol === mt5q.symbol);
+        if (idx !== -1 && mt5q.price !== null) {
+          data[idx] = mt5q;
+        }
       }
     }
 
-    return { data: [], fromCache: false, rateLimited: true };
+    if (data.length > 0) {
+      setCache(cacheKey, data, 120000);
+    }
+    return { data, fromCache: false, rateLimited: false };
   },
 
   async getEconomicCalendar(): Promise<{
@@ -350,24 +317,28 @@ export const macroDataService = {
 
     // Fetch Finnhub
     if (finnhubKey) {
-      const { data: finnData, rateLimited } = await fetchWithRateLimit(API_LIMITS.FINNHUB, async () => {
-        const resp = await axios.get(
-          `https://finnhub.io/api/v1/news?category=general&token=${finnhubKey}`,
-          { timeout: 5000 }
-        );
-        return resp.data.slice(0, limit).map((item: any) => ({
-          id: item.id,
-          datetime: item.datetime,
-          headline: item.headline,
-          summary: item.summary,
-          source: "Finnhub",
-        }));
-      });
+      try {
+        const { data: finnData, rateLimited } = await fetchWithRateLimit(API_LIMITS.FINNHUB, async () => {
+          const resp = await axios.get(
+            `https://finnhub.io/api/v1/news?category=general&token=${finnhubKey}`,
+            { timeout: 12000 }
+          );
+          return (resp.data || []).slice(0, limit).map((item: any) => ({
+            id: item.id,
+            datetime: item.datetime,
+            headline: item.headline,
+            summary: item.summary,
+            source: "Finnhub",
+          }));
+        });
 
-      if (finnData && finnData.length > 0) {
-        allNews = [...allNews, ...finnData];
+        if (finnData && finnData.length > 0) {
+          allNews = [...allNews, ...finnData];
+        }
+        isRateLimited = isRateLimited || rateLimited;
+      } catch (e: any) {
+        silentLogger.warn(`[MacroData] Finnhub fetch failed: ${e.message}`);
       }
-      isRateLimited = isRateLimited || rateLimited;
     }
 
     if (allNews.length > 0) {
@@ -454,7 +425,9 @@ export const macroDataService = {
     });
 
     if (data) {
-      setCache(cacheKey, data, 3600000);
+      // ON RRP update harian. TTL 1 jam bikin data bisa basi sampai 1 jam setelah
+      // rilis. Turunkan ke 10 menit supaya selalu dekat data terbaru.
+      setCache(cacheKey, data, 10 * 60 * 1000);
       return { data: data!, fromCache: false, rateLimited };
     }
 
@@ -481,7 +454,8 @@ export const macroDataService = {
     }
 
     const { data, rateLimited } = await fetchWithRateLimit(API_LIMITS.FRED, async () => {
-      const [dgs2, dgs5, dgs10, dgs30] = await Promise.all([
+      const [dgs3m, dgs2, dgs5, dgs10, dgs30] = await Promise.all([
+        axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=DGS3MO&api_key=${fredKey}&file_type=json&sort_order=desc&limit=1`),
         axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&api_key=${fredKey}&file_type=json&sort_order=desc&limit=1`),
         axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=DGS5&api_key=${fredKey}&file_type=json&sort_order=desc&limit=1`),
         axios.get(`https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=${fredKey}&file_type=json&sort_order=desc&limit=1`),
@@ -493,11 +467,14 @@ export const macroDataService = {
         return val && val !== "." ? parseFloat(val) : null;
       };
 
-      const [y2, y5, y10, y30] = [parse(dgs2), parse(dgs5), parse(dgs10), parse(dgs30)];
+      const [y3m, y2, y5, y10, y30] = [
+        parse(dgs3m), parse(dgs2), parse(dgs5), parse(dgs10), parse(dgs30),
+      ];
 
       const spread10y2y = y10 !== null && y2 !== null ? Math.round((y10 - y2) * 100) : null;
-      const spread10y3m = y10 !== null ? Math.round((y10 - 3.5) * 100) : null;
-      const spread30y3m = y30 !== null ? Math.round((y30 - 3.5) * 100) : null;
+      // PENTING: pakai DGS3MO asli, bukan hardcoded 3.5 (dulu error ~75 bps)
+      const spread10y3m = y10 !== null && y3m !== null ? Math.round((y10 - y3m) * 100) : null;
+      const spread30y3m = y30 !== null && y3m !== null ? Math.round((y30 - y3m) * 100) : null;
       const inverted = spread10y2y !== null && spread10y2y < 0;
 
       return {

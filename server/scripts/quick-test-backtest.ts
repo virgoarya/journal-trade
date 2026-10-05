@@ -8,8 +8,8 @@ async function run() {
     // Ensure MT5 is connected first
     console.log("Connecting to MT5...");
     await mt5McpService.connectToMT5({
-      mcpUrl: "http://127.0.0.1:22346/mcp",
-      apiKey: "1oBaWtEsZuqVsfzLoHlALKBtNcTQuFHt5AHGrRS9Zw",
+      mcpUrl: process.env.MT5_MCP_URL || "http://127.0.0.1:22346/mcp",
+      apiKey: process.env.MT5_MCP_API_KEY || "",
     });
     console.log("MT5 connected!");
     const fromDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days ago

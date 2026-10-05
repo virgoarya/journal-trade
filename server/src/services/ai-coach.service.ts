@@ -7,6 +7,10 @@ import { AITradeLog } from "../models/AITradeLog";
 import { Trade } from "../models/Trade";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
+import { prismaAgent } from "../lib/agent/prisma-agent";
+import { getUserProfileWithNotes } from "../lib/agent/profile-repo";
+import { assembleHermesPrompt, DEFAULT_MACRO_SSOT, MacroSSOT } from "../lib/agent/hermes-prompt";
+import { extractUserFacts, saveFactsToUserProfile, ExtractedFact } from "./memory-extractor.service";
 
 export interface EmotionDistribution {
   tag: string;
@@ -263,12 +267,55 @@ ATURAN:
   return prompt;
 }
 
+function extractJSON(response: string): string {
+  // Strip markdown code fences (```json ... ```)
+  const fenced = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1];
+
+  // Ambil objek JSON seimbang dari `{` pertama (bukan greedy match)
+  const start = response.indexOf("{");
+  if (start === -1) return response;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < response.length; i++) {
+    const ch = response[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return response.slice(start, i + 1);
+    }
+  }
+  return response.slice(start);
+}
+
+function repairJSON(str: string): string {
+  // Perbaikan best-effort untuk output LLM yang tidak valid:
+  // trailing comma, single-quote, dan key tanpa tanda kutip
+  return str
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/:\s*'([^']*)'/g, ':"$1"')
+    .replace(/,\s*'([^']*)'\s*:/g, ',"$1":')
+    .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
+}
+
 function parseAIResponse(response: string): AIAnalysisResult {
   try {
-    // Extract JSON from response (handle potential markdown code blocks)
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : response;
-    const parsed = JSON.parse(jsonStr);
+    let jsonStr = extractJSON(response);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      jsonStr = repairJSON(jsonStr);
+      parsed = JSON.parse(jsonStr);
+    }
 
     // Validate structure
     if (
@@ -619,36 +666,48 @@ export const aiCoachService = {
     },
 
   /**
-   * Chat with AI Coach - conversational endpoint
+   * Chat with AI Coach - conversational endpoint (Hermes-style context injection)
+   *
+   * Alur:
+   * 1. Fetch UserProfile + memoryNotes dari PostgreSQL Agent DB
+   * 2. Assemble Hermes Prompt (identitas + memori + macro SSOT + persona)
+   * 3. Kirim ke LLM via 9Router dengan output JSON terstruktur (reasoning + content)
+   * 4. Return JSON parsed atau string biasa kalau parsing gagal
    */
-  async chatWithAI(userId: string, message: string, history: Array<{role: string, content: string}> = []): Promise<string> {
-    const tradingContext = await this.getUserTradingContext(userId);
+  async chatWithAI(
+    userId: string,
+    message: string,
+    history: Array<{ role: string; content: string }> = []
+  ): Promise<string> {
+    // ── 1. Fetch user profile + memory notes dari PostgreSQL ──────────
+    const profileData = await getUserProfileWithNotes(userId);
+    const userProfile = profileData?.profile ?? null;
+    const memoryNotes = profileData?.notes ?? [];
 
-    const contextStr = JSON.stringify(tradingContext, null, 2);
-    const historyStr = history.length > 0
-      ? history.map(h => `${h.role}: ${h.content}`).join("\n")
-      : "Belum ada riwayat obrolan.";
+    silentLogger.info(
+      `[HERMES] User profile fetched — userId=${userId}, notes=${memoryNotes.length}, persona=${
+        userProfile?.agentPersona ?? "hawk"
+      }`
+    );
 
-    const prompt = `Anda adalah AI Trading Coach untuk platform Hunter Trades Journal.
-Berbicaralah dalam Bahasa Indonesia yang natural, profesional, dan suportif.
+    // ── 2. Macro SSOT (mock sekarang, nanti diganti service makro) ─────
+    // TODO: Ganti dengan fetch dari macro service / FRED / dll
+    const macroSSOT: MacroSSOT = DEFAULT_MACRO_SSOT;
 
-KONTEKS TRADING USER (30 hari terakhir):
-${contextStr}
+    // ── 3. Assemble Hermes Prompt ──────────────────────────────────────
+    const systemPrompt = assembleHermesPrompt({
+      agentId: "hawk-quant-engine",
+      userProfile,
+      macroSSOT,
+      memoryNotes,
+      userMessage: message,
+      chatHistory: history,
+      extraContext: await this.getUserTradingContext(userId).then((ctx) =>
+        JSON.stringify(ctx, null, 2)
+      ),
+    });
 
-RIWAYAT OBROLAN:
-${historyStr}
-
-PESAN USER SAAT INI:
-${message}
-
-TUGAS ANDA:
-- Jawab pertanyaan user berdasarkan konteks trading mereka
-- Berikan analisis, saran, atau perhitungan yang relevan (misal: RR, position sizing, risk management)
-- Jika user meminta perhitungan (seperti RR/R-multiple), hitung berdasarkan data trade mereka
-- Gunakan data aktual dari konteks (jangan mengarang angka)
-- Jika data tidak cukup, minta info tambahan dengan sopan
-- Tetap dalam karakter AI Trading Coach yang empatik dan berbasis data`;
-
+    // ── 4. Call LLM via 9Router ────────────────────────────────────────
     const baseUrl = env.NINE_ROUTER_URL || "http://localhost:20128/v1";
     const apiKey = env.NINE_ROUTER_API_KEY || "sk-dummy";
     const model = "gemini/gemini-3.5-flash-lite";
@@ -668,14 +727,16 @@ TUGAS ANDA:
           messages: [
             {
               role: "system",
-              content: "Anda adalah AI Trading Coach yang membantu trader menganalisis performa dan psikologi trading mereka. Selalu jawab dalam Bahasa Indonesia.",
+              content: systemPrompt,
             },
-            ...history.map(h => ({ role: h.role, content: h.content })),
-            { role: "user", content: prompt },
+            ...history.map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
+            { role: "user", content: message },
           ],
           max_tokens: 2000,
           temperature: 0.7,
           stream: false,
+          // Wajib JSON output biar frontend bisa parse reasoning vs content
+          response_format: { type: "json_object" },
         }),
         signal: controller.signal,
       });
@@ -688,9 +749,49 @@ TUGAS ANDA:
       }
 
       const data: any = await response.json();
-      const reply = data.choices?.[0]?.message?.content || "Maaf, saya tidak bisa memproses pesan Anda saat ini.";
+      const rawContent = data.choices?.[0]?.message?.content || "{}";
 
-      return reply;
+      // ── 5. Parse JSON terstruktur ─────────────────────────────────────
+      let replyToReturn: string;
+      try {
+        const parsed = JSON.parse(rawContent);
+        if (parsed.reasoning && parsed.content) {
+          // Return format yang bisa diparsing frontend: reasoning + content
+          replyToReturn = JSON.stringify({
+            reasoning: parsed.reasoning,
+            content: parsed.content,
+            latency: Date.now(),
+          });
+        } else {
+          replyToReturn = rawContent;
+        }
+      } catch {
+        replyToReturn = rawContent;
+      }
+
+      // ── 6. Background Memory Extraction (async, non-blocking) ────────
+      // Jalankan setelah reply dikirim — jangan block response ke user
+      setImmediate(async () => {
+        try {
+          // Sisipkan pesan terbaru ke history untuk ekstraksi
+          const chatHistoryForExtraction = [...history, { role: "user", content: message }];
+          const extractedFacts = await extractUserFacts({
+            chatHistory: chatHistoryForExtraction,
+            userProfile,
+          });
+
+          if (extractedFacts.length > 0) {
+            const savedCount = await saveFactsToUserProfile(userId, extractedFacts);
+            silentLogger.info(
+              `[HERMES] Memory extracted & saved — facts=${extractedFacts.length}, saved=${savedCount}, userId=${userId}`
+            );
+          }
+        } catch (extractError) {
+          silentLogger.error("[HERMES] Background memory extraction failed:", extractError);
+        }
+      });
+
+      return replyToReturn;
     } catch (error) {
       clearTimeout(timeout);
       silentLogger.error(`[AI-COACH] Chat LLM call failed: ${error}`);

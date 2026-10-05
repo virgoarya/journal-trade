@@ -3,8 +3,14 @@ import { agentConsensusService } from "../services/agent-consensus.service";
 import { proactiveAlertService } from "../services/proactive-alert.service";
 import { deepResearchService } from "../services/deep-research.service";
 import { silentLogger } from "../utils/silent-logger";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
+
+// PENTING: tanpa requireAuth, `req.user` selalu undefined → filter userId di
+// endpoint proactive tidak pernah diterapkan → semua user melihat insight yang
+// sama. Middleware ini WAJIB supaya insight benar-benar terpisah per user.
+router.use(requireAuth);
 
 /**
  * POST /v1/agent-consensus/deep-research
@@ -23,14 +29,17 @@ router.post("/v1/agent-consensus/deep-research", async (req: Request, res: Respo
 
 /**
  * GET /v1/agent-consensus/insights
- * Ambil riwayat insight terbaru
+ * Ambil riwayat insight terbaru — MILIK USER yang login.
  */
 router.get("/v1/agent-consensus/insights", async (req: Request, res: Response) => {
   try {
     const { type = "proactive", personaId, limit = 10 } = req.query;
+    const userId = (req as any).user?.id;
     const filter: any = {};
     if (type) filter.insightType = type;
     if (personaId) filter.personaId = personaId;
+    // Filter per-user supaya tidak menampilkan insight milik user lain
+    if (userId) filter.userId = userId;
 
     const insights = await (await import("../models/AgentInsight")).AgentInsight.find(filter)
       .sort({ createdAt: -1 })
@@ -56,11 +65,14 @@ router.post("/v1/agent-consensus", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    silentLogger.info(`[API] Agent consensus request (${mode})`);
+    const userId = (req as any).user?.id || "default_user";
+    const enrichedContext = { ...(context || {}), userId };
+
+    silentLogger.info(`[API] Agent consensus request (${mode}) for ${userId}`);
 
     const result = mode === "sequential"
-      ? await agentConsensusService.runSequentialDebate(prompt, context || {})
-      : await agentConsensusService.runParallelDebate(prompt, context || {});
+      ? await agentConsensusService.runSequentialDebate(prompt, enrichedContext)
+      : await agentConsensusService.runParallelDebate(prompt, enrichedContext);
 
     silentLogger.info(`[API] Agent consensus completed. Mode: ${mode}`);
     return res.status(200).json(result);
@@ -111,7 +123,9 @@ router.post("/v1/agent-consensus/debate", async (req: Request, res: Response) =>
     }
 
     silentLogger.info(`[API] Sequential debate request`);
-    const result = await agentConsensusService.runSequentialDebate(prompt, context || {});
+    const userId = (req as any).user?.id || "default_user";
+    const enrichedContext = { ...(context || {}), userId };
+    const result = await agentConsensusService.runSequentialDebate(prompt, enrichedContext);
     return res.status(200).json(result);
   } catch (error: any) {
     silentLogger.error(`[API] Sequential debate error: ${error.message}`);
@@ -137,7 +151,9 @@ router.post("/v1/agent-consensus/single/:persona", async (req: Request, res: Res
     }
 
     silentLogger.info(`[API] Single agent request: ${persona}`);
-    const result = await agentConsensusService.runSingleAgent(persona as string, prompt, context || {});
+    const userId = (req as any).user?.id || "default_user";
+    const enrichedContext = { ...(context || {}), userId };
+    const result = await agentConsensusService.runSingleAgent(persona as string, prompt, enrichedContext);
     return res.status(200).json(result);
   } catch (error: any) {
     silentLogger.error(`[API] Single agent error: ${error.message}`);
@@ -147,13 +163,14 @@ router.post("/v1/agent-consensus/single/:persona", async (req: Request, res: Res
 
 /**
  * GET /v1/agent-consensus/proactive
- * Get latest proactive insights dari semua agent
+ * Get latest proactive insights MILIK USER yang login (difilter by userId).
  * Query: ?limit=10
  */
 router.get("/v1/agent-consensus/proactive", async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
-    const insights = await proactiveAlertService.getLatestInsights(limit);
+    const userId = (req as any).user?.id;
+    const insights = await proactiveAlertService.getLatestInsights(limit, userId);
     return res.status(200).json({ success: true, data: insights });
   } catch (error: any) {
     silentLogger.error(`[API] Proactive insights error: ${error.message}`);
@@ -163,11 +180,12 @@ router.get("/v1/agent-consensus/proactive", async (req: Request, res: Response) 
 
 /**
  * GET /v1/agent-consensus/proactive/latest
- * Get latest 1 insight per agent (terbaru)
+ * Get latest 1 insight per agent (terbaru) — untuk user yang login.
  */
 router.get("/v1/agent-consensus/proactive/latest", async (req: Request, res: Response) => {
   try {
-    const insights = await proactiveAlertService.getLatestPerAgent();
+    const userId = (req as any).user?.id;
+    const insights = await proactiveAlertService.getLatestPerAgent(userId);
     return res.status(200).json({ success: true, data: insights });
   } catch (error: any) {
     silentLogger.error(`[API] Latest proactive insights error: ${error.message}`);

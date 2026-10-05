@@ -14,6 +14,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const pathname = usePathname();
   const { data: session, isPending } = useSession();
   const [mounted, setMounted] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -76,11 +77,13 @@ export function Header({ onMenuClick }: HeaderProps) {
             </p>
           </div>
           <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-accent-gold/30 p-0.5 overflow-hidden transition-all group-hover:border-accent-gold hover:scale-105 bg-bg-elevated flex items-center justify-center">
-            {mounted && session?.user?.image ? (
+            {mounted && session?.user?.image && !avatarError ? (
               <img
                 src={session.user.image}
                 alt="Profile"
                 className="w-full h-full object-cover rounded-full"
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarError(true)}
               />
             ) : mounted && isPending ? (
               <Loader2 className="w-4 h-4 text-accent-gold animate-spin" />

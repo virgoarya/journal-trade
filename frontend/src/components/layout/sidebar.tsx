@@ -79,6 +79,15 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
         <div 
           onClick={() => !isMobile && setIsCollapsed(!isCollapsed)}
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          role="button"
+          tabIndex={0}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onKeyDown={(e) => {
+            if (!isMobile && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setIsCollapsed(!isCollapsed);
+            }
+          }}
           className={cn("mx-4 mb-8 px-4 py-3 flex items-center glass cursor-pointer transition-all hover:scale-[1.02] hover:bg-white/5", isCollapsed ? "justify-center px-0 mx-2" : "space-x-3")}
         >
           <div className="relative flex-shrink-0">
@@ -113,6 +122,7 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 onClick={isMobile ? onClose : undefined}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "flex items-center h-[44px] sm:h-[48px] px-3 group touch-target",
                   isActive

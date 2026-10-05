@@ -45,8 +45,14 @@ export interface PatternData {
 class JournalService {
   async getPatterns(period: "week" | "month" = "month"): Promise<{ success: boolean; data: PatternData | null; error?: string }> {
     try {
-      const response = await apiClient.get(`/analytics/patterns?period=${period}`);
-      return response.data as { success: boolean; data: PatternData | null; error?: string };
+      const response = await apiClient.get<PatternData>(`/api/v1/analytics/patterns?period=${period}`);
+      if (!response.success) {
+        return { success: false, data: null, error: response.error || "Gagal memuat data patterns" };
+      }
+      return {
+        success: true,
+        data: response.data || null,
+      };
     } catch (error: any) {
       console.error("[JournalService] getPatterns error:", error);
       return { success: false, data: null, error: error.message || "Failed to fetch patterns" };

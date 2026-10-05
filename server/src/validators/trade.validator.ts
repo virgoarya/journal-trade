@@ -29,6 +29,14 @@ export const logTradeSchema = z.object({
   session: z.enum(["Asia", "London", "NY AM", "NY PM", "Other", "NY"]).optional().nullable(),
   marketCondition: z.enum(["TRENDING", "RANGING", "VOLATILE", "LIQUID", "ALL"]).optional().nullable(),
   riskPercent: z.number().min(0).max(100).optional().nullable(),
+
+  // Institutional Prop-Firm Fields
+  grossPnl: z.number().optional().nullable(),
+  commission: z.number().min(0).optional().nullable(),
+  swap: z.number().optional().nullable(),
+  worstPriceReached: z.number().positive("Harga worst price harus positif").optional().nullable(),
+  bestPriceReached: z.number().positive("Harga best price harus positif").optional().nullable(),
+  ruleViolations: z.array(z.string()).optional().nullable(),
 });
 
 export const updateTradeSchema = logTradeSchema.partial();

@@ -120,3 +120,15 @@ server/scripts/probe-*.mjs
 # OTA Patch artifacts (contain build output, never commit)
 desktop/dist-patch/
 update/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Hermes internal
+.hermes/
+
+# Debug artifacts
+chart.png
+
+# Stray tool output (dirname uses U+F03A private-use colon, not ASCII ":")
+server/C/

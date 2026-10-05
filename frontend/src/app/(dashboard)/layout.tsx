@@ -3,10 +3,12 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { UpdateNotification } from "@/components/layout/UpdateNotification";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { settingsService } from "@/services/settings.service";
+import { logger } from "@/lib/logger";
 
 export default function DashboardLayout({
   children,
@@ -42,7 +44,7 @@ export default function DashboardLayout({
           localStorage.setItem("hunter-trades-accent", appearance.accentColor);
         }
       } catch (e) {
-        console.error("DashboardLayout: Failed to load global settings", e);
+        logger.error("DashboardLayout: Failed to load global settings", e);
       }
     };
     applyGlobalSettings();
@@ -93,7 +95,7 @@ export default function DashboardLayout({
             router.push("/akses-ditolak");
             return;
           }
-          console.error("Guild verification failed:", data);
+          logger.error("Guild verification failed:", data);
           router.push(`/akses-ditolak${res.status === 429 ? '?error=rate_limit' : '?error=verification_failed'}`);
           return;
         }
@@ -105,7 +107,7 @@ export default function DashboardLayout({
           return;
         }
       } catch (error) {
-        console.error("Guild verification error:", error);
+        logger.error("Guild verification error:", error);
         router.push("/akses-ditolak?error=network");
       } finally {
         setGuildCheckPending(false);
@@ -170,7 +172,9 @@ export default function DashboardLayout({
              <div className="absolute top-3/4 right-1/3 w-1 h-1 rounded-full bg-accent-gold/20 shadow-[0_0_6px_rgba(212,175,55,0.3)] animate-[floatDust_16s_ease-in-out_infinite_1s]" />
           </div>
 
-          {children}
+          <ErrorBoundary label="Halaman">
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
 

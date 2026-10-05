@@ -356,6 +356,8 @@ class AITradingService {
   async getStatus() {
     const res = await apiClient.get<{
       connected: boolean;
+      /** Session exists but MT5 is being brought back in the background */
+      reconnecting: boolean;
       accountInfo: ACCOUNTInfo | null;
       pipeline: PipelineStatus;
     }>("/api/v1/ai-trading/status");

@@ -35,6 +35,7 @@ export interface DataStatusState {
   news: DataStatus;
   geoRisk: DataStatus;
   quant: DataStatus;
+  differentials: DataStatus;
   nexus: DataStatus;
   tga: DataStatus;
   cot: DataStatus;
@@ -75,12 +76,28 @@ export interface VixState {
 }
 
 export interface YieldCurveState {
+  y3m?: number | null;
+  y2y?: number | null;
+  y5?: number | null;
+  y10?: number | null;
+  y30?: number | null;
+  spread10y3m?: number | null;
   spread10y2y: number | null;
+  spread30y5y?: number | null;
   spread30y3m: number | null;
   curveRegime: string;
   inverted: boolean;
   aiExplainer: string | null;
   fetchedAt: string | null;
+}
+
+export interface DifferentialData {
+  code: string;
+  currencyPair: string;
+  centralBank: string;
+  policyRateDiff: number;
+  yieldCurveFlat: boolean;
+  lastUpdate: string;
 }
 
 export interface EconomicEvent {
@@ -121,6 +138,8 @@ interface MacroTerminalContextProps {
   nextEvent: EconomicEvent | null;
   vix: VixState;
   yieldCurve: YieldCurveState;
+  differentials: DifferentialData[];
+  differentialsStatus: DataStatus;
   geoRisk: GeoRiskSummary;
   refreshSnapshot: () => Promise<void>;
 }
@@ -216,6 +235,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     aiExplainer: null,
     fetchedAt: null,
   });
+  const [differentials, setDifferentials] = useState<DifferentialData[]>([]);
+  const [differentialsStatus, setDifferentialsStatus] = useState<DataStatus>("stale");
 
   const {
     isAnalyzing,
@@ -300,10 +321,11 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
   );
 
   const applyLiquidityUpdate = (payload: LiquidityData) => {
-    setLiquidity({
+    setLiquidity((prev) => ({
       ...payload,
       status: payload.status,
-    });
+      tga: payload.tga ?? prev?.tga,
+    }));
     setDataStatus((prev) => ({ ...prev, liquidity: "live" }));
     setLastUpdated(new Date());
   };
@@ -347,8 +369,17 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
             fetchedAt: json.fetchedAt ?? null,
           });
           setYieldCurve({
+            y3m: typeof d.y3m === "number" ? d.y3m : null,
+            y2y: typeof d.y2y === "number" ? d.y2y : null,
+            y5: typeof d.y5 === "number" ? d.y5 : null,
+            y10: typeof d.y10 === "number" ? d.y10 : null,
+            y30: typeof d.y30 === "number" ? d.y30 : null,
+            spread10y3m:
+              typeof d.spread10y3m === "number" ? d.spread10y3m : null,
             spread10y2y:
               typeof d.spread10y2y === "number" ? d.spread10y2y : null,
+            spread30y5y:
+              typeof d.spread30y5y === "number" ? d.spread30y5y : null,
             spread30y3m:
               typeof d.spread30y3m === "number" ? d.spread30y3m : null,
             curveRegime: d.curveRegime ?? "UNKNOWN",
@@ -373,6 +404,33 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
       clearInterval(interval);
     };
   }, [setDataStatus]);
+
+  // ── Differentials data sync ──────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchDifferentials() {
+      try {
+        const res = await fetch("/api/v1/central-bank-differentials");
+        const json = await res.json();
+        if (!cancelled && res.ok && json.success && json.data) {
+          setDifferentials(json.data);
+          setDifferentialsStatus(json.fromCache ? "cache" : "live");
+        } else {
+          setDifferentialsStatus("error");
+        }
+      } catch {
+        setDifferentialsStatus("error");
+      }
+    }
+
+    fetchDifferentials();
+    const interval = setInterval(fetchDifferentials, 10 * 60 * 1000); // 10 minutes
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // ── Regime analysis effect ──────────────────────────────────────────────────
   useEffect(() => {
@@ -442,6 +500,8 @@ export function MacroTerminalProvider({ children }: { children: ReactNode }) {
     nextEvent,
     vix,
     yieldCurve,
+    differentials,
+    differentialsStatus,
     geoRisk,
     refreshSnapshot,
   };

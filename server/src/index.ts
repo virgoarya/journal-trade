@@ -21,7 +21,7 @@ import { mt5McpService } from "./services/mt5-mcp.service";
 import { registerInternalTools } from "./services/internal-tools.service";
 import { llmConsensusService } from "./services/llm-consensus.service";
 import { setWebSocketServer, startWebSocketHeartbeat, stopWebSocketHeartbeat, getClientCount, authenticateWebSocket, type AuthenticatedWebSocket } from "./ws-server";
-import { initMt5NativeMcp } from "./mt5-streamer";
+import { initMt5NativeMcp, mt5StreamCache } from "./mt5-streamer";
 import { silentLogger } from "./utils/silent-logger";
 import { tradingPipelineService } from "./services/trading-pipeline.service";
 import { proactiveAlertService } from "./services/proactive-alert.service";
@@ -156,6 +156,23 @@ wss.on("connection", async (socket, req) => {
   ws.channels.add("mt5");
   ws.channels.add("all");
 
+  // Authoritative MT5 status snapshot on connect.
+  // The client otherwise has to wait for the next /status poll to learn the
+  // real session state, which left a window where a fresh socket rendered
+  // "connected" (or the reconnect overlay) wrongly. Send it immediately so the
+  // UI converges on the first frame instead of the first poll.
+  try {
+    socket.send(JSON.stringify({
+      type: "mt5_status",
+      data: {
+        connected: mt5StreamCache.isConnected(),
+        reconnecting: mt5StreamCache.isReconnecting(),
+      },
+    }));
+  } catch {
+    // best-effort — a failed snapshot must not break the connection
+  }
+
   socket.on("close", syncMacroMarketStream);
   syncMacroMarketStream();
 });
@@ -221,16 +238,16 @@ try {
       }
     }
 
-    if (env.AITRADOS_SECRET_KEY) {
-      const aitradosMcpPath = mcpBinPath("finance-trading-ai-agents-mcp");
-      if (!fs.existsSync(aitradosMcpPath)) {
-        console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
-      } else {
-        console.log("Starting Aitrados MCP Server...");
-        mcpService.registerAitrados(aitradosMcpPath, 11999, "127.0.0.1")
-          .catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
-      }
-    }
+    // if (env.AITRADOS_SECRET_KEY) {
+    //   const aitradosMcpPath = mcpBinPath("finance-trading-ai-agents-mcp");
+    //   if (!fs.existsSync(aitradosMcpPath)) {
+    //     console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
+    //   } else {
+    //     console.log("Starting Aitrados MCP Server...");
+    //     mcpService.registerAitrados(aitradosMcpPath, 11999, "127.0.0.1")
+    //       .catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
+    //   }
+    // }
     console.log("[STARTUP] Additional MCP servers registration complete.");
 
     // Register internal native tools (market-data, geo-risk, etc.)
@@ -301,22 +318,24 @@ const gracefulShutdown = () => {
   // Removed clearReconnectTimer();
   stopWebSocketHeartbeat();
 
+  // Force exit after 5 seconds if not closed
+  const forceExitTimer = setTimeout(() => {
+    console.error("Forcefully shutting down because connections took too long to close");
+    process.exit(1);
+  }, 5000);
+  if (forceExitTimer.unref) forceExitTimer.unref();
+
   // Close WebSocket Server
   wss.close(() => {
     console.log("WebSocket server closed.");
 
     // Close HTTP Server
     server.close(() => {
+      clearTimeout(forceExitTimer);
       console.log("HTTP server closed.");
       process.exit(0);
     });
   });
-
-  // Force exit after 5 seconds if not closed
-  setTimeout(() => {
-    console.error("Forcefully shutting down because connections took too long to close");
-    process.exit(1);
-  }, 5000);
 };
 
 process.on("SIGTERM", gracefulShutdown);

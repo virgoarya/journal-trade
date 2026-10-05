@@ -1,6 +1,12 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IAgentInsight extends Document {
+  /**
+   * Pemilik insight. Insight bersifat PER-USER supaya tiap user mendapat
+   * analisis yang menyebut identitasnya sendiri (bukan nama user lain).
+   * Nilai "global" dipakai untuk insight sistem yang tidak terikat user.
+   */
+  userId: string;
   personaId: "hawk" | "dove" | "contrarian" | "consensus";
   insightType: "proactive" | "debate" | "alert";
   content: string;
@@ -14,6 +20,12 @@ export interface IAgentInsight extends Document {
 
 const AgentInsightSchema = new Schema<IAgentInsight>(
   {
+    userId: {
+      type: String,
+      required: true,
+      default: "global",
+      index: true,
+    },
     personaId: {
       type: String,
       enum: ["hawk", "dove", "contrarian", "consensus"],
@@ -40,8 +52,8 @@ const AgentInsightSchema = new Schema<IAgentInsight>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-// Index compound untuk query cepat
-AgentInsightSchema.index({ personaId: 1, insightType: 1, createdAt: -1 });
+// Index compound untuk query cepat (per-user, per-persona, terbaru dulu)
+AgentInsightSchema.index({ userId: 1, personaId: 1, insightType: 1, createdAt: -1 });
 AgentInsightSchema.index({ createdAt: -1 }, { expireAfterSeconds: 7 * 24 * 3600 }); // Auto-delete setelah 7 hari
 
 export const AgentInsight =

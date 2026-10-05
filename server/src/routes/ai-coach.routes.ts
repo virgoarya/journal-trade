@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth";
 import { validateRequest } from "../middleware/validation";
 import { aiCoachService } from "../services/ai-coach.service";
+import { macroAiService } from "../services/macro-ai.service";
 import { apiResponse } from "../utils/api-response";
 
 const router = Router();
@@ -39,15 +40,21 @@ const upsertEmotionBodySchema = z.object({
 });
 
 const chatRequestBodySchema = z.object({
-  message: z.string().min(1, "Pesan obrolan tidak boleh kosong"),
-  history: z
+  messages: z
     .array(
       z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string(),
       })
     )
-    .optional(),
+    .min(1, "Pesan obrolan tidak boleh kosong"),
+  currentRegime: z.string().optional(),
+  assets: z.array(z.any()).optional(),
+  liquidityStatus: z.string().optional(),
+  personaId: z.string().optional(),
+  context: z.any().optional(),
+  sessionId: z.string().optional(),
+  userId: z.string().optional(),
 });
 
 // Query schemas
@@ -127,7 +134,7 @@ router.post("/analyze", validateRequest({ body: analyzeBodySchema }), async (req
  */
 router.get("/emotion-distribution", validateRequest({ query: emotionDistributionQuerySchema }), async (req, res, next) => {
   try {
-    const { period, startDate, endDate } = req.query;
+    const { period, startDate, endDate } = (req as any).validatedQuery || req.query;
     const userId = req.user.id;
 
     const { startDate: start, endDate: end } = getDateRange(
@@ -149,7 +156,7 @@ router.get("/emotion-distribution", validateRequest({ query: emotionDistribution
  */
 router.get("/heatmap", validateRequest({ query: emotionDistributionQuerySchema }), async (req, res, next) => {
   try {
-    const { period, startDate, endDate } = req.query;
+    const { period, startDate, endDate } = (req as any).validatedQuery || req.query;
     const userId = req.user.id;
 
     const { startDate: start, endDate: end } = getDateRange(
@@ -171,7 +178,7 @@ router.get("/heatmap", validateRequest({ query: emotionDistributionQuerySchema }
  */
 router.get("/session-distribution", validateRequest({ query: emotionDistributionQuerySchema }), async (req, res, next) => {
   try {
-    const { period, startDate, endDate } = req.query;
+    const { period, startDate, endDate } = (req as any).validatedQuery || req.query;
     const userId = req.user.id;
 
     const { startDate: start, endDate: end } = getDateRange(
@@ -235,7 +242,7 @@ router.delete("/emotion/:tradeId", validateRequest({ params: deleteEmotionParams
  */
 router.get("/emotions", validateRequest({ query: paginatedEmotionsQuerySchema }), async (req, res, next) => {
   try {
-    const { period, startDate, endDate, page, limit } = req.query;
+    const { period, startDate, endDate, page, limit } = (req as any).validatedQuery || req.query;
     const userId = req.user.id;
 
     const { startDate: start, endDate: end } = getDateRange(
@@ -293,12 +300,43 @@ const chatRequestSchema = z.object({
 
 router.post("/chat", validateRequest({ body: chatRequestBodySchema }), async (req, res, next) => {
   try {
-    const { message, history = [] } = req.body;
-    const userId = req.user.id;
+    const {
+      messages,
+      currentRegime,
+      assets,
+      liquidityStatus,
+      personaId,
+      context,
+      sessionId,
+      userId: bodyUserId,
+    } = req.body;
+    const userId = req.user.id || bodyUserId || "default_user";
 
-    const reply = await aiCoachService.chatWithAI(userId, message, history);
+    // Use macroAiService.chatStream for Hermes-style context injection
+    const groqResponse = await macroAiService.chatStream(
+      messages,
+      currentRegime,
+      assets,
+      liquidityStatus,
+      personaId || "hawk",
+      userId,
+      context
+    );
 
-    return apiResponse.success(res, { reply });
+    const reply =
+      typeof groqResponse === "string"
+        ? groqResponse
+        : (groqResponse as any).text || "AI tidak merespons.";
+
+    const reasoning =
+      typeof groqResponse === "object" ? (groqResponse as any).reasoning : undefined;
+    const toolsUsed =
+      typeof groqResponse === "object" && (groqResponse as any).toolsUsed
+        ? (groqResponse as any).toolsUsed
+        : [];
+
+    // Frontend (AiPersonaChatPanel) expects { reply, toolsUsed } at top level
+    return res.json({ success: true, reply, reasoning, toolsUsed });
   } catch (error) {
     next(error);
   }

@@ -27,6 +27,22 @@ export interface Trade {
   session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk exposure as % of account equity
+  // Institutional prop-firm fields
+  grossPnl?: number;       // PnL sebelum dipotong komisi & swap
+  commission?: number;     // Biaya komisi broker per-side (dalam USD)
+  swap?: number;           // Biaya swap/overnight per malam (dalam USD)
+  maeR?: number;           // Maximum Adverse Excursion (dalam satuan R)
+  mfeR?: number;           // Maximum Favorable Excursion (dalam satuan R)
+  worstPriceReached?: number; // Harga terburuk yang dicapai saat trade terbuka
+  bestPriceReached?: number;  // Harga terbaik yang dicapai saat trade terbuka
+  ruleViolations?: string[];  // Daftar pelanggaran trading rules (psikologi)
+  macroSnapshot?: {           // Kondisi macro saat trade dibuka (Journal-Macro Bridge)
+    regime?: string;
+    liquidityRisk?: string;
+    vix?: number;
+    yieldCurveSpread?: number;
+    capturedAt?: string;
+  };
   isDeleted?: boolean; // soft delete flag
   deletedAt?: string;
   deletionReason?: string;
@@ -57,6 +73,13 @@ export interface CreateTradeDto {
   session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk % of account equity
+  // Institutional prop-firm fields
+  grossPnl?: number;
+  commission?: number;
+  swap?: number;
+  worstPriceReached?: number;
+  bestPriceReached?: number;
+  ruleViolations?: string[];
 }
 
 export interface TradeSummary {

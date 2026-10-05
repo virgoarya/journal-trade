@@ -27,12 +27,12 @@ export function calculateRollingZScore(data: number[], windowSize: number = 36):
     const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / window.length;
     const stdDev = Math.sqrt(variance);
     
-    // Avoid division by zero
-    if (stdDev === 0) {
-      result[i] = 0;
-    } else {
-      result[i] = (data[i] - mean) / stdDev;
-    }
+    // Avoid division by zero (use epsilon for floating point precision)
+        if (stdDev < 1e-12) {
+          result[i] = 0;
+        } else {
+          result[i] = (data[i] - mean) / stdDev;
+        }
   }
   
   return result;
@@ -76,7 +76,10 @@ export function aggregateMacroScores(inputs: MacroRawInputs): { growthScore: num
   // Helper to get latest z-score from an indicator series
   const getLatestZScore = (data: number[]): number => {
     const zScores = calculateRollingZScore(data, 36);
-    return zScores[zScores.length - 1] || 0; // Return 0 if NaN or undefined
+    const latestZScore = zScores[zScores.length - 1];
+    // If stdDev was 0, zScore is 0. If data is insufficient, zScore is NaN.
+    // In either case, we treat it as 0 for aggregation purposes.
+    return isNaN(latestZScore) ? 0 : latestZScore;
   };
   
   // Growth components (each 20% of 40% leading + 40% coincident + 20% lagging = 20% each)
