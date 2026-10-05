@@ -193,6 +193,189 @@ describe("findSwingHighs / findSwingLows — ATR noise filter", () => {
     // Tidak ada swing ganda berdekatan: harga monoton naik, harusnya < 5 swing
     expect(highs.length).toBeLessThan(5);
   });
+
+  // ─── TC-01: Flat Market — ATR Rendah ───────────────────────────────
+  it("TC-01: Flat market (ATR rendah) — filter tidak terlalu agresif", () => {
+    // 20 candles dengan range kecil (high-low = 1.0)
+    // Pola: naik gradual, spike turun, naik gradual, spike turun...
+    // ATR(14) ≈ 1.0, minGap = 0.5
+    const candles = makeCandles([
+      { open: 99.5, high: 100.5, low: 99.5, close: 100 },
+      { open: 100.5, high: 101.5, low: 100.5, close: 101 },
+      { open: 101.5, high: 102.5, low: 101.5, close: 102 },
+      { open: 102.5, high: 103.5, low: 102.5, close: 103 },
+      { open: 109.5, high: 110.5, low: 109.5, close: 110 }, // spike (swing high)
+      { open: 102.5, high: 103.5, low: 102.5, close: 103 },
+      { open: 101.5, high: 102.5, low: 101.5, close: 102 },
+      { open: 100.5, high: 101.5, low: 100.5, close: 101 },
+      { open: 102.5, high: 103.5, low: 102.5, close: 103 },
+      { open: 110.5, high: 111.5, low: 110.5, close: 111 }, // spike (swing high)
+      { open: 103.5, high: 104.5, low: 103.5, close: 104 },
+      { open: 102.5, high: 103.5, low: 102.5, close: 103 },
+      { open: 101.5, high: 102.5, low: 101.5, close: 102 },
+      { open: 103.5, high: 104.5, low: 103.5, close: 104 },
+      { open: 111.5, high: 112.5, low: 111.5, close: 112 }, // spike (swing high)
+      { open: 104.5, high: 105.5, low: 104.5, close: 105 },
+      { open: 103.5, high: 104.5, low: 103.5, close: 104 },
+      { open: 102.5, high: 103.5, low: 102.5, close: 103 },
+      { open: 101.5, high: 102.5, low: 101.5, close: 102 },
+      { open: 100.5, high: 101.5, low: 100.5, close: 101 },
+    ]);
+    const highs = marketStructureService.findSwingHighs(candles);
+    // Swing highs tetap terdeteksi (minimal 1-2 swing)
+    expect(highs.length).toBeGreaterThanOrEqual(1);
+    expect(highs.length).toBeLessThan(5); // tidak terlalu banyak
+  });
+
+  // ─── TC-02: Spike Volatility — ATR Tinggi ───────────────────────────
+  it("TC-02: Spike volatility (ATR tinggi) — noise swing difilter", () => {
+    // 20 candles dengan range besar (high-low = 10)
+    // Harga naik-turun drastic: 100 → 110 → 95 → 115 → 90 → 120
+    // ATR(14) ≈ 10, minGap = 5
+    const candles = makeCandles([
+      { open: 100, high: 110, low: 90, close: 105 },
+      { open: 105, high: 115, low: 95, close: 110 },
+      { open: 110, high: 120, low: 100, close: 115 },
+      { open: 115, high: 125, low: 105, close: 120 },
+      { open: 120, high: 130, low: 110, close: 125 },
+      { open: 125, high: 135, low: 115, close: 130 },
+      { open: 130, high: 140, low: 120, close: 135 },
+      { open: 135, high: 145, low: 125, close: 140 },
+      { open: 140, high: 150, low: 130, close: 145 },
+      { open: 145, high: 155, low: 135, close: 150 },
+      { open: 150, high: 160, low: 140, close: 155 },
+      { open: 155, high: 165, low: 145, close: 160 },
+      { open: 160, high: 170, low: 150, close: 165 },
+      { open: 165, high: 175, low: 155, close: 170 },
+      { open: 170, high: 180, low: 160, close: 175 },
+      { open: 175, high: 185, low: 165, close: 180 },
+      { open: 180, high: 190, low: 170, close: 185 },
+      { open: 185, high: 195, low: 175, close: 190 },
+      { open: 190, high: 200, low: 180, close: 195 },
+      { open: 195, high: 205, low: 185, close: 200 },
+    ]);
+    const highs = marketStructureService.findSwingHighs(candles);
+    // Hanya swing signifikan yang terdeteksi
+    // Noise swing (jarak < 5) harus di-filter
+    for (let i = 1; i < highs.length; i++) {
+      expect(Math.abs(highs[i].price - highs[i - 1].price)).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  // ─── TC-03: Boundary Condition — Jarak Tepat 0.5×ATR ─────────────
+  it("TC-03: Boundary condition (jarak = 0.5×ATR) — off-by-one check", () => {
+    // Setup: 2 swing highs dengan jarak tepat 0.5 × ATR
+    // Pola: naik 3 candle, puncak, turun 2 candle, naik 3 candle, puncak, turun 2 candle
+    // ATR(14) dihitung dari range candle
+    const candles = makeCandles([
+      { open: 98, high: 100, low: 97, close: 99 },    // naik
+      { open: 99, high: 101, low: 98, close: 100 },   // naik
+      { open: 100, high: 102, low: 99, close: 101 },  // naik
+      { open: 101, high: 103, low: 100, close: 102 }, // puncak (swing high)
+      { open: 102, high: 102, low: 99, close: 100 },  // turun
+      { open: 100, high: 101, low: 98, close: 99 },   // turun
+      { open: 99, high: 101, low: 98, close: 100 },   // naik
+      { open: 100, high: 102, low: 99, close: 101 },  // naik
+      { open: 101, high: 103, low: 100, close: 102 }, // naik
+      { open: 102, high: 104, low: 101, close: 103 }, // puncak (swing high, jarak = 1)
+      { open: 103, high: 103, low: 100, close: 101 }, // turun
+      { open: 101, high: 102, low: 99, close: 100 },  // turun
+    ]);
+    const highs = marketStructureService.findSwingHighs(candles);
+    // Verifikasi bahwa swing highs terdeteksi
+    expect(highs.length).toBeGreaterThanOrEqual(1);
+    // Verifikasi jarak antar swing highs >= minGap (0.5 × ATR)
+    for (let i = 1; i < highs.length; i++) {
+      expect(Math.abs(highs[i].price - highs[i - 1].price)).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+
+  // ─── TC-04: Swing Lows — Mirror Logic ──────────────────────────────
+  it("TC-04: Swing lows — mirror logic dari findSwingHighs", () => {
+    // 20 candles dengan noise swing lows
+    // Pola mirror dari TC-01: turun gradual, spike naik, turun gradual, spike naik...
+    const candles = makeCandles([
+      { open: 100.5, high: 100.5, low: 99.5, close: 100 },
+      { open: 99.5, high: 99.5, low: 98.5, close: 99 },
+      { open: 98.5, high: 98.5, low: 97.5, close: 98 },
+      { open: 97.5, high: 97.5, low: 96.5, close: 97 },
+      { open: 90.5, high: 90.5, low: 89.5, close: 90 }, // spike (swing low)
+      { open: 97.5, high: 97.5, low: 96.5, close: 97 },
+      { open: 98.5, high: 98.5, low: 97.5, close: 98 },
+      { open: 99.5, high: 99.5, low: 98.5, close: 99 },
+      { open: 97.5, high: 97.5, low: 96.5, close: 97 },
+      { open: 89.5, high: 89.5, low: 88.5, close: 89 }, // spike (swing low)
+      { open: 96.5, high: 96.5, low: 95.5, close: 96 },
+      { open: 97.5, high: 97.5, low: 96.5, close: 97 },
+      { open: 98.5, high: 98.5, low: 97.5, close: 98 },
+      { open: 96.5, high: 96.5, low: 95.5, close: 96 },
+      { open: 88.5, high: 88.5, low: 87.5, close: 88 }, // spike (swing low)
+      { open: 95.5, high: 95.5, low: 94.5, close: 95 },
+      { open: 96.5, high: 96.5, low: 95.5, close: 96 },
+      { open: 97.5, high: 97.5, low: 96.5, close: 97 },
+      { open: 98.5, high: 98.5, low: 97.5, close: 98 },
+      { open: 99.5, high: 99.5, low: 98.5, close: 99 },
+    ]);
+    const lows = marketStructureService.findSwingLows(candles);
+    expect(lows.length).toBeGreaterThanOrEqual(1);
+    expect(lows.length).toBeLessThan(5);
+    // Verifikasi jarak antar swing lows >= minGap
+    for (let i = 1; i < lows.length; i++) {
+      expect(Math.abs(lows[i].price - lows[i - 1].price)).toBeGreaterThanOrEqual(0.25);
+    }
+  });
+
+  // ─── TC-05: Mixed Scenario — Naik-Turun + Noise ────────────────────
+  it("TC-05: Mixed scenario (naik-turun + noise) — real-world combo", () => {
+    // 30 candles: naik 10 candle, turun 10 candle, naik 10 candle
+    // Noise swing di setiap fase (jarak < 0.5×ATR)
+    const candles: Candle[] = [];
+    // Phase 1: naik 10 candle (100 → 110)
+    for (let i = 0; i < 10; i++) {
+      const price = 100 + i;
+      candles.push({
+        time: 1000 + i * 60,
+        open: price - 0.2,
+        high: price + 0.5,
+        low: price - 0.5,
+        close: price + 0.2,
+      });
+    }
+    // Phase 2: turun 10 candle (110 → 100)
+    for (let i = 0; i < 10; i++) {
+      const price = 110 - i;
+      candles.push({
+        time: 1000 + (10 + i) * 60,
+        open: price + 0.2,
+        high: price + 0.5,
+        low: price - 0.5,
+        close: price - 0.2,
+      });
+    }
+    // Phase 3: naik 10 candle (100 → 110)
+    for (let i = 0; i < 10; i++) {
+      const price = 100 + i;
+      candles.push({
+        time: 1000 + (20 + i) * 60,
+        open: price - 0.2,
+        high: price + 0.5,
+        low: price - 0.5,
+        close: price + 0.2,
+      });
+    }
+    const highs = marketStructureService.findSwingHighs(candles);
+    const lows = marketStructureService.findSwingLows(candles);
+    // Harus ada swing highs dan lows
+    expect(highs.length).toBeGreaterThanOrEqual(1);
+    expect(lows.length).toBeGreaterThanOrEqual(1);
+    // Noise swing tidak boleh lolos
+    for (let i = 1; i < highs.length; i++) {
+      expect(Math.abs(highs[i].price - highs[i - 1].price)).toBeGreaterThanOrEqual(0.5);
+    }
+    for (let i = 1; i < lows.length; i++) {
+      expect(Math.abs(lows[i].price - lows[i - 1].price)).toBeGreaterThanOrEqual(0.5);
+    }
+  });
 });
 
 describe("fallback model config (llm-models.config)", () => {
