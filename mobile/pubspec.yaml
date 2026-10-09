@@ -1,0 +1,28 @@
+name: hunter_trades_mobile
+description: Hunter Trades Journal — mobile client (Terminal Noir).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # State + storage for the login PoC
+  shared_preferences: ^2.2.3
+  # Localization from day one — no hardcoded user-facing strings
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

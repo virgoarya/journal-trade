@@ -1,0 +1,19 @@
+{
+  "@@locale": "en",
+  "appTitle": "Hunter Trades Journal",
+  "brandName": "HUNTER TRADES",
+  "brandVersion": "JOURNAL TERMINAL v1.0",
+  "terminalAuthLabel": "auth",
+  "labelUsername": "USERNAME",
+  "labelPassword": "PASSWORD",
+  "hintUsername": "operator_id",
+  "hintPassword": "••••••••",
+  "actionInitialize": "INITIALIZE SESSION",
+  "actionBiometric": "BIOMETRIC AUTH",
+  "actionTogglePassword": "Toggle password visibility",
+  "dividerOr": "OR",
+  "statusOnline": "SYSTEM ONLINE",
+  "statusEncrypted": "ENCRYPTED",
+  "errorEmptyFields": "ACCESS DENIED — Fields required",
+  "errorInvalidCredentials": "ACCESS DENIED — Invalid credentials"
+}

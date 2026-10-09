@@ -1,0 +1,19 @@
+{
+  "@@locale": "id",
+  "appTitle": "Jurnal Hunter Trades",
+  "brandName": "HUNTER TRADES",
+  "brandVersion": "TERMINAL JURNAL v1.0",
+  "terminalAuthLabel": "masuk",
+  "labelUsername": "NAMA PENGGUNA",
+  "labelPassword": "KATA SANDI",
+  "hintUsername": "id_operator",
+  "hintPassword": "••••••••",
+  "actionInitialize": "MULAI SESI",
+  "actionBiometric": "AUTENTIKASI BIOMETRIK",
+  "actionTogglePassword": "Tampilkan kata sandi",
+  "dividerOr": "ATAU",
+  "statusOnline": "SISTEM ONLINE",
+  "statusEncrypted": "TERENKRIPSI",
+  "errorEmptyFields": "AKSES DITOLAK — Kolom wajib diisi",
+  "errorInvalidCredentials": "AKSES DITOLAK — Kredensial tidak valid"
+}
