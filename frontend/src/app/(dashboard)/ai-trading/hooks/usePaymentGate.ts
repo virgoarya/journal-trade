@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface PaymentGateStatus {
   isRegistered: boolean;
@@ -9,13 +9,13 @@ interface PaymentGateStatus {
   isUnlimited?: boolean;
 }
 
-export function usePaymentGate(userId: string | undefined) {
+export function usePaymentGate(userId: string | undefined, forceFull: boolean = false) {
   const [status, setStatus] = useState<PaymentGateStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
+  const fetchStatus = useCallback(async () => {
+    if (process.env.NODE_ENV === "development" && !forceFull) {
       setStatus({
         isRegistered: true,
         tokenBalance: Number.POSITIVE_INFINITY,
@@ -35,41 +35,38 @@ export function usePaymentGate(userId: string | undefined) {
       return;
     }
 
-    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/payment/status-for-user/${userId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setStatus({
+        isRegistered: data.isRegistered,
+        tokenBalance: data.tokenBalance,
+        hasInsufficientToken: data.hasInsufficientToken,
+        isBooster: data.isBooster,
+        plan: data.plan,
+        isUnlimited: data.isUnlimited,
+      });
+    } catch (e: any) {
+      setError(e.message);
+      setStatus(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, forceFull]);
 
-    const fetchStatus = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/v1/payment/status-for-user/${userId}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) {
-          setStatus({
-            isRegistered: data.isRegistered,
-            tokenBalance: data.tokenBalance,
-            hasInsufficientToken: data.hasInsufficientToken,
-            isBooster: data.isBooster,
-            plan: data.plan,
-            isUnlimited: data.isUnlimited,
-          });
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setError(e.message);
-          setStatus(null);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchStatus();
 
+    // Periodic refresh every 30 seconds to keep state in sync with backend
+    const intervalId = setInterval(fetchStatus, 30000);
+
     return () => {
-      cancelled = true;
+      clearInterval(intervalId);
     };
-  }, [userId]);
+  }, [fetchStatus]);
 
   // Helper untuk menentukan aksi yang dibutuhkan
   const gateAction: "none" | "package" | "token_topup" | null = status
@@ -80,5 +77,9 @@ export function usePaymentGate(userId: string | undefined) {
       : "none"
     : null;
 
-  return { status, loading, error, gateAction };
+  const refetch = () => {
+    fetchStatus();
+  };
+
+  return { status, loading, error, gateAction, refetch };
 }

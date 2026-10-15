@@ -161,7 +161,7 @@ export function CentralBankDifferentialsPanel({ className }: CentralBankDifferen
                   </td>
                   <td className="py-2 text-center">
                     {diff.yieldCurveFlat ? (
-                      <span className="text-text-muted text-[10px] px-1.5 py-0.5 rounded border border-border-subtle bg-surface-elevated/50">
+                      <span className="text-text-muted text-[10px] px-1.5 py-0.5 rounded border border-border-subtle bg-bg-elevated/50">
                         FLAT
                       </span>
                     ) : (

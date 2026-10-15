@@ -1,11 +1,102 @@
-# 📖 Panduan Pengguna: Menghubungkan MetaTrader 5 via Native MCP
+# 📖 Panduan Pengguna: Install & Menghubungkan MetaTrader 5
 
-> **Hunter Trades Journal & AI Trading Engine**  
-> Panduan resmi setup koneksi MetaTrader 5 (MT5) untuk masing-masing user menggunakan protokol **Native Model Context Protocol (MCP)**.
+> **Hunter Trades Journal & AI Trading Engine**
+> Panduan resmi untuk user: install aplikasi desktop, verifikasi semua service jalan, lalu
+> menghubungkan MetaTrader 5 (MT5) via protokol **Native Model Context Protocol (MCP)**.
 
 ---
 
-## 💡 Konsep & Solusi Arsitektur Multi-User
+## 🖥️ Bagian 1 — Install EXE Production
+
+### Yang Anda butuhkan
+
+| Kebutuhan | Keterangan |
+|---|---|
+| **Windows 10/11 (64-bit)** | Aplikasi desktop hanya tersedia untuk Windows. |
+| **RAM** | Minimal 4 GB. Di bawah itu aplikasi tetap jalan tapi AI dan backtest lebih lambat (aplikasi akan menampilkan peringatan). |
+| **MetaTrader 5** | Build terbaru yang punya tab **MCP** di menu Options. Boleh di-install setelahnya. |
+| **Akun MongoDB** | Koneksi ke database. Bisa lokal maupun MongoDB Atlas — diisi saat first-run setup. |
+
+### Langkah install
+
+1. **Unduh installer** `Hunter Trades Setup <versi>.exe` dari halaman GitHub Releases.
+2. **Jalankan installer.** Klik **Next**, pilih folder instalasi, lalu **Install**.
+   Installer akan membuat shortcut di Desktop dan Start Menu.
+3. **Jalankan first-run setup** — saat pertama kali dibuka, aplikasi mendeteksi bahwa
+   `server.env` belum ada dan menampilkan jendela **Setup Configuration**. Isi semua field
+   bertanda bintang (wajib):
+
+   | Field | Keterangan |
+   |---|---|
+   | **Database URL** \* | Connection string MongoDB — Atlas (`mongodb+srv://...`) atau lokal. |
+   | **Auth Secret** \* | String acak minimal 32 karakter. Generate: `openssl rand -base64 32`. |
+   | **Encryption Key** \* | String acak minimal 32 karakter. Dipakai enkripsi kredensial MT5. |
+   | **Discord Client ID** \* | Dari Discord Developer Portal. |
+   | **Discord Client Secret** \* | Dari Discord Developer Portal. |
+   | **Discord Guild ID** \* | ID server Discord untuk verifikasi keanggotaan. |
+   | **Midtrans Server Key** \* | Dari dashboard.midtrans.com → Settings → Access Keys. |
+   | **Midtrans Environment** \* | `Sandbox` (testing) atau `Production`. |
+
+   Field opsional: **9Router URL** dan **9Router API Key** — biarkan default
+   (`http://127.0.0.1:20128/v1`) kalau Anda tidak memakai gateway LLM sendiri.
+
+   Aplikasi akan menolak menyimpan kalau ada field wajib yang kosong, dan menyebutkan nama
+   field yang bermasalah.
+
+4. **Klik Simpan.** Konfigurasi ditulis ke `%APPDATA%\hunter-trades-desktop\server.env`
+   dan dipakai backend pada setiap start berikutnya. Setup ini hanya muncul sekali — untuk
+   mengubahnya nanti, edit file tersebut lalu restart aplikasi.
+5. **Tunggu splash screen selesai** (10–60 detik saat pertama kali). Setelah itu jendela
+   utama Hunter Trades terbuka.
+
+> Aplikasi berjalan di **system tray**. Menutup jendela tidak mematikan service — klik kanan
+> icon tray lalu **Quit** untuk menghentikan semuanya.
+
+### Verifikasi semua service jalan
+
+Buka Command Prompt / PowerShell dan jalankan:
+
+```bash
+curl http://localhost:5000/health    # -> {"status":"OK","timestamp":"..."}
+curl http://localhost:3000           # -> halaman Hunter Trades
+curl http://localhost:20128          # -> 9Router gateway aktif
+curl http://127.0.0.1:22346/mcp      # -> MT5 MCP (butuh MT5 terbuka)
+```
+
+| Port | Service | Kalau gagal |
+|---|---|---|
+| `3000` | Frontend (UI) | Cek `logs\frontend.log`. Sering karena port dipakai proses lain. |
+| `5000` | Backend API | Cek `logs\backend.log` — biasanya ada variabel `.env` yang belum diisi. |
+| `20128` | 9Router (LLM gateway) | Cek `logs\9router.log`. Tanpa ini, fitur AI tidak jalan. |
+| `22346` | MT5 Native MCP | Milik MetaTrader 5 — pastikan MT5 terbuka (lihat Bagian 2). |
+
+**Lokasi log:** `%APPDATA%\hunter-trades-desktop\logs\`
+(`main.log`, `backend.log`, `frontend.log`, `9router.log`)
+
+### Update otomatis (OTA)
+
+Aplikasi memeriksa pembaruan 10 detik setelah start, lalu setiap 1 jam. Kalau ada versi baru,
+aplikasi menampilkan dialog — klik **Update** untuk mengunduh dan menerapkan patch.
+
+Patch diverifikasi checksum SHA-256 sebelum dipasang. Kalau penerapan gagal, aplikasi
+**otomatis kembali ke versi sebelumnya** supaya tetap bisa dipakai. Versi lokal yang lebih
+baru tidak akan pernah diturunkan (downgrade) oleh server.
+
+### Troubleshooting install
+
+| Gejala | Solusi |
+|---|---|
+| Splash tidak hilang, muncul "Failed to start servers" | Port 3000/5000 sedang dipakai. Tutup aplikasi lain yang memakai port tersebut, lalu buka Hunter Trades lagi. |
+| "Backend crash" saat start | Ada variabel wajib yang kosong. Cek `logs\backend.log` — nama variabelnya disebutkan. |
+| Halaman putih / blank | Tutup aplikasi, lalu pasang ulang installer. Kalau masih terjadi, hubungi support. |
+| Aplikasi tidak muncul setelah diklik | Cek system tray — jendela mungkin sedang diminimize ke tray. Klik dua kali icon tray. |
+| Aplikasi terasa lambat | Tutup aplikasi berat lain. AI dan backtest butuh RAM; sistem dengan < 4 GB akan lebih lambat. |
+
+---
+
+## 🔌 Bagian 2 — Menghubungkan MetaTrader 5
+
+### 💡 Konsep & Solusi Arsitektur Multi-User
 
 Setiap pengguna Hunter Trades memiliki terminal **MetaTrader 5** dan akun broker tersendiri. Pada versi terbaru:
 1. **Tidak Membutuhkan Python Server / Aplikasi Tambahan**: MT5 modern kini telah dilengkapi **Native MCP Server** internal resmi dari MetaQuotes.
@@ -88,4 +179,13 @@ Jika Anda menjalankan MT5 di port custom atau remote port:
 ---
 
 ## 📞 Bantuan Tambahan
-Jika Anda mengalami kendala saat menghubungkan akun Anda, silakan hubungi tim support Hunter Trades melalui komunitas Discord resmi kami.
+Jika Anda mengalami kendala saat install aplikasi atau menghubungkan akun Anda, silakan
+hubungi tim support Hunter Trades melalui komunitas Discord resmi kami.
+
+Saat melapor, sertakan:
+- Versi aplikasi (terlihat di splash screen atau menu Settings → About)
+- Isi file log yang relevan dari `%APPDATA%\hunter-trades-desktop\logs\`
+- Hasil perintah `curl http://localhost:5000/health`
+
+> ⚠️ **Jangan pernah mengirimkan API Key MT5, password broker, atau isi file `.env` Anda
+> kepada siapa pun** — termasuk ke tim support. Semua kredensial bersifat pribadi.

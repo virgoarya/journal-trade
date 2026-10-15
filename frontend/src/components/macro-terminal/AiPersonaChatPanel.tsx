@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Send, User, ChevronDown, Zap, Brain, History, Clock, Copy, Check, RefreshCw } from "lucide-react";
+import { Send, User, ChevronDown, Zap, Brain, History, Check, RefreshCw, Copy } from "lucide-react";
 import { useMacroTerminal } from "./MacroTerminalContext";
 
 interface Message {
@@ -71,36 +71,12 @@ const THINKING_MESSAGES = [
 ];
 
 const QUICK_PROMPTS = [
-  "What breaks this regime?",
-  "What would force Fed pivot?",
-  "Where is liquidity leaking?",
-  "What asset is most vulnerable if VIX > 20?",
+  "Apa yang merusak rezim ini?",
+  "Apa yang memaksa Fed pivot?",
+  "Di mana likuiditas bocor?",
+  "Aset apa paling rentan jika VIX > 20?",
 ];
 
-// ── User Profile Component ────────────────────────────────────
-interface UserProfileProps {
-  name: string;
-  role: string;
-  avatar?: string;
-}
-
-function UserProfile({ name, role }: UserProfileProps) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-8 h-8 rounded-full bg-accent-gold/20 border border-accent-gold/30 flex items-center justify-center">
-        <User className="w-4 h-4 text-accent-gold" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-mono font-bold text-text-primary truncate max-w-[120px]">
-          {name}
-        </p>
-        <p className="text-[9px] text-text-muted font-mono truncate max-w-[120px]">
-          {role}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ── Memory Context Badge ──────────────────────────────────────
 interface MemoryContextBadgeProps {
@@ -110,42 +86,33 @@ interface MemoryContextBadgeProps {
 }
 
 function MemoryContextBadge({ tokenCount, maxTokens, factsCount }: MemoryContextBadgeProps) {
-  // Kalau ada factsCount, tampilkan "N Facts Injected"
+  // Kalau ada factsCount, tampilkan jumlah fakta yang di-inject
   if (factsCount !== undefined && factsCount > 0) {
     return (
-      <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-border-subtle bg-surface-elevated">
-        <div className="w-2 h-2 rounded-full bg-data-profit" />
-        <div className="text-xs font-mono">
-          <span className="text-text-muted">Memory: </span>
-          <span className="text-data-profit font-bold">Active</span>
-          <span className="text-[9px] text-text-muted/60"> ({factsCount} facts)</span>
-        </div>
+      <div
+        className="flex items-center gap-1.5 px-1.5 py-1 rounded border border-border-subtle bg-bg-elevated"
+        title={`Memori aktif — ${factsCount} fakta di-inject ke konteks`}
+      >
+        <div className="w-1.5 h-1.5 rounded-full bg-data-profit" />
+        <span className="text-[9px] font-mono text-text-muted">
+          <span className="text-data-profit font-bold">{factsCount}</span> fakta
+        </span>
       </div>
     );
   }
 
-  // Fallback: tampilkan token usage (estimasi dari message length)
+  // Fallback: estimasi pemakaian konteks dari panjang pesan
   const percentage = Math.min(100, (tokenCount / maxTokens) * 100);
   const isNearLimit = percentage > 80;
+  const tone = isNearLimit ? "text-data-loss" : percentage > 50 ? "text-accent-gold" : "text-data-profit";
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-border-subtle bg-surface-elevated">
-      <History className="w-3 h-3 text-text-muted flex-shrink-0" />
-      <div className="text-xs font-mono">
-        <span className="text-text-muted">Memory: </span>
-        <span className={isNearLimit ? "text-data-loss font-bold" : percentage > 50 ? "text-accent-gold" : "text-data-profit"}>
-          {tokenCount}/{maxTokens}
-        </span>
-        <span className="text-[8px] text-text-muted/60"> ({percentage.toFixed(0)}%)</span>
-      </div>
-      <div className="w-16 h-1 bg-border-subtle/30 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${
-            isNearLimit ? "bg-data-loss" : percentage > 50 ? "bg-accent-gold" : "bg-data-profit"
-          }`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
+    <div
+      className="flex items-center gap-1.5 px-1.5 py-1 rounded border border-border-subtle bg-bg-elevated"
+      title={`Konteks terpakai ${tokenCount}/${maxTokens} token (${percentage.toFixed(0)}%)`}
+    >
+      <History className="w-3 h-3 text-text-muted shrink-0" />
+      <span className={`text-[9px] font-mono ${tone}`}>{percentage.toFixed(0)}%</span>
     </div>
   );
 }
@@ -175,22 +142,8 @@ function ContextTags({ latency, contextInjected }: ContextTagProps) {
   );
 }
 
-// ── Copy to Clipboard Hook ─────────────────────────────────────
-function useCopyToClipboard() {
-  const [copied, setCopied] = useState(false);
-  
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-  
-  return { copied, copy };
-}
+// ── Copy to Clipboard ───────────────────────────────────────────
+// Dipakai oleh bubble asisten: tombol copy muncul saat hover.
 
 export function AiPersonaChatPanel() {
   const {
@@ -212,15 +165,16 @@ export function AiPersonaChatPanel() {
     contrarian: [],
   });
   const [input, setInput] = useState("");
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [thinkingState, setThinkingState] = useState<ThinkingState>("idle");
   const [toolExecutions, setToolExecutions] = useState<ToolExecution[]>([]);
   // Jumlah memory notes dari database (diisi nanti dari API profile)
   const [memoryFactsCount, setMemoryFactsCount] = useState<number>(0);
   const [showReasoning, setShowReasoning] = useState(false);
   const [reasoningText, setReasoningText] = useState<string>("");
-  // Indeks langkah thinking yang sedang aktif (untuk dropdown Sequence Thinking)
+  // Indeks langkah thinking yang sedang aktif (untuk dropdown Urutan Berpikir)
   const [thinkingStepIndex, setThinkingStepIndex] = useState<number>(0);
-  // Dropdown open state (Agent & Sequence Thinking)
+  // Dropdown open state (Agent & Urutan Berpikir)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
   // Nama user — diisi dari API profile (fallback: "User")
@@ -228,6 +182,7 @@ export function AiPersonaChatPanel() {
   const [userPersona, setUserPersona] = useState<string>("hawk");
   const [userDisplayName, setUserDisplayName] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const thinkingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const thinkingIndexRef = useRef(0);
   const lastSentAtRef = useRef(0);
@@ -275,7 +230,6 @@ export function AiPersonaChatPanel() {
     };
   }, []);
 
-  const { copied, copy } = useCopyToClipboard();
   const activePersona = PERSONAS.find((p) => p.id === activePersonaId)!;
   const messages = allMessages[activePersonaId];
 
@@ -330,10 +284,6 @@ export function AiPersonaChatPanel() {
       localStorage.setItem(storedKey, JSON.stringify(messages));
     }
   }, [messages, activePersonaId]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const clearThinking = () => {
     if (thinkingIntervalRef.current) {
@@ -413,6 +363,36 @@ export function AiPersonaChatPanel() {
     });
   };
 
+  const resizeComposer = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
+  };
+
+  useEffect(() => {
+    resizeComposer();
+  }, [input]);
+
+  const copyAssistantMessage = async (content: string, idx: number) => {
+    if (!content.trim()) return;
+    try {
+      await navigator.clipboard.writeText(content.trim());
+      setCopiedMessageIndex(idx);
+      window.setTimeout(() => {
+        setCopiedMessageIndex((current) => (current === idx ? null : current));
+      }, 1500);
+    } catch {
+      setCopiedMessageIndex(null);
+    }
+  };
+
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = input.trim();
@@ -486,7 +466,7 @@ export function AiPersonaChatPanel() {
       const data = await resp.json();
       const latencyMs = Date.now() - requestStartedAt;
 
-      // Populate toolExecutions dari toolsUsed supaya muncul di dropdown Sequence Thinking
+      // Populate toolExecutions dari toolsUsed supaya muncul di dropdown Urutan Berpikir
       if (Array.isArray(data.toolsUsed) && data.toolsUsed.length > 0) {
         const now = Date.now();
         setToolExecutions(
@@ -521,7 +501,7 @@ export function AiPersonaChatPanel() {
       setReasoningText("");
     };
 
-    // NEW SESSION — reset riwayat chat saja.
+    // SESI BARU — reset riwayat chat saja.
     // PENTING: TIDAK menyentuh memory notes di PostgreSQL (fakta jangka panjang tetap utuh).
     const handleNewSession = () => {
       const key = `intelligence_chat_${activePersonaId}`;
@@ -543,64 +523,201 @@ export function AiPersonaChatPanel() {
     const isThinking =
       thinkingState === "thinking" || thinkingState === "responding";
 
+    const hasUserMessage = messages.some((m) => m.role === "user");
+    const contextChips: { label: string; value: string }[] = [
+      { label: "REZIM", value: currentRegime ?? "—" },
+      { label: "LIKUIDITAS", value: liquidity?.status ?? "—" },
+      { label: "VIX", value: vix.value === null ? "—" : `${vix.value.toFixed(1)} ${vix.regime}` },
+      { label: "KURVA", value: yieldCurve.inverted ? "INVERTED" : yieldCurve.curveRegime },
+      { label: "GEO", value: geoRisk.topDriver },
+      { label: "AGENDA", value: nextEvent ? `${nextEvent.country} · ${nextEvent.impact}` : "—" },
+    ];
+
     return (
       <div
         className="flex flex-col h-full w-full glass overflow-hidden relative transition-colors duration-300"
         style={{ borderColor: activePersona.color + "35" }}
       >
-        {/* Header - Agent Status Bar & User Profile */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0 bg-surface-elevated/50">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Agent Status */}
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-surface-elevated/50 border border-border-subtle">
-              <div className="w-2 h-2 rounded-full animate-pulse bg-data-profit" />
-              <span className="text-[10px] font-mono text-text-primary">
-                {activePersona.id.toUpperCase()} ONLINE
-              </span>
-            </div>
-
-            {/* User Profile Badge — dynamic name */}
-            <UserProfile name={userName} role={activePersona.label} />
-
-            {/* Persona Badge (aktif) */}
-            <div className="flex items-center gap-1 px-2 py-1 rounded-md border border-border-subtle bg-surface-elevated/50">
-              <span style={{ color: activePersona.color }}>{activePersona.emoji}</span>
-              <span className="text-[9px] font-mono text-text-muted hidden sm:inline">{activePersona.label}</span>
-            </div>
-
-            {/* Memory Context Badge */}
-            <MemoryContextBadge tokenCount={Math.floor(memoryTokenCount)} maxTokens={MEMORY_MAX_TOKENS} factsCount={memoryFactsCount} />
+        {/* ── Header padat — satu baris ─────────────────────── */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-subtle shrink-0 bg-bg-elevated/50">
+          {/* Identitas agent + user */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
+              style={{ backgroundColor: activePersona.color }}
+            />
+            <span
+              className="text-[11px] font-mono font-bold truncate"
+              style={{ color: activePersona.color }}
+            >
+              {activePersona.emoji} {activePersona.label.split(" · ")[0]}
+            </span>
+            <span className="text-[10px] font-mono text-text-muted truncate hidden md:inline">
+              · {userName}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Kontrol */}
+          <div className="flex items-center gap-1.5 ml-auto shrink-0">
+            {/* Badge memori */}
+            <MemoryContextBadge
+              tokenCount={Math.floor(memoryTokenCount)}
+              maxTokens={MEMORY_MAX_TOKENS}
+              factsCount={memoryFactsCount}
+            />
+
+            {/* Toggle penalaran */}
             <button
+              type="button"
+              onClick={() => setShowReasoning(!showReasoning)}
+              disabled={isThinking}
+              title="Penalaran — proses berpikir agent"
+              aria-expanded={showReasoning}
+              className={`p-1.5 rounded border transition-colors disabled:opacity-40 ${
+                showReasoning
+                  ? "border-accent-gold/40 text-accent-gold bg-accent-gold/10"
+                  : "border-border-subtle text-text-muted hover:text-text-primary"
+              }`}
+            >
+              <Brain className={`w-3.5 h-3.5 ${isThinking ? "animate-pulse text-data-profit" : isAnalyzing ? "animate-pulse" : ""}`} />
+            </button>
+
+            {/* Sesi baru */}
+            <button
+              type="button"
               onClick={handleNewSession}
               disabled={isThinking}
-              title="Mulai sesi baru — riwayat chat direset. Memory jangka panjang tetap tersimpan."
-              className="flex items-center gap-1.5 text-[10px] font-mono text-text-muted hover:text-accent-gold border border-border-subtle hover:border-accent-gold/40 px-2 py-1 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Sesi baru — riwayat chat direset. Memori jangka panjang tetap tersimpan."
+              className="p-1.5 rounded border border-border-subtle text-text-muted hover:text-accent-gold hover:border-accent-gold/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <RefreshCw size={11} />
-              NEW SESSION
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Briefing Context Banner */}
-        <div className="px-4 py-2 border-b border-border-subtle/50 shrink-0 bg-surface-elevated/30">
-          <p className="text-[11px] font-mono text-text-muted leading-relaxed">
-            <span className="text-text-primary">{briefing}</span>
-          </p>
+        {/* ── Strip konteks ──────────────────────────────── */}
+        <div
+          className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-subtle/50 shrink-0 overflow-x-auto scrollbar-hide bg-bg-elevated/30"
+          title={briefing}
+        >
+          {contextChips.map((chip) => (
+            <span
+              key={chip.label}
+              className="shrink-0 text-[9px] font-mono px-1.5 py-0.5 rounded border border-border-subtle/60 text-text-primary whitespace-nowrap"
+            >
+              <span className="text-text-muted">{chip.label} </span>
+              {chip.value}
+            </span>
+          ))}
         </div>
 
-        {/* Agent & Sequence Thinking dropdowns */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle shrink-0">
-          {/* ── Dropdown 1: Agent (Hawk / Dove / Contrarian) ── */}
+        {/* ── Area pesan ─────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-border-subtle">
+          {/* Saran awal — hilang setelah pesan pertama user */}
+          {!hasUserMessage && (
+            <div className="flex flex-wrap gap-1.5 pb-1">
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => setInput(prompt)}
+                  disabled={isThinking}
+                  className="text-[9px] font-mono text-text-muted border border-border-subtle rounded px-2 py-1 hover:text-accent-gold hover:border-accent-gold/40 disabled:opacity-40"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`group flex gap-1.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {msg.role === "assistant" && (
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px]"
+                  style={{ backgroundColor: activePersona.color + "25" }}
+                >
+                  {activePersona.emoji}
+                </div>
+              )}
+              <div
+                className={`relative max-w-[85%] px-3 py-2 rounded-xl text-[11px] font-mono leading-[1.65] ${
+                  msg.role === "user"
+                    ? "bg-accent-gold/10 border border-accent-gold/30 text-text-primary"
+                    : isThinking && idx === messages.length - 1
+                      ? "border border-border-subtle text-text-muted italic animate-pulse"
+                      : "glass border border-border-subtle text-text-primary"
+                }`}
+              >
+                {msg.role === "assistant" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => copyAssistantMessage(msg.content, idx)}
+                      title={copiedMessageIndex === idx ? "Tersalin" : "Salin jawaban"}
+                      className="absolute -right-2 -top-2 rounded border border-border-subtle bg-bg-elevated p-1 text-text-muted opacity-0 shadow-lg transition-all hover:text-accent-gold group-hover:opacity-100 focus:opacity-100"
+                    >
+                      {copiedMessageIndex === idx ? (
+                        <Check className="h-3 w-3 text-data-profit" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content ? msg.content.replace(/```[a-z]*\s*$/g, "").replace(/`+\s*$/g, "").trim() : ""}
+                    </ReactMarkdown>
+                    <ContextTags latency={msg.latency} contextInjected={msg.contextInjected} />
+                  </>
+                ) : (
+                  msg.content
+                )}
+              </div>
+              {msg.role === "user" && (
+                <div className="w-5 h-5 rounded-full bg-accent-gold/20 border border-accent-gold/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <User className="w-3 h-3 text-accent-gold" />
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* ── Panel penalaran — hanya dirender saat dibuka ───── */}
+        {showReasoning && (
+          <div className="border-t border-border-subtle shrink-0 max-h-56 overflow-y-auto px-3 py-2 bg-bg-elevated/30">
+            {isAnalyzing ? (
+              <div className="flex items-center gap-2 text-accent-gold">
+                <div className="w-3 h-3 border border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+                <span className="text-xs font-mono">Menganalisis struktur rezim dan dinamika pasar...</span>
+              </div>
+            ) : reasoningText ? (
+              <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words">
+                {reasoningText}
+              </pre>
+            ) : (
+              <div className="text-[11px] font-mono text-text-muted">
+                <p>Belum ada penalaran. Kirim pertanyaan ke agent untuk melihat proses berpikirnya.</p>
+                <p className="mt-2">Rezim saat ini: {currentRegime || "UNKNOWN"}</p>
+                <p className="mt-1">Likuiditas: {liquidity?.status || "UNKNOWN"}</p>
+                <p className="mt-1">VIX: {vix.value ? `${vix.value.toFixed(1)} (${vix.regime})` : "N/A"}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* ── Baris kontrol: Agent & Urutan Berpikir ──────── */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border-subtle/50 shrink-0 bg-bg-elevated/30">
+        {/* Dropdown Agent */}
           <div className="relative" ref={agentMenuRef}>
             <button
               type="button"
               onClick={() => { setAgentMenuOpen(!agentMenuOpen); setThinkingMenuOpen(false); }}
               disabled={isThinking}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Ganti agent"
+              className="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-mono transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 color: activePersona.color,
                 borderColor: activePersona.color + "55",
@@ -608,19 +725,18 @@ export function AiPersonaChatPanel() {
               }}
             >
               <span>{activePersona.emoji}</span>
-              <span className="font-bold">{activePersona.label}</span>
               <ChevronDown className={`w-3 h-3 transition-transform ${agentMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {agentMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 z-30 w-64 glass border border-border-subtle rounded-lg overflow-hidden shadow-xl">
+              <div className="absolute left-0 bottom-full mb-1 z-30 w-64 max-w-[calc(100vw-1.5rem)] bg-bg-elevated border border-border-subtle rounded-lg overflow-hidden shadow-xl">
                 {PERSONAS.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => { handlePersonaSwitch(p.id); setAgentMenuOpen(false); }}
-                    className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-elevated/70 ${
-                      p.id === activePersonaId ? "bg-surface-elevated/50" : ""
+                    className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-elevated/70 ${
+                      p.id === activePersonaId ? "bg-bg-elevated/50" : ""
                     }`}
                   >
                     <span className="text-base leading-none mt-0.5">{p.emoji}</span>
@@ -641,26 +757,25 @@ export function AiPersonaChatPanel() {
             )}
           </div>
 
-          {/* ── Dropdown 2: Sequence Thinking ── */}
+          {/* Dropdown Urutan Berpikir */}
           <div className="relative" ref={thinkingMenuRef}>
             <button
               type="button"
               onClick={() => { setThinkingMenuOpen(!thinkingMenuOpen); setAgentMenuOpen(false); }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border-subtle bg-surface-elevated/50 text-xs font-mono text-text-muted hover:text-text-main transition-all"
+              title="Urutan berpikir"
+              className="flex items-center gap-1 px-2 py-1 rounded border border-border-subtle bg-bg-elevated/50 text-[10px] font-mono text-text-muted hover:text-text-primary transition-all"
             >
-              <Brain className={`w-3 h-3 ${isThinking ? "text-accent-gold animate-pulse" : "text-text-muted"}`} />
-              <span>
-                {isThinking
-                  ? THINKING_MESSAGES[thinkingStepIndex]
-                  : `Sequence Thinking${toolExecutions.length > 0 ? ` (${toolExecutions.length})` : ""}`}
+              <Brain className={`w-3 h-3 ${isThinking ? "text-accent-gold animate-pulse" : ""}`} />
+              <span className="hidden lg:inline">
+                {isThinking ? "BERPIKIR…" : `URUTAN${toolExecutions.length > 0 ? ` (${toolExecutions.length})` : ""}`}
               </span>
               <ChevronDown className={`w-3 h-3 transition-transform ${thinkingMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {thinkingMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 z-30 w-80 glass border border-border-subtle rounded-lg overflow-hidden shadow-xl">
+              <div className="absolute left-0 bottom-full mb-1 z-30 w-72 max-w-[calc(100vw-1.5rem)] bg-bg-elevated border border-border-subtle rounded-lg overflow-hidden shadow-xl">
                 <div className="px-3 py-2 border-b border-border-subtle/50">
-                  <span className="text-[9px] font-mono text-text-muted tracking-wider">THINKING SEQUENCE</span>
+                  <span className="text-[9px] font-mono text-text-muted tracking-wider">URUTAN BERPIKIR</span>
                 </div>
                 <div className="p-2">
                   {THINKING_MESSAGES.map((step, i) => {
@@ -693,14 +808,14 @@ export function AiPersonaChatPanel() {
                 {toolExecutions.length > 0 && (
                   <div className="border-t border-border-subtle/50">
                     <div className="px-3 py-2 flex items-center gap-1.5">
-                      <Zap className="w-3 h-3 text-accent-gold" />
+                      <Zap className="w-2.5 h-2.5 text-accent-gold" />
                       <span className="text-[9px] font-mono text-text-muted tracking-wider">
-                        TOOLS EXECUTED ({toolExecutions.length})
+                        TOOLS DIJALANKAN ({toolExecutions.length})
                       </span>
                     </div>
                     <div className="max-h-40 overflow-y-auto px-2 pb-2">
-                      {toolExecutions.map((exec, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1">
+                      {toolExecutions.map((exec, idx2) => (
+                        <div key={idx2} className="flex items-center justify-between gap-2 px-2 py-1">
                           <code className="text-[10px] font-mono text-accent-gold truncate">{exec.tool}</code>
                           <span
                             className={`shrink-0 text-[8px] font-mono px-1.5 py-0.5 rounded ${
@@ -711,7 +826,7 @@ export function AiPersonaChatPanel() {
                                 : "bg-accent-gold/10 text-accent-gold"
                             }`}
                           >
-                            {exec.status === "pending" ? "PENDING" : exec.status === "executing" ? "RUNNING" : exec.status === "success" ? "✓" : "✗"}
+                            {exec.status === "pending" ? "PENDING" : exec.status === "executing" ? "JALAN" : exec.status === "success" ? "✓" : "✗"}
                           </span>
                         </div>
                       ))}
@@ -721,159 +836,36 @@ export function AiPersonaChatPanel() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Quick Prompts */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle shrink-0 overflow-x-auto scrollbar-hide">
-          {QUICK_PROMPTS.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              onClick={() => setInput(prompt)}
-              disabled={isThinking}
-              className="text-[9px] font-mono text-text-muted border border-border-subtle rounded px-2 py-1 hover:text-accent-gold hover:border-accent-gold/40 disabled:opacity-40 whitespace-nowrap"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
+      </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-border-subtle">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              {msg.role === "assistant" && (
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-sm"
-                  style={{ backgroundColor: activePersona.color + "25" }}
-                >
-                  {activePersona.emoji}
-                </div>
-              )}
-              <div
-                className={`max-w-[80%] px-3 py-2 rounded-xl text-xs font-mono leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-accent-gold/10 border border-accent-gold/30 text-text-primary"
-                    : isThinking && idx === messages.length - 1
-                      ? "border border-border-subtle text-text-muted italic animate-pulse"
-                      : "glass border border-border-subtle text-text-main"
-                }`}
-              >
-                {msg.role === "assistant" ? (
-                  <>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content ? msg.content.replace(/```[a-z]*\s*$/g, "").replace(/`+\s*$/g, "").trim() : ""}
-                    </ReactMarkdown>
-                    <ContextTags latency={msg.latency} contextInjected={msg.contextInjected} />
-                  
-                    {/* Tools Used Section */}
-                    {msg.toolsUsed && msg.toolsUsed.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1 border-t border-border-subtle/30 pt-2">
-                        <span className="text-[9px] text-text-muted flex items-center gap-1">
-                          <Zap size={10} className="text-accent-gold" />
-                          Tools:
-                        </span>
-                        {msg.toolsUsed.map((t, i) => (
-                          <span
-                            key={i}
-                            className="text-[9px] bg-accent-gold/10 text-accent-gold border border-accent-gold/20 px-1.5 py-0.5 rounded font-bold tracking-wider cursor-pointer hover:bg-accent-gold/20"
-                            title="Click to copy"
-                            onClick={() => copy(t)}
-                          >
-                            {t}
-                            {copied && t === msg.toolsUsed?.[i] && (
-                              <Check className="w-3 h-3 ml-1 text-data-profit" />
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  msg.content
-                )}
-              </div>
-              {msg.role === "user" && (
-                <div className="w-6 h-6 rounded-full bg-accent-gold/20 border border-accent-gold/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <User className="w-3 h-3 text-accent-gold" />
-                </div>
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Reasoning Panel — di bawah area chat, tepat di atas input */}
-        <div className="border-t border-border-subtle shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowReasoning(!showReasoning)}
-            className="w-full flex items-center justify-between px-4 py-2 text-xs font-mono text-text-muted hover:bg-surface-elevated/50 transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <Brain className={`w-3 h-3 ${isAnalyzing ? "text-accent-gold animate-pulse" : "text-accent-gold"}`} />
-              REASONING
-              {reasoningText && (
-                <span className="text-[9px] text-text-muted/60">
-                  ({reasoningText.length} chars)
-                </span>
-              )}
-            </span>
-            <ChevronDown
-              className={`w-3 h-3 transition-transform ${showReasoning ? "rotate-180" : ""}`}
-            />
-          </button>
-
-          {showReasoning && (
-            <div className="px-4 pb-2 max-h-64 overflow-y-auto">
-              <div className="bg-surface-elevated/30 border border-border-subtle/30 rounded-lg p-3">
-                {isAnalyzing ? (
-                  <div className="flex items-center gap-2 text-accent-gold">
-                    <div className="w-3 h-3 border border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
-                    <span className="text-xs font-mono">Analyzing regime structure and market dynamics...</span>
-                  </div>
-                ) : reasoningText ? (
-                  <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-words">
-                    {reasoningText}
-                  </pre>
-                ) : (
-                  <div className="text-[11px] font-mono text-text-muted">
-                    <p>Belum ada reasoning. Kirim pertanyaan ke agent untuk melihat proses berpikirnya.</p>
-                    <p className="mt-2">Current regime: {currentRegime || "UNKNOWN"}</p>
-                    <p className="mt-1">Liquidity: {liquidity?.status || "UNKNOWN"}</p>
-                    <p className="mt-1">VIX: {vix.value ? `${vix.value.toFixed(1)} (${vix.regime})` : "N/A"}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input */}
+        {/* ── Composer ──────────────────────────────────────── */}
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle shrink-0"
+          className="flex items-end gap-2 px-3 py-2.5 border-t border-border-subtle shrink-0"
         >
-          <div className="flex-1 flex items-center gap-2 bg-surface-elevated border border-border-subtle rounded-lg px-3 py-2">
-            <Zap
-              className="w-3 h-3 shrink-0"
-              style={{ color: activePersona.color }}
-            />
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Tanya ${activePersona.emoji} ${activePersona.label.split(" · ")[0]}...`}
-              className="flex-1 bg-transparent text-xs font-mono text-text-primary placeholder-text-muted outline-none"
-              disabled={isThinking}
-            />
+          <div className="group/composer flex-1 flex items-start gap-2 bg-bg-elevated border border-border-subtle rounded-lg px-3 py-2 focus-within:border-accent-gold/40">
+            <Zap className="w-3 h-3 shrink-0 mt-1" style={{ color: activePersona.color }} />
+            <div className="flex-1">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                placeholder={`Tanya ${activePersona.emoji} ${activePersona.label.split(" · ")[0]}...`}
+                className="max-h-24 min-h-[20px] w-full resize-none bg-transparent text-xs font-mono leading-5 text-text-primary placeholder-text-muted outline-none scrollbar-thin scrollbar-thumb-border-subtle"
+                disabled={isThinking}
+              />
+              <div className="mt-1 hidden text-[9px] font-mono text-text-muted group-focus-within/composer:block">
+                Enter kirim · Shift+Enter baris baru
+              </div>
+            </div>
           </div>
           <button
             type="submit"
             disabled={!input.trim() || isThinking}
+            title="Kirim"
             className="p-2 rounded-lg transition-all disabled:opacity-30"
             style={{
               backgroundColor: activePersona.color + "25",

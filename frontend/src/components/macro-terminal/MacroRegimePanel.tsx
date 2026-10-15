@@ -154,7 +154,7 @@ function MetricStrip({
   };
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-surface-elevated/35 min-w-0 flex flex-col transition-all overflow-hidden">
+    <div className="rounded-lg border border-border-subtle bg-bg-elevated/35 min-w-0 flex flex-col transition-all overflow-hidden">
       <div className="p-2 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-1">

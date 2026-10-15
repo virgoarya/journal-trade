@@ -11,6 +11,7 @@ import {
   hasInsufficientToken,
   getPaymentStatus,
 } from "../services/payment.service";
+import { Transaction } from "../models/Transaction";
 
 /** Zod schema untuk body createPaymentToken */
 const createTokenSchema = z.object({
@@ -76,6 +77,71 @@ export async function checkStatus(req: Request, res: Response) {
   }
 }
 
+/** POST /api/payment/confirm — finalisasi pembayaran dari client (fallback webhook) */
+export async function confirmPayment(req: Request, res: Response) {
+  try {
+    const { orderId } = req.body;
+    if (!orderId || typeof orderId !== "string") {
+      return res.status(400).json({ error: "orderId is required" });
+    }
+
+    // 1. Cek status transaksi ke Midtrans API
+    const status = await getTransactionStatus(orderId);
+    const transactionStatus = status.transaction_status;
+    const successStatuses = ["capture", "settlement"];
+
+    if (!successStatuses.includes(transactionStatus)) {
+      return res.status(400).json({
+        error: `Payment not completed. Status: ${transactionStatus}`,
+      });
+    }
+
+    // 2. Parse order_id untuk dapat userId, orderType, packageType
+    const ctx = parseOrderId(orderId);
+    if (!ctx) {
+      return res.status(400).json({ error: "Invalid order_id format" });
+    }
+
+    // 3. Idempotency check — skip if already processed
+    const existingTxn = await Transaction.findOne({
+      reference_id: status.transaction_id,
+    });
+    if (existingTxn && existingTxn.status === "completed") {
+      return res.json({
+        message: "Payment already processed",
+        orderId,
+        userId: ctx.userId,
+      });
+    }
+
+    // 4. Finalize payment
+    console.log("[Midtrans] confirmPayment calling handlePaymentSuccess:", {
+      orderId,
+      gross_amount: status.gross_amount,
+      userId: ctx.userId,
+      orderType: ctx.orderType,
+      transaction_id: status.transaction_id,
+      packageType: ctx.packageType,
+    });
+    const result = await handlePaymentSuccess(
+      orderId,
+      Number(status.gross_amount),
+      ctx.userId,
+      ctx.orderType,
+      status.transaction_id,
+      false, // boosterDiscount
+      ctx.packageType
+    );
+    console.log("[Midtrans] confirmPayment result:", result);
+
+    return res.json({ message: result, orderId, userId: ctx.userId });
+  } catch (err: any) {
+    console.error("[Midtrans] confirmPayment error:", err.message);
+    console.error("[Midtrans] confirmPayment stack:", err.stack);
+    res.status(500).json({ error: "Failed to confirm payment", detail: err.message });
+  }
+}
+
 /** POST /api/payment/callback — webhook Midtrans (PRODUCTION) */
 export async function midtransCallback(req: Request, res: Response) {
   const {
@@ -128,7 +194,8 @@ export async function midtransCallback(req: Request, res: Response) {
       ctx.userId,
       ctx.orderType,
       transaction_id,
-      ctx.orderType === "registration"
+      ctx.orderType === "registration",
+      ctx.packageType
     );
     console.log("[Midtrans] Payment processed:", result);
     return res.status(200).send("OK");

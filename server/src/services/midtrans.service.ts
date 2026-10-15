@@ -49,7 +49,12 @@ export async function createSnapToken(payload: PaymentPayload): Promise<string> 
       gross_amount,
     },
     customer_details: { email: `user_${userId}@example.com` },
-    enabled_payments: ['bank_transfer', 'echannel', 'gopay', 'ovo', 'dana'],
+    enabled_payments: [
+      'credit_card', 'bank_transfer', 'echannel', 'gopay', 'ovo', 'dana',
+      'qris', 'cimb_clicks', 'bca_klikbca', 'bri_epay', 'uob_epay',
+      'akulaku', 'shopeepay', 'indomaret', 'alfamart', 'danamon_online',
+      'permata_va', 'bca_va', 'bni_va', 'bri_va', 'mandiri_clickpay',
+    ],
   };
 
   const token: string = await snap.createTransactionToken(parameter);

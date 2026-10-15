@@ -133,7 +133,26 @@
   100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
 }
 
+/* Fase 2.3 — Realtime Hardening: flash harga saat nilai berubah */
+@keyframes flashUp {
+  0% { background-color: rgba(57,255,136,0.28); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashDown {
+  0% { background-color: rgba(255,56,100,0.28); }
+  100% { background-color: transparent; }
+}
+
 @layer utilities {
+  .flash-up {
+    animation: flashUp 600ms ease-out;
+  }
+
+  .flash-down {
+    animation: flashDown 600ms ease-out;
+  }
+
   .scrollbar-hide {
     scrollbar-width: none;
     -ms-overflow-style: none;

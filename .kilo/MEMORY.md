@@ -19,6 +19,7 @@
   - System tray untuk background operation.
   - Bisa diakses dari browser desktop/mobile di jaringan yang sama.
   - Installer .exe via `electron-builder` + NSIS.
+  - **First-Run Setup Wizard**: Jika `server.env` tidak ada di `%APPDATA%/hunter-trades/`, setup window muncul untuk mengisi konfigurasi (DATABASE_URL, BETTER_AUTH_SECRET, DISCORD_*, 9Router). Config disimpan ke `server.env` dan startup lanjut normal.
 - **Backend**: Express server (port 5000) + WebSocket server. MongoDB Atlas (cloud).
 - **Frontend**: Next.js standalone (port 3000). API proxy ke backend via rewrites.
 - **MT5 Integration**:
@@ -85,6 +86,15 @@
 8. **Macro Regime Detection** — VIX, yield curve, geo risk monitoring
 9. **Playbook System** — Dokumentasi strategi trading pribadi
 10. **GitHub Releases Auto-Update** — electron-updater
+
+## Macro Terminal — Charting, Palette, Screener & Realtime (Fase 1–3)
+- **Charting** (`components/macro-terminal/MacroPriceChart.tsx`): lightweight-charts v5, 3 pane (candle+overlay / volume / oscillator), 8 timeframe, 6 indikator (SMA/EMA/VWAP/BB/RSI/MACD). Fungsi indikator murni di `frontend/src/lib/indicators.ts`.
+- **Command Palette** (`Ctrl+K`): registry + fuzzy filter di `lib/commands.ts` (pure — `createContext` juga di sini untuk memutus circular import hook↔overlay), provider `hooks/useCommandPalette.tsx`, overlay `components/macro-terminal/CommandPalette.tsx`. Wiring di `layout.tsx`: **sudah di Overview** → kirim event DOM `macro:open-instrument` (chart sudah mendengarkan); **dari tab lain** → simbol ditulis ke `sessionStorage` (`PENDING_INSTRUMENT_KEY`) lalu `router.push("/macro-terminal/overview")`, dan chart membacanya sekali saat mount. Chart menunda fetch pertama dengan flag `pendingChecked` supaya tidak fetch simbol default dulu.
+- **Screener + Sparkline**: `MacroScreener.tsx` (tabel 8 instrumen, sort semua kolom, filter kategori, sparkline inline, tombol buka chart) + `Sparkline.tsx` (SVG `polyline` murni, tanpa library chart tambahan). Dipasang di tab Intelligence — di **dua branch** (legacy + widget workspace). **WAJIB full-width, di LUAR grid 5 kolom**: tabelnya punya 7 kolom, dan sebagai anak grid tanpa `col-span` ia hanya mendapat 1 kolom (~280px) sehingga kolom Harga/Chg/Sparkline/Aksi terpotong. Di branch workspace slot-nya `{ i: "macro-screener", w: 12 }` di `DEFAULT_LAYOUTS.intelligence`.
+- **Realtime Hardening (Fase 2.3)**: `hooks/useAdaptivePolling.ts` — polling pause saat tab hidden atau panel di luar viewport (IntersectionObserver, dengan guard `typeof === "undefined"` untuk jsdom/SSR), resume instan saat kembali aktif. `hooks/useFlashOnChange.ts` — kelas `flash-up`/`flash-down` 600ms saat nilai berubah; keyframes di `app/globals.css` `@layer utilities`.
+- **Backend provider modular** (`server/src/services/macro/providers/`): `yahoo`, `stooq`, `mt5`, `fred` (candle/quote) + `tradingview` (economic calendar), `finnhub` & `rss` (news). `macro-data.service.ts` hanya orkestrasi + cache + ingest.
+- **Status**: seluruh Fase 1–3 ada di source **dan sudah ter-bundle di EXE** (`desktop/dist-app/win-unpacked`, BUILD_ID `wGsXGt6-xpiI1KIvC3npL`). Test: frontend 164, server 109. `SCHEMA_VERSION` workspace = **3** (bump saat menambah slot `macro-screener`).
+- **Temuan yang BELUM dikerjakan**: `MacroPriceChart` hanya terpasang di branch **legacy** `overview/page.tsx`. `DEFAULT_LAYOUTS.overview` (widget workspace) **tidak punya slot `price-chart`**, jadi bila flag `NEXT_PUBLIC_WIDGET_WORKSPACE_ENABLED` dinyalakan, chart hilang dan wiring Command Palette ikut mati di branch itu. Perbaikannya butuh: entry `price-chart` di `DEFAULT_LAYOUTS.overview` + geser `y` enam widget lain, `WidgetShell` di `WidgetGrid`, dan bump `SCHEMA_VERSION` lagi.
 
 ## Development Constraints
 - User benci delay → semua harus real-time

@@ -10,12 +10,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   MacroTerminalProvider,
   useMacroTerminal,
 } from "@/components/macro-terminal/MacroTerminalContext";
 import { ErrorBoundary } from "@/components/macro-terminal/ErrorBoundary";
+import { CommandPaletteProvider } from "@/hooks/useCommandPalette";
+import { CommandPaletteOverlay } from "@/components/macro-terminal/CommandPalette";
+import { PENDING_INSTRUMENT_KEY } from "@/services/macro-candles.service";
 
 const TABS = [
   { name: "Overview", path: "/macro-terminal/overview" },
@@ -148,6 +151,7 @@ function MarketStatusBar() {
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     refreshSnapshot,
   } = useMacroTerminal();
@@ -162,9 +166,46 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /**
+   * Command Palette → buka instrumen di chart.
+   * Chart hanya ada di tab Overview, jadi:
+   *  - sudah di Overview → kirim event (chart sudah mendengarkan)
+   *  - belum → simpan simbol lalu pindah tab; chart membacanya saat mount
+   */
+  const handleSelectInstrument = React.useCallback(
+    (symbol: string) => {
+      if (pathname.startsWith("/macro-terminal/overview")) {
+        window.dispatchEvent(
+          new CustomEvent("macro:open-instrument", { detail: { symbol } })
+        );
+        return;
+      }
+
+      try {
+        sessionStorage.setItem(PENDING_INSTRUMENT_KEY, symbol);
+      } catch {
+        /* sessionStorage diblokir — chart akan memakai simbol default */
+      }
+      router.push("/macro-terminal/overview");
+    },
+    [pathname, router]
+  );
+
   return (
-    <div className="flex flex-col w-full gap-4">
-      <div className="flex items-center justify-between shrink-0">
+    <CommandPaletteProvider
+      onRefreshAll={() => void handleRefresh()}
+      onSelectInstrument={handleSelectInstrument}
+      onToggleWidget={(widgetId) =>
+        window.dispatchEvent(
+          new CustomEvent("macro:toggle-widget", { detail: { widgetId } })
+        )
+      }
+      onResetLayout={() =>
+        window.dispatchEvent(new CustomEvent("macro:reset-layout"))
+      }
+    >
+      <div className="flex flex-col w-full gap-4">
+        <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent-gold/10 border border-accent-gold/20">
             <Activity className="w-6 h-6 text-accent-gold" />
@@ -204,7 +245,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
               className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-mono text-sm transition-colors border-b-2 whitespace-nowrap ${
                   isActive
                     ? "border-data-profit text-data-profit bg-data-profit/5 shadow-[0_-1px_0_rgba(57,255,136,0.35)]"
-                    : "border-transparent text-text-muted hover:text-text-main hover:bg-surface-elevated/50"
+                    : "border-transparent text-text-muted hover:text-text-primary hover:bg-bg-elevated/50"
               }`}
             >
               {tab.name}
@@ -215,7 +256,11 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
       {/* Children (Overview, COT, etc.) will render here */}
       <div className="flex-1 min-h-0 flex flex-col">{children}</div>
-    </div>
+      </div>
+
+      {/* Command Palette overlay (⌘K) */}
+      <CommandPaletteOverlay />
+    </CommandPaletteProvider>
   );
 }
 

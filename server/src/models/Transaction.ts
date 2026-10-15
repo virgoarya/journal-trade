@@ -14,7 +14,7 @@ export interface ITransaction extends Document {
 
 const TransactionSchema = new Schema<ITransaction>({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  type: { type: String, enum: ['registration', 'token_topup', 'consumption', 'refund'], required: true },
+  type: { type: String, enum: ['registration', 'token_topup', 'package', 'consumption', 'refund'], required: true },
   amount: { type: Number, required: true },
   currency: { type: String, enum: ['IDR', 'USD'], default: 'IDR' },
   status: { type: String, enum: ['completed', 'pending', 'failed'], default: 'pending' },

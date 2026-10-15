@@ -107,7 +107,7 @@ export function VixRegimePanel() {
                   ? "text-data-warning border-data-warning/30 bg-data-warning/10"
                   : dataStatus.quant === "error"
                     ? "text-data-loss border-data-loss/30 bg-data-loss/10"
-                    : "text-text-muted border-border-subtle bg-surface-elevated/50"
+                    : "text-text-muted border-border-subtle bg-bg-elevated/50"
           }`}
         >
           {dataStatus.quant.toUpperCase()}
@@ -166,7 +166,7 @@ export function VixRegimePanel() {
           </p>
         </div>
 
-        <div className="w-full max-w-[320px] h-2.5 bg-surface-elevated rounded-full overflow-hidden relative border border-border-subtle">
+        <div className="w-full max-w-[320px] h-2.5 bg-bg-elevated rounded-full overflow-hidden relative border border-border-subtle">
           <div
             className="absolute inset-y-0 left-0 rounded-full"
             style={{
@@ -187,7 +187,7 @@ export function VixRegimePanel() {
           <span>30+</span>
         </div>
 
-        <div className="w-full max-w-[320px] mt-6 border border-border-subtle bg-surface-elevated/20 rounded-lg p-3">
+        <div className="w-full max-w-[320px] mt-6 border border-border-subtle bg-bg-elevated/20 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[9px] text-text-muted font-mono uppercase tracking-widest">
               30D VIX History

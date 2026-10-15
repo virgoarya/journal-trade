@@ -11,8 +11,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.test.ts", "src/services/strategies/crt.strategy.ts"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.bak", "src/services/strategies/crt.strategy.ts"]
 }

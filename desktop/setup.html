@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hunter Trades — First Run Setup</title>
+  <style>
+    :root {
+      --bg: #0A0A0A;
+      --bg-card: #121212;
+      --bg-input: #1E1E1E;
+      --border: #2A2A2A;
+      --gold: #D4AF37;
+      --gold-hover: #E5C04B;
+      --text: #E0E0E0;
+      --text-muted: #888;
+      --error: #FF4444;
+      --success: #44FF88;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 560px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--gold);
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    label .required {
+      color: var(--error);
+      margin-left: 2px;
+    }
+    input[type="text"], input[type="password"], input[type="url"] {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    input::placeholder {
+      color: #555;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--gold);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 8px;
+    }
+    .btn:hover {
+      background: var(--gold-hover);
+    }
+    .btn:disabled {
+      background: #555;
+      color: #888;
+      cursor: not-allowed;
+    }
+    .error-msg {
+      color: var(--error);
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+    .success-msg {
+      color: var(--success);
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+    .section {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section:last-of-type {
+      border-bottom: none;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hunter Trades</h1>
+    <p class="subtitle">First Run Setup — Lengkapi konfigurasi berikut untuk memulai aplikasi.</p>
+
+    <div class="section">
+      <div class="section-title">Database (MongoDB)</div>
+      <div class="form-group">
+        <label>Database URL <span class="required">*</span></label>
+        <input type="text" id="DATABASE_URL" placeholder="mongodb+srv://user:pass@cluster.mongodb.net/journal_trade" />
+        <p class="hint">MongoDB Atlas connection string atau local MongoDB</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Better Auth (Discord OAuth)</div>
+      <div class="form-group">
+        <label>Auth Secret <span class="required">*</span></label>
+        <input type="password" id="BETTER_AUTH_SECRET" placeholder="Min. 32 karakter random string" />
+        <p class="hint">Generate dengan: openssl rand -base64 32</p>
+      </div>
+      <div class="form-group">
+        <label>Encryption Key <span class="required">*</span></label>
+        <input type="password" id="ENCRYPTION_KEY" placeholder="Min. 32 karakter random string" />
+        <p class="hint">Untuk encrypt credentials di database. Generate dengan: openssl rand -base64 32</p>
+      </div>
+      <div class="form-group">
+        <label>Discord Client ID <span class="required">*</span></label>
+        <input type="text" id="DISCORD_CLIENT_ID" placeholder="Discord Application Client ID" />
+      </div>
+      <div class="form-group">
+        <label>Discord Client Secret <span class="required">*</span></label>
+        <input type="password" id="DISCORD_CLIENT_SECRET" placeholder="Discord Application Client Secret" />
+      </div>
+      <div class="form-group">
+        <label>Discord Guild ID <span class="required">*</span></label>
+        <input type="text" id="DISCORD_GUILD_ID" placeholder="Discord Server ID untuk verifikasi membership" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Midtrans Payment Gateway</div>
+      <div class="form-group">
+        <label>Midtrans Server Key <span class="required">*</span></label>
+        <input type="password" id="MIDTRANS_SERVER_KEY" placeholder="Midtrans Server Key (dari dashboard.midtrans.com)" />
+        <p class="hint">Ambil dari Midtrans Dashboard → Settings → Access Keys</p>
+      </div>
+      <div class="form-group">
+        <label>Midtrans Environment <span class="required">*</span></label>
+        <select id="MIDTRANS_ENV" style="width:100%;padding:10px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
+          <option value="sandbox">Sandbox (Testing)</option>
+          <option value="production">Production (Live)</option>
+        </select>
+        <p class="hint">Pilih sandbox untuk testing, production untuk live</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">AI Gateway (9Router)</div>
+      <div class="form-group">
+        <label>9Router URL</label>
+        <input type="text" id="NINE_ROUTER_URL" placeholder="http://127.0.0.1:20128/v1" />
+        <p class="hint">Default: http://127.0.0.1:20128/v1</p>
+      </div>
+      <div class="form-group">
+        <label>9Router API Key</label>
+        <input type="password" id="NINE_ROUTER_API_KEY" placeholder="Opsional — kosongkan jika tidak butuh" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Macro Data (FRED API)</div>
+      <div class="form-group">
+        <label>FRED API Key</label>
+        <input type="password" id="FRED_API_KEY" placeholder="FRED API Key dari research.stlouisfed.org" />
+        <p class="hint">Opsional — diperlukan untuk data Macro Terminal (Liquidity Flow, Yield Curve, Nexus, Geo Risk). Dapatkan gratis di https://research.stlouisfed.org/docs/api/api_key.html</p>
+      </div>
+    </div>
+
+    <button class="btn" id="saveBtn" onclick="saveConfig()">Save & Launch</button>
+    <p class="error-msg" id="errorMsg"></p>
+    <p class="success-msg" id="successMsg"></p>
+  </div>
+
+  <script>
+    async function saveConfig() {
+      const btn = document.getElementById('saveBtn');
+      const errorMsg = document.getElementById('errorMsg');
+      const successMsg = document.getElementById('successMsg');
+
+      btn.disabled = true;
+      errorMsg.style.display = 'none';
+      successMsg.style.display = 'none';
+
+      const config = {
+        DATABASE_URL: document.getElementById('DATABASE_URL').value.trim(),
+        BETTER_AUTH_SECRET: document.getElementById('BETTER_AUTH_SECRET').value.trim(),
+        ENCRYPTION_KEY: document.getElementById('ENCRYPTION_KEY').value.trim(),
+        DISCORD_CLIENT_ID: document.getElementById('DISCORD_CLIENT_ID').value.trim(),
+        DISCORD_CLIENT_SECRET: document.getElementById('DISCORD_CLIENT_SECRET').value.trim(),
+        DISCORD_GUILD_ID: document.getElementById('DISCORD_GUILD_ID').value.trim(),
+        MIDTRANS_SERVER_KEY: document.getElementById('MIDTRANS_SERVER_KEY').value.trim(),
+        MIDTRANS_ENV: document.getElementById('MIDTRANS_ENV').value.trim(),
+        NINE_ROUTER_URL: document.getElementById('NINE_ROUTER_URL').value.trim() || 'http://127.0.0.1:20128/v1',
+        NINE_ROUTER_API_KEY: document.getElementById('NINE_ROUTER_API_KEY').value.trim(),
+        FRED_API_KEY: document.getElementById('FRED_API_KEY').value.trim(),
+      };
+
+      // Client-side validation
+      const required = ['DATABASE_URL', 'BETTER_AUTH_SECRET', 'ENCRYPTION_KEY', 'DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_GUILD_ID', 'MIDTRANS_SERVER_KEY', 'MIDTRANS_ENV'];
+      for (const key of required) {
+        if (!config[key]) {
+          errorMsg.textContent = `Field "${key}" wajib diisi.`;
+          errorMsg.style.display = 'block';
+          btn.disabled = false;
+          return;
+        }
+      }
+
+      try {
+        const result = await window.setupWizard.saveConfig(config);
+        if (result.success) {
+          successMsg.textContent = 'Configuration saved! Launching Hunter Trades...';
+          successMsg.style.display = 'block';
+          setTimeout(() => {
+            window.setupWizard.onComplete();
+          }, 1500);
+        } else {
+          errorMsg.textContent = result.error || 'Failed to save configuration.';
+          errorMsg.style.display = 'block';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Error: ' + err.message;
+        errorMsg.style.display = 'block';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

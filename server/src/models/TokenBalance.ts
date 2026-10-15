@@ -10,7 +10,7 @@ export interface ITokenBalance extends Document {
 }
 
 const TokenBalanceSchema = new Schema<ITokenBalance>({
-  user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
+  user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   balance: { type: Number, default: 0 },
   last_updated: { type: Date, default: Date.now },
   monthly_reset_date: { type: Date },
@@ -18,7 +18,7 @@ const TokenBalanceSchema = new Schema<ITokenBalance>({
   refill_count: { type: Number, default: 0 },
 }, {
   timestamps: false,
-  collection: "token_balances",
+  collection: "tokenbalances",
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });

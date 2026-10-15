@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createPaymentToken,
   checkStatus,
+  confirmPayment,
   midtransCallback,
   getPaymentStatusHandler,
 } from "../controllers/midtrans.controller";
@@ -15,7 +16,8 @@ const createTokenSchema = z.object({
   userId: z.string().min(1),
   amountIDR: z.number().positive(),
   isBooster: z.boolean().optional(),
-  orderType: z.enum(["registration", "token_topup"]),
+  orderType: z.enum(["registration", "token_topup", "package"]),
+  packageType: z.enum(["basic", "pro", "premium"]).optional(),
 });
 
 const orderIdParamSchema = z.object({
@@ -35,6 +37,9 @@ router.get(
   validate({ params: orderIdParamSchema }),
   checkStatus
 );
+
+/** POST /api/payment/confirm — finalisasi pembayaran dari client (fallback webhook) */
+router.post("/confirm", confirmPayment);
 
 /** POST /api/payment/callback — webhook Midtrans */
 router.post("/callback", midtransCallback);

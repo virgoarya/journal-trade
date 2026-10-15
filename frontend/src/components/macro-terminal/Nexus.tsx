@@ -1335,7 +1335,7 @@ export default function Nexus() {
           <div className="flex items-center gap-2">
             <button
               onClick={exportDeskBrief}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-border-subtle bg-surface-elevated/40 text-text-muted hover:text-accent-gold hover:border-accent-gold/40 transition-all shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border border-border-subtle bg-bg-elevated/40 text-text-muted hover:text-accent-gold hover:border-accent-gold/40 transition-all shrink-0"
             >
               <Layers className="w-3 h-3" />
               Export Desk Brief

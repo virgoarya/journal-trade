@@ -8,12 +8,14 @@ interface TokenRefillModalProps {
   userId: string;
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 export default function TokenRefillModal({
   userId,
   isOpen,
   onClose,
+  onSuccess,
 }: TokenRefillModalProps) {
   const [loading, setLoading] = useState(false);
 
@@ -44,12 +46,26 @@ export default function TokenRefillModal({
       }
 
       snap.pay(data.token, {
-        onSuccess: (result: any) => {
-          toast.success("Token berhasil diisi ulang!");
-          onClose();
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+        onSuccess: async (result: any) => {
+          try {
+            const confirmRes = await fetch("/api/v1/payment/confirm", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId: data.orderId }),
+            });
+            if (!confirmRes.ok) {
+              const errData = await confirmRes.json().catch(() => ({}));
+              throw new Error(errData.error || "Gagal konfirmasi pembayaran");
+            }
+            toast.success("Token berhasil diisi ulang!");
+            onClose();
+            onSuccess?.();
+          } catch (err: any) {
+            console.error("[TokenRefillModal] Confirm error:", err.message);
+            toast.error("Pembayaran berhasil tapi gagal konfirmasi: " + err.message);
+            onClose();
+            onSuccess?.();
+          }
         },
         onPending: (result: any) => {
           toast.info("Pembayaran tertunda. Silahkan selesaikan di Midtrans.");
@@ -59,9 +75,18 @@ export default function TokenRefillModal({
               const status = await res.json();
               if (status.transaction_status === "settlement" || status.transaction_status === "capture") {
                 clearInterval(pollInterval);
+                try {
+                  await fetch("/api/v1/payment/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ orderId: data.orderId }),
+                  });
+                } catch (e) {
+                  console.error("[TokenRefillModal] Pending confirm error:", e);
+                }
                 toast.success("Pembayaran berhasil diproses!");
                 onClose();
-                window.location.reload();
+                onSuccess?.();
               }
             } catch (error) {
               console.error("Polling error:", error);
@@ -85,7 +110,11 @@ export default function TokenRefillModal({
     }
   };
 
-  if (process.env.NODE_ENV === "development") return null;
+  // Dev bypass: hide the real payment UI in development unless ?full=1 is present
+  const devBlocked =
+    process.env.NODE_ENV === "development" &&
+    (typeof window === "undefined" || !new URLSearchParams(window.location.search).get("full"));
+  if (devBlocked) return null;
   if (!isOpen) return null;
 
   return (

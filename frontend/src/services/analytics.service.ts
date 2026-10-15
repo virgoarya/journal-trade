@@ -47,6 +47,27 @@ export interface AnalyticsData {
   totalTrades: number;
   winRate: number;
   profitFactor: number;
+  winCount: number;
+  lossCount: number;
+  breakevenCount: number;
+  avgTradePnl: number;
+  avgDailyPnl: number;
+  avgWinningTrade: number;
+  avgLosingTrade: number;
+  largestProfit: number;
+  largestLoss: number;
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
+  avgWinningDayPnl: number;
+  avgLosingDayPnl: number;
+  largestProfitableDay: number;
+  largestLosingDay: number;
+  avgDailyVolume: number;
+  totalCommission: number;
+  totalSwap: number;
+  totalFees: number;
+  openTrades: number;
+  loggedDays: number;
   bestPerformingPairs: Array<{ pair: string; pnl: number; winRate: number }>;
   riskMetrics: {
     sharpeRatio: number;

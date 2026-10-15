@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BarChart3, TrendingUp, TrendingDown, Calendar, DollarSign, Percent, Target, Activity, Award, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Calendar, DollarSign, Target, Activity, Award, Loader2 } from "lucide-react";
 import { analyticsService, type AnalyticsData } from "@/services/analytics.service";
 import { Heatmap } from "@/components/analytics/Heatmap";
 import { EquityCurveChart } from "@/components/analytics/EquityCurveChart";
@@ -105,8 +105,29 @@ export default function AnalyticsPage() {
     totalTrades: 0,
     winRate: 0,
     profitFactor: 0,
+    winCount: 0,
+    lossCount: 0,
+    breakevenCount: 0,
+    avgTradePnl: 0,
+    avgDailyPnl: 0,
+    avgWinningTrade: 0,
+    avgLosingTrade: 0,
+    largestProfit: 0,
+    largestLoss: 0,
+    maxConsecutiveWins: 0,
+    maxConsecutiveLosses: 0,
+    avgWinningDayPnl: 0,
+    avgLosingDayPnl: 0,
+    largestProfitableDay: 0,
+    largestLosingDay: 0,
+    avgDailyVolume: 0,
+    totalCommission: 0,
+    totalSwap: 0,
+    totalFees: 0,
+    openTrades: 0,
+    loggedDays: 0,
     bestPerformingPairs: [],
-    riskMetrics: { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0 },
+    riskMetrics: { sharpeRatio: 0, maxDrawdown: 0, avgRR: 0, expectancy: 0, avgWin: 0, avgLoss: 0 },
     tradingBehaviour: { avgTradeDuration: "0h 0m", avgPnlPerTrade: 0, tradesPerDay: 0, planAdherence: 0 }
   };
 
@@ -171,38 +192,96 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Key Metrics */}
+      {/* Summary Cards - 8 metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass p-4 border-b-2 border-accent-gold/20">
-          <div className="flex items-center text-text-secondary mb-2">
-            <DollarSign className="w-4 h-4 mr-2 text-accent-gold" />
-            <span className="text-[10px] uppercase tracking-[0.15em]">Total P&L</span>
+        {[
+          { label: "Total P&L", value: displayData.totalPnL, prefix: displayData.totalPnL >= 0 ? "+" : "", suffix: "", color: displayData.totalPnL >= 0 ? "text-data-profit" : "text-data-loss" },
+          { label: "Avg Trade P&L", value: displayData.avgTradePnl, prefix: displayData.avgTradePnl >= 0 ? "+" : "", suffix: "", color: displayData.avgTradePnl >= 0 ? "text-data-profit" : "text-data-loss" },
+          { label: "Avg Daily P&L", value: displayData.avgDailyPnl, prefix: displayData.avgDailyPnl >= 0 ? "+" : "", suffix: "", color: displayData.avgDailyPnl >= 0 ? "text-data-profit" : "text-data-loss" },
+          { label: "Largest Profit", value: displayData.largestProfit, prefix: "+", suffix: "", color: "text-data-profit" },
+          { label: "Largest Loss", value: displayData.largestLoss, prefix: "", suffix: "", color: "text-data-loss" },
+          { label: "Total Trades", value: displayData.totalTrades, prefix: "", suffix: "", color: "text-text-primary" },
+          { label: "Winning Trades", value: displayData.winCount, prefix: "", suffix: "", color: "text-data-profit" },
+          { label: "Losing Trades", value: displayData.lossCount, prefix: "", suffix: "", color: "text-data-loss" },
+        ].map((card) => (
+          <div key={card.label} className="glass p-4 border-b-2 border-accent-gold/20">
+            <p className="text-[10px] uppercase tracking-[0.15em] text-text-secondary mb-2">{card.label}</p>
+            <p className={`font-mono text-xl font-bold ${card.color}`}>
+              {card.prefix}{typeof card.value === "number" ? card.value.toLocaleString() : card.value}{card.suffix}
+            </p>
           </div>
-          <p className={`font-mono text-xl font-bold ${displayData.totalPnL >= 0 ? "text-data-profit" : "text-data-loss"}`}>
-            {displayData.totalPnL >= 0 ? "+" : ""}${displayData.totalPnL.toLocaleString()}
-          </p>
-        </div>
-        <div className="glass p-4 border-b-2 border-accent-gold/20">
-          <div className="flex items-center text-text-secondary mb-2">
-            <Percent className="w-4 h-4 mr-2 text-accent-gold" />
-            <span className="text-[10px] uppercase tracking-[0.15em]">Win Rate</span>
+        ))}
+      </div>
+
+      {/* P&L Monthly Chart */}
+      <div className="glass p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-semibold text-text-primary">Profit & Loss</h3>
+          <div className="flex items-center gap-2 text-[10px] text-text-muted uppercase tracking-widest">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-data-profit inline-block"></span>Win</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-data-loss inline-block"></span>Loss</span>
           </div>
-          <p className="font-mono text-xl font-bold text-data-profit">{displayData.winRate.toFixed(1)}%</p>
         </div>
-        <div className="glass p-4 border-b-2 border-accent-gold/20">
-          <div className="flex items-center text-text-secondary mb-2">
-            <Activity className="w-4 h-4 mr-2 text-accent-gold" />
-            <span className="text-[10px] uppercase tracking-[0.15em]">Profit Factor</span>
+        <div className="flex items-end justify-between h-48 gap-2 px-2 relative">
+          <div className="absolute inset-0 flex flex-col justify-between opacity-5">
+            {[0, 1, 2, 3, 4].map(i => <div key={i} className="w-full border-t border-white" />)}
           </div>
-          <p className="font-mono text-xl font-bold text-accent-gold">{displayData.profitFactor.toFixed(2)}</p>
+          {displayData.monthlyPnL.length > 0 ? displayData.monthlyPnL.map((item, idx) => {
+            const maxVal = Math.max(...displayData.monthlyPnL.map(d => Math.abs(d.pnl)), 1);
+            const height = (Math.abs(item.pnl) / maxVal) * 100;
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center group relative z-10">
+                <div
+                  className="w-full rounded-t-sm transition-all duration-500 group-hover:brightness-125"
+                  style={{
+                    height: `${height}%`,
+                    backgroundColor: item.pnl >= 0 ? "#D4AF37" : "#FF1744",
+                    minHeight: Math.abs(item.pnl) > 0 ? "4px" : "0",
+                  }}
+                >
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-surface border border-accent-gold/20 px-2 py-1 rounded text-[9px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-20 shadow-xl font-mono">
+                    ${item.pnl.toLocaleString()}
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-text-muted mt-2 group-hover:text-accent-gold transition-colors">{item.month}</span>
+              </div>
+            );
+          }) : (
+            <div className="w-full h-full flex items-center justify-center text-text-muted text-sm uppercase tracking-widest font-mono opacity-30">No Data</div>
+          )}
         </div>
-        <div className="glass p-4 border-b-2 border-accent-gold/20">
-          <div className="flex items-center text-text-secondary mb-2">
-            <Target className="w-4 h-4 mr-2 text-accent-gold" />
-            <span className="text-[10px] uppercase tracking-[0.15em]">Total Trades</span>
+        <div className="flex justify-between mt-4 text-[10px] text-text-muted">
+          <span>Net Total P&L: <span className={displayData.totalPnL >= 0 ? "text-data-profit" : "text-data-loss"}>{displayData.totalPnL >= 0 ? "+" : ""}${displayData.totalPnL.toLocaleString()}</span></span>
+          <span>{displayData.winCount} Win / {displayData.lossCount} Loss / {displayData.breakevenCount} Breakeven</span>
+        </div>
+      </div>
+
+      {/* Detailed Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Avg. Winning Trade", value: `$${displayData.avgWinningTrade.toLocaleString()}` },
+          { label: "Avg. Losing Trade", value: `-$${Math.abs(displayData.avgLosingTrade).toLocaleString()}` },
+          { label: "Avg Winning Day P&L", value: `$${displayData.avgWinningDayPnl.toLocaleString()}` },
+          { label: "Avg Losing Day P&L", value: `-$${Math.abs(displayData.avgLosingDayPnl).toLocaleString()}` },
+          { label: "Max Consecutive Wins", value: displayData.maxConsecutiveWins },
+          { label: "Max Consecutive Losses", value: displayData.maxConsecutiveLosses },
+          { label: "Largest Profitable Day", value: `$${displayData.largestProfitableDay.toLocaleString()}` },
+          { label: "Largest Losing Day", value: `-$${Math.abs(displayData.largestLosingDay).toLocaleString()}` },
+          { label: "Avg Daily Volume", value: displayData.avgDailyVolume.toFixed(2) },
+          { label: "Total Commission", value: `-$${Math.abs(displayData.totalCommission).toLocaleString()}` },
+          { label: "Total Swap", value: `-$${Math.abs(displayData.totalSwap).toLocaleString()}` },
+          { label: "Trade Expectancy", value: `$${displayData.riskMetrics.expectancy.toLocaleString()}` },
+          { label: "Total Fees", value: `-$${Math.abs(displayData.totalFees).toLocaleString()}` },
+          { label: "Profit Factor", value: displayData.profitFactor.toFixed(2) },
+          { label: "Logged Days", value: displayData.loggedDays },
+          { label: "Open Trades", value: displayData.openTrades },
+          { label: "Win Rate", value: `${displayData.winRate.toFixed(1)}%` },
+        ].map((stat) => (
+          <div key={stat.label} className="glass p-3 border-b border-accent-gold/10">
+            <p className="text-[9px] uppercase tracking-[0.15em] text-text-secondary mb-1">{stat.label}</p>
+            <p className="font-mono text-sm font-bold text-text-primary">{stat.value}</p>
           </div>
-          <p className="font-mono text-xl font-bold text-text-primary">{displayData.totalTrades}</p>
-        </div>
+        ))}
       </div>
 
       {/* Main Charts Grid */}

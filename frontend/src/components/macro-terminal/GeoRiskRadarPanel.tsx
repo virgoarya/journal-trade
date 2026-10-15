@@ -292,21 +292,21 @@ function SkeletonPanel() {
   return (
     <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4 animate-pulse">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-3.5 h-3.5 bg-surface-elevated rounded" />
-        <div className="w-28 h-3 bg-surface-elevated rounded" />
+        <div className="w-3.5 h-3.5 bg-bg-elevated rounded" />
+        <div className="w-28 h-3 bg-bg-elevated rounded" />
       </div>
       <div className="flex gap-3 mb-3">
-        <div className="w-[72px] h-[72px] bg-surface-elevated rounded-full" />
+        <div className="w-[72px] h-[72px] bg-bg-elevated rounded-full" />
         <div className="flex-1 space-y-2 py-2">
-          <div className="w-full h-2 bg-surface-elevated rounded" />
-          <div className="w-3/4 h-2 bg-surface-elevated rounded" />
-          <div className="w-1/2 h-2 bg-surface-elevated rounded" />
+          <div className="w-full h-2 bg-bg-elevated rounded" />
+          <div className="w-3/4 h-2 bg-bg-elevated rounded" />
+          <div className="w-1/2 h-2 bg-bg-elevated rounded" />
         </div>
       </div>
-      <div className="flex-1 bg-surface-elevated/30 rounded-lg" />
+      <div className="flex-1 bg-bg-elevated/30 rounded-lg" />
       <div className="space-y-2 mt-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-12 bg-surface-elevated/40 rounded-lg" />
+          <div key={i} className="h-12 bg-bg-elevated/40 rounded-lg" />
         ))}
       </div>
     </div>
@@ -676,7 +676,7 @@ export function GeoRiskRadarPanel() {
                       </div>
                       <div className="flex items-center gap-2">
                         {rawVal !== null && (
-                          <span className="text-[10px] font-mono text-slate-400 bg-surface-elevated/80 px-1.5 py-0.5 rounded border border-border-subtle/60">
+                          <span className="text-[10px] font-mono text-slate-400 bg-bg-elevated/80 px-1.5 py-0.5 rounded border border-border-subtle/60">
                             {config.rawLabel}:{" "}
                             <span className="text-[11px] font-bold text-slate-200">
                               {config.rawFormat(rawVal)}
@@ -696,7 +696,7 @@ export function GeoRiskRadarPanel() {
                       </div>
                     </div>
                     {/* Progress bar with dynamic gradient */}
-                    <div className="w-full h-1.5 bg-surface-elevated/90 rounded-full overflow-hidden mb-1 border border-border-subtle/40">
+                    <div className="w-full h-1.5 bg-bg-elevated/90 rounded-full overflow-hidden mb-1 border border-border-subtle/40">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{

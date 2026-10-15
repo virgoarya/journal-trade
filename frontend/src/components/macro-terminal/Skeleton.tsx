@@ -10,7 +10,7 @@ type SkeletonProps = {
 };
 
 export function Skeleton({ className, variant = "rect", lines = 1 }: SkeletonProps) {
-  const baseClasses = "bg-surface-elevated animate-pulse";
+  const baseClasses = "bg-bg-elevated animate-pulse";
 
   const getVariantClasses = () => {
     switch (variant) {

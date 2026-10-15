@@ -1,6 +1,6 @@
 {
   "name": "journal-trade",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Hunter Trades — Journal Trade monorepo (server / frontend / desktop)",
   "scripts": {
@@ -9,6 +9,14 @@
     "build:frontend": "npm --prefix frontend run build",
     "build:desktop": "npm --prefix desktop run build:pack",
     "build:all": "npm run build && npm run build:desktop",
+    "mobile:get": "cd mobile && flutter pub get",
+    "mobile:l10n": "cd mobile && flutter gen-l10n",
+    "mobile:analyze": "cd mobile && flutter analyze",
+    "mobile:test": "cd mobile && flutter test",
+    "mobile:run": "cd mobile && flutter run",
+    "mobile:web": "cd mobile && flutter run -d chrome",
+    "mobile:build:web": "cd mobile && flutter build web --release",
+    "mobile:build:apk": "cd mobile && flutter build apk --release",
     "test": "npm run test:server && npm run test:frontend",
     "test:server": "npm --prefix server test",
     "test:frontend": "npm --prefix frontend test",

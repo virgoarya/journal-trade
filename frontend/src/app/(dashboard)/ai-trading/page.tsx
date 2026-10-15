@@ -61,20 +61,21 @@ function AITradingPageContent() {
 
   // ── Payment Gate Logic ─────────────────────────────────────────────────
   const userId = session?.user?.id;
-  const { status: paymentStatus, loading: paymentLoading, gateAction } = usePaymentGate(userId);
+  // ?full=1 forces the real payment flow even in development
+  const forceFullFlow = !!searchParams.get("full");
+  const { status: paymentStatus, loading: paymentLoading, gateAction, refetch: refetchPaymentStatus } = usePaymentGate(userId, forceFullFlow);
 
   // Modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showRefillModal, setShowRefillModal] = useState(false);
   const [paymentPackage, setPaymentPackage] = useState<"package" | "token_topup" | "none">("package");
   const [paymentIsBooster, setPaymentIsBooster] = useState(false);
+  const [paymentDismissed, setPaymentDismissed] = useState(false);
 
   // Close modal handler
   const handleClosePaymentModal = () => {
     setShowPaymentModal(false);
-    if (paymentPackage === "package") {
-      router.push("/dashboard");
-    }
+    setPaymentDismissed(true);
   };
 
   // ── Original Logic ─────────────────────────────────────────────────────
@@ -119,14 +120,27 @@ function AITradingPageContent() {
       return;
     }
 
-    if (gateAction === "package" && !paymentLoading && !showPaymentModal && isConnected) {
+    if (paymentDismissed) return;
+    if (paymentLoading) return;
+
+    // Payment gate is independent of the MT5 connection: prompt as soon as the
+    // page opens and the backend says access has not been granted yet.
+    if (gateAction === "package" && !showPaymentModal) {
       setPaymentPackage("package");
       setPaymentIsBooster(paymentStatus?.isBooster ?? false);
       setShowPaymentModal(true);
-    } else if (gateAction === "token_topup" && !paymentLoading && !showRefillModal && isConnected) {
+    } else if (gateAction === "token_topup" && !showRefillModal) {
       setShowRefillModal(true);
     }
-  }, [gateAction, paymentLoading, showPaymentModal, showRefillModal, paymentStatus?.isBooster, isConnected, searchParams]);
+  }, [gateAction, paymentLoading, showPaymentModal, showRefillModal, paymentStatus?.isBooster, searchParams, paymentDismissed]);
+
+  // Handle payment success callback from PaymentModal
+  const handlePaymentSuccess = () => {
+    // Reset dismissed state so modal won't reappear
+    setPaymentDismissed(false);
+    // Refresh payment status after successful payment
+    refetchPaymentStatus();
+  };
 
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && !searchParams.get("full")) {
@@ -182,6 +196,35 @@ function AITradingPageContent() {
     }
   }, [regCheck, router]);
 
+  // ── Block access if payment required (setelah semua hooks dipanggil) ──
+  const isPaymentRequired = gateAction === "package" && paymentDismissed;
+  const isTokenTopupRequired = gateAction === "token_topup" && !showRefillModal;
+
+  if (isPaymentRequired || isTokenTopupRequired) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-[#0A0A0F] border border-[#D4AF37]/30 rounded-3xl p-8 max-w-md text-center">
+          <div className="text-4xl mb-4">🔒</div>
+          <h2 className="text-xl font-bold text-[#D4AF37] mb-2">Akses Diblokir</h2>
+          <p className="text-gray-400 text-sm mb-6">
+            {isPaymentRequired
+              ? "Selesaikan pembayaran untuk mengakses AI Trading."
+              : "Token LLM Anda habis. Isi ulang untuk melanjutkan."}
+          </p>
+          <button
+            onClick={() => {
+              setPaymentDismissed(false);
+              setShowPaymentModal(true);
+            }}
+            className="px-6 py-3 bg-gradient-to-r from-[#D4AF37] to-[#F3E5AB] text-black font-bold rounded-xl hover:brightness-110 transition-all"
+          >
+            {isPaymentRequired ? "Lanjutkan Pembayaran" : "Isi Ulang Token"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (regCheck === "loading" || regCheck === "redirect") {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -209,6 +252,22 @@ function AITradingPageContent() {
             error={connectError}
           />
         </div>
+
+        {/* Payment gate must also be reachable before MT5 is connected */}
+        <PaymentModal
+          userId={userId || "anonymous"}
+          isBooster={paymentStatus?.isBooster ?? false}
+          isOpen={showPaymentModal}
+          onClose={handleClosePaymentModal}
+          onSuccess={handlePaymentSuccess}
+        />
+
+        <TokenRefillModal
+          userId={userId || "anonymous"}
+          isOpen={showRefillModal}
+          onClose={() => setShowRefillModal(false)}
+          onSuccess={handlePaymentSuccess}
+        />
       </div>
     );
   }
@@ -438,12 +497,14 @@ function AITradingPageContent() {
         isBooster={paymentStatus?.isBooster ?? false}
         isOpen={showPaymentModal}
         onClose={handleClosePaymentModal}
+        onSuccess={handlePaymentSuccess}
       />
 
       <TokenRefillModal
         userId={userId || "anonymous"}
         isOpen={showRefillModal}
         onClose={() => setShowRefillModal(false)}
+        onSuccess={handlePaymentSuccess}
       />
     </div>
   );

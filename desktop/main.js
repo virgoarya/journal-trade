@@ -47,6 +47,30 @@ function getResourcePath(...segments) {
   return path.join(process.resourcesPath, ...segments);
 }
 
+// ─── Load env from APPDATA early (before starting child processes) ──
+(function loadAppDataEnv() {
+  try {
+    const appDataEnvPath = path.join(app.getPath("userData"), "server.env");
+    if (fs.existsSync(appDataEnvPath)) {
+      const envContent = fs.readFileSync(appDataEnvPath, "utf-8");
+      for (const line of envContent.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIndex = trimmed.indexOf("=");
+        if (eqIndex === -1) continue;
+        const key = trimmed.slice(0, eqIndex).trim();
+        const value = trimmed.slice(eqIndex + 1).trim();
+        if (key && !process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+      console.log("[MAIN] Loaded env from " + appDataEnvPath);
+    }
+  } catch (e) {
+    console.warn("[MAIN] Failed to load APPDATA env:", e.message);
+  }
+})();
+
 // ─── State ───────────────────────────────────────────────────
 let mainWindow = null;
 let splashWindow = null;
@@ -54,6 +78,7 @@ let tray = null;
 let backendProcess = null;
 let frontendProcess = null;
 let routerProcess = null;
+let setupWindow = null;
 let isQuitting = false;
 
 // ─── Restart Guard (cap consecutive failures) ────────────────
@@ -116,6 +141,7 @@ function isPortResponding(port, checkPath = "/") {
 let backendLastStderr = "";
 let frontendLastStderr = "";
 let logDir = null;
+let globalFileEnv = {};
 
 function appendToLog(filename, str) {
   try {
@@ -218,8 +244,11 @@ async function startBackend() {
     ? path.join(__dirname, "..", "server")
     : path.join(process.resourcesPath, "server");
 
-  const envFilePath = path.join(serverCwd, ".env");
+  // Load .env from APPDATA first (written by setup wizard), then fallback to serverCwd
+  const appDataEnvPath = path.join(app.getPath("userData"), "server.env");
+  const envFilePath = fs.existsSync(appDataEnvPath) ? appDataEnvPath : path.join(serverCwd, ".env");
   const fileEnv = loadEnvFile(envFilePath);
+  globalFileEnv = fileEnv;
   const logStream = getLogStream("backend.log");
 
   if (isDev) {
@@ -419,6 +448,7 @@ async function startFrontend() {
     cwd: frontendDir,
     env: {
       ...process.env,
+      ...globalFileEnv,
       PORT: String(FRONTEND_PORT),
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
@@ -992,10 +1022,133 @@ function killChildGracefully(child) {
 }
 // (Cleaned up old auto-updater)
 
+// ─── First-Run Setup ────────────────────────────────────────
+const SETUP_ENV_PATH = path.join(app.getPath("userData"), "server.env");
+
+function checkFirstRunSetup() {
+  return !fs.existsSync(SETUP_ENV_PATH);
+}
+
+function createSetupWindow() {
+  const setupWindow = new BrowserWindow({
+    width: 640,
+    height: 800,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    title: "Hunter Trades — First Run Setup",
+    icon: path.join(__dirname, "assets", "icon.ico"),
+    show: false,
+    backgroundColor: "#0A0A0A",
+    webPreferences: {
+      preload: path.join(__dirname, "preload-setup.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      devTools: false,
+    },
+  });
+
+  setupWindow.loadFile(path.join(__dirname, "setup.html"));
+  setupWindow.center();
+
+  setupWindow.once("ready-to-show", () => {
+    setupWindow.show();
+    setupWindow.focus();
+  });
+
+  return setupWindow;
+}
+
+// IPC: Save config from setup wizard
+ipcMain.handle("setup:save-config", async (event, config) => {
+  try {
+    // Validate required fields
+    const required = ["DATABASE_URL", "BETTER_AUTH_SECRET", "ENCRYPTION_KEY", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_GUILD_ID", "MIDTRANS_SERVER_KEY", "MIDTRANS_ENV"];
+    for (const key of required) {
+      if (!config[key] || !config[key].trim()) {
+        return { success: false, error: `Field "${key}" is required.` };
+      }
+    }
+
+    // Build .env content
+    const envContent = [
+      `# Hunter Trades Server Configuration`,
+      `# Generated on ${new Date().toISOString()}`,
+      ``,
+      `# Server`,
+      `PORT=${BACKEND_PORT}`,
+      `NODE_ENV=production`,
+      `FRONTEND_URL=http://localhost:${FRONTEND_PORT}`,
+      ``,
+      `# Database`,
+      `DATABASE_URL=${config.DATABASE_URL}`,
+      ``,
+      `# Better Auth`,
+      `BETTER_AUTH_SECRET=${config.BETTER_AUTH_SECRET}`,
+      `ENCRYPTION_KEY=${config.ENCRYPTION_KEY}`,
+      `BETTER_AUTH_URL=http://localhost:${BACKEND_PORT}`,
+      `DISCORD_CLIENT_ID=${config.DISCORD_CLIENT_ID}`,
+      `DISCORD_CLIENT_SECRET=${config.DISCORD_CLIENT_SECRET}`,
+      `DISCORD_GUILD_ID=${config.DISCORD_GUILD_ID}`,
+      ``,
+      `# AI Gateway (9Router)`,
+      `NINE_ROUTER_URL=${config.NINE_ROUTER_URL || "http://127.0.0.1:20128/v1"}`,
+      `NINE_ROUTER_API_KEY=${config.NINE_ROUTER_API_KEY || ""}`,
+      `NINE_ROUTER_MODEL=free`,
+      ``,
+      `# Midtrans Payment Gateway`,
+      `MIDTRANS_SERVER_KEY=${config.MIDTRANS_SERVER_KEY}`,
+      `MIDTRANS_ENV=${config.MIDTRANS_ENV || "sandbox"}`,
+      ``,
+      `# Macro Data (FRED API)`,
+      `FRED_API_KEY=${config.FRED_API_KEY || ""}`,
+      ``,
+    ].join("\n");
+
+    // Ensure directory exists
+    const envDir = path.dirname(SETUP_ENV_PATH);
+    if (!fs.existsSync(envDir)) {
+      fs.mkdirSync(envDir, { recursive: true });
+    }
+
+    // Write .env file
+    fs.writeFileSync(SETUP_ENV_PATH, envContent, "utf-8");
+    console.log(`[SETUP] Configuration saved to ${SETUP_ENV_PATH}`);
+
+    return { success: true };
+  } catch (err) {
+    console.error("[SETUP] Failed to save config:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC: Setup complete — close setup window and continue startup
+ipcMain.on("setup:done", () => {
+  if (setupWindow && !setupWindow.isDestroyed()) {
+    setupWindow.close();
+  }
+});
+
 // ─── App Lifecycle ──────────────────────────────────────────
 app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return;
   logSystemDiagnostics();
+
+  // First-run setup: if no server.env exists, show setup wizard
+  if (checkFirstRunSetup()) {
+    console.log("[MAIN] First run detected — showing setup wizard.");
+    setupWindow = createSetupWindow();
+
+    // Wait for setup to complete
+    await new Promise((resolve) => {
+      ipcMain.once("setup:done", resolve);
+      setupWindow.on("closed", resolve);
+    });
+
+    setupWindow = null;
+    console.log("[MAIN] Setup complete — continuing startup.");
+  }
 
   // Show splash while servers start
   createSplashWindow();

@@ -284,19 +284,11 @@ export const quantService = {
       explainerText.length > 0 &&
       !/[.!?]\s*$/.test(explainerText.trim());
 
-    const isOutdatedAnalysis = recent?.aiExplainer && (
-      !recent.aiExplainer.includes("rug pull") ||
-      !recent.aiExplainer.includes("DIVERGENCE TOTAL") ||
-      recent.aiExplainer.includes("Analisis Regime Yield") ||
-      looksTruncated
-    );
+    // Only regenerate if explainer is empty or truncated (not based on content keywords)
+    const isOutdatedAnalysis = recent?.aiExplainer && looksTruncated;
 
     if (isOutdatedAnalysis) {
-      console.log(
-        looksTruncated
-          ? "[QuantLab] AI explainer terpotong (kalimat menggantung). Forcing regeneration."
-          : "[QuantLab] Stale AI explainer detected (old prompt). Forcing regeneration."
-      );
+      console.log("[QuantLab] AI explainer terpotong (kalimat menggantung). Forcing regeneration.");
       isStale = true;
     }
 

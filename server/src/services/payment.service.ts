@@ -21,6 +21,17 @@ export function verifyMidtransSignature(payload: any): boolean {
   return computed === signature_key;
 }
 
+/**
+ * Normalize a user identifier to a Mongo key.
+ * better-auth ids are 24-hex ObjectIds in production; legacy/test ids may be plain strings.
+ * Cast only when valid so mixed data never throws a BSONError.
+ */
+function toUserId(userId: string): any {
+  return mongoose.isValidObjectId(userId)
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+}
+
 interface PaymentContext {
   userId: string;
   orderType: "registration" | "token_topup" | "package";
@@ -29,28 +40,40 @@ interface PaymentContext {
 
 /** Extract userId + orderType from Midtrans order_id (format: `${prefix}_${userId}_${timestamp}` or `${prefix}_${userId}_${packageType}_${timestamp}`) */
 export function parseOrderId(order_id: string): PaymentContext | null {
-  const parts = order_id.split("_");
-  if (parts.length < 3) return null;
-
-  const timestamp = parts.pop();
-  const packageType = parts.length >= 4 ? parts.pop() : undefined; // 'basic' | 'pro' | 'premium'
-  const userId = parts.pop();
-  const rawType = parts.join("_");
-
   let orderType: "registration" | "token_topup" | "package";
-  if (rawType === "reg" || rawType === "registration") {
-    orderType = "registration";
-  } else if (rawType === "top" || rawType === "token_topup") {
+  let rest: string;
+
+  if (order_id.startsWith("token_topup_")) {
     orderType = "token_topup";
-  } else if (rawType === "pkg") {
+    rest = order_id.substring("token_topup_".length);
+  } else if (order_id.startsWith("registration_")) {
+    orderType = "registration";
+    rest = order_id.substring("registration_".length);
+  } else if (order_id.startsWith("reg_")) {
+    orderType = "registration";
+    rest = order_id.substring("reg_".length);
+  } else if (order_id.startsWith("pkg_")) {
     orderType = "package";
+    rest = order_id.substring("pkg_".length);
   } else {
     return null;
   }
 
+  const parts = rest.split("_");
+  if (parts.length < 2) return null;
+
+  const timestamp = parts.pop()!;
+  const lastPart = parts[parts.length - 1];
+
+  let packageType: "basic" | "pro" | "premium" | undefined;
+  if (lastPart === "basic" || lastPart === "pro" || lastPart === "premium") {
+    packageType = parts.pop()! as "basic" | "pro" | "premium";
+  }
+
+  const userId = parts.join("_");
   if (!userId) return null;
 
-  return { userId, orderType, packageType: packageType as any };
+  return { userId, orderType, packageType };
 }
 
 /**
@@ -66,9 +89,13 @@ export async function handlePaymentSuccess(
   boosterDiscount: boolean = false,
   packageType?: "basic" | "pro" | "premium"
 ): Promise<string> {
+  // Force ObjectId for consistency
+  const userObjectId = toUserId(userId);
+  console.log("[handlePaymentSuccess] called with:", { userId, userObjectId: userObjectId?.toString(), orderType, gross_amount, order_id });
+
   // 1. Record transaction
   await Transaction.create({
-    user_id: userId,
+    user_id: userObjectId,
     type: orderType,
     amount: gross_amount,
     currency: "IDR",
@@ -77,23 +104,31 @@ export async function handlePaymentSuccess(
     description:
       orderType === "registration"
         ? `Registration fee${boosterDiscount ? " (Booster -10%)" : ""}`
+        : orderType === "package"
+        ? `Package ${packageType} purchase`
         : "Token topup",
   });
 
   if (orderType === "registration") {
     // 2a. Get user data from better-auth collection
-    const db = authMongoClient.db(env.DATABASE_NAME);
-    const user = await db.collection("user").findOne({ id: userId });
+    const db = mongoose.connection.db!;
+    const user = await db.collection("user").findOne({
+      $or: [
+        { _id: userId },
+        { _id: userObjectId },
+        { id: userId },
+      ],
+    });
     if (!user) {
       throw new Error(`User ${userId} not found in better-auth collection`);
     }
 
     // 2b. Mark registration active
     await Registration.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userObjectId },
       {
-        user_id: userId,
-        discord_id: user.id,
+        user_id: userObjectId,
+        discord_id: user.id || user._id?.toString() || userId,
         username: user.name,
         email: user.email,
         registration_status: "active",
@@ -108,8 +143,9 @@ export async function handlePaymentSuccess(
 
     // 2c. Create initial subscription (recurring token)
     await Subscription.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userObjectId },
       {
+        user_id: userObjectId,
         plan: "basic",
         status: "active",
         start_date: new Date(),
@@ -123,8 +159,9 @@ export async function handlePaymentSuccess(
     // 2d. Initialize token balance
     const initialTokens = 1000;
     await TokenBalance.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userObjectId },
       {
+        user_id: userObjectId,
         balance: initialTokens,
         last_updated: new Date(),
         monthly_reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -135,8 +172,14 @@ export async function handlePaymentSuccess(
     return `Registration activated for user ${userId}. Token balance: ${initialTokens}`;
   } else if (orderType === "package") {
     // 2a. Get user data from better-auth collection
-    const db = authMongoClient.db(env.DATABASE_NAME);
-    const user = await db.collection("user").findOne({ id: userId });
+    const db = mongoose.connection.db!;
+    const user = await db.collection("user").findOne({
+      $or: [
+        { _id: userId },
+        { _id: userObjectId },
+        { id: userId },
+      ],
+    });
     if (!user) {
       throw new Error(`User ${userId} not found in better-auth collection`);
     }
@@ -149,13 +192,13 @@ export async function handlePaymentSuccess(
       : isPro
       ? 180 * 24 * 60 * 60 * 1000 // 6 months
       : 90 * 24 * 60 * 60 * 1000; // 3 months (basic)
-    const initialTokens = isPremium ? 0 : 300000;
+    const initialTokens = isPremium ? 99999999 : 300000;
     const eaDurationMs = 30 * 24 * 60 * 60 * 1000; // Free EA 1 bulan (Premium & Pro)
 
     // 2c. Upsert Registration
     const updateData: any = {
-      user_id: userId,
-      discord_id: user.id,
+      user_id: userObjectId,
+      discord_id: user.id || user._id?.toString() || userId,
       username: user.name,
       email: user.email,
       registration_status: "active",
@@ -171,12 +214,15 @@ export async function handlePaymentSuccess(
     if (isPremium || isPro) {
       updateData.ea_active_until = new Date(Date.now() + eaDurationMs);
     }
-    await Registration.findOneAndUpdate({ user_id: userId }, updateData, { upsert: true });
+    await Registration.findOneAndUpdate({ user_id: userObjectId }, updateData, {
+      upsert: true,
+    });
 
     // 2d. Upsert Subscription
     await Subscription.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userObjectId },
       {
+        user_id: userObjectId,
         plan: packageType || "basic",
         status: "active",
         start_date: new Date(),
@@ -188,37 +234,28 @@ export async function handlePaymentSuccess(
     );
 
     // 2e. Initialize token balance
-    if (isPremium) {
-      await TokenBalance.findOneAndUpdate(
-        { user_id: userId },
-        {
-          balance: 99999999,
-          is_unlimited: true,
-          refill_count: 0,
-          last_updated: new Date(),
-        },
-        { upsert: true }
-      );
-    } else {
-      await TokenBalance.findOneAndUpdate(
-        { user_id: userId },
-        {
-          balance: initialTokens,
-          is_unlimited: false,
-          refill_count: 0,
-          last_updated: new Date(),
-        },
-        { upsert: true }
-      );
-    }
+    await TokenBalance.findOneAndUpdate(
+      { user_id: userObjectId },
+      {
+        user_id: userObjectId,
+        balance: initialTokens,
+        is_unlimited: isPremium,
+        refill_count: 0,
+        last_updated: new Date(),
+      },
+      { upsert: true }
+    );
 
-    return `Package ${packageType} activated for user ${userId}. Token balance: ${isPremium ? "unlimited" : initialTokens}`;
+    return `Package ${packageType} activated for user ${userId}. Token balance: ${
+      isPremium ? "unlimited" : initialTokens
+    }`;
   } else {
     // 2e. Topup token
     const tokensToAdd = Math.floor(gross_amount / 500); // Rp 500 per token (Rp 50.000 = 100 token)
     await TokenBalance.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userObjectId },
       {
+        user_id: userObjectId,
         $inc: { balance: tokensToAdd, refill_count: 1 },
         last_updated: new Date(),
       },
@@ -251,14 +288,15 @@ export async function getPaymentStatus(userId: string): Promise<{
     };
   }
 
-  // user_id is an ObjectId; a non-ObjectId string (e.g. client userId) must
-  // not crash the query. Return safe defaults instead of throwing 500.
-  const isValidObjectId = mongoose.isValidObjectId(userId);
-  const userObjectId = isValidObjectId ? new mongoose.Types.ObjectId(userId) : null;
+  // Robust query — match both ObjectId (new) and string (legacy) storage
+  const key = toUserId(userId);
+  const query: any = mongoose.isValidObjectId(userId)
+    ? { $or: [{ user_id: key }, { user_id: userId }] }
+    : { user_id: userId };
 
   const [registration, tokenBalance] = await Promise.all([
-    userObjectId ? Registration.findOne({ user_id: userObjectId }) : null,
-    userObjectId ? TokenBalance.findOne({ user_id: userObjectId }) : null,
+    Registration.findOne(query),
+    TokenBalance.findOne(query),
   ]);
 
   const isRegistered = registration?.registration_status === "active";
@@ -282,7 +320,7 @@ export async function hasInsufficientToken(
   userId: string,
   requiredTokens: number = 1
 ): Promise<boolean> {
-  const balance = await TokenBalance.findOne({ user_id: userId });
+  const balance = await TokenBalance.findOne({ user_id: toUserId(userId) });
   if (!balance) return true;
   return balance.balance < requiredTokens;
 }

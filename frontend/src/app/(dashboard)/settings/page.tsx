@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
+import { useAvatarSync } from "@/hooks/useAvatarSync";
 import { toast } from "sonner";
 import { tradingAccountService, TradingAccount } from "@/services/trading-account.service";
 import { settingsService, UserSettingsData } from "@/services/settings.service";
@@ -22,12 +23,17 @@ interface SettingsSection {
 
 export default function SettingsPage() {
   const { data: session, isPending: sessionPending } = useSession();
+  const { avatarUrl, refresh } = useAvatarSync();
   const [mounted, setMounted] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
   const [activeAccount, setActiveAccount] = useState<TradingAccount | null>(null);
   const [activeSection, setActiveSection] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
@@ -540,7 +546,7 @@ export default function SettingsPage() {
                           alt="Avatar" 
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
-                          onError={() => setAvatarError(true)}
+                          onError={() => { setAvatarError(true); void refresh(); }}
                         />
                       ) : (
                         <span className="text-2xl font-mono font-bold text-accent-gold">

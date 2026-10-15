@@ -9,6 +9,7 @@ import aiReviewRoutes from "./ai-review.routes";
 import notificationRoutes from "./notification.routes";
 import settingsRoutes from "./settings.routes";
 import authV1Routes from "./auth-v1.routes";
+import avatarRoutes from "./avatar.routes";
 import mt5Routes from "./mt5.routes";
 import macroAiRoutes from "./macro-ai.routes";
 import macroAiObserverRoutes from "./macro-ai-observer.routes";
@@ -23,6 +24,7 @@ import backtestRoutes from "./backtest.routes";
 import devTestRoutes from "./dev-test.routes";
 import paymentRoutes from "./payment.routes";
 import centralBankDifferentialsRoutes from "./central-bank-differentials.routes";
+import macroCandlesRoutes from "./macro-candles.routes";
 
 import { aiLimiter } from "../middleware/rate-limit";
 
@@ -33,6 +35,7 @@ const router = Router();
 
 // Auth V1 API routes
 router.use("/v1/auth", authV1Routes);
+router.use("/v1/auth", avatarRoutes);
 
 router.use("/v1/trading-accounts", tradingAccountRoutes);
 router.use("/v1/trades", tradeRoutes);
@@ -84,6 +87,7 @@ router.use("/v1/dev", devTestRoutes);
 router.use("/v1/broker-registration", brokerRegistrationRoutes);
 router.use("/v1/payment", paymentRoutes);
 router.use("/v1/central-bank-differentials", centralBankDifferentialsRoutes);
+router.use("/v1/macro", macroCandlesRoutes);
 
 
 export default router;

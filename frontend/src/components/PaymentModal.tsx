@@ -11,6 +11,7 @@ interface PaymentModalProps {
   isBooster: boolean;
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 export default function PaymentModal({
@@ -18,9 +19,11 @@ export default function PaymentModal({
   isBooster,
   isOpen,
   onClose,
+  onSuccess,
 }: PaymentModalProps) {
   const [loading, setLoading] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<PackageType>("premium");
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   // Harga dasar (sebelum diskon booster jika ada)
   const pricing = {
@@ -33,6 +36,16 @@ export default function PaymentModal({
   const getEffectivePrice = (pkgKey: "basic" | "pro" | "premium") => {
     const rawPrice = pricing[pkgKey].price;
     return isBooster ? Math.round(rawPrice * 0.9) : rawPrice;
+  };
+
+  const handlePaymentSuccess = () => {
+    setPaymentSuccess(true);
+  };
+
+  const handleContinueToAITrading = () => {
+    setPaymentSuccess(false);
+    onClose();
+    onSuccess?.();
   };
 
   const handlePayment = async () => {
@@ -58,7 +71,19 @@ export default function PaymentModal({
 
       const data = await res.json();
       if (!res.ok || !data.token) {
-        throw new Error(data.error || "Gagal mendapatkan token pembayaran");
+        let errorMessage = "Gagal mendapatkan payment token";
+        if (typeof data.error === "string") {
+          errorMessage = data.error;
+        } else if (typeof data.error === "object" && data.error !== null) {
+          if (Array.isArray(data.error)) {
+            errorMessage = data.error.map((e: any) => e?.message || String(e)).join(", ");
+          } else {
+            errorMessage = JSON.stringify(data.error);
+          }
+        } else if (typeof data.message === "string") {
+          errorMessage = data.message;
+        }
+        throw new Error(errorMessage);
       }
 
       // 2. Load Midtrans Snap JS & redirect ke UI
@@ -68,12 +93,24 @@ export default function PaymentModal({
       }
 
       snap.pay(data.token, {
-        onSuccess: (result: any) => {
-          toast.success("✅ Pembayaran berhasil diproses!");
-          onClose();
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
+        onSuccess: async (result: any) => {
+          try {
+            const confirmRes = await fetch("/api/v1/payment/confirm", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId: data.orderId }),
+            });
+            if (!confirmRes.ok) {
+              const errData = await confirmRes.json().catch(() => ({}));
+              throw new Error(errData.detail || errData.error || "Gagal konfirmasi pembayaran");
+            }
+            toast.success("✅ Pembayaran berhasil diproses!");
+            handlePaymentSuccess();
+          } catch (err: any) {
+            console.error("[PaymentModal] Confirm error:", err.message);
+            toast.error("Pembayaran berhasil tapi gagal konfirmasi: " + err.message);
+            handlePaymentSuccess();
+          }
         },
         onPending: (result: any) => {
           toast.info("⏳ Menunggu penyelesaian pembayaran di Midtrans.");
@@ -83,9 +120,17 @@ export default function PaymentModal({
               const status = await res.json();
               if (status.transaction_status === "settlement" || status.transaction_status === "capture") {
                 clearInterval(pollInterval);
+                try {
+                  await fetch("/api/v1/payment/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ orderId: data.orderId }),
+                  });
+                } catch (e) {
+                  console.error("[PaymentModal] Pending confirm error:", e);
+                }
                 toast.success("Pembayaran berhasil dikonfirmasi!");
-                onClose();
-                window.location.reload();
+                handlePaymentSuccess();
               }
             } catch (error) {
               console.error("Polling error:", error);
@@ -109,7 +154,11 @@ export default function PaymentModal({
     }
   };
 
-  if (process.env.NODE_ENV === "development") return null;
+  // Dev bypass: hide the real payment UI in development unless ?full=1 is present
+  const devBlocked =
+    process.env.NODE_ENV === "development" &&
+    (typeof window === "undefined" || !new URLSearchParams(window.location.search).get("full"));
+  if (devBlocked) return null;
   if (!isOpen) return null;
 
   const packages = [
@@ -188,6 +237,25 @@ export default function PaymentModal({
         
         {/* Ambient Top Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-28 bg-gradient-to-b from-[#D4AF37]/15 to-transparent blur-3xl pointer-events-none" />
+
+        {/* Payment Success Modal */}
+        {paymentSuccess && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+            <div className="bg-[#0A0A0F] border-2 border-[#D4AF37] rounded-3xl p-8 max-w-md w-full text-center">
+              <div className="text-5xl mb-4 text-[#D4AF37]">✓</div>
+              <h2 className="text-2xl font-bold text-[#D4AF37] mb-2">Pembayaran Berhasil!</h2>
+              <p className="text-gray-300 mb-6">
+                Akses AI Trading Anda telah diaktifkan. Silakan lanjutkan ke halaman utama.
+              </p>
+              <button
+                onClick={handleContinueToAITrading}
+                className="w-full py-3 bg-gradient-to-r from-[#D4AF37] to-[#F3E5AB] text-black font-bold rounded-xl hover:brightness-110 transition-all"
+              >
+                Lanjutkan ke AI Trading
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="relative border-b border-white/10 p-6 sm:px-10 sm:py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

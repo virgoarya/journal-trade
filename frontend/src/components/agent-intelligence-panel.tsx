@@ -141,7 +141,7 @@ function AgentReplyCard({
         <span className="text-base">{persona?.emoji}</span>
         <h4 className={`font-mono text-xs font-bold ${persona?.color}`}>{title}</h4>
       </div>
-      <div className="text-xs font-mono text-text-main leading-relaxed prose prose-invert max-w-none">
+      <div className="text-xs font-mono text-text-primary leading-relaxed prose prose-invert max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanReply}</ReactMarkdown>
       </div>
     </div>
@@ -239,7 +239,7 @@ function FormattedInsightContent({ content }: { content: string }) {
               : "text-emerald-300 bg-emerald-950/40 border-emerald-500/40";
 
           return (
-            <div key={idx} className="space-y-1 bg-surface-elevated/20 p-2 rounded border border-border-subtle/50">
+            <div key={idx} className="space-y-1 bg-bg-elevated/20 p-2 rounded border border-border-subtle/50">
               <span className={`inline-flex items-center font-mono text-[9px] font-bold px-2 py-0.5 rounded border tracking-wider shadow-sm ${badgeColor}`}>
                 {fullHeader}
               </span>
@@ -451,13 +451,13 @@ export function AgentIntelligencePanel() {
   return (
     <div className="flex flex-col h-full min-h-0 space-y-3">
       {/* Sub-tab Navigation */}
-      <div className="flex items-center gap-1 bg-surface-elevated/40 rounded-lg p-1 border border-border-subtle shrink-0">
+      <div className="flex items-center gap-1 bg-bg-elevated/40 rounded-lg p-1 border border-border-subtle shrink-0">
         <button
           onClick={() => setActiveTab("dashboard")}
           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 font-mono text-xs font-semibold rounded transition-all ${
             activeTab === "dashboard"
               ? "bg-data-profit/10 text-data-profit border border-data-profit/30"
-              : "text-text-muted hover:text-text-main"
+              : "text-text-muted hover:text-text-primary"
           }`}
         >
           <Activity size={12} />
@@ -468,7 +468,7 @@ export function AgentIntelligencePanel() {
           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 font-mono text-xs font-semibold rounded transition-all ${
             activeTab === "debate"
               ? "bg-accent-gold/10 text-accent-gold border border-accent-gold/30"
-              : "text-text-muted hover:text-text-main"
+              : "text-text-muted hover:text-text-primary"
           }`}
         >
           <MessageCircle size={12} />
@@ -730,7 +730,7 @@ export function AgentIntelligencePanel() {
                         className={`p-2 text-left font-mono rounded border transition-all ${
                           selectedPrompt === qp.prompt
                             ? "border-accent-gold bg-accent-gold/15 text-accent-gold"
-                            : "border-border-subtle bg-surface-elev_tertiary/40 text-text-muted hover:text-text-main hover:bg-surface-elevated"
+                            : "border-border-subtle bg-surface-elev_tertiary/40 text-text-muted hover:text-text-primary hover:bg-bg-elevated"
                         }`}
                       >
                         <div className="text-[11px] font-bold">{qp.label}</div>
@@ -753,7 +753,7 @@ export function AgentIntelligencePanel() {
                     if (selectedPrompt) setSelectedPrompt(null);
                   }}
                   placeholder="Masukkan topik, instrumen, atau dilema makro untuk didebatkan agen..."
-                  className="w-full p-2.5 rounded border border-border-subtle bg-surface-elevated/50 font-mono text-xs text-text-primary focus:outline-none focus:border-accent-gold/50 resize-none shadow-inner"
+                  className="w-full p-2.5 rounded border border-border-subtle bg-bg-elevated/50 font-mono text-xs text-text-primary focus:outline-none focus:border-accent-gold/50 resize-none shadow-inner"
                   rows={2}
                 />
               </div>
@@ -847,12 +847,12 @@ export function AgentIntelligencePanel() {
                     </div>
                     <div className="space-y-2 text-xs font-mono text-text-muted">
                       <div>
-                        <span className="text-text-main font-bold block mb-0.5">1. Post-Hoc Analysis (Self-Improvement):</span>
-                        <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.selfImprovement}</p>
+                        <span className="text-text-primary font-bold block mb-0.5">1. Post-Hoc Analysis (Self-Improvement):</span>
+                        <p className="bg-bg-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.selfImprovement}</p>
                       </div>
                       <div>
-                        <span className="text-text-main font-bold block mb-0.5">2. Critical Synthesis:</span>
-                        <p className="bg-surface-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.marketComparison}</p>
+                        <span className="text-text-primary font-bold block mb-0.5">2. Critical Synthesis:</span>
+                        <p className="bg-bg-elevated/40 p-2 rounded text-[11px] leading-relaxed">{res.marketComparison}</p>
                       </div>
                     </div>
                   </div>
