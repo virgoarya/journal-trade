@@ -139,3 +139,6 @@ server/C/
 # Gitleaks scan report (contains secrets in findings)
 gitleaks-report.json
 gitleaks-report-clean.json
+frontend/test-results/
+gitleaks-report*.json
+server/dist.old.*/
