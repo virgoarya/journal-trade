@@ -3,25 +3,22 @@ import { test, expect } from '@playwright/test';
 test.describe('Setup Wizard', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
   });
 
-  test('should show setup wizard on first run', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
-    
-    // Look for setup wizard elements
+  test('should show setup wizard or onboarding on first run', async ({ page }) => {
     const wizardElements = page.locator('[class*="wizard"], [class*="setup"], [class*="onboarding"]');
     const count = await wizardElements.count();
-    console.log(`Found ${count} setup wizard elements`);
     
-    await page.screenshot({ path: 'e2e/screenshots/setup-wizard.png', fullPage: true });
+    const ctaBtn = page.locator('button:has-text("Get Started"), button:has-text("Start"), a:has-text("Get Started")');
+    const ctaCount = await ctaBtn.count();
+    
+    console.log(`Wizard elements: ${count}, CTA buttons: ${ctaCount}`);
   });
 
-  test('should complete setup wizard flow', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
-    
-    // Look for next/submit buttons in wizard
-    const nextBtn = page.locator('button:has-text("Next"), button:has-text("Continue"), button:has-text("Start")').first();
-    const count = await nextBtn.count();
-    console.log(`Wizard navigation buttons: ${count > 0 ? 'FOUND' : 'NOT FOUND'}`);
+  test('should have navigation to main app', async ({ page }) => {
+    const navLinks = page.locator('a[href="/"], a[href="/dashboard"], a[href="/log-trade"]');
+    const count = await navLinks.count();
+    expect(count).toBeGreaterThan(0);
   });
 });

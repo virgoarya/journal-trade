@@ -2,56 +2,48 @@ import { test, expect } from '@playwright/test';
 
 test.describe('JournalEntryForm', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/log-trade');
+    await page.waitForLoadState('networkidle');
   });
 
-  test('should render the journal entry form', async ({ page }) => {
-    // Check if form exists - adjust selectors based on actual implementation
-    const form = page.locator('form').first();
+  test('should render the journal entry form with basic step', async ({ page }) => {
+    const form = page.locator('form');
     await expect(form).toBeVisible({ timeout: 10000 });
+    
+    const submitBtn = page.getByRole('button', { name: /log trade/i });
+    await expect(submitBtn).toBeVisible();
   });
 
-  test('should have required form fields', async ({ page }) => {
-    // Common trading journal fields
-    const fields = ['symbol', 'side', 'entryPrice', 'exitPrice', 'quantity'];
-    
-    for (const field of fields) {
-      const element = page.locator(`[name="${field}"], [id="${field}"], [placeholder*="${field}" i]`).first();
-      // Log whether field exists - don't fail yet since we're discovering the actual form
-      const count = await element.count();
-      console.log(`Field "${field}": ${count > 0 ? 'FOUND' : 'NOT FOUND'}`);
-    }
+  test('should have symbol selector with default XAU/USD', async ({ page }) => {
+    const symbolSelect = page.locator('select').first();
+    await expect(symbolSelect).toBeVisible();
+    await expect(symbolSelect).toHaveValue('XAU/USD');
   });
 
-  test('should submit a new trade entry', async ({ page }) => {
-    // This is a placeholder test - will be updated after discovering actual form structure
-    await page.goto('/');
+  test('should validate required fields on submit', async ({ page }) => {
+    const entryPriceInput = page.locator('input[type="number"]').first();
+    await entryPriceInput.fill('0');
     
-    // Wait for page to load
-    await page.waitForLoadState('networkidle');
+    const submitBtn = page.getByRole('button', { name: /log trade/i });
+    await submitBtn.click();
     
-    // Take a screenshot for evidence
-    await page.screenshot({ path: 'e2e/screenshots/journal-entry-form.png', fullPage: true });
-    
-    console.log('JournalEntryForm page loaded successfully');
+    const errorMessage = page.locator('text=/must be > 0|required/i');
+    await expect(errorMessage.first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('should validate required fields', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+  test('should navigate to details step or show all fields', async ({ page }) => {
+    const nextBtn = page.getByRole('button', { name: /next|continue|details/i });
+    const count = await nextBtn.count();
     
-    // Try to submit empty form if submit button exists
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Submit"), button:has-text("Save")').first();
-    const btnCount = await submitBtn.count();
-    
-    if (btnCount > 0) {
-      await submitBtn.click();
-      // Check for validation errors
-      await page.waitForTimeout(1000);
-      await page.screenshot({ path: 'e2e/screenshots/form-validation.png', fullPage: true });
-      console.log('Form validation test completed');
+    if (count > 0) {
+      await nextBtn.click();
+      await page.waitForTimeout(500);
+      const notesField = page.locator('textarea, input[name="notes"]');
+      await expect(notesField.first()).toBeVisible({ timeout: 5000 });
     } else {
-      console.log('Submit button not found - form may not be implemented yet');
+      const allInputs = page.locator('input, select, textarea');
+      const inputCount = await allInputs.count();
+      expect(inputCount).toBeGreaterThan(3);
     }
   });
 });

@@ -3,24 +3,29 @@ import { test, expect } from '@playwright/test';
 test.describe('Login + OAuth Flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
   });
 
-  test('should show login option', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+  test('should show login or auth option', async ({ page }) => {
+    const loginBtn = page.locator('button:has-text("Login"), button:has-text("Sign in"), a:has-text("Login"), a:has-text("Sign in")');
+    const loginCount = await loginBtn.count();
     
-    // Look for login/auth elements
-    const loginElements = page.locator('button:has-text("Login"), button:has-text("Sign in"), a:has-text("Login"), a:has-text("Sign in"), [class*="login"], [class*="auth"]');
-    const count = await loginElements.count();
-    console.log(`Found ${count} login-related elements`);
+    const discordBtn = page.locator('button:has-text("Discord"), a:has-text("Discord"), [class*="discord"]');
+    const discordCount = await discordBtn.count();
     
-    await page.screenshot({ path: 'e2e/screenshots/login-page.png', fullPage: true });
+    expect(loginCount + discordCount).toBeGreaterThan(0);
   });
 
   test('should have Discord OAuth button', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
-    
     const discordBtn = page.locator('button:has-text("Discord"), a:has-text("Discord"), [class*="discord"]');
     const count = await discordBtn.count();
-    console.log(`Discord OAuth button: ${count > 0 ? 'FOUND' : 'NOT FOUND'}`);
+    
+    if (count > 0) {
+      await expect(discordBtn.first()).toBeVisible();
+    } else {
+      const oauthBtns = page.locator('button:has-text("OAuth"), button:has-text("Google"), button:has-text("GitHub")');
+      const oauthCount = await oauthBtns.count();
+      console.log(`OAuth buttons found: ${oauthCount}`);
+    }
   });
 });
