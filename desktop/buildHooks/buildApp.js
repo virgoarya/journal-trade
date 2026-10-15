@@ -3,7 +3,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 console.log('\n======================================================');
-console.log('   🔨 Hunter Trades v1.0.5 — Fast Production Builder   ');
+console.log('   🔨 Hunter Trades v1.2.0 — Fast Production Builder   ');
 console.log('======================================================\n');
 
 const projectRoot = path.resolve(__dirname, '../..');

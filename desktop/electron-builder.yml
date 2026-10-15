@@ -10,7 +10,7 @@ publish:
   provider: github
   owner: virgoarya
   repo: journal-trade
-  releaseType: draft
+  releaseType: release
 
 win:
   target:
