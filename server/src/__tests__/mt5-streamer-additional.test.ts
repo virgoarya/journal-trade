@@ -61,7 +61,7 @@ describe("MT5 Streamer — Additional Tests (Phase 2 Prep)", () => {
     });
 
     it("should broadcast disconnected status after deliberate disconnect", async () => {
-      const { broadcast } = require("../ws-server");
+      const { broadcast } = await import("../ws-server");
       
       await disconnectMcp();
 
@@ -85,8 +85,10 @@ describe("MT5 Streamer — Additional Tests (Phase 2 Prep)", () => {
 
   describe("Gap 2: handleDisconnect() guard — early return if already disconnected", () => {
     it("should not change state when handleDisconnect called while disconnected", async () => {
-      // Ensure disconnected state
+      // Reset to known disconnected state
       await disconnectMcp();
+      expect(mt5StreamCache.isConnected()).toBe(false);
+      expect(mt5StreamCache.isReconnecting()).toBe(false);
 
       // Call disconnect again — should be a no-op
       // (handleDisconnect has: if (!isConnected) return;)

@@ -8,5 +8,8 @@ export default defineConfig({
     environment: 'node',
     setupFiles: [join(__dirname, 'test-setup.ts')],
     include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
+    clearMocks: true,
+    restoreMocks: true,
+    mockReset: true,
   },
 });

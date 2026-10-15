@@ -35,9 +35,12 @@ vi.mock("../config/env", () => ({
 import { mt5StreamCache, forceReconnect } from "../mt5-streamer";
 
 describe("MT5 Streamer Reconnect Logic", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    // Reset global state — forceReconnect() in Task 1.1 sets isReconnecting=true
+    const { disconnectMcp } = await import("../mt5-streamer");
+    await disconnectMcp();
   });
 
   afterEach(() => {
@@ -89,8 +92,8 @@ describe("MT5 Streamer Reconnect Logic", () => {
   });
 
   describe("Task 1.3: disconnect pipeline log spam guard", () => {
-    it("should not broadcast duplicate disconnect events", () => {
-      const { broadcast } = require("../ws-server");
+    it("should not broadcast duplicate disconnect events", async () => {
+      const { broadcast } = await import("../ws-server");
       
       forceReconnect();
       
