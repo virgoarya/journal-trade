@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hunter Trades — Frontend
 
-## Getting Started
+> Next.js 16 App Router · Trading journal + AI trading engine · Terminal Noir theme
 
-First, run the development server:
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| **Node.js** | >= 20 | Enforced via `engines` |
+| **npm** | bundled with Node | Use `package-lock.json` for reproducible installs |
+
+### Install & Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+npm install
+
+# Development server (hot reload)
+npm run dev          # → http://localhost:3000
+
+# Type check
+npm run typecheck
+
+# Production build
+npm run build        # → .next/standalone
+
+# Lint
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+frontend/
+├── src/
+│   ├── app/(dashboard)/   # Dashboard, AI Trading, Macro Terminal, Analytics, etc.
+│   ├── components/        # Shared UI components (Terminal Noir)
+│   ├── services/          # API client services
+│   ├── hooks/             # Custom React hooks
+│   └── lib/               # Utility functions
+├── e2e/                   # Playwright E2E tests
+├── public/                # Static assets
+└── package.json
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🎨 Design System
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Terminal Noir** — dark background (`#121212`, `#1E1E1E`) with gold accent (`#D4AF37`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **CSS-first config** via Tailwind CSS v4 `@theme` in `globals.css`
+- **Typography:** Inter / Roboto / Outfit (Google Fonts)
+- **Micro-animations** on hover states
+- **Accessibility:** WCAG 2.1 AA enforced
 
-## Deploy on Vercel
+See `globals.css` for complete design tokens.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🧪 Testing
+
+```bash
+# Unit tests (Vitest)
+npm run test
+
+# E2E tests (Playwright)
+npx playwright install chromium   # first time only
+npx playwright test
+```
+
+---
+
+## 🔗 Related Documentation
+
+- [Main README](../README.md) — Project overview, architecture, setup wizard
+- [Setup Wizard Guide](../docs/SETUP_WIZARD_GUIDE.md) — First-run setup field-by-field
+- [User Guide MT5](../docs/USER_GUIDE_MT5.md) — Install EXE + connect MetaTrader 5
+- [API Reference](../docs/API_REFERENCE.md) — `/api/v1/` endpoint reference
+
+---
+
+*Hunter Trades Journal · Frontend · Terminal Noir*
