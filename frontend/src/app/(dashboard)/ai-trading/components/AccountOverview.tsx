@@ -56,7 +56,7 @@ export function AccountOverview({
       <div className="flex flex-col md:flex-row items-center md:items-center gap-6 md:gap-8">
         
         {/* Left: Holographic Account Ring (Enlarged) */}
-        <div className="relative w-48 h-48 flex-shrink-0">
+        <div className="relative w-32 h-32 md:w-48 md:h-48 flex-shrink-0">
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 192 192">
             <defs>
               <linearGradient id="ao-gold" x1="0%" y1="0%" x2="100%" y2="100%">

@@ -464,12 +464,12 @@ export function BacktestForm({ onRun, isRunning }: Props) {
             <div className="flex gap-2 ml-2">
               <input
                 type="text" inputMode="decimal" value={activationATR} onChange={(e) => setActivationATR(parseFloat(e.target.value) || 0)}
-                className="w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs text-text-primary text-center outline-none"
-                title="Activation ATR"
-              />
-              <input
-                type="text" inputMode="decimal" value={trailATR} onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
-                className="w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs text-text-primary text-center outline-none"
+                className="w-full sm:w-20 md:w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs md:text-sm text-text-primary text-center outline-none"
+                                title="Activation ATR"
+                              />
+                              <input
+                                type="text" inputMode="decimal" value={trailATR} onChange={(e) => setTrailATR(parseFloat(e.target.value) || 0)}
+                                className="w-full sm:w-20 md:w-16 bg-bg-elevated border border-border-subtle rounded-lg p-1 text-xs md:text-sm text-text-primary text-center outline-none"
                 title="Trail ATR"
               />
             </div>
@@ -497,9 +497,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                   <label htmlFor="drEnabled" className="text-xs font-medium text-text-secondary block">Drawdown Recovery (Safety Gear)</label>
                   {drEnabled && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={drActivationPct} onChange={(e) => setDrActivationPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Activation Drawdown %" />
+                      <input type="number" value={drActivationPct} onChange={(e) => setDrActivationPct(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Activation Drawdown %" />
                       <span className="text-[10px] text-text-muted">% DD ➔</span>
-                      <input type="number" step="0.1" value={drRiskMult} onChange={(e) => setDrRiskMult(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Risk Multiplier" />
+                      <input type="number" step="0.1" value={drRiskMult} onChange={(e) => setDrRiskMult(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Risk Multiplier" />
                       <span className="text-[10px] text-text-muted">× Risk</span>
                     </div>
                   )}
@@ -513,9 +513,9 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                   <label htmlFor="cpEnabled" className="text-xs font-medium text-text-secondary block">Tiered Scaling (Capital Preservation)</label>
                   {cpEnabled && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Activation Growth %" />
+                      <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Activation Growth %" />
                       <span className="text-[10px] text-text-muted">% Profit ➔</span>
-                      <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-16 bg-surface border border-border-subtle rounded p-1 text-xs text-text-primary text-center" title="Risk Multiplier" />
+                      <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Risk Multiplier" />
                       <span className="text-[10px] text-text-muted">× Risk</span>
                     </div>
                   )}
