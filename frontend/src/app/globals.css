@@ -353,6 +353,42 @@
   }
 
 
+  /* ============== ACCESSIBILITY: Focus Visible Styles ============== */
+  *:focus-visible {
+    outline: 2px solid var(--color-accent-gold);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--color-accent-gold);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2);
+  }
+
+  /* Skip navigation link */
+  .skip-nav {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    background: var(--color-accent-gold);
+    color: var(--color-bg-void);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    z-index: 100;
+    transition: top 0.2s;
+  }
+
+  .skip-nav:focus {
+    top: 0;
+  }
+
   .btn-gold {
     @apply bg-accent-gold text-bg-void font-semibold px-6 py-2.5 rounded-md transition-all hover:brightness-110 active:scale-95 shadow-sm;
   }
