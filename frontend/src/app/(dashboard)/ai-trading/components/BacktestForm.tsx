@@ -512,7 +512,7 @@ export function BacktestForm({ onRun, isRunning }: Props) {
                 <div className="flex-1 space-y-2">
                   <label htmlFor="cpEnabled" className="text-xs font-medium text-text-secondary block">Tiered Scaling (Capital Preservation)</label>
                   {cpEnabled && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col md:flex-row items-center gap-2">
                       <input type="number" value={cpGrowthPct} onChange={(e) => setCpGrowthPct(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Activation Growth %" />
                       <span className="text-[10px] text-text-muted">% Profit ➔</span>
                       <input type="number" step="0.1" value={cpRiskMult} onChange={(e) => setCpRiskMult(Number(e.target.value))} className="w-full sm:w-20 md:w-16 bg-surface border border-border-subtle rounded p-1 text-xs md:text-sm text-text-primary text-center" title="Risk Multiplier" />
