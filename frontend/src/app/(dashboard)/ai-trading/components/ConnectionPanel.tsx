@@ -118,10 +118,11 @@ export function ConnectionPanel({
                   required
                 />
                 <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
-                >
+                                type="button"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
+                                aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                              >
                   {showApiKey ? (
                     <EyeOff className="w-4 h-4" />
                   ) : (
@@ -137,10 +138,12 @@ export function ConnectionPanel({
             {/* Advanced Toggle */}
             <div>
               <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1.5 transition-colors"
-              >
+                              type="button"
+                              onClick={() => setShowAdvanced(!showAdvanced)}
+                              className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1.5 transition-colors"
+                              aria-expanded={showAdvanced}
+                              aria-label="Toggle advanced settings"
+                            >
                 {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 <span>Opsi Lanjutan (Address & Port)</span>
               </button>
@@ -216,9 +219,10 @@ export function ConnectionPanel({
                 </h2>
               </div>
               <button 
-                onClick={() => setShowGuide(false)} 
-                className="text-text-muted hover:text-white p-1 rounded-lg hover:bg-surface transition-colors"
-              >
+                              onClick={() => setShowGuide(false)} 
+                              className="text-text-muted hover:text-white p-1 rounded-lg hover:bg-surface transition-colors"
+                              aria-label="Close guide"
+                            >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>

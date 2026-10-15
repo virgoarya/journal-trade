@@ -80,7 +80,7 @@ export function AccountOverview({
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
             <p className="text-[10px] font-mono text-neon-green/70 uppercase tracking-[0.25em] mb-1.5">Account</p>
-            <p className="text-xs font-bold text-neon-green font-mono tracking-wider drop-shadow-[0_0_8px_rgba(57,255,136,0.6)] whitespace-nowrap">
+            <p className="text-xs font-bold text-neon-green font-mono tracking-wider drop-shadow-[0_0_8px_rgba(57,255,136,0.6)]">
               {accountInfo.name || `USR_${accountInfo.login}`}
             </p>
             <p className="text-[9px] font-mono text-gray-500 mt-1.5 truncate w-full">{accountInfo.server}</p>

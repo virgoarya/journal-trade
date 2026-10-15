@@ -63,7 +63,9 @@ export function Card({
             {action}
             {collapsible && (
               <button
-                onClick={() => setCollapsed(!collapsed)}
+                            onClick={() => setCollapsed(!collapsed)}
+                            aria-label={collapsed ? "Expand card" : "Collapse card"}
+                            aria-expanded={!collapsed}
                 className="text-gray-500 hover:text-white transition p-1"
                 aria-label={collapsed ? "Expand" : "Collapse"}
               >
