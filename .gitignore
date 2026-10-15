@@ -135,3 +135,7 @@ chart.png
 
 # Stray tool output (dirname uses U+F03A private-use colon, not ASCII ":")
 server/C/
+
+# Gitleaks scan report (contains secrets in findings)
+gitleaks-report.json
+gitleaks-report-clean.json
