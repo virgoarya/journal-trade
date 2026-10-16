@@ -680,13 +680,13 @@ async function runUpdateCheck() {
       return { status: "no-update", version: currentVersion, message: "Tidak ada pembaruan tersedia." };
     }
 
-    // Simple version compare (assumes semver e.g., 1.0.5)
-    const isNewer = remoteInfo.version.localeCompare(currentVersion, undefined, { numeric: true, sensitivity: 'base' }) > 0;
+    // Semver-aware version comparison (correct: 1.2.10 > 1.2.9)
+    const isNewer = compareVersions(remoteInfo.version, currentVersion) > 0;
 
     if (isNewer) {
       console.log(`[OTA-UPDATER] Update available: v${remoteInfo.version}`);
       const result = {
-        status: "downloaded", // We mock downloaded so the UI asks to install immediately
+        status: "available", // Patch downloaded & applied via quit-and-install handler
         version: remoteInfo.version,
         releaseNotes: remoteInfo.notes || "A new update is available.",
         patchUrl: remoteInfo.patchUrl
