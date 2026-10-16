@@ -73,10 +73,23 @@ cd desktop && npm run build:patch     # buildHooks/buildPatch.js
 sha256sum update/patch.zip
 grep checksum update/version.json
 
-# 7. Commit + push
+# 7. STRICT RELEASE GATE (WAJIB — jangan pernah push kalau gagal)
+node scripts/preflight-release.mjs --strict-bundle
+#    → HARUS exit 0. Gate ini memverifikasi:
+#      - artefak build lengkap (bundle + patch.zip + version.json)
+#      - `dist` tidak stale terhadap `src`
+#      - tidak ada kebocoran nilai kredensial di seluruh output build
+#      - pin dependency desktop cocok
+#    Urutan wajib: repack bundle → gate exit 0 → BARU push.
+
+# 8. Commit + push
 git add -A && git commit -m "release(vX.Y.Z): ..."
 git push origin main
 ```
+
+**Gate adalah gerbang terakhir sebelum push, bukan langkah sebelum pack.** Kalau gate
+gagal, perbaiki dulu di sumber lalu ulangi dari langkah yang relevan — jangan pernah
+`git push` dengan gate merah.
 
 **Jangan pernah mengedit `update/version.json` dengan tangan.** Versi dan checksum
 harus selalu dihasilkan `buildPatch.js` dari bundle yang benar-benar dikirim.

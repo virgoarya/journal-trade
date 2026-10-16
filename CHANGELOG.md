@@ -1,3 +1,30 @@
+## 🚀 [v1.2.1] — 2026-10-16 (Versi Terbaru)
+
+> Dipulihkan dari commit `4916798` (yang salah label `v1.2.2`), lalu dikoreksi agar
+> jujur. Versi sebenarnya adalah **1.2.1** — cocok dengan `desktop/`, `frontend/`,
+> `server/package.json`, dan `update/version.json`.
+
+### 🔄 OTA Update — Hosting di GitHub Raw CDN
+- **Remote OTA Hosting:** `version.json` dan `patch.zip` dipindah dari local server ke
+  branch `main` GitHub raw (`https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/`).
+- **Fix `.gitignore` OTA Leak/Block:** folder `update/` diizinkan masuk repo agar patch dan
+  metadata versi tersinkronisasi sempurna.
+- **Semver-aware Gate:** logika perbandingan versi pada updater diperbaiki untuk mencegah
+  downgrade atau silent failure.
+
+### 🎓 In-App Guidance (Whatfix Pattern)
+- **Komponen panduan interaktif modular** (`frontend/src/components/guidance/`): tooltips
+  kontekstual, dynamic step manifest, dan progress state persistence.
+- **Integrasi ke aplikasi (pekerjaan rilis ini):** `GuidanceProvider` dipasang di
+  `app/layout.tsx`, logika auto-start first-run ditambahkan, dan selector manifest
+  diselaraskan dengan route nyata (`/playbook`, `macro-terminal`, `analytics`, `ai-review`).
+- **⚠️ Koreksi klaim:** commit `4916798` menulis *"Mengintegrasikan"* padahal saat itu baru
+  **komponen** yang dibangun — provider belum pernah dipasang (dead code, `startTour()`
+  nol pemanggil). Entri ini menggantikan klaim tersebut. Integrasi diselesaikan pada rilis
+  ini dan **wajib lolos verifikasi QA (Vera) + strict gate sebelum dinyatakan aktif.**
+
+---
+
 ## 🚧 [v1.2.0] — Unreleased
 
 ### ✨ First-Run Setup Wizard
