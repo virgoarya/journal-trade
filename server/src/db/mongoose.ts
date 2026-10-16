@@ -48,6 +48,10 @@ export const connectDB = async () => {
     // 2. Connect Mongoose
     if (mongoose.connection.readyState < 1) {
       await mongoose.connect(env.DATABASE_URL, {
+        // Pin the database name explicitly. Without this, Mongoose uses the
+        // name embedded in the URI while Better Auth uses DATABASE_NAME — the
+        // two can diverge and silently split auth data from application data.
+        dbName: env.DATABASE_NAME,
         serverSelectionTimeoutMS: 10000,
       } as any);
       console.log("🚀 Mongoose Connected.");

@@ -189,6 +189,10 @@ for (const dir of SHIP_DIRS) {
   for (const f of walkFiles(dir, null)) {
     const base = path.basename(f);
     if (base !== ".env" && !/^\.env\.[a-z]+$/i.test(base)) continue;
+    // Templates are not secrets. The installer is REQUIRED to ship a template
+    // (see desktop/buildHooks/buildApp.js) so a fresh install has a config
+    // skeleton; only real credential-bearing .env files are blocking here.
+    if (/^\.env\.(example|sample|template)$/i.test(base)) continue;
     const rel = path.relative(ROOT, f);
     if (isBundle) {
       fail(
