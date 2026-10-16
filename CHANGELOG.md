@@ -1,4 +1,14 @@
-## 🚀 [v1.1.0] — 2026-08-11 (Versi Terbaru)
+## 🚀 [v1.2.2] — 2026-10-16 (Versi Terbaru)
+
+### 🚀 OTA Update & In-App Guidance (Whatfix Pattern)
+- **Remote OTA Hosting (GitHub Raw CDN):** Memindahkan hosting `version.json` dan `patch.zip` dari local server ke branch `main` GitHub raw URL (`https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/`).
+- **Fix .gitignore OTA Leak/Block:** Mengizinkan folder `update/` masuk ke repository git agar file patch dan metadata versi tersinkronisasi sempurna.
+- **In-App Guidance Architecture:** Mengintegrasikan komponen panduan interaktif modular (`frontend/src/components/guidance/`) berbasis pola Whatfix (tooltips kontekstual, dynamic step manifest, progress state persistence).
+- **Semver-aware Gate:** Memperbaiki logika perbandingan versi semver pada updater untuk mencegah downgrade atau silent failure.
+
+---
+
+## 🚀 [v1.1.0] — 2026-08-11
 
 ### ✨ Fitur Baru: Reset AI Trading Performance
 - **Tombol "Reset AI Trading Performance"** di Settings → Data & Privacy → Danger Zone (`frontend/src/app/(dashboard)/settings/page.tsx`).
