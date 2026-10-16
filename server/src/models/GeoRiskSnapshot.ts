@@ -10,6 +10,7 @@ export interface IGeoRiskSnapshot extends Document {
   vix: number | null; // VIX (fear index → geopolitics proxy)
   vixSource: "yahoo" | "fred" | null;
   globalPmi: number | null; // Global Manufacturing PMI (supply chain)
+  pmiSource: "calendar_db" | "dbnomics" | "trading_economics" | "ipman_synthetic" | null; // asal nilai globalPmi
   onRrpBalance: number | null; // Fed ON RRP balance (liquidity drain)
   // Derived scores 0–100
   scores: {
@@ -31,6 +32,11 @@ const GeoRiskSnapshotSchema = new Schema<IGeoRiskSnapshot>(
     vix: { type: Number, default: null },
     vixSource: { type: String, enum: ["yahoo", "fred"], default: null },
     globalPmi: { type: Number, default: null },
+    pmiSource: {
+      type: String,
+      enum: ["calendar_db", "dbnomics", "trading_economics", "ipman_synthetic"],
+      default: null,
+    },
     onRrpBalance: { type: Number, default: null },
     scores: {
       inflation: { type: Number, required: true },

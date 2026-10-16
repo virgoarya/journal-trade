@@ -159,7 +159,7 @@ export const ALL_LLM_PROVIDERS: LlmModelNode[] = [
   { name: "gemini", label: "Gemini 3.1 Flash", model: "gc/gemini-3.1-flash-lite-preview", status: "active" },
   { name: "mistral", label: "Mistral Large", model: "mistral/mistral-large-latest", status: "active" },
   { name: "gpt", label: "GPT OSS 120B", model: "groq/openai/gpt-oss-120b", status: "active" },
-  { name: "deepseek", label: "DeepSeek 3.2", model: "kr/deepseek-3.2", status: "active" },
+  { name: "deepseek", label: "Qwen 3.6 27B", model: "kr/deepseek-3.2", status: "active" },
   { name: "nemotron", label: "Nemotron 3.5", model: "openrouter/nvidia/nemotron-3.5-lightning:free", status: "active" },
   { name: "claude-opus", label: "Claude Opus 4.6", model: "ag/claude-opus-4-6-thinking", status: "active" },
 ];

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { useRouter } from "next/navigation";
 import { tradeService, type Trade } from "@/services/trade.service";
 import { analyticsService, type AnalyticsData } from "@/services/analytics.service";
 import { tradingAccountService, type TradingAccount } from "@/services/trading-account.service";
 import { playbookService, type Strategy } from "@/services/playbook.service";
 import { useSession } from "@/lib/auth-client";
+import { logger } from "@/lib/logger";
 import { Heatmap } from "@/components/analytics/Heatmap";
 import { PnLCalendar } from "@/components/analytics/PnLCalendar";
 import { AssetDistributionChart } from "@/components/analytics/AssetDistributionChart";
@@ -14,6 +15,86 @@ import { ForexCalculator } from "@/components/dashboard/ForexCalculator";
 import { ChecklistModal } from "@/components/playbook/ChecklistModal";
 import { toast } from "sonner";
 import { Trophy, Target, TrendingUp, TrendingDown, Activity, Zap, Wallet, ShieldCheck, History, Loader2, AlertCircle } from "lucide-react";
+
+// ── SVG Line Chart for Equity Curve (SMOOTH VERSION) ───────────────────
+// Extracted to module scope + memoised: the parent re-renders every poll and
+// previously rebuilt this whole Bezier path component each time. Props are a
+// plain data array, so React.memo gives a stable reference and skips the work
+// when the curve has not changed.
+const EquityLineChart = memo(function EquityLineChart({
+  data,
+}: {
+  data: { date: string; equity: number }[];
+}) {
+  if (data.length === 0) return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
+      <div className="w-12 h-12 border-2 border-dashed border-[#d4af37] rounded-full animate-spin-slow"></div>
+      <span className="font-mono text-[10px] text-text-muted tracking-widest uppercase">Waiting for Trade Data...</span>
+    </div>
+  );
+
+  const chartData = data.length === 1
+    ? [{ date: 'Start', equity: 0 }, ...data]
+    : data;
+
+  const values = chartData.map(d => d.equity);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 100);
+  const range = (max - min) || 1;
+
+  // Scale points
+  const points = chartData.map((d, i) => ({
+    x: (i / (chartData.length - 1)) * 100,
+    y: 80 - ((d.equity - min) / range) * 60 // Increased padding for "smaller" look (was 70/85)
+  }));
+
+  // Helper for smoothing (Bezier Curve)
+  const getSmoothingPath = (pts: { x: number, y: number }[]) => {
+    if (pts.length < 2) return "";
+    let d = `M ${pts[0].x},${pts[0].y}`;
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const cp_x = (p0.x + p1.x) / 2;
+      d += ` C ${cp_x},${p0.y} ${cp_x},${p1.y} ${p1.x},${p1.y}`;
+    }
+    return d;
+  };
+
+  const pathData = getSmoothingPath(points);
+
+  return (
+    <div className="w-full h-[85%] relative p-6 group"> {/* Restored to 85% to fit large container */}
+      <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="equityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#d4af37" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Shadow Area - keep it smooth but closed */}
+        {pathData && (
+          <path
+            d={`${pathData} L 100,80 L 0,80 Z`}
+            fill="url(#equityGradient)"
+            className="transition-all duration-700 opacity-60 group-hover:opacity-100"
+          />
+        )}
+        {/* Main Smooth Line */}
+        <path
+          d={pathData}
+          fill="none"
+          stroke="#d4af37"
+          strokeWidth="0.6" // Refined stroke (original was 0.8)
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-500"
+        />
+      </svg>
+    </div>
+  );
+});
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -139,7 +220,7 @@ export default function DashboardPage() {
           setPlaybooks(playbooksResult.data);
         }
       } catch (err: any) {
-        console.error("Dashboard Fetch Error:", err);
+        logger.error("Dashboard Fetch Error:", err);
         setError(err.message || "Failed to load dashboard data");
       } finally {
         setLoading(false);
@@ -148,9 +229,20 @@ export default function DashboardPage() {
 
     if (session) {
       fetchData();
-      // Auto-refresh every 30 seconds to sync with Log Trade
-      const interval = setInterval(fetchData, 30000);
-      return () => clearInterval(interval);
+      // Auto-refresh every 30 seconds to sync with Log Trade, but only while
+      // the tab is visible: a hidden tab does not need 5 API calls every 30s
+      // (wasted bandwidth/battery), and it refetches immediately on return.
+      const interval = setInterval(() => {
+        if (document.visibilityState === "visible") fetchData();
+      }, 30000);
+      const onVisible = () => {
+        if (document.visibilityState === "visible") fetchData();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener("visibilitychange", onVisible);
+      };
     } else {
       setLoading(false);
     }
@@ -240,78 +332,6 @@ export default function DashboardPage() {
 
   const getPnlColor = (result: string) => {
     return result === "win" ? "text-data-profit" : result === "loss" ? "text-data-loss" : "text-accent-gold";
-  };
-
-  // SVG Line Chart Helper for Equity Curve (SMOOTH VERSION)
-  const EquityLineChart = ({ data }: { data: { date: string, equity: number }[] }) => {
-    if (data.length === 0) return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
-        <div className="w-12 h-12 border-2 border-dashed border-[#d4af37] rounded-full animate-spin-slow"></div>
-        <span className="font-mono text-[10px] text-text-muted tracking-widest uppercase">Waiting for Trade Data...</span>
-      </div>
-    );
-
-    const chartData = data.length === 1 
-      ? [{ date: 'Start', equity: 0 }, ...data] 
-      : data;
-
-    const values = chartData.map(d => d.equity);
-    const min = Math.min(...values, 0);
-    const max = Math.max(...values, 100);
-    const range = (max - min) || 1;
-    
-    // Scale points
-    const points = chartData.map((d, i) => ({
-      x: (i / (chartData.length - 1)) * 100,
-      y: 80 - ((d.equity - min) / range) * 60 // Increased padding for "smaller" look (was 70/85)
-    }));
-
-    // Helper for smoothing (Bezier Curve)
-    const getSmoothingPath = (pts: {x: number, y: number}[]) => {
-      if (pts.length < 2) return "";
-      let d = `M ${pts[0].x},${pts[0].y}`;
-      
-      for (let i = 0; i < pts.length - 1; i++) {
-        const p0 = pts[i];
-        const p1 = pts[i+1];
-        const cp_x = (p0.x + p1.x) / 2;
-        d += ` C ${cp_x},${p0.y} ${cp_x},${p1.y} ${p1.x},${p1.y}`;
-      }
-      return d;
-    };
-
-    const pathData = getSmoothingPath(points);
-
-    return (
-      <div className="w-full h-[85%] relative p-6 group"> {/* Restored to 85% to fit large container */}
-        <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="equityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#d4af37" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {/* Shadow Area - keep it smooth but closed */}
-          {pathData && (
-            <path
-              d={`${pathData} L 100,80 L 0,80 Z`}
-              fill="url(#equityGradient)"
-              className="transition-all duration-700 opacity-60 group-hover:opacity-100"
-            />
-          )}
-          {/* Main Smooth Line */}
-          <path
-            d={pathData}
-            fill="none"
-            stroke="#d4af37"
-            strokeWidth="0.6" // Refined stroke (original was 0.8)
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="filter drop-shadow-[0_0_8px_rgba(212,175,55,0.4)] transition-all duration-500"
-          />
-        </svg>
-      </div>
-    );
   };
 
   return (

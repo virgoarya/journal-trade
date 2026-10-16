@@ -60,6 +60,16 @@ const DEFAULT_LIQUIDITY = {
   tga: undefined,
 };
 
+// Default TGA state — same placeholder approach as ON RRP so both gauges render immediately
+const DEFAULT_TGA = {
+  value: 0,
+  delta: 0,
+  displayValue: "$0.00B",
+  date: "",
+  history: [] as { date: string; value: number; status: string }[],
+  trend: [] as ("injecting" | "draining" | "neutral")[],
+};
+
 function GaugeRow({
   title,
   value,
@@ -222,28 +232,26 @@ function GaugeRow({
 export function LiquidityGaugePanel({ className }: { className?: string }) {
   const { liquidity, dataStatus } = useMacroTerminal();
   const safeLiquidity = liquidity ?? DEFAULT_LIQUIDITY;
-  const tga = safeLiquidity.tga;
+  const tga = safeLiquidity.tga ?? DEFAULT_TGA;
 
-  // ON RRP
-  const onRrpFormattedValue = safeLiquidity.value >= 1000
-    ? `$${(safeLiquidity.value / 1000).toFixed(2)}T`
-    : `$${safeLiquidity.value.toFixed(2)}B`;
-  const onRrpChangeFormatted = Math.abs(safeLiquidity.change) >= 1000
-    ? `${(Math.abs(safeLiquidity.change) / 1000).toFixed(2)}T`
-    : `${safeLiquidity.change > 0 ? "+" : ""}${safeLiquidity.change.toFixed(2)}B`;
+    // ON RRP
+    const onRrpFormattedValue = safeLiquidity.value >= 1000
+      ? `$${(safeLiquidity.value / 1000).toFixed(2)}T`
+      : `$${safeLiquidity.value.toFixed(2)}B`;
+    const onRrpChangeFormatted = Math.abs(safeLiquidity.change) >= 1000
+      ? `${(Math.abs(safeLiquidity.change) / 1000).toFixed(2)}T`
+      : `${safeLiquidity.change > 0 ? "+" : ""}${safeLiquidity.change.toFixed(2)}B`;
   
-  // Note: ON RRP injects when it decreases (change < 0 => INJECTING)
-  // The service normalizes this, but we rely on safeLiquidity.status
-  const onRrpStatus = safeLiquidity.status as any;
+    // Note: ON RRP injects when it decreases (change < 0 => INJECTING)
+    // The service normalizes this, but we rely on safeLiquidity.status
+    const onRrpStatus = safeLiquidity.status as any;
 
-  // TGA: delta > 0 means Treasury withdrawing from banking system (DRAINING liquidity)
-  // TGA: delta < 0 means Treasury injecting into banking system (INJECTING liquidity)
-  const tgaStatus = tga ? (tga.delta > 0 ? "DRAINING" : tga.delta < 0 ? "INJECTING" : "NEUTRAL") : "UNKNOWN";
-  const tgaChangeFormatted = tga 
-    ? (Math.abs(tga.delta) >= 1000 
-        ? `${(Math.abs(tga.delta)/1000).toFixed(2)}T` 
-        : `${tga.delta > 0 ? "+" : ""}${tga.delta.toFixed(2)}B`)
-    : "0B";
+    // TGA: delta > 0 means Treasury withdrawing from banking system (DRAINING liquidity)
+    // TGA: delta < 0 means Treasury injecting into banking system (INJECTING liquidity)
+    const tgaStatus = tga.delta > 0 ? "DRAINING" : tga.delta < 0 ? "INJECTING" : "NEUTRAL";
+    const tgaChangeFormatted = Math.abs(tga.delta) >= 1000
+      ? `${(Math.abs(tga.delta)/1000).toFixed(2)}T`
+      : `${tga.delta > 0 ? "+" : ""}${Math.abs(tga.delta).toFixed(2)}B`;
 
   const isAnyInjecting = onRrpStatus === "INJECTING" || tgaStatus === "INJECTING";
   const isAnyDraining = onRrpStatus === "DRAINING" || tgaStatus === "DRAINING";
@@ -287,25 +295,19 @@ export function LiquidityGaugePanel({ className }: { className?: string }) {
           targetMinuteET={15}
         />
         
-        {tga ? (
-          <GaugeRow 
-            title="Treasury General Account (TGA)"
-            value={tga.value}
-            formattedValue={tga.displayValue}
-            change={tga.delta}
-            changeFormatted={tgaChangeFormatted}
-            status={tgaStatus}
-            history={tga.history || []}
-            trend={tga.trend || []}
-            maxRef={MAX_TGA_REF}
-            targetHourET={16}
-            targetMinuteET={0}
-          />
-        ) : (
-          <div className="flex items-center justify-center text-text-muted text-[9px] font-mono">
-            TGA Data Loading...
-          </div>
-        )}
+        <GaugeRow 
+          title="Treasury General Account (TGA)"
+          value={tga.value}
+          formattedValue={tga.displayValue || `$${(tga.value || 0).toFixed(1)}B`}
+          change={tga.delta}
+          changeFormatted={tgaChangeFormatted}
+          status={tgaStatus}
+          history={tga.history || []}
+          trend={tga.trend || []}
+          maxRef={MAX_TGA_REF}
+          targetHourET={16}
+          targetMinuteET={0}
+        />
       </div>
 
       {/* Ambient glow */}

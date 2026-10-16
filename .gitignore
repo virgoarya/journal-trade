@@ -116,3 +116,29 @@ server/scripts/probe-*.mjs
 
 # Temp lesson files
 .kilo/temp_lesson.md
+
+# OTA Patch artifacts (contain build output, never commit)
+desktop/dist-patch/
+
+
+# Runtime monitoring output (written by system-monitor-agent, contains live data)
+server/monitoring-reports/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Hermes internal
+.hermes/
+
+# Debug artifacts
+chart.png
+
+# Stray tool output (dirname uses U+F03A private-use colon, not ASCII ":")
+server/C/
+
+# Gitleaks scan report (contains secrets in findings)
+gitleaks-report.json
+gitleaks-report-clean.json
+frontend/test-results/
+gitleaks-report*.json
+server/dist.old.*/

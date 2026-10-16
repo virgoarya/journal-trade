@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Plus, Sparkles, AlertCircle } from "lucide-react";
 import { playbookService, type Strategy } from "@/services/playbook.service";
@@ -27,15 +27,7 @@ export function PlaybookAssignmentModal({
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchPlaybooks();
-      setSelectedId("");
-      setShowCreateForm(false);
-    }
-  }, [isOpen]);
-
-  const fetchPlaybooks = async () => {
+  const fetchPlaybooks = useCallback(async () => {
     try {
       setLoading(true);
       const result = await playbookService.getAll();
@@ -48,6 +40,18 @@ export function PlaybookAssignmentModal({
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchPlaybooks();
+    }
+  }, [isOpen, fetchPlaybooks]);
+
+  const handleClose = () => {
+    setSelectedId("");
+    setShowCreateForm(false);
+    onClose();
   };
 
   const handleAssign = async () => {

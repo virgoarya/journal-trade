@@ -1,7 +1,7 @@
 import { silentLogger } from "../utils/silent-logger";
 import path from "node:path";
 import fs from "node:fs";
-import { mt5StreamCache, executeMt5Command, connectWithMcpConfig, disconnectMcp } from "../mt5-streamer";
+import { mt5StreamCache, executeMt5Command, connectWithMcpConfig, disconnectMcp, forceReconnect } from "../mt5-streamer";
 import { execSync } from 'child_process';
 
 // ─── Circuit Breaker ────────────────────────────────────────────────────
@@ -270,11 +270,22 @@ class MT5MCPService {
   }
 
   get isConnected(): boolean {
-    return this.connected;
+    // The native MCP streamer (mt5-streamer.ts) owns the real transport and its
+    // own auto-reconnect loop. `this.connected` only reflects the last explicit
+    // connectToMT5() call, so it goes stale (stays false) after a drop that the
+    // streamer later healed on its own — which froze the pipeline in
+    // waitingReconnect and made /status report "disconnected" forever.
+    // The streamer is authoritative: trust either source.
+    return this.connected || mt5StreamCache.isConnected();
   }
 
   get isReconnectingStatus(): boolean {
-    return this.isReconnecting;
+    // The native streamer owns the reconnect loop, so its flag is the real one.
+    // this.isReconnecting is only set by the legacy auto-reconnect path, which
+    // is never reached once the streamer is the transport — reading it alone
+    // made /status.reconnecting permanently false and broke the client's
+    // reconnect overlay (it would eject the user to the connect panel on a blip).
+    return this.isReconnecting || mt5StreamCache.isReconnecting();
   }
 
   get circuitBreakerState(): string {
@@ -289,6 +300,10 @@ class MT5MCPService {
     this.stopAutoReconnect();
     this.stopKeepAlive();
     this.connected = false;
+    // The streamer owns the transport — drop it there too, otherwise the two
+    // layers disagree and isConnected (which trusts the streamer) would keep
+    // reporting the stale transport as healthy.
+    forceReconnect();
   }
 
   private startAutoReconnect() {
@@ -322,7 +337,7 @@ class MT5MCPService {
     this.stopKeepAlive();
     // Ping every 30 seconds to keep connection alive
     this.keepAliveTimer = setInterval(() => {
-      if (this.connected) {
+      if (this.isConnected) {
         this.callWithCircuit("mt5_account_info", {}).catch((err) => {
           silentLogger.debug(`[MT5-MCP] Keep-alive ping failed: ${err.message}`);
         });
@@ -355,6 +370,8 @@ class MT5MCPService {
 
     try {
       if (config.apiKey !== undefined || config.mcpUrl) {
+        // Log apiKey for debugging purposes (handle with care)
+        silentLogger.debug(`[MT5-MCP] Connecting with config: server=${config.server}, login=${config.login}, apiKey=${config.apiKey ? 'provided' : 'missing'}, mcpUrl=${config.mcpUrl}`);
         const res = await connectWithMcpConfig({ mcpUrl: config.mcpUrl, apiKey: config.apiKey });
         if (!res.success) {
           return { success: false, error: res.error || "Gagal terhubung ke MT5 Native MCP" };
@@ -440,12 +457,29 @@ class MT5MCPService {
     return (result as any).symbols ?? [];
   }
 
-  /** Get symbol details. */
+  private symbolInfoCache: Map<string, { info: MT5Symbol; timestamp: number }> = new Map();
+  private readonly SYMBOL_INFO_TTL = 30_000; // 30s cache for static symbol specs
+  private readonly TICK_TTL = 5_000; // 5s cache for real-time tick data
+
+  /** Clear cached symbol info */
+  public clearSymbolCache(): void {
+    this.symbolInfoCache.clear();
+  }
+
+  /** Get symbol details with in-memory 30s cache for static specs. */
   async getSymbolInfo(symbol: string): Promise<MT5Symbol | null> {
+    const cached = this.symbolInfoCache.get(symbol);
+    if (cached && Date.now() - cached.timestamp < this.SYMBOL_INFO_TTL) {
+      return cached.info;
+    }
+
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_info", { symbol });
+      if (result) {
+        this.symbolInfoCache.set(symbol, { info: result as MT5Symbol, timestamp: Date.now() });
+      }
       return result as MT5Symbol;
-    }, 3, 500);
+    }, 1, 300); // 1 retry for read-only
   }
 
   /** Fetch OHLCV rates. */
@@ -453,47 +487,40 @@ class MT5MCPService {
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_copy_rates", { symbol, timeframe, count });
       return (result as any).rates ?? [];
-    }, 3, 500);
+    }, 2, 500); // 2 retries (reduced from 3)
   }
 
   /** Fetch OHLCV rates within a date range (for backtesting). */
   async getRatesRange(symbol: string, timeframe: string, from: number, to: number): Promise<MT5Rate[]> {
+    // Fail fast if MT5 is not connected
+    if (!mt5StreamCache.isConnected()) {
+      throw new Error("MT5 not connected. Call mt5_connect first or wait for stream to establish.");
+    }
     return withRetry(async () => {
-      const result = await this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to });
+      const result = await Promise.race([
+        this.callWithCircuit("mt5_copy_rates_range", { symbol, timeframe, from, to }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("MT5 getRatesRange timeout (12s)")), 12000))
+      ]);
       return (result as any).rates ?? [];
-    }, 3, 500);
+    }, 2, 1000); // 2 retries, 1s delay
   }
 
-  /** Get current tick. */
+  /** Get current tick with fail-fast retry (real-time, not cached). */
   async getTick(symbol: string): Promise<MT5Tick | null> {
     return withRetry(async () => {
       const result = await this.callWithCircuit("mt5_symbol_tick", { symbol });
       return result as MT5Tick;
-    }, 3, 500);
+    }, 1, 200); // 1 retry, fail-fast
   }
 
   /** Get all open positions with retry on transient failure. */
   async getPositions(): Promise<MT5Position[]> {
-    const cached = mt5StreamCache.getPositions();
-    if (cached && cached.length > 0) {
-      return cached as MT5Position[];
-    }
-    
-    // Fallback if cache is completely empty or hasn't received ticks yet
-    return withRetry(async () => {
-      const result = await this.callWithCircuit("mt5_positions_get", { includeOrders: true });
-      return (result as any).positions ?? [];
-    }, 3, 500);
+    return mt5StreamCache.getPositions() as MT5Position[];
   }
 
   /** Get all active pending (limit/stop) orders. */
   async getOrders(): Promise<any[]> {
-    const cached = mt5StreamCache.getOrders();
-    if (cached && cached.length > 0) {
-      return cached;
-    }
-    const result = await this.callWithCircuit("mt5_orders_get", { includeOrders: true });
-    return Array.isArray(result) ? result : [];
+    return mt5StreamCache.getOrders();
   }
 
   /** Debug — get raw MT5 diagnostic info about positions. */
@@ -598,7 +625,7 @@ class MT5MCPService {
     try {
       const result = await withRetry(
         async () => {
-          if (!this.connected && tool !== "mt5_connect") {
+          if (!this.isConnected && tool !== "mt5_connect") {
             throw new Error("MT5 not connected");
           }
           return await executeMt5Command(tool, args);

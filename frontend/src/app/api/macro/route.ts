@@ -8,7 +8,7 @@ const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
 // Cache for FRED series data to prevent hitting rate limits
 const fredCache: Record<string, { data: { date: string; value: number }[]; timestamp: number }> = {};
-const FRED_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes â€” suitable for institutional macro desk real-time needs
+const FRED_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes — optimal real-time data freshness for institutional macro desk
 
 const SERIES_IDS = {
   // Growth
@@ -63,8 +63,7 @@ async function fetchFredSeries(seriesId: string, startDate?: string, retryCount:
     if (!response.ok) {
       if (response.status === 429 && retryCount < 3) {
         const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
-        console.log(`[FRED] Rate limited for ${seriesId}, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise(resolve => setTimeout(resolve, delay));
         return fetchFredSeries(seriesId, startDate, retryCount + 1);
       }
       console.error(`[FRED] Failed to fetch ${seriesId}: ${response.status} ${response.statusText}`);
@@ -111,8 +110,7 @@ async function fetchFredSeries(seriesId: string, startDate?: string, retryCount:
   } catch (error: any) {
     if (retryCount < 3) {
       const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
-      console.log(`[FRED] Fetch failed for ${seriesId}, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise(resolve => setTimeout(resolve, delay));
       return fetchFredSeries(seriesId, startDate, retryCount + 1);
     }
     console.error(`[FRED] Error fetching ${seriesId} after retries:`, error.message);
@@ -196,8 +194,7 @@ export async function GET(request: NextRequest) {
     const hasRealData = unrateData.length >= 36 && cpiData.length >= 36;
     
     if (!hasRealData) {
-      console.log(`[FRED] Insufficient data, using dummy fallback. unrate:${unrateData.length}, cpi:${cpiData.length}`);
-      const dummyInputs = generateDummyData();
+            const dummyInputs = generateDummyData();
       const dummyCpiMoM: number[] = [
         ...Array(34).fill(0.3),
         0.4, 0.4, 0.4, 0.3, 0.3, 0.3

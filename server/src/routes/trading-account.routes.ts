@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { tradingAccountService } from "../services/trading-account.service";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { createTradingAccountSchema, updateTradingAccountSchema, updateRiskRulesSchema } from "../validators/trading-account.validator";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";

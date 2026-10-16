@@ -8,7 +8,7 @@ import { promisify } from "util";
 import path from "path";
 
 const execFileAsync = promisify(execFile);
-// ─── State ─────────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 let cachedPositions: any[] = [];
 let cachedOrders: any[] = [];
 let cachedAccountInfo: any = null;
@@ -16,6 +16,11 @@ let mcpClient: Client | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
 let isConnected = false;
 let reconnectTimer: NodeJS.Timeout | null = null;
+// True from the moment a drop is detected until the transport is back. The
+// service's own reconnect flag is only set on its (unused) legacy path, so the
+// client would otherwise never see a "reconnecting" window and would eject the
+// user to the connect panel on every blip.
+let isReconnecting = false;
 
 const POLL_INTERVAL_MS = 1500;   // Poll every 1.5s
 const RECONNECT_DELAY_MS = 5000; // Retry connection every 5s
@@ -32,7 +37,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-// ─── Normalizers ────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Normalizers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function normalizeAccountInfo(raw: any): any {
    if (!raw) return null;
    // Native MCP sends account info nested under 'account' key
@@ -63,58 +68,79 @@ function normalizeAccountInfo(raw: any): any {
  }
 
 function normalizePosition(p: any): any {
-   let timeVal = 0;
-   const timeStr = p.open_time ?? p.create_time ?? p.update_time ?? p.time;
-   if (typeof timeStr === "string") {
-     // Native MCP: "2026.08.05 14:00:22"
-     timeVal = Math.floor(new Date(timeStr.replace(/\./g, "-")).getTime() / 1000);
-   } else if (typeof timeStr === "number") {
-     timeVal = timeStr;
-   }
+  // Python _pos_dict already returns camelCase: ticket, symbol, type, volume, priceOpen, priceCurrent, sl, tp, profit, swap, commission, comment, time, magic
+  // But accept snake_case as fallback for raw MT5 data
+  const timeVal = p.time ?? p.open_time ?? p.create_time ?? p.update_time ?? 0;
 
-const pAction = String(p.action ?? p.type ?? "").toLowerCase();
-   // Preserve pending order types (buy limit, buy stop, sell limit, sell stop)
-   // Map only market orders (buy/sell) to BUY/SELL
-   const isPending = pAction.includes("limit") || pAction.includes("stop");
-   const normalizedType = isPending
-     ? pAction.toUpperCase().replace(/\s+/g, "_")  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
-     : (pAction === "buy" || pAction === "0" || p.type === 0) ? "BUY" : "SELL";
+  const pAction = String(p.action ?? p.type ?? "").toLowerCase();
+  const isPending = pAction.includes("limit") || pAction.includes("stop");
+  const normalizedType = isPending
+    ? pAction.toUpperCase().replace(/\s+/g, "_")  // BUY_LIMIT, SELL_LIMIT, BUY_STOP, SELL_STOP
+    : (pAction === "buy" || pAction === "0" || p.type === 0) ? "BUY" : "SELL";
 
-   const priceOpen = p.price_order ?? p.price_open ?? p.priceOpen ?? p.open_price ?? 0;
+  // Python sends camelCase; accept snake_case as fallback
+  const priceOpen = p.priceOpen ?? p.price_open ?? p.price_order ?? p.open_price ?? 0;
 
-   const comment = String(p.comment ?? "");
-   // Detect order source by comment: AI pipeline uses "AI-<METHOD>-C<conf>" prefix
-   const isAiOrder = /^AI-/i.test(comment.trim()) || /^HUNTER-/i.test(comment.trim());
+  const comment = String(p.comment ?? "");
+  const isAiOrder = /^AI-/i.test(comment.trim()) || /^HUNTER-/i.test(comment.trim());
 
-   return {
-     ticket: Number(p.order_id ?? p.position_id ?? p.ticket ?? p.id ?? 0),
-     symbol: String(p.symbol ?? ""),
-     type: normalizedType,
-     volume: Number(p.volume_initial ?? p.volume ?? p.lots ?? 0),
-     priceOpen,
-     priceCurrent: Number(p.price_last ?? p.price_current ?? p.priceCurrent ?? p.price ?? priceOpen),
-     sl: Number(p.stop_loss ?? p.sl ?? 0),
-     tp: Number(p.take_profit ?? p.tp ?? 0),
-     profit: Number(p.profit ?? 0),
-     swap: Number(p.swap ?? p.swaps ?? 0),
-     commission: Number(p.commission ?? p.commissions ?? 0),
-     comment,
-     source: isAiOrder ? "AI" : "MANUAL",
-     time: timeVal,
-     magic: Number(p.magic ?? 0),
-     state: String(p.state ?? ""),
-   };
- }
+  return {
+    ticket: Number(p.ticket ?? p.order_id ?? p.position_id ?? p.id ?? 0),
+    symbol: String(p.symbol ?? ""),
+    type: normalizedType,
+    volume: Number(p.volume ?? p.volume_initial ?? p.lots ?? 0),
+    priceOpen,
+    priceCurrent: Number(p.priceCurrent ?? p.price_current ?? p.price_last ?? p.price ?? priceOpen),
+    sl: Number(p.sl ?? p.stop_loss ?? 0),
+    tp: Number(p.tp ?? p.take_profit ?? 0),
+    profit: Number(p.profit ?? 0),
+    swap: Number(p.swap ?? p.swaps ?? 0),
+    commission: Number(p.commission ?? p.commissions ?? 0),
+    comment,
+    source: isAiOrder ? "AI" : "MANUAL",
+    time: typeof timeVal === "string" ? Math.floor(new Date(timeVal.replace(/\./g, "-")).getTime() / 1000) : Number(timeVal),
+    magic: Number(p.magic ?? 0),
+    state: String(p.state ?? ""),
+  };
+}
 
-// ─── Public Cache API ───────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Public Cache API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export const mt5StreamCache = {
   getPositions: () => cachedPositions,
   getOrders: () => cachedOrders,
   getAccountInfo: () => cachedAccountInfo,
   isConnected: () => isConnected,
+  isReconnecting: () => isReconnecting,
 };
 
-// ─── MCP Tool Call Helper ───────────────────────────────────────────────────
+/**
+ * Drop the transport and immediately schedule a reconnect.
+ * Use when a caller detects a broken connection mid-operation: the streamer
+ * owns the transport, so a caller that only flips its own flag would leave the
+ * two layers disagreeing about whether MT5 is up.
+ */
+export function forceReconnect(): void {
+  if (mcpClient) {
+    try {
+      Promise.resolve(mcpClient.close()).catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
+  mcpClient = null;
+  isConnected = false;
+  isReconnecting = true;
+  stopPolling();
+  // Clear any pending attempt so this retry is prompt instead of waiting out
+  // an already-scheduled backoff window.
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  scheduleReconnect();
+}
+
+// ΓöÇΓöÇΓöÇ MCP Tool Call Helper ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 async function callTool(name: string, args: Record<string, any> = {}): Promise<any> {
   if (!mcpClient) throw new Error("MT5 MCP client not initialized");
   const result = await mcpClient.callTool({ name, arguments: args });
@@ -148,7 +174,7 @@ function isMcpTradeBlocked(res: any): boolean {
   return /not permitted|not allowed/i.test(text);
 }
 
-// ─── Python subprocess queue ─────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Python subprocess queue ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // MT5 hanya mengizinkan SATU proses python terhubung ke terminal pada satu waktu
 // (retcode -6 "connection failed"). Semua spawn python di-serialize via promise
 // chain agar manual close, pipeline AI, dan trailing stop tidak saling rebut.
@@ -163,7 +189,29 @@ function enqueuePython(args: string[], options: any = {}): Promise<{ stdout: str
 /** Spawn python, stream stdout, resolve with { stdout } string (caller parses JSON). */
 function spawnPython(args: string[], options: any): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn("python", args, {
+    const pythonExecutable: string =
+      process.env.PYTHON_PATH ||
+      (() => {
+        // Try common Python paths in order
+        const candidates = [
+          process.env.PYTHON_PATH,
+          process.env.PYTHON,
+          "python",
+          "python3",
+          "python.exe",
+          "C:\\Python314\\python.exe",
+          "C:\\Python313\\python.exe",
+          "C:\\Python312\\python.exe",
+          "C:\\Python311\\python.exe",
+          "C:\\Python310\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+          "C:\\Users\\" + (process.env.USERNAME || "") + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        ].filter((c): c is string => Boolean(c));
+        return candidates[0] || "python";
+      })();
+    const child: any = spawn(pythonExecutable, args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -199,7 +247,7 @@ async function enqueuePythonTrade(action: string, payload: any = {}): Promise<an
   try {
     const scriptPath = path.join(__dirname, "..", "trade_api.py");
     const { stdout } = await enqueuePython([scriptPath, action, JSON.stringify(payload)], {
-      timeout: 30000, // 30s timeout — Python MT5 call bisa hang jika terminal freeze
+      timeout: 30000, // 30s timeout ΓÇö Python MT5 call bisa hang jika terminal freeze
       killSignal: "SIGKILL",
       maxBuffer: 1024 * 1024 * 8,
     });
@@ -210,7 +258,31 @@ async function enqueuePythonTrade(action: string, payload: any = {}): Promise<an
   }
 }
 
-// ─── Public RPC Interface (Unified with native MT5 MCP tools) ────────────────
+// ΓöÇΓöÇΓöÇ Public RPC Interface (Unified with native MT5 MCP tools) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/**
+ * Normalizes MT5 position/order data for frontend consumption.
+ * Converts internal normalized format to Mt5Position frontend type.
+ */
+export function normalizePositionForFrontend(raw: any): { id: string; symbol: string; entryPrice: number; pnl: number; status: "open" | "closed" } {
+  if (!raw) {
+    return { id: "0", symbol: "", entryPrice: 0, pnl: 0, status: "open" };
+  }
+  const ticket = raw.ticket ?? raw.order_id ?? raw.position_id ?? raw.id ?? 0;
+  const symbol = String(raw.symbol ?? "");
+  const priceOpen = raw.priceOpen ?? raw.price_open ?? raw.price_order ?? raw.open_price ?? 0;
+  const profit = Number(raw.profit ?? 0);
+  const type = String(raw.type ?? "").toLowerCase();
+  const isPending = type.includes("limit") || type.includes("stop");
+  
+  return {
+    id: String(ticket),
+    symbol,
+    entryPrice: Number(priceOpen),
+    pnl: profit,
+    status: isPending ? "closed" : "open",
+  };
+}
+
 export const executeMt5Command = async (action: string, payload: any = {}): Promise<any> => {
   if (!isConnected || !mcpClient) {
     throw new Error("MT5 Streamer (Native MCP) is not connected.");
@@ -246,7 +318,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         return pyRes.orders;
       }
       const res = await callTool("get_trading_open_positions", { include_orders: true, ...(payload.symbol ? { symbol: payload.symbol } : {}) });
-      const raw = Array.isArray(res) ? res : res;
+      const raw = Array.isArray(res) ? res : (res?.orders ?? res?.result ?? res);
       const rawOrders = (raw?.orders ?? []).map(normalizePosition);
       cachedOrders = rawOrders;
       return rawOrders;
@@ -254,7 +326,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
 
     case "mt5_history_deals_get":
     case "get_trading_history_positions": {
-      // Native MCP tidak punya tool deals terpisah — pakai get_trading_history_positions
+      // Native MCP tidak punya tool deals terpisah ΓÇö pakai get_trading_history_positions
       // yang mengembalikan posisi tertutup lengkap (close_price, close_reason, profit)
       const args: any = {};
       if (payload.from) args.datetime_from = payload.from;
@@ -355,7 +427,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         tp: payload.tp !== undefined ? Number(payload.tp) : undefined,
         comment: payload.comment ? String(payload.comment).slice(0, 31) : undefined,
       });
-      // Timeout/kill atau stdout gagal parse → order MUNGKIN sudah terkirim.
+      // Timeout/kill atau stdout gagal parse ΓåÆ order MUNGKIN sudah terkirim.
       // Jangan fallback ke native MCP (bisa double-submit). Minta verifikasi manual.
       const pyErrMsg = pyRes?.error ? String(pyRes.error) : "";
       if (pyRes?.success !== true && /timeout|ETIMEDOUT|SIGKILL|JSON|Unexpected token/i.test(pyErrMsg)) {
@@ -363,7 +435,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
         return {
           success: false,
           uncertain: true,
-          error: "Order status tidak pasti — verifikasi posisi di MT5 sebelum submit ulang.",
+          error: "Order status tidak pasti ΓÇö verifikasi posisi di MT5 sebelum submit ulang.",
         };
       }
       if (pyRes?.success === true) {
@@ -445,7 +517,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
           return { success: true, ticket: ticketNum, source: "python" };
         }
         // Retcode 10016 = TRADE_DISABLED, 10014 = MARKET_CLOSED: tidak ada gunanya
-        // fallback ke native MCP — hasilnya sama-sama ditolak terminal.
+        // fallback ke native MCP ΓÇö hasilnya sama-sama ditolak terminal.
         if (pyRes?.retcode === 10016 || pyRes?.retcode === 10014) {
           return { success: false, ticket: ticketNum, error: mcpTradeError(pyRes.error || pyRes) };
         }
@@ -637,7 +709,7 @@ export const executeMt5Command = async (action: string, payload: any = {}): Prom
   }
 };
 
-// ─── Connection ─────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Connection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 let activeMcpUrl: string = env.MT5_MCP_URL ?? "http://127.0.0.1:22346/mcp";
 let activeApiKey: string = env.MT5_MCP_API_KEY ?? "";
 
@@ -691,9 +763,10 @@ export async function disconnectMcp(): Promise<void> {
     mcpClient = null;
   }
   isConnected = false;
+  isReconnecting = false; // deliberate disconnect — not a reconnect window
   cachedPositions = [];
   cachedAccountInfo = null;
-  broadcast("mt5_status", { connected: false }, "mt5" as any);
+  broadcast("mt5_status", { connected: false, reconnecting: false }, "mt5" as any);
 }
 
 async function connectToNativeMcp(): Promise<void> {
@@ -722,17 +795,18 @@ async function connectToNativeMcp(): Promise<void> {
     await withTimeout(
       client.connect(transport),
       CONNECT_TIMEOUT_MS,
-      "Koneksi ke MT5 MCP timeout. Pastikan MetaTrader 5 menyala dan 'Enable Internal Server' aktif di Options → MCP.",
+      "Koneksi ke MT5 MCP timeout. Pastikan MetaTrader 5 menyala dan 'Enable Internal Server' aktif di Options ΓåÆ MCP.",
     );
     mcpClient = client;
     isConnected = true;
+    isReconnecting = false;
 
-    silentLogger.info("[MT5-MCP] ✅ Connected to native MT5 MCP server (Streamable HTTP).");
+    silentLogger.info("[MT5-MCP] Γ£à Connected to native MT5 MCP server (Streamable HTTP).");
     broadcast("mt5_status", { connected: true, reconnecting: false }, "mt5" as any);
 
     // Initial fetch of account info
     try {
-      const initialAcct = await callTool("mt5_account_info", {});
+      const initialAcct = await callTool("get_trading_account_info", {});
       cachedAccountInfo = normalizeAccountInfo(initialAcct);
     } catch {
       // ignore
@@ -760,22 +834,29 @@ async function connectToNativeMcp(): Promise<void> {
 function handleDisconnect() {
   if (!isConnected) return;
   isConnected = false;
+  isReconnecting = true;
   mcpClient = null;
   stopPolling();
-  broadcast("mt5_status", { connected: false }, "mt5" as any);
+  // Emit reconnecting:true together with the drop so the client can switch to
+  // the "reconnecting" state immediately instead of waiting for a stale poll.
+  broadcast("mt5_status", { connected: false, reconnecting: true }, "mt5" as any);
   scheduleReconnect();
 }
 
 function scheduleReconnect() {
   if (reconnectTimer) return;
   silentLogger.info(`[MT5-MCP] Scheduling reconnect in ${RECONNECT_DELAY_MS}ms...`);
+  // Surface the reconnecting state even when the very first connect failed
+  // (handleDisconnect is skipped then, so nothing else would tell the client).
+  isReconnecting = true;
+  broadcast("mt5_status", { connected: false, reconnecting: true }, "mt5" as any);
   reconnectTimer = setTimeout(async () => {
     reconnectTimer = null;
     await connectToNativeMcp();
   }, RECONNECT_DELAY_MS);
 }
 
-// ─── Polling ────────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Polling ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(async () => {
@@ -820,7 +901,7 @@ function stopPolling() {
   }
 }
 
-// ─── Entry Point ─────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Entry Point ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 export function initMt5NativeMcp(): void {
   silentLogger.info("[MT5-MCP] Initializing native MT5 MCP streamer...");
   connectToNativeMcp();

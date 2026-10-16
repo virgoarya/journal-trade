@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hunter Trades Journal - Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: {
+                            void: '#020202',
+                            surface: '#111116',
+                            elevated: '#151520',
+                        },
+                        accent: {
+                            gold: '#D4AF37',
+                            goldDim: '#8B7722',
+                        },
+                        neon: {
+                            green: '#39FF88',
+                            orange: '#FF6A00',
+                            red: '#FF3864',
+                        },
+                        text: {
+                            primary: '#E5E7EB',
+                            secondary: '#CBD5E1',
+                            muted: '#94A3B8',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            background-color: #020202;
+            color: #E5E7EB;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .terminal-border {
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+
+        .glow-gold {
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 10;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(212, 175, 55, 0.05) 50%, rgba(0, 0, 0, 0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            bottom: 100%;
+            animation: scanline 6s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { bottom: 100%; }
+            100% { bottom: -100px; }
+        }
+
+        .glass-panel {
+            background: rgba(21, 21, 32, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+    <div class="scanline"></div>
+    
+    <div class="min-h-screen flex flex-col p-6 space-y-6 max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center border-b border-white/10 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold font-mono tracking-tighter text-accent-gold glow-gold">HUNTER_TRADES // JOURNAL</h1>
+                <p class="text-xs text-text-muted font-mono uppercase mt-1">Trade Log & Reflection</p>
+            </div>
+            <div class="text-right font-mono">
+                <p class="text-sm">SEPTEMBER 10, 2026</p>
+                <p class="text-xs text-text-muted">21:45:12 UTC+7</p>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-panel p-4 rounded-md terminal-border">
+                <p class="text-xs text-text-muted font-mono uppercase mb-1">Total Entries</p>
+                <p class="text-2xl font-bold">89</p>
+            </div>
+            <div class="glass-panel p-4 rounded-md terminal-border">
+                <p class="text-xs text-text-muted font-mono uppercase mb-1">Winning Entries</p>
+                <p class="text-2xl font-bold text-neon-green">61</p>
+            </div>
+            <div class="glass-panel p-4 rounded-md terminal-border">
+                <p class="text-xs text-text-muted font-mono uppercase mb-1">Losing Entries</p>
+                <p class="text-2xl font-bold text-neon-red">28</p>
+            </div>
+            <div class="glass-panel p-4 rounded-md terminal-border">
+                <p class="text-xs text-text-muted font-mono uppercase mb-1">Avg RRR</p>
+                <p class="text-2xl font-bold text-accent-gold">1:2.1</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- New Entry Form / Filters -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Filters -->
+                <div class="glass-panel p-4 rounded-md terminal-border">
+                    <h2 class="text-sm font-mono font-bold uppercase tracking-widest text-accent-gold mb-3">Filters</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-text-muted font-mono uppercase block mb-1">Symbol</label>
+                            <select class="w-full bg-black/30 border border-white/10 rounded text-sm font-mono text-text-primary focus:outline-none focus:border-accent-gold px-3 py-2">
+                                <option>ALL SYMBOLS</option>
+                                <option>XAUUSD</option>
+                                <option>EURUSD</option>
+                                <option>BTCUSD</option>
+                                <option>GBPUSD</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-text-muted font-mono uppercase block mb-1">Date Range</label>
+                            <select class="w-full bg-black/30 border border-white/10 rounded text-sm font-mono text-text-primary focus:outline-none focus:border-accent-gold px-3 py-2">
+                                <option>THIS MONTH</option>
+                                <option>LAST 7 DAYS</option>
+                                <option>LAST 30 DAYS</option>
+                                <option>ALL TIME</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-text-muted font-mono uppercase block mb-1">Outcome</label>
+                            <select class="w-full bg-black/30 border border-white/10 rounded text-sm font-mono text-text-primary focus:outline-none focus:border-accent-gold px-3 py-2">
+                                <option>ALL</option>
+                                <option class="text-neon-green">WIN</option>
+                                <option class="text-neon-red">LOSS</option>
+                                <option class="text-text-muted">BREAKEVEN</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Add -->
+                <div class="glass-panel p-4 rounded-md terminal-border">
+                    <h2 class="text-sm font-mono font-bold uppercase tracking-widest text-accent-gold mb-3">Quick Add</h2>
+                    <button class="w-full bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold font-mono py-2 rounded-md transition-colors border border-accent-gold/20">
+                        + NEW TRADE ENTRY
+                    </button>
+                    <p class="text-[10px] text-text-muted font-mono text-center mt-2">Log a completed trade</p>
+                </div>
+            </div>
+
+            <!-- Journal Entries List -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-sm font-mono font-bold uppercase tracking-widest text-accent-gold">Trade Entries</h2>
+                    <div class="flex space-x-2">
+                        <button class="text-[10px] text-text-muted hover:text-accent-gold transition-colors font-mono">EXPORT CSV</button>
+                        <button class="text-[10px] text-text-muted hover:text-accent-gold transition-colors font-mono">IMPORT</button>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <!-- Entry 1 -->
+                    <div class="glass-panel p-4 rounded-md terminal-border hover:bg-white/[0.02] transition-colors">
+                        <div class="grid grid-cols-12 gap-4 mb-3">
+                            <div class="col-span-12 md:col-span-3">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Symbol</p>
+                                <p class="font-bold font-mono">XAUUSD</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Direction</p>
+                                <p class="font-bold text-neon-green font-mono">BUY</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Entry / Exit</p>
+                                <p class="font-mono text-sm">2514.20 / 2528.00</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">P&L</p>
+                                <p class="font-bold text-neon-green font-mono">+$1,380.00</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">RRR</p>
+                                <p class="font-mono">1:2.5</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-1">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Date</p>
+                                <p class="font-mono text-[10px]">2026-09-10</p>
+                            </div>
+                        </div>
+                        <div class="border-t border-white/5 pt-3">
+                            <p class="text-xs text-text-secondary italic line-clamp-2">"Clean breakout on H1. Waited for retest of broken resistance. Execution was perfect via MT5 bridge. Emotionally calm throughout."</p>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button class="text-[10px] text-text-muted hover:text-accent-gold transition-colors font-mono">EDIT</button>
+                            <button class="text-[10px] text-text-muted hover:text-neon-red transition-colors font-mono">DELETE</button>
+                        </div>
+                    </div>
+
+                    <!-- Entry 2 -->
+                    <div class="glass-panel p-4 rounded-md terminal-border hover:bg-white/[0.02] transition-colors">
+                        <div class="grid grid-cols-12 gap-4 mb-3">
+                            <div class="col-span-12 md:col-span-3">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Symbol</p>
+                                <p class="font-bold font-mono">EURUSD</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Direction</p>
+                                <p class="font-bold text-neon-red font-mono">SELL</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Entry / Exit</p>
+                                <p class="font-mono text-sm">1.1042 / 1.1065</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">P&L</p>
+                                <p class="font-bold text-neon-red font-mono">-$460.00</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">RRR</p>
+                                <p class="font-mono">1:1.8</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-1">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Date</p>
+                                <p class="font-mono text-[10px]">2026-09-09</p>
+                            </div>
+                        </div>
+                        <div class="border-t border-white/5 pt-3">
+                            <p class="text-xs text-text-secondary italic line-clamp-2">"Entered on breakout but got stopped out. News catalyst (CPI) hit right after entry. Need to check economic calendar before trading breakouts."</p>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button class="text-[10px] text-text-muted hover:text-accent-gold transition-colors font-mono">EDIT</button>
+                            <button class="text-[10px] text-text-muted hover:text-neon-red transition-colors font-mono">DELETE</button>
+                        </div>
+                    </div>
+
+                    <!-- Entry 3 -->
+                    <div class="glass-panel p-4 rounded-md terminal-border hover:bg-white/[0.02] transition-colors">
+                        <div class="grid grid-cols-12 gap-4 mb-3">
+                            <div class="col-span-12 md:col-span-3">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Symbol</p>
+                                <p class="font-bold font-mono">BTCUSD</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Direction</p>
+                                <p class="font-bold text-neon-green font-mono">BUY</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Entry / Exit</p>
+                                <p class="font-mono text-sm">58200 / 59450</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">P&L</p>
+                                <p class="font-bold text-neon-green font-mono">+$2,480.00</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-2">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">RRR</p>
+                                <p class="font-mono">1:3.0</p>
+                            </div>
+                            <div class="col-span-12 md:col-span-1">
+                                <p class="text-[10px] text-text-muted font-mono uppercase mb-1">Date</p>
+                                <p class="font-mono text-[10px]">2026-09-08</p>
+                            </div>
+                        </div>
+                        <div class="border-t border-white/5 pt-3">
+                            <p class="text-xs text-text-secondary italic line-clamp-2">"Liquidity grab setup on H4. Held through volatility. Best trade this month. Patience paid off."</p>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button class="text-[10px] text-text-muted hover:text-accent-gold transition-colors font-mono">EDIT</button>
+                            <button class="text-[10px] text-text-muted hover:text-neon-red transition-colors font-mono">DELETE</button>
+                        </div>
+                    </div>
+
+                    <!-- Load More -->
+                    <div class="text-center py-4">
+                        <button class="text-text-muted hover:text-accent-gold transition-colors font-mono text-sm">LOAD MORE ENTRIES</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-auto pt-6 border-t border-white/10 flex justify-between items-center text-[10px] text-text-muted font-mono uppercase">
+            <div>&copy; 2026 HUNTER_TRADES // SYSTEM_V1.1</div>
+            <div class="flex space-x-4">
+                <span class="text-neon-green">P_STATUS: OPTIMAL</span>
+                <span>LATENCY: 14ms</span>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

@@ -42,6 +42,9 @@ interface SymbolTrack {
     EXECUTION: PipelineStage;
     TRAILING: PipelineStage;
   };
+  // NEW: track validation steps & guardrails per‑symbol
+  validationSteps?: string[];
+  guardrailFlags?: string[];
 }
 
 const renderLogMessage = (msg: string) => {
@@ -283,6 +286,11 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
         } else if (log.type === "ERROR") {
           track.stages.EXECUTION = { status: "error", message: log.message, time };
           track.stages.TRAILING = { status: "pending" };
+        } else if (log.type === "WARN" && log.message.includes("GUARDRAIL")) {
+          track.guardrailFlags = track.guardrailFlags || [];
+          if (!track.guardrailFlags.includes(log.message)) {
+            track.guardrailFlags.push(log.message);
+          }
         } else if (log.type === "TRAILING") {
           track.stages.TRAILING = { status: "success", message: log.message, time };
         }
@@ -492,6 +500,18 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                     );
                   })}
                 </div>
+
+                {track.guardrailFlags && track.guardrailFlags.length > 0 && (
+                  <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded font-mono text-[9px] text-yellow-400 flex flex-col gap-1">
+                    <span className="font-bold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                      ACTIVE GUARDRAIL INTERCEPTIONS:
+                    </span>
+                    {track.guardrailFlags.map((flag, idx) => (
+                      <span key={idx} className="opacity-90 pl-4">• {flag}</span>
+                    ))}
+                  </div>
+                )}
 
                 {currentStepDetail && currentStepDetail.message && (
                   <div className={`mt-2 p-3 bg-black/60 rounded border font-mono text-[10px] leading-relaxed transition shadow-inner relative overflow-hidden ${

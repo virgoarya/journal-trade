@@ -97,7 +97,7 @@ class SMCStrategy {
     for (let i = validSignals.length - 1; i >= 0; i--) {
       const sig = validSignals[i];
       const validation = this.buildSMCChecklist(sig, fractal);
-      sig.checklistItems = validation.items;
+      sig.checklistItems = this.buildSMCDisplayItems(sig, fractal);
       
       // Strict Validation: Drop signal if any core step failed
       if (sig.confidence > 0 && !validation.passed) {
@@ -117,8 +117,7 @@ class SMCStrategy {
         reason: "Scanning for setups...",
         checklistItems: []
       };
-      const validation = this.buildSMCChecklist(dummySig, fractal);
-      dummySig.checklistItems = validation.items;
+      dummySig.checklistItems = this.buildSMCDisplayItems(dummySig, fractal);
       validSignals.push(dummySig);
     }
 
@@ -131,7 +130,8 @@ class SMCStrategy {
     const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
     const dailyBias = analyzeDaily3CandleBias(fractal.daily || fractal.direction);
 
-    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+    const avgRange = fractal?.entry ? this.avgCandleRange(fractal.entry, 5) : 0;
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
     const entryTfLabel = fractal.entryTimeframeStr || "M15";
     const setupTfLabel = fractal.setupTimeframeStr || "H1";
     const htfTfLabel = fractal.directionTimeframeStr || "H4";
@@ -235,6 +235,40 @@ class SMCStrategy {
   }
 
 
+  /** Display checklist rapi (engine-flow + target level saat WAITING). UI only, tidak dipakai engine buat drop. */
+  private buildSMCDisplayItems(sig: SMCSignal, fractal: import("./market-structure.service").FractalContext): ChecklistItem[] {
+    const isBuy = sig.direction === "BUY";
+    const htfStr = fractal.directionStr || fractal.dailyStr;
+    const isHtfBosConfirmed = isBuy ? htfStr.trend.direction === "BULL" : htfStr.trend.direction === "BEAR";
+    const avgRange = fractal?.entry ? this.avgCandleRange(fractal.entry, 5) : 0;
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp, avgRange * 0.5);
+    const entryTfLabel = fractal.entryTimeframeStr || "M15";
+    const setupTfLabel = fractal.setupTimeframeStr || "H1";
+    const htfTfLabel = fractal.directionTimeframeStr || "H4";
+    const { relHigh, relLow } = getSwingPrices(fractal);
+    const targetSweep = isBuy ? relLow : relHigh;
+    const liquidityZone = fractal.directionStr?.liquidityZones?.find(lz => lz.swept && lz.type === (isBuy ? "SELL_SIDE" : "BUY_SIDE"));
+    const obSweepPrice = liquidityZone ? liquidityZone.price.toFixed(5) : (sig.orderBlock?.sweepPrice ? sig.orderBlock.sweepPrice.toFixed(5) : null);
+    const isSweepValid = ((sig.orderBlock?.hasSweep ?? false) || !!liquidityZone) && !!obSweepPrice;
+    const lastCandle = fractal.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
+    const isM5ChoCh = sig.breachType === "M5_CHOCH_OB";
+    const hasMss = sig.breachType === "MSS" || sig.breachType === "CHOCH" || sig.breachType === "BREAKER" || sig.breachType === "LIQUIDITY_GRAB" || sig.breachType === "OB_MITIGATION" || (sig.orderBlock?.hasCHOCH ?? false);
+    const mk = (id: string, label: string, condition: boolean, opts?: { isIndependent?: boolean; isFailable?: boolean; value?: string; details?: string; timeframe?: string }): ChecklistItem => {
+      const status: "PASSED" | "WAITING" | "FAILED" = condition ? "PASSED" : (opts?.isIndependent ? "WAITING" : "FAILED");
+      return { id, label, status, value: opts?.value, timeframe: opts?.timeframe, details: opts?.details };
+    };
+    return [
+      mk("smc-bos", `① ${htfTfLabel} CHoCH/BOS : ${isHtfBosConfirmed ? (isBuy ? "Bullish" : "Bearish") : "Unconfirmed"}`, isHtfBosConfirmed, { isFailable: true, isIndependent: true, value: isHtfBosConfirmed ? "Confirmed" : "Unconfirmed", details: "Trend HTF harus searah (engine drop jika SIDEWAYS)." }),
+      mk("smc-liq", isSweepValid ? `② ${isBuy ? "SSL" : "BSL"} Swept @ ${obSweepPrice}` : `② ${isBuy ? "SSL" : "BSL"} Menunggu Sweep @ ${targetSweep}`, isSweepValid, { isFailable: true, isIndependent: true, value: isSweepValid ? `Swept @ ${obSweepPrice}` : `Target @ ${targetSweep}`, details: isSweepValid ? `Liquidity disapu di ${setupTfLabel}` : `Menunggu sweep ${isBuy ? "SSL" : "BSL"} @ ${targetSweep}` }),
+      mk("smc-ob", `③ ${htfTfLabel} ${isBuy ? "Bullish" : "Bearish"} OB`, !!(sig.orderBlock || sig.h1OrderBlock), { isFailable: true, isIndependent: true, details: "PD Array zone terdeteksi." }),
+      mk("smc-mss", isM5ChoCh ? `④ M5 CHoCH Confirmation + M5 OB` : `④ ${entryTfLabel} MSS / CHoCH Confirmation`, hasMss, { isFailable: true, isIndependent: true, value: hasMss ? "Confirmed" : "N/A", details: "Break swing / CHoCH di LTF." }),
+      mk("smc-entry", `⑤ Retest OB (Pending ${sig.direction} Limit @ ${sig.entry.toFixed(5)})`, hasMss && isEntryRetested, { isFailable: true, isIndependent: true, value: hasMss && isEntryRetested ? "Retested" : "Not Retested", details: `Pending ${sig.direction} Limit @ ${sig.entry.toFixed(5)} (Target ${sig.tp.toFixed(5)})` }),
+      mk("smc-rr", `⑥ Risk-to-Reward 1:2 ${isRRValid ? "terpenuhi" : "belum"}`, isRRValid, { isFailable: true, isIndependent: true, details: isRRValid ? `R:R 1:${rrRatio.toFixed(2)} | SL ${sig.sl.toFixed(5)} | TP ${sig.tp.toFixed(5)}` : "RR < 1:2, signal di-drop engine." }),
+    ];
+  }
+
   // ── M5 Confirmation Entry after Retest H1 OB ───────────────────────
 
   /**
@@ -271,6 +305,9 @@ class SMCStrategy {
           m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BULLISH").pop();
         }
 
+        // Tambahkan validasi sweep di M5 OB
+        if (m5OB && !m5OB.hasSweep) continue;
+
         const entry = m5OB ? m5OB.top : h1OB.top;
         const sl = m5OB ? m5OB.bottom - avgRange * 0.5 : h1OB.bottom - avgRange * 0.5;
         const targetPDH = dailyBias.pdh > entry ? dailyBias.pdh : entry + (entry - sl) * 3;
@@ -297,6 +334,9 @@ class SMCStrategy {
         if (!m5OB && m5Str.orderBlocks.length > 0) {
           m5OB = m5Str.orderBlocks.filter((ob) => ob.type === "BEARISH").pop();
         }
+
+        // Tambahkan validasi sweep di M5 OB
+        if (m5OB && !m5OB.hasSweep) continue;
 
         const entry = m5OB ? m5OB.bottom : h1OB.bottom;
         const sl = m5OB ? m5OB.top + avgRange * 0.5 : h1OB.top + avgRange * 0.5;

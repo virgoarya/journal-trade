@@ -563,7 +563,15 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
         from_ts = arguments["from"]
         to_ts = arguments["to"]
 
-        if not mt5.symbol_select(symbol, True):
+        # Ensure symbol is loaded – retry a few times because MT5 may still be initializing
+        selected = False
+        for _ in range(3):
+            selected = mt5.symbol_select(symbol, True)
+            if selected:
+                break
+            time.sleep(0.5)
+        if not selected:
+            print(f"[MT5-ERROR] Failed to select symbol {symbol} after retries", file=sys.stderr)
             return _err(f"Failed to select symbol {symbol}")
 
         rates = mt5.copy_rates_range(symbol, timeframe, from_ts, to_ts)
@@ -571,6 +579,7 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
             err = mt5.last_error()
             print(f"[MT5-ERROR] mt5.copy_rates_range({symbol}) returned None: {err}", file=sys.stderr)
             return _err(f"No rates for {symbol} between given dates")
+
         result = [
             {
                 "time": int(r["time"]),
@@ -754,17 +763,19 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
                     print(f"[MT5-WARN] Filling mode {filling_mode} failed for {symbol}, retrying with {try_mode}...", file=sys.stderr)
                     request["type_filling"] = try_mode
                     result = mt5.order_send(request)
-                    if result.retcode == mt5.TRADE_RETCODE_DONE:
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                         break  # success!
                 else:
                     # All modes exhausted — report last error with comprehensive details
                     sym_info = mt5.symbol_info(symbol)
                     filling_mask = sym_info.filling_mode if sym_info else "N/A"
+                    ret_code = result.retcode if result else "None"
+                    comment = result.comment if result else "order_send returned None"
                     return _err(
-                        f"Order failed: retcode={result.retcode} "
+                        f"Order failed: retcode={ret_code} "
                         f"filling_mode_attempted={request['type_filling']} "
                         f"symbol_filling_mask={filling_mask} "
-                        f"comment={result.comment}"
+                        f"comment={comment}"
                     )
             else:
                 # Map common retcodes to human-readable messages
@@ -948,7 +959,7 @@ def sync_call_tool(name: str, arguments: dict) -> list[TextContent]:
             "sl": sl,
             "tp": tp,
             "tick": {"bid": tick.bid, "ask": tick.ask, "spread": tick.ask - tick.bid},
-            "symbol": {
+            "symbolInfo": {
                 "name": info.name,
                 "digits": info.digits,
                 "point": info.point,
@@ -1004,6 +1015,7 @@ def run_ws_client(app_instance=None, ws_url=None):
 
     # URL WebSocket Server Lokal
     WS_URL = ws_url or os.environ.get("MT5_WS_URL") or "ws://localhost:5000/ws/mt5-stream"
+    WS_TOKEN = os.environ.get("INTERNAL_WS_TOKEN") or "hunter_internal_dev_token"
     print(f"[WS-STREAM] Menghubungkan ke: {WS_URL}")
     
     async def tick_streamer(ws):
@@ -1109,7 +1121,7 @@ def run_ws_client(app_instance=None, ws_url=None):
     async def streamer():
         while True:
             try:
-                async with websockets.connect(WS_URL) as ws:
+                async with websockets.connect(WS_URL, extra_headers={"x-internal-token": WS_TOKEN}) as ws:
                     print(f"\n[WS-STREAM] [OK] Berhasil terhubung ke Server Lokal: {WS_URL}")
                     if app_instance:
                         app_instance.set_status(True)

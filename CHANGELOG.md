@@ -1,14 +1,62 @@
-## 🚀 [v1.2.2] — 2026-10-16 (Versi Terbaru)
+## 🚧 [v1.2.0] — Unreleased
 
-### 🚀 OTA Update & In-App Guidance (Whatfix Pattern)
-- **Remote OTA Hosting (GitHub Raw CDN):** Memindahkan hosting `version.json` dan `patch.zip` dari local server ke branch `main` GitHub raw URL (`https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/`).
-- **Fix .gitignore OTA Leak/Block:** Mengizinkan folder `update/` masuk ke repository git agar file patch dan metadata versi tersinkronisasi sempurna.
-- **In-App Guidance Architecture:** Mengintegrasikan komponen panduan interaktif modular (`frontend/src/components/guidance/`) berbasis pola Whatfix (tooltips kontekstual, dynamic step manifest, progress state persistence).
-- **Semver-aware Gate:** Memperbaiki logika perbandingan versi semver pada updater untuk mencegah downgrade atau silent failure.
+### ✨ First-Run Setup Wizard
+- **Jendela Setup Configuration** (`desktop/setup.html` + `desktop/preload-setup.js`) muncul
+  otomatis saat `%APPDATA%\hunter-trades-desktop\server.env` belum ada. User mengisi
+  kredensial lewat GUI, lalu konfigurasi ditulis ke file itu.
+- `desktop/main.js` memuat `server.env` dari userData **lebih dulu**, baru fallback ke
+  `server/.env` (berguna saat menjalankan Electron di mode dev).
+- Field wajib divalidasi sebelum simpan: `DATABASE_URL`, `BETTER_AUTH_SECRET`,
+  `ENCRYPTION_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_GUILD_ID`,
+  `MIDTRANS_SERVER_KEY`, `MIDTRANS_ENV`. `NINE_ROUTER_URL` / `NINE_ROUTER_API_KEY` opsional.
+- **Ini yang membuat installer bisa benar-benar "install → klik icon → jalan"** tanpa user
+  menyentuh file `.env` secara manual. Installer tetap tidak membawa kredensial apa pun.
+
+### 🔒 Keamanan & Rilis
+- **Hapus `update/patch.zip` dari git tracking** + tambah scan gitleaks di CI (`b915065`).
+  Patch OTA pernah membawa 33 kredensial produksi ke repo publik — `buildPatch.js` sekarang
+  punya assertion yang menggagalkan build kalau `.env`, `logs/`, `*.log`, `node_modules/`
+  ikut masuk arsip.
+- **Release tooling baru** (`64b7fe6`): `scripts/preflight-release.mjs` sebagai gate release
+  keras — verifikasi artefak build, deteksi `dist` yang stale terhadap `src`, pemindaian
+  kebocoran nilai kredensial ke seluruh output build, dan pengecekan pin dependency desktop.
+  Ditambah `scripts/check-desktop-pins.mjs` dan perintah root `preflight`, `preflight:bundle`,
+  `check:pins`, `release`.
+- **Installer tidak lagi membawa `.env`.** `buildApp.js` menyalin `server/.env.example`
+  sebagai template, bukan `.env` developer, dan menolak build kalau ada `.env` asli di bundle.
+  Build juga menolak lanjut tanpa `server/package-lock.json` (build reproducible via `npm ci`).
+
+### 🎯 Akurasi Metodologi (SMC/ICT/MSNR)
+- **SNR flip direction & wick-inclusive Order Block** (`065a75c`): arah flip RBS/SBR
+  dikoreksi, dan deteksi OB kini menyertakan wick — bukan hanya body candle.
+- **ATR noise filter untuk swing detection** (`f085457`): swing hanya valid kalau jaraknya
+  dari swing sebelumnya melebihi ambang ATR, mengurangi level palsu. Ditambah 5 test case
+  (TC-01…TC-05) di `server/src/services/strategies/__tests__/snr-flip.test.ts`.
+
+### 🔌 Stabilitas MT5 & Shutdown
+- **MT5 status snapshot otoritatif** dikirim saat WebSocket connect, dan **graceful shutdown**
+  diperbaiki (`065a75c`). Ini menutup rangkaian bug dari post-mortem 2026-10-05: flag
+  `mt5McpService.connected` tidak pernah disinkronkan dengan hasil auto-reconnect di
+  `mt5-streamer.ts`, sehingga pipeline menahan `waitingReconnect` selamanya.
+
+### 📝 Dokumentasi
+- **`docs/DAILY_BRIEFING_PROTOCOL.md`** (`9771119`): protokol briefing harian Tim Dev 2 —
+  struktur 5 blok, pre-build checklist, dan aturan delegasi.
+- **`README.md` ditulis ulang**: Quick Start untuk user (install EXE) dan developer, tabel
+  tech stack terverifikasi, prerequisites, workflow monorepo, contributing guidelines,
+  diagram arsitektur + topologi runtime, tabel port, alur pipeline 4 stage, dan troubleshooting.
+- **`docs/USER_GUIDE_MT5.md`**: ditambah bagian install EXE production.
+
+### 🧹 Housekeeping
+- Bersihkan script debug sekali pakai dari root `server/` (`64b7fe6`) — 57 file, termasuk
+  `server/dev/null` berukuran 258 ribu baris yang ikut ter-track.
+
+> **Blocker terbuka:** rotasi 9Router API key (lihat `docs/post-mortem-2026-10-05-mt5-9router.md`
+> → Action Item #1). Nilai lama masih ada di git history; rotasi wajib sebelum release production.
 
 ---
 
-## 🚀 [v1.1.0] — 2026-08-11
+## 🚀 [v1.1.0] — 2026-08-11 (Versi Terbaru)
 
 ### ✨ Fitur Baru: Reset AI Trading Performance
 - **Tombol "Reset AI Trading Performance"** di Settings → Data & Privacy → Danger Zone (`frontend/src/app/(dashboard)/settings/page.tsx`).

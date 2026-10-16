@@ -1,0 +1,17 @@
+b17effed20cc0365ec42f07b1d9c724e15da2aaf:server/scripts/quick-test-backtest.ts:generic-api-key:12
+74e8de5166510b0fd8a3b22f66239554262a9926:server/scripts/probe-all-tools2.mjs:generic-api-key:5
+74e8de5166510b0fd8a3b22f66239554262a9926:server/scripts/probe-all-tools.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-delete-permission.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-history2.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-history.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-pending-tools.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-include-orders.mjs:generic-api-key:5
+4cfe942e57b67f0525bfa0faec34123ba9455aeb:server/scripts/probe-permission-state.mjs:generic-api-key:5
+4d162448666fae49e5391439a454ae6c7312cf86:server/scripts/probe-trade-schema.mjs:generic-api-key:4
+d7aa986b5ba658c60352d7930471b31da1e51b35:server/scripts/probe-pending-order.mjs:generic-api-key:5
+ce2cfa47e89215c86835046b5e11403e28854ac5:server/scripts/probe-native-mcp.mjs:generic-api-key:5
+ce2cfa47e89215c86835046b5e11403e28854ac5:server/scripts/probe-account.mjs:generic-api-key:4
+89f108c733a911350264cb3d0cce45a60f71399c:server/.env.example:generic-api-key:41
+cc9893b0c91eee3514cf2f820b0903b8c2a8f27c:gitleaks-report.json:generic-api-key:188
+cc9893b0c91eee3514cf2f820b0903b8c2a8f27c:gitleaks-report.json:generic-api-key:248
+cc9893b0c91eee3514cf2f820b0903b8c2a8f27c:gitleaks-report.json:generic-api-key:268

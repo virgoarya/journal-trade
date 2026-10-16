@@ -136,39 +136,65 @@ export function RegimeHistoryTimeline({ history, currentRegime }: RegimeHistoryT
           </button>
         </div>
 
-        {/* Duration & Last Shift Info */}
+        {/* Duration & Last Shift — mini card footer */}
         {duration && (
-          <div className="flex flex-col gap-1.5 rounded border border-border-subtle glass p-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-mono text-text-muted">DURASI REZIM AKTIF:</span>
-              <span className="text-xs font-mono font-bold" style={{ color: cfg.color }}>
-                {duration.days} hari
-              </span>
-              <span className="text-[9px] text-text-muted font-mono ml-auto">
-                (sejak {duration.startDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })})
-              </span>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+            {/* Duration Row */}
+            <div className="flex items-center justify-between px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3 h-3 text-text-muted shrink-0" />
+                <span className="text-[9px] font-mono text-text-muted uppercase tracking-widest">Durasi Rezim Aktif</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-sm font-black font-mono tabular-nums px-2 py-0.5 rounded"
+                  style={{ color: cfg.color, backgroundColor: `${cfg.color}18`, boxShadow: `0 0 8px ${cfg.color}30` }}
+                >
+                  {duration.days} HARI
+                </span>
+                <span className="text-[9px] text-text-muted font-mono hidden sm:block">
+                  sejak {duration.startDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+              </div>
             </div>
-            
-            {transitions.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-text-muted border-t border-border-subtle/50 pt-1.5">
-                <span>SHIFT TERAKHIR:</span>
-                <span style={{ color: REGIME_CONFIG[transitions[0].from.toLowerCase()]?.color ?? "#94A3B8" }}>
-                  {transitions[0].from.toUpperCase()}
-                </span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-50" />
-                <span style={{ color: REGIME_CONFIG[transitions[0].to.toLowerCase()]?.color ?? "#94A3B8" }}>
-                  {transitions[0].to.toUpperCase()}
-                </span>
-                <span className="ml-auto font-bold opacity-80">
-                  {new Date(transitions[0].date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-text-muted border-t border-border-subtle/50 pt-1.5">
-                <span>SHIFT TERAKHIR:</span>
-                <span className="opacity-80">Belum ada transisi dalam riwayat data ini.</span>
-              </div>
-            )}
+
+            {/* Shift Row */}
+            <div className="border-t border-white/10 px-3 py-2">
+              {transitions.length > 0 ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-mono text-text-muted uppercase tracking-widest">Shift Terakhir</span>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <span
+                      className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        color: REGIME_CONFIG[transitions[0].from.toLowerCase()]?.color ?? "#94A3B8",
+                        backgroundColor: `${REGIME_CONFIG[transitions[0].from.toLowerCase()]?.color ?? "#94A3B8"}18`,
+                      }}
+                    >
+                      {transitions[0].from.toUpperCase()}
+                    </span>
+                    <ArrowRight className="w-2.5 h-2.5 text-text-muted/50" />
+                    <span
+                      className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        color: REGIME_CONFIG[transitions[0].to.toLowerCase()]?.color ?? "#94A3B8",
+                        backgroundColor: `${REGIME_CONFIG[transitions[0].to.toLowerCase()]?.color ?? "#94A3B8"}18`,
+                      }}
+                    >
+                      {transitions[0].to.toUpperCase()}
+                    </span>
+                    <span className="text-[9px] text-text-muted font-mono ml-1">
+                      {new Date(transitions[0].date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[9px] font-mono text-text-muted">
+                  <span className="uppercase tracking-widest">Shift Terakhir</span>
+                  <span className="ml-auto opacity-60">Belum ada transisi dalam riwayat data ini.</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -216,10 +216,25 @@ class MCPService {
     this.isConnected = false;
   }
 
+  async registerInternalTool(toolInfo: MCPToolInfo) {
+    // Register a tool without needing an MCP client connection
+    // Used for internal native tools (market-data, geo-risk, etc.)
+    this.toolsCache.set(toolInfo.name, {
+      serverName: "Internal",
+      tool: toolInfo,
+    });
+  }
+
   async executeTool(name: string, args: Record<string, any>): Promise<any> {
     const entry = this.toolsCache.get(name);
     if (!entry) {
       throw new Error(`MCP Tool '${name}' not found in any registered server.`);
+    }
+
+    // Internal tools — execute directly without MCP client
+    if (entry.serverName === "Internal") {
+      const { executeInternalTool } = await import("./internal-tools.service");
+      return await executeInternalTool(name, args);
     }
 
     const client = this.clients.get(entry.serverName);

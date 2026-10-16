@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { playbookService } from "@/services/playbook.service";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface ChecklistModalProps {
   playbookId: string;
@@ -30,7 +31,7 @@ export function ChecklistModal({ playbookId, isOpen, onClose }: ChecklistModalPr
         setPlaybookName(response.data.name);
       }
     } catch (error) {
-      console.error("Failed to fetch checklist:", error);
+      logger.error("Failed to fetch checklist:", error);
     } finally {
       setLoading(false);
     }

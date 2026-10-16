@@ -1,0 +1,204 @@
+openapi: 3.0.3
+info:
+  title: Journal Trade API
+  description: Backend API for managing trading signals, journal entries, and performance analysis.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/v1
+    description: Development server (Express API)
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Signal:
+      type: object
+      required:
+        - pair
+        - direction
+        - volume
+      properties:
+        id:
+          type: string
+          readOnly: true
+        pair:
+          type: string
+          example: EUR/USD
+        direction:
+          type: string
+          enum: [BUY, SELL]
+        volume:
+          type: number
+          description: Position size in lots
+        sl:
+          type: number
+          description: Stop‑loss price
+        tp:
+          type: number
+          description: Take‑profit price
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Model confidence (0‑1)
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+    Entry:
+      type: object
+      required:
+        - date
+        - profit
+      properties:
+        id:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date-time
+          example: 2026-07-07T10:00:00Z
+        profit:
+          type: number
+          description: PnL for the entry
+        notes:
+          type: string
+          description: Optional free‑form notes
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+    AnalysisResult:
+      type: object
+      properties:
+        winRate:
+          type: number
+          format: float
+        profitFactor:
+          type: number
+        drawdown:
+          type: number
+        equityCurve:
+          type: array
+          items:
+            type: number
+        generatedAt:
+          type: string
+          format: date-time
+security:
+  - BearerAuth: []
+paths:
+  /signals:
+    get:
+      summary: List all trading signals
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+          description: Max number of signals to return
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        '200':
+          description: List of signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Signal'
+    post:
+      summary: Create a new trading signal
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Signal'
+      responses:
+        '201':
+          description: Signal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signal'
+  /journal:
+    get:
+      summary: List journal entries
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entry'
+    post:
+      summary: Create a journal entry
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Entry'
+      responses:
+        '201':
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+  /analysis:
+    get:
+      summary: Retrieve performance analysis
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: symbol
+          schema:
+            type: string
+          required: false
+          description: Filter by trading pair
+        - in: query
+          name: timeframe
+          schema:
+            type: string
+          required: false
+          description: e.g., H1, H4, D1
+      responses:
+        '200':
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'

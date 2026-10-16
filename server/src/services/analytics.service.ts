@@ -7,7 +7,7 @@ export const analyticsService = {
 
   async getOverview(userId: string, accountId: string) {
     const rawTrades = await Trade.find({ tradingAccountId: accountId, userId, isDeleted: { $ne: true } })
-      .select('actualPnl result tradeDate pair session');
+      .select('actualPnl result tradeDate pair session commission swap lotSize exitDate');
 
     // Calculate basic stats
     let winCount = 0;
@@ -17,6 +17,10 @@ export const analyticsService = {
     let grossLoss = 0;
     const wins: number[] = [];
     const losses: number[] = [];
+    let totalCommission = 0;
+    let totalSwap = 0;
+    let totalVolume = 0;
+    let openTrades = 0;
 
     for (const t of rawTrades) {
       const p = t.actualPnl;
@@ -33,6 +37,10 @@ export const analyticsService = {
       else if (t.result === "BREAKEVEN") {
         breakevenCount++;
       }
+      totalCommission += t.commission || 0;
+      totalSwap += t.swap || 0;
+      totalVolume += t.lotSize || 0;
+      if (!t.exitDate) openTrades++;
     }
 
     const total = winCount + lossCount + breakevenCount;
@@ -197,6 +205,39 @@ export const analyticsService = {
       }
     });
 
+    // Unique days for daily metrics
+    const uniqueDaysSet = new Set(rawTrades.map(t => new Date(t.tradeDate).toDateString()));
+    const uniqueDaysCount = uniqueDaysSet.size;
+
+    // Daily P&L breakdown
+    const dailyPnlMap = new Map<string, { pnl: number; wins: number; losses: number }>();
+    rawTrades.forEach(t => {
+      const dayKey = new Date(t.tradeDate).toDateString();
+      if (!dailyPnlMap.has(dayKey)) dailyPnlMap.set(dayKey, { pnl: 0, wins: 0, losses: 0 });
+      const d = dailyPnlMap.get(dayKey)!;
+      d.pnl += t.actualPnl;
+      if (t.result === "WIN") d.wins++;
+      else if (t.result === "LOSS") d.losses++;
+    });
+
+    const winningDays = Array.from(dailyPnlMap.values()).filter(d => d.pnl > 0);
+    const losingDays = Array.from(dailyPnlMap.values()).filter(d => d.pnl < 0);
+
+    const avgWinningDayPnl = winningDays.length > 0
+      ? winningDays.reduce((s, d) => s + d.pnl, 0) / winningDays.length : 0;
+    const avgLosingDayPnl = losingDays.length > 0
+      ? Math.abs(losingDays.reduce((s, d) => s + d.pnl, 0) / losingDays.length) : 0;
+
+    const largestProfitableDay = winningDays.length > 0
+      ? Math.max(...winningDays.map(d => d.pnl)) : 0;
+    const largestLosingDay = losingDays.length > 0
+      ? Math.min(...losingDays.map(d => d.pnl)) : 0;
+
+    const avgTradePnl = total > 0 ? (grossProfit - grossLoss) / total : 0;
+    const avgDailyPnl = uniqueDaysCount > 0 ? (grossProfit - grossLoss) / uniqueDaysCount : 0;
+    const avgDailyVolume = total > 0 ? totalVolume / total : 0;
+    const totalFees = Math.abs(totalCommission) + Math.abs(totalSwap);
+
     return {
       monthlyPnL,
       weeklyStats,
@@ -207,6 +248,27 @@ export const analyticsService = {
       totalTrades: total,
       winRate: Number(winRate.toFixed(1)),
       profitFactor,
+      winCount,
+      lossCount,
+      breakevenCount,
+      avgTradePnl,
+      avgDailyPnl,
+      avgWinningTrade: winCount > 0 ? grossProfit / winCount : 0,
+      avgLosingTrade: lossCount > 0 ? grossLoss / lossCount : 0,
+      largestProfit: wins.length > 0 ? Math.max(...wins) : 0,
+      largestLoss: losses.length > 0 ? Math.min(...losses) : 0,
+      maxConsecutiveWins: longestWin,
+      maxConsecutiveLosses: longestLoss,
+      avgWinningDayPnl,
+      avgLosingDayPnl,
+      largestProfitableDay,
+      largestLosingDay,
+      avgDailyVolume,
+      totalCommission,
+      totalSwap,
+      totalFees,
+      openTrades,
+      loggedDays: uniqueDaysCount,
       bestPerformingPairs,
       riskMetrics: {
         sharpeRatio,

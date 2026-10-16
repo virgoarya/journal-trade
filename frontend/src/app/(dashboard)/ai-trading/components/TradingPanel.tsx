@@ -6,6 +6,8 @@ import { SkillDisplay } from "./SkillDisplay";
 import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
 import { useState, useEffect } from "react";
+import PaymentModal from "@/components/PaymentModal";
+import { useTokenBalance } from "../hooks/useTokenBalance";
 
 import { LlmConsensusConfig } from "./LlmConsensusConfig";
 
@@ -52,11 +54,34 @@ export function TradingPanel({
     setVisualizationStyle,
   } = useAiTrading();
 
+  // State untuk kontrol Payment Modal
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentPackage, setPaymentPackage] = useState<"registration" | "token_topup">("token_topup");
+  const [paymentIsBooster, setPaymentIsBooster] = useState(false);
+
+  // Periksa saldo token
+  const userId = accountInfo?.login?.toString() || "anonymous";
+  const { hasInsufficient, loading: tokenLoading } = useTokenBalance(userId);
+
+  const openPaymentModal = (pkg: "registration" | "token_topup", isBooster = false) => {
+    setPaymentPackage(pkg);
+    setPaymentIsBooster(isBooster);
+    setShowPaymentModal(true);
+  };
+
   const handleStart = async () => {
     if (!savedPipelineConfig) {
       toast.error("No backtest configuration applied. Please run a backtest first.");
       return;
     }
+
+    // Cek token sebelum start
+    if (hasInsufficient) {
+      toast.warning("Token LLM tidak cukup. Harap lakukan topup.");
+      openPaymentModal("token_topup", paymentIsBooster);
+      return;
+    }
+
     // Clear any lingering circuit breaker alert before starting
     setCircuitBreakerAlert(null);
     await startPipeline({ ...savedPipelineConfig, useAppliedConfig: true });
@@ -222,7 +247,9 @@ export function TradingPanel({
                 <div className="grid grid-cols-2 gap-2 mb-5">
                   <div className="bg-black/60 rounded-lg p-2.5 text-center border border-white/5">
                     <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
-                    <p className="text-[13px] font-bold font-mono text-text-primary">${accountInfo.balance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-[13px] font-bold font-mono text-text-primary">
+                      ${accountInfo.balance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
                   <div className="bg-black/60 rounded-lg p-2.5 text-center border border-white/5">
                     <p className="text-[9px] text-text-muted uppercase tracking-widest mb-1">Equity</p>
@@ -496,23 +523,36 @@ export function TradingPanel({
       {/* Pipeline Controls (Tactile Switches) */}
       <div className="pt-4 border-t border-accent-gold/20 space-y-3">
         {!pipelineRunning && !pipelinePaused && (
-          <button
-            onClick={handleStart}
-            disabled={isStarting || !savedPipelineConfig}
-            className="w-full py-4 bg-black border border-accent-gold/40 hover:bg-accent-gold/10 disabled:bg-black/40 disabled:border-gray-800 disabled:text-gray-600 text-accent-gold text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2"
-          >
-            {isStarting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>INIT SYS...</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5 fill-current" />
-                <span>ENGAGE PIPELINE</span>
-              </>
-            )}
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleStart}
+              disabled={isStarting || !savedPipelineConfig || tokenLoading}
+              className={`w-full py-4 bg-black border border-accent-gold/40 text-accent-gold text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2 ${
+                isStarting || !savedPipelineConfig || tokenLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-accent-gold/10 hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)]"
+              }`}
+            >
+              {isStarting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>INIT SYS...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-5 h-5 fill-current" />
+                  <span>ENGAGE PIPELINE</span>
+                </>
+              )}
+            </button>
+            {/* Topup Token Button */}
+            <button
+              onClick={() => openPaymentModal("token_topup", paymentIsBooster)}
+              className="w-full py-2 bg-accent-gold/5 border border-accent-gold/30 hover:bg-accent-gold/15 text-accent-gold text-xs rounded-lg font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2"
+            >
+              💎 Topup Token (Rp 50.000)
+            </button>
+          </div>
         )}
 
         {pipelineRunning && (
@@ -555,6 +595,14 @@ export function TradingPanel({
           </div>
         )}
       </div>
+
+      {/* Payment Modal - Midtrans Snap Token Topup */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        userId={userId}
+        isBooster={paymentIsBooster}
+      />
     </div>
   );
 }

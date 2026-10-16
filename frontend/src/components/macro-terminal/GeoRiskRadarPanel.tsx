@@ -38,7 +38,7 @@ interface GeoRiskData {
     vix: number | null;
     vixSource?: "yahoo" | "fred" | null;
     globalPmi: number | null;
-    pmiSource?: "calendar_db" | "dbnomics" | "trading_economics" | "ipman_synthetic" | null;
+    pmiSource?: "calendar_db" | "dbnomics" | "trading_economics" | "empire_state" | "ipman_synthetic" | null;
     onRrpBalance: number | null;
   };
   fetchedAt: string;
@@ -69,7 +69,7 @@ const METRIC_CONFIG = [
     icon: Gauge,
     rawKey: "fedfunds_rate",
     rawFormat: (v: number) => `${v.toFixed(2)}%`,
-    rawLabel: "Fed Funds",
+    rawLabel: "Fed Funds (Effective)",
     context: (v: number | null) => {
       if (v === null) return "N/A";
       if (v >= 5) return "Restrictive territory";
@@ -99,7 +99,7 @@ const METRIC_CONFIG = [
     icon: Zap,
     rawKey: "globalPmi",
     rawFormat: (v: number) => v.toFixed(1),
-    rawLabel: "ISM PMI",
+    rawLabel: "Mfg Activity",
     context: (v: number | null) => {
       if (v === null) return "N/A";
       if (v >= 55) return "Strong expansion";
@@ -131,6 +131,12 @@ function riskColor(score: number): string {
   if (score >= 70) return "#ef4444";
   if (score >= 45) return "#f59e0b";
   return "#22c55e";
+}
+
+function riskGradient(score: number): string {
+  if (score >= 70) return "linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)";
+  if (score >= 45) return "linear-gradient(90deg, #22c55e 0%, #f59e0b 100%)";
+  return "linear-gradient(90deg, #10b981 0%, #22c55e 100%)";
 }
 
 function riskBg(score: number): string {
@@ -286,21 +292,21 @@ function SkeletonPanel() {
   return (
     <div className="flex flex-col h-full w-full glass overflow-hidden relative p-4 animate-pulse">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-3.5 h-3.5 bg-surface-elevated rounded" />
-        <div className="w-28 h-3 bg-surface-elevated rounded" />
+        <div className="w-3.5 h-3.5 bg-bg-elevated rounded" />
+        <div className="w-28 h-3 bg-bg-elevated rounded" />
       </div>
       <div className="flex gap-3 mb-3">
-        <div className="w-[72px] h-[72px] bg-surface-elevated rounded-full" />
+        <div className="w-[72px] h-[72px] bg-bg-elevated rounded-full" />
         <div className="flex-1 space-y-2 py-2">
-          <div className="w-full h-2 bg-surface-elevated rounded" />
-          <div className="w-3/4 h-2 bg-surface-elevated rounded" />
-          <div className="w-1/2 h-2 bg-surface-elevated rounded" />
+          <div className="w-full h-2 bg-bg-elevated rounded" />
+          <div className="w-3/4 h-2 bg-bg-elevated rounded" />
+          <div className="w-1/2 h-2 bg-bg-elevated rounded" />
         </div>
       </div>
-      <div className="flex-1 bg-surface-elevated/30 rounded-lg" />
+      <div className="flex-1 bg-bg-elevated/30 rounded-lg" />
       <div className="space-y-2 mt-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-12 bg-surface-elevated/40 rounded-lg" />
+          <div key={i} className="h-12 bg-bg-elevated/40 rounded-lg" />
         ))}
       </div>
     </div>
@@ -468,7 +474,9 @@ export function GeoRiskRadarPanel() {
                         ? "#22c55e"
                         : data.raw.pmiSource === "trading_economics"
                           ? "#3b82f6"
-                          : "#f59e0b",
+                          : data.raw.pmiSource === "empire_state"
+                            ? "#eab308"
+                            : "#f59e0b",
                 }}
               >
                 PMI:
@@ -478,7 +486,9 @@ export function GeoRiskRadarPanel() {
                     ? "ISM"
                     : data.raw.pmiSource === "trading_economics"
                       ? "TE"
-                      : "SYNTH"}
+                      : data.raw.pmiSource === "empire_state"
+                        ? "EMPIRE"
+                        : "SYNTH"}
               </span>
             )}
           </div>
@@ -566,7 +576,13 @@ export function GeoRiskRadarPanel() {
                   ≥70
                 </span>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={0}
+                minHeight={200}
+                initialDimension={{ width: 420, height: 300 }}
+              >
                 <RadarChart
                   data={radarData}
                   cx="50%"
@@ -647,42 +663,46 @@ export function GeoRiskRadarPanel() {
                       backgroundColor: riskBg(score),
                     }}
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <Icon
                           size={13}
                           style={{ color: riskColor(score) }}
                           className="flex-shrink-0"
                         />
-                        <span className="text-[13px] font-mono font-bold text-text-primary">
+                        <span className="text-[12px] font-mono font-bold text-text-primary">
                           {config.label}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         {rawVal !== null && (
-                          <span className="text-[10px] font-mono text-text-muted">
+                          <span className="text-[10px] font-mono text-slate-400 bg-bg-elevated/80 px-1.5 py-0.5 rounded border border-border-subtle/60">
                             {config.rawLabel}:{" "}
-                            <span className="text-[11px] font-bold text-text-primary">
+                            <span className="text-[11px] font-bold text-slate-200">
                               {config.rawFormat(rawVal)}
                             </span>
                           </span>
                         )}
                         <span
-                          className="text-xs font-mono font-black min-w-[24px] text-right"
-                          style={{ color: riskColor(score) }}
+                          className="text-[11px] font-mono font-black px-1.5 py-0.2 rounded border shadow-sm"
+                          style={{
+                            color: riskColor(score),
+                            borderColor: `${riskColor(score)}40`,
+                            backgroundColor: `${riskColor(score)}15`,
+                          }}
                         >
                           {score}
                         </span>
                       </div>
                     </div>
-                    {/* Progress bar */}
-                    <div className="w-full h-1 bg-surface-elevated/60 rounded-full overflow-hidden mb-1">
+                    {/* Progress bar with dynamic gradient */}
+                    <div className="w-full h-1.5 bg-bg-elevated/90 rounded-full overflow-hidden mb-1 border border-border-subtle/40">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{
                           width: `${score}%`,
-                          backgroundColor: riskColor(score),
-                          boxShadow: `0 0 6px ${riskColor(score)}50`,
+                          background: riskGradient(score),
+                          boxShadow: `0 0 8px ${riskColor(score)}60`,
                         }}
                       />
                     </div>

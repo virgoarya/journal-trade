@@ -12,6 +12,7 @@ const YIELD_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const FETCH_TIMEOUT_MS = 8000;
 const YAHOO_RETRY_DELAY_MS = 1200;
 const YAHOO_STAGGER_MS = 350;
+const FRED_STAGGER_MS = 350; // jarak antar panggilan FRED (hindari rate limit)
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -73,9 +74,11 @@ function extractYahooPrice(data: any): number | null {
 }
 
 const FRED_SERIES = {
+  DGS3MO: "DGS3MO",
   DGS2: "DGS2",
   DGS5: "DGS5",
   DGS10: "DGS10",
+  DGS30: "DGS30",
   VIX: "VIXCLS",
 } as const;
 
@@ -136,23 +139,28 @@ async function fetchYahooVix(): Promise<number | null> {
 }
 
 async function fetchFreshQuantSnapshot(): Promise<IYieldCurveSnapshot> {
-  const y3m = await fetchYahooYield("^IRX");
-  await sleep(YAHOO_STAGGER_MS);
-  const y5 = await fetchYahooYield("^FVX");
-  await sleep(YAHOO_STAGGER_MS);
-  const y10 = await fetchYahooYield("^TNX");
-  await sleep(YAHOO_STAGGER_MS);
-  const y30 = await fetchYahooYield("^TYX");
+  // ── SUMBER: FRED (bukan Yahoo) untuk SEMUA tenor ──
+  // ALASAN: Yahoo ^IRX = discount rate (4.03%), bukan yield setara obligasi.
+  // FRED DGS3MO = 4.25% → beda 22 bps → spread 10Y-3M salah 25 bps.
+  // Mencampur Yahoo (3M/5Y/10Y/30Y) + FRED (2Y) juga bikin spread tidak konsisten.
+  // FRED dipakai seragam supaya angka identik dengan panel Yield Curve & Nexus.
+  const y3m = await fredLatest(FRED_SERIES.DGS3MO, 6);
+  await sleep(FRED_STAGGER_MS);
+  const y5 = await fredLatest(FRED_SERIES.DGS5, 6);
+  await sleep(FRED_STAGGER_MS);
+  const y10 = await fredLatest(FRED_SERIES.DGS10, 6);
+  await sleep(FRED_STAGGER_MS);
+  const y30 = await fredLatest(FRED_SERIES.DGS30, 6);
 
-  await sleep(YAHOO_STAGGER_MS);
+  await sleep(FRED_STAGGER_MS);
 
-  const histY3m = await fetchYahooHistorical("^IRX");
-  await sleep(YAHOO_STAGGER_MS);
-  const histY5 = await fetchYahooHistorical("^FVX");
-  await sleep(YAHOO_STAGGER_MS);
-  const histY10 = await fetchYahooHistorical("^TNX");
-  await sleep(YAHOO_STAGGER_MS);
-  const histY30 = await fetchYahooHistorical("^TYX");
+  const histY3m = await fredHistorical(FRED_SERIES.DGS3MO, 22);
+  await sleep(FRED_STAGGER_MS);
+  const histY5 = await fredHistorical(FRED_SERIES.DGS5, 22);
+  await sleep(FRED_STAGGER_MS);
+  const histY10 = await fredHistorical(FRED_SERIES.DGS10, 22);
+  await sleep(FRED_STAGGER_MS);
+  const histY30 = await fredHistorical(FRED_SERIES.DGS30, 22);
 
   let y2y: number | null = null;
   let histY2y: number | null = null;
@@ -268,14 +276,19 @@ export const quantService = {
     let isStale =
       !recent || now - new Date(recent.fetchedAt).getTime() > CACHE_TTL_MS;
 
-    const isOutdatedAnalysis = recent?.aiExplainer && (
-      !recent.aiExplainer.includes("rug pull") ||
-      !recent.aiExplainer.includes("DIVERGENCE TOTAL") ||
-      recent.aiExplainer.includes("Analisis Regime Yield")
-    );
+    // Deteksi analisis lama ATAU output terpotong.
+    // Output terpotong = tidak diakhiri tanda baca penutup (kalimat menggantung),
+    // biasanya karena max_tokens habis. Harus diregenerasi.
+    const explainerText = recent?.aiExplainer ?? "";
+    const looksTruncated =
+      explainerText.length > 0 &&
+      !/[.!?]\s*$/.test(explainerText.trim());
+
+    // Only regenerate if explainer is empty or truncated (not based on content keywords)
+    const isOutdatedAnalysis = recent?.aiExplainer && looksTruncated;
 
     if (isOutdatedAnalysis) {
-      console.log("[QuantLab] Stale AI explainer detected (old prompt). Forcing regeneration.");
+      console.log("[QuantLab] AI explainer terpotong (kalimat menggantung). Forcing regeneration.");
       isStale = true;
     }
 

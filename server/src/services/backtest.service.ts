@@ -405,6 +405,7 @@ class BacktestService {
         return;
       }
 
+      // Fetch symbol info with timeout
       let contractSize = 100000, volumeMin = 0.01, volumeMax = 100, volumeStep = 0.01, symbolSpread = 0, symbolPoint = 0.00001;
       try {
         const info = await Promise.race([

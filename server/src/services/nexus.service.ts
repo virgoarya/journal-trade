@@ -212,8 +212,13 @@ export interface NexusSnapshot {
   dxy: { value: number; delta: number } | null;
   crb: { value: number; delta: number } | null;
   gold: { value: number; delta: number } | null;
+  /** Effective Fed Funds Rate harian (FRED DFF) — rate aktual */
   fedFundsRate: { value: number; delta: number } | null;
+  /** Target range FOMC (DFEDTARL–DFEDTARU) — konteks kebijakan, bukan rate efektif */
+  fedTargetRange?: { lower: number; upper: number } | null;
   breakeven5y: number | null;
+  /** Breakeven inflation 10Y (T10YIE) — proksi ekspektasi inflasi harian */
+  breakeven10y?: number | null;
   cpiYoY: number | null;
   growthSentiment: number | null;
   ismPmi: number | null;
@@ -283,13 +288,15 @@ async function fetchFreshSnapshot(): Promise<NexusSnapshot> {
     await sleep(YAHOO_STAGGER_MS);
   }
 
-  // ── 4. Fed Funds Rate (upper bound) from FRED
+  // ── 4. Fed Funds Rate — DFF (daily effective rate, update harian)
+  // CATATAN: sebelumnya pakai DFEDTARU (target upper). Sekarang pakai DFF supaya
+  // konsisten dengan Geo Risk Radar & macro-regime — semuanya = rate EFEKTIF harian.
   let fedFundsRate = getCached<{ value: number; delta: number }>(
     "nexus_fedrate",
     TTL.FED_FUNDS,
   );
   if (!fedFundsRate) {
-    fedFundsRate = await fetchFredWithDelta("DFEDTARU");
+    fedFundsRate = await fetchFredWithDelta("DFF");
     if (fedFundsRate) {
       setCache("nexus_fedrate", fedFundsRate);
       source.fedFundsRate = "fred";
@@ -308,23 +315,37 @@ async function fetchFreshSnapshot(): Promise<NexusSnapshot> {
     await sleep(FRED_STAGGER_MS);
   }
 
-  // ── 6. CPI YoY from GeoRisk Radar (Consistent with Dashboard)
-  let cpiYoY = getCached<number>("nexus_cpi", TTL.CPI);
-  if (cpiYoY == null) {
-    try {
-      const { geoRiskService } = require("./geo-risk.service");
-      const geoRisk = await geoRiskService.getScores();
-      cpiYoY = geoRisk.raw.cpi_yoy;
-    } catch (err: any) {
-      silentLogger.warn(
-        "[NexusService] Failed to pull CPI from GeoRisk, falling back to fetchFredYoY",
-        err.message,
-      );
+  // ── 6. CPI YoY from FRED (most reliable source for US CPI)
+    // Try GeoRisk first if available, fallback to FRED CPIAUCSL
+    let cpiYoY = getCached<number>("nexus_cpi", TTL.CPI);
+    if (cpiYoY == null) {
+      // Direct FRED fallback (doesn't depend on geo-risk service)
       cpiYoY = await fetchFredYoY("CPIAUCSL");
+      if (cpiYoY != null) {
+        setCache("nexus_cpi", cpiYoY);
+        source.cpiYoY = "fred:CPIAUCSL";
+      } else {
+        // Ultra-fallback: PCE inflation. PENTING: series-nya "PCEPI", bukan "PCECPI"
+        // (PCECPI tidak ada di FRED → fallback selalu gagal).
+        const pceYoY = await fetchFredYoY("PCEPI");
+        if (pceYoY != null) {
+          cpiYoY = pceYoY;
+          setCache("nexus_cpi", cpiYoY);
+          source.cpiYoY = "fred:PCEPI";
+        }
+      }
+      await sleep(FRED_STAGGER_MS);
     }
-    if (cpiYoY != null) {
-      setCache("nexus_cpi", cpiYoY);
-      source.cpiYoY = "geo-risk:fred";
+
+  // ── 6b. Breakeven Inflation 10Y (T10YIE) — proksi inflasi ekspektasi HARIAN
+  // CPI resmi (CPIAUCSL) adalah series BULANAN dengan lag ~2 bulan. Breakeven
+  // harian dipakai sebagai indikator inflasi forward-looking yang selalu segar.
+  let breakeven10y = getCached<number>("nexus_be10y", TTL.BREAKEVEN);
+  if (breakeven10y == null) {
+    breakeven10y = await fredLatest("T10YIE", 6);
+    if (breakeven10y != null) {
+      setCache("nexus_be10y", breakeven10y);
+      source.breakeven10y = "fred:T10YIE";
     }
     await sleep(FRED_STAGGER_MS);
   }
@@ -374,27 +395,64 @@ async function fetchFreshSnapshot(): Promise<NexusSnapshot> {
     await sleep(FRED_STAGGER_MS);
   }
 
-  const snapshot: NexusSnapshot = {
-    dxy,
-    crb,
-    gold,
-    fedFundsRate,
-    breakeven5y: breakeven5y ?? null,
-    cpiYoY: cpiYoY != null ? Math.round(cpiYoY * 100) / 100 : null,
-    growthSentiment:
-      growthSentiment != null ? Math.round(growthSentiment * 10) / 10 : null,
-    ismPmi:
-      growthSentiment != null ? Math.round(growthSentiment * 10) / 10 : null,
-    walcl,
-    realYields,
-    fetchedAt: new Date().toISOString(),
-    fromCache: false,
-    quality: {
-      source,
-      freshness: errors.length ? "error" : "live",
-      errors,
-    },
-  };
+  // ── 9b. Fed Target Range (DFEDTARL–DFEDTARU) — konteks kebijakan
+  // Ini BUKAN rate efektif; hanya rentang target FOMC. Dipakai sebagai info tambahan
+  // supaya UI bisa menampilkan "target 3.75–4.00% | effective 3.88%".
+  let fedTargetRange = getCached<{ lower: number; upper: number }>(
+    "nexus_fed_target_range",
+    TTL.FED_FUNDS,
+  );
+  if (!fedTargetRange) {
+    const [lower, upper] = await Promise.all([
+      fetchFredWithDelta("DFEDTARL"),
+      fetchFredWithDelta("DFEDTARU"),
+    ]);
+    if (lower && upper) {
+      fedTargetRange = { lower: lower.value, upper: upper.value };
+      setCache("nexus_fed_target_range", fedTargetRange);
+      source.fedTargetRange = "fred";
+    }
+    await sleep(FRED_STAGGER_MS);
+  }
+
+  // ── Fetch ISM PMI
+  // PENTING: "NAPM" DIHAPUS dari FRED sejak Juni 2016 (ISM menarik lisensinya).
+  // Memakainya = selalu null. Pakai IPMAN (Industrial Production: Manufacturing)
+  // sebagai proxy aktivitas manufaktur — seri valid, update bulanan.
+  // Sumber PMI utama (DBnomics) ada di geo-risk.service; di sini pakai FRED.
+    let ismPmi = getCached<number>("nexus_pmi", TTL.UMCSENT);
+    if (ismPmi == null) {
+      ismPmi = await fredLatest("IPMAN", 6);
+      if (ismPmi != null) {
+        setCache("nexus_pmi", ismPmi);
+        source.ismPmi = "fred:IPMAN";
+      }
+      await sleep(FRED_STAGGER_MS);
+    }
+
+    const snapshot: NexusSnapshot = {
+      dxy,
+      crb,
+      gold,
+      fedFundsRate,
+      fedTargetRange: fedTargetRange ?? null,
+      breakeven5y: breakeven5y ?? null,
+      breakeven10y: breakeven10y ?? null,
+      cpiYoY: cpiYoY != null ? Math.round(cpiYoY * 100) / 100 : null,
+      growthSentiment:
+        growthSentiment != null ? Math.round(growthSentiment * 10) / 10 : null,
+      ismPmi:
+        ismPmi != null ? Math.round(ismPmi * 10) / 10 : null,
+      walcl,
+      realYields,
+      fetchedAt: new Date().toISOString(),
+      fromCache: false,
+      quality: {
+        source,
+        freshness: errors.length ? "error" : "live",
+        errors,
+      },
+    };
 
   // Cache the entire snapshot for fast subsequent reads
   setCache("nexus_full_snapshot", snapshot);

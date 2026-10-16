@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { aiTradingService, type PipelinePerformance } from "@/services/ai-trading.service";
+import { aiTradingService } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { Terminal, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";

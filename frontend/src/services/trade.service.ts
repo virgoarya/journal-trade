@@ -14,9 +14,11 @@ export interface Trade {
   takeProfit?: number;
   lotSize: number;
   sizeUnit?: "LOT" | "CONTRACT";
+  sizeType?: "standard" | "micro" | "mini";
   actualPnl: number;
   pnl: number;  // Alias for actualPnl for UI convenience
-  rMultiple?: number;
+  rMultiple?: number; // actual R-multiple
+  plannedRMultiple?: number; // planned R-multiple (based on TP/SL)
   result: "win" | "loss" | "breakeven";  // UI-friendly case
   emotionalState?: number;
   notes?: string;
@@ -25,11 +27,28 @@ export interface Trade {
   session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk exposure as % of account equity
+  // Institutional prop-firm fields
+  grossPnl?: number;       // PnL sebelum dipotong komisi & swap
+  commission?: number;     // Biaya komisi broker per-side (dalam USD)
+  swap?: number;           // Biaya swap/overnight per malam (dalam USD)
+  maeR?: number;           // Maximum Adverse Excursion (dalam satuan R)
+  mfeR?: number;           // Maximum Favorable Excursion (dalam satuan R)
+  worstPriceReached?: number; // Harga terburuk yang dicapai saat trade terbuka
+  bestPriceReached?: number;  // Harga terbaik yang dicapai saat trade terbuka
+  ruleViolations?: string[];  // Daftar pelanggaran trading rules (psikologi)
+  macroSnapshot?: {           // Kondisi macro saat trade dibuka (Journal-Macro Bridge)
+    regime?: string;
+    liquidityRisk?: string;
+    vix?: number;
+    yieldCurveSpread?: number;
+    capturedAt?: string;
+  };
   isDeleted?: boolean; // soft delete flag
   deletedAt?: string;
   deletionReason?: string;
   createdAt: string;
   updatedAt: string;
+  source?: "ai" | "manual"; // Source of trade
 }
 
 export interface CreateTradeDto {
@@ -43,6 +62,7 @@ export interface CreateTradeDto {
   takeProfit?: number;
   lotSize: number;
   sizeUnit?: "LOT" | "CONTRACT";
+  sizeType?: "standard" | "micro" | "mini";
   actualPnl?: number;
   rMultiple?: number;
   result?: "WIN" | "LOSS" | "BREAKEVEN";  // Send uppercase to backend
@@ -53,6 +73,13 @@ export interface CreateTradeDto {
   session?: "Asia" | "London" | "NY AM" | "NY PM" | "Other" | "NY";
   marketCondition?: "TRENDING" | "RANGING" | "VOLATILE" | "LIQUID" | "ALL";
   riskPercent?: number; // Risk % of account equity
+  // Institutional prop-firm fields
+  grossPnl?: number;
+  commission?: number;
+  swap?: number;
+  worstPriceReached?: number;
+  bestPriceReached?: number;
+  ruleViolations?: string[];
 }
 
 export interface TradeSummary {
@@ -86,35 +113,38 @@ export class TradeService {
     }
 
     return {
-      id: trade._id || trade.id,
-      userId: trade.userId,
-      tradingAccountId: trade.tradingAccountId,
-      playbookId,
-      playbookName,
-      tradeDate: trade.tradeDate,
-      pair: trade.pair,
-      direction: trade.direction === "LONG" ? "Long" : trade.direction === "SHORT" ? "Short" : trade.direction,
-      entryPrice: trade.entryPrice,
-      stopLoss: trade.stopLoss,
-      takeProfit: trade.takeProfit,
-      lotSize: trade.lotSize,
-      actualPnl: trade.actualPnl,
-      pnl: trade.actualPnl,
-      rMultiple: trade.rMultiple,
-      result: trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven",
-      emotionalState: trade.emotionalState,
-      notes: trade.notes,
-      chartLink: trade.chartLink,
-      exitDate: trade.exitDate,
-      session: trade.session,
-      marketCondition: trade.marketCondition,
-      riskPercent: trade.riskPercent,
-      isDeleted: trade.isDeleted,
-      deletedAt: trade.deletedAt,
-      deletionReason: trade.deletionReason,
-      createdAt: trade.createdAt,
-      updatedAt: trade.updatedAt,
-    };
+          id: trade._id || trade.id,
+          userId: trade.userId,
+          tradingAccountId: trade.tradingAccountId,
+          playbookId,
+          playbookName,
+          tradeDate: trade.tradeDate,
+          pair: trade.pair,
+          direction: trade.direction === "LONG" ? "Long" : trade.direction === "SHORT" ? "Short" : trade.direction,
+          entryPrice: trade.entryPrice,
+          stopLoss: trade.stopLoss,
+          takeProfit: trade.takeProfit,
+          lotSize: trade.lotSize,
+          sizeUnit: trade.sizeUnit,
+          sizeType: trade.sizeType,
+          actualPnl: trade.actualPnl,
+          pnl: trade.actualPnl,
+          rMultiple: trade.rMultiple,
+          plannedRMultiple: trade.plannedRMultiple,
+          result: trade.result === "WIN" ? "win" : trade.result === "LOSS" ? "loss" : "breakeven",
+          emotionalState: trade.emotionalState,
+          notes: trade.notes,
+          chartLink: trade.chartLink,
+          exitDate: trade.exitDate,
+          session: trade.session,
+          marketCondition: trade.marketCondition,
+          riskPercent: trade.riskPercent,
+          isDeleted: trade.isDeleted,
+          deletedAt: trade.deletedAt,
+          deletionReason: trade.deletionReason,
+          createdAt: trade.createdAt,
+          updatedAt: trade.updatedAt,
+        };
   }
 
   async getAll(includeDeleted: boolean = false): Promise<ApiResponse<Trade[]>> {

@@ -173,6 +173,28 @@ export const playbookService = {
     return duplicated;
   },
 
+  async getPlaybookMatrix(userId: string, accountId: string) {
+    // Get all playbooks with their stats
+    const playbooks = await Playbook.find({ userId, tradingAccountId: accountId, isArchived: false });
+    await Promise.all(playbooks.map(pb => this.computeStats(pb)));
+
+    // Create matrix data
+    const matrix = playbooks.map(pb => ({
+      id: pb._id.toString(),
+      name: pb.name,
+      totalTrades: pb.stats.totalTrades,
+      winRate: pb.stats.winRate,
+      avgRr: pb.stats.avgRr,
+      totalPnL: pb.stats.totalPnL,
+      methodology: pb.methodology,
+      marketCondition: pb.marketCondition,
+      timeframe: pb.timeframe,
+      markets: pb.markets,
+    }));
+
+    return matrix;
+  },
+
   async assignTrade(playbookId: string, tradeId: string, userId: string, accountId: string) {
     // Verify ownership of both playbook and trade
     const playbook = await Playbook.findOne({ _id: playbookId, userId, tradingAccountId: accountId, isArchived: false });

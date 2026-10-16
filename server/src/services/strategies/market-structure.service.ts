@@ -159,6 +159,8 @@ export interface MalaysianSNR {
   originalType?: "RESISTANCE" | "SUPPORT";
   /** Waktu candle yang mem-break level (valid untuk flip) */
   flipTime?: number;
+  /** Arah break terakhir: UP = resistance di-break ke atas, DOWN = support di-break ke bawah */
+  flipDir?: "UP" | "DOWN";
 }
 
 export interface MalaysianEngulfing {
@@ -618,6 +620,7 @@ class MarketStructureService {
     candles: Candle[],
     swingHighs: SwingHigh[],
     swingLows: SwingLow[],
+    wickInclusive = false,
   ): OrderBlock[] {
     const blocks: OrderBlock[] = [];
     if (candles.length < 10) return blocks;
@@ -651,8 +654,8 @@ class MarketStructureService {
         const recentLow = priorLows.length > 0 ? priorLows[priorLows.length - 1] : null;
         const hasSweep = recentLow ? (current.low < recentLow.price || (i > 0 && candles[i - 1].low < recentLow.price)) : false;
 
-        const obTop = Math.max(current.open, current.close);
-        const obBottom = Math.min(current.open, current.close);
+        const obTop = wickInclusive ? current.high : Math.max(current.open, current.close);
+        const obBottom = wickInclusive ? current.low : Math.min(current.open, current.close);
 
         blocks.push({
           index: i,
@@ -682,8 +685,8 @@ class MarketStructureService {
         const recentHigh = priorHighs.length > 0 ? priorHighs[priorHighs.length - 1] : null;
         const hasSweep = recentHigh ? (current.high > recentHigh.price || (i > 0 && candles[i - 1].high > recentHigh.price)) : false;
 
-        const obTop = Math.max(current.open, current.close);
-        const obBottom = Math.min(current.open, current.close);
+        const obTop = wickInclusive ? current.high : Math.max(current.open, current.close);
+        const obBottom = wickInclusive ? current.low : Math.min(current.open, current.close);
 
         blocks.push({
           index: i,
@@ -1343,14 +1346,18 @@ class MarketStructureService {
             snr.brokenByBody = true;
             snr.isFresh = true; // Broken by body makes it fresh for support
             snr.type = "SUPPORT"; // Flipped SNR
-            if (!snr.flipTime) snr.flipTime = c.time;
+            snr.flipDir = "UP"; // Track arah break terakhir
+            snr.flipTime = c.time; // Update flipTime setiap break
+            if (!snr.originalType) snr.originalType = "RESISTANCE";
             continue;
         }
         if (snr.type === "SUPPORT" && Math.max(c.open, c.close) < snr.price) {
             snr.brokenByBody = true;
             snr.isFresh = true;
             snr.type = "RESISTANCE"; // Flipped SNR
-            if (!snr.flipTime) snr.flipTime = c.time;
+            snr.flipDir = "DOWN"; // Track arah break terakhir
+            snr.flipTime = c.time; // Update flipTime setiap break
+            if (!snr.originalType) snr.originalType = "SUPPORT";
             continue;
         }
 
@@ -1524,21 +1531,20 @@ class MarketStructureService {
 
     for (const snr of snrs) {
       // Flip SUDAH terjadi di updateSNRFreshness:
-      //   - originalType RESISTANCE + brokenByBody → break ke ATAS → level jadi SUPPORT → RBS
-      //   - originalType SUPPORT + brokenByBody → break ke BAWAH → level jadi RESISTANCE → SBR
-      // Jika originalType tidak tersedia, infer dari arah break (type sekarang vs original).
-      const originalType = snr.originalType ?? (snr.type === "RESISTANCE" ? "SUPPORT" : "RESISTANCE");
-
+      //   - flipDir "UP" = resistance di-break ke atas → level jadi SUPPORT → RBS
+      //   - flipDir "DOWN" = support di-break ke bawah → level jadi RESISTANCE → SBR
+      // Pakai flipDir (arah break TERAKHIR), bukan originalType yang bisa stale setelah re-flip.
       if (!snr.brokenByBody) continue;
+      if (!snr.flipDir) continue;
 
-      if (originalType === "RESISTANCE") {
+      if (snr.flipDir === "UP") {
         // Resistance di-break ke atas → jadi support → RBS
         flips.push({
           type: "RBS",
           level: snr.price,
           time: snr.flipTime ?? snr.time,
         });
-      } else if (originalType === "SUPPORT") {
+      } else if (snr.flipDir === "DOWN") {
         // Support di-break ke bawah → jadi resistance → SBR
         flips.push({
           type: "SBR",

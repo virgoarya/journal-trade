@@ -9,9 +9,9 @@ import { silentLogger } from "../utils/silent-logger";
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const TRADING_ECONOMICS_BASE = "https://api.tradingeconomics.com";
 const DBNOMICS_BASE = "https://api.db.nomics.world/v22";
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const PMI_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours (ISM PMI is monthly)
-const VIX_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 menit — ON RRP/CPI/Fed update harian
+const PMI_CACHE_TTL_MS = 60 * 60 * 1000; // 1 jam (PMI bulanan — data tidak berubah cepat)
+const VIX_CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
 const FETCH_TIMEOUT_MS = 8000;
 const YAHOO_RETRY_DELAY_MS = 1200;
 
@@ -81,20 +81,41 @@ function extractYahooPrice(data: any): number | null {
   return typeof price === "number" ? price : null;
 }
 
+/**
+ * Hitung umur data (hari) dari string periode.
+ * Mendukung format: "2025-08" (bulanan DBnomics), "2025-08-01", ISO datetime.
+ * Return null kalau format tidak dikenali.
+ */
+function periodAgeDays(period: string | undefined | null): number | null {
+  if (!period) return null;
+  let d: Date;
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    d = new Date(`${period}-01T00:00:00Z`); // bulanan → hari pertama bulan
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
+    d = new Date(`${period}T00:00:00Z`);
+  } else {
+    d = new Date(period);
+  }
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
 // FRED series IDs
 const FRED_SERIES = {
   CPI: "CPIAUCSL", // Consumer Price Index – All Urban Consumers
-  FEDFUNDS: "FEDFUNDS", // Effective Federal Funds Rate
+  // FEDFUNDS = monthly average (lag ~2 bulan). DFF = daily effective rate,
+  // update harian → dipakai supaya konsisten dengan Nexus & macro-regime.
+  FEDFUNDS: "DFF", // Daily Federal Funds Effective Rate
   VIX: "VIXCLS", // CBOE Volatility Index (geopolitics/vol proxy)
   // NOTE: NAPM was removed from FRED in June 2016 by ISM.
-  // Primary PMI source is now DBnomics (ISM/pmi/pm), free, no API key needed.
-  // IPMAN (Industrial Production: Manufacturing) as final fallback proxy.
-  PMI_FALLBACK: "IPMAN", // Industrial Production: Manufacturing (2017=100 index)
+  // PMI utama: DBnomics (ISM/pmi/pm). Fallback: Empire State Mfg diffusion index
+  // (konsep identik PMI, lag ~30 hari).
+  EMPIRE_STATE: "GACDISA066MSFRBNY", // Empire State Mfg General Business (diffusion index)
   ONRRP: "RRPONTSYD", // Fed ON RRP Balance (liquidity drain, in billions USD)
 } as const;
 
 // PMI source tracking type
-type PmiSource = "calendar_db" | "dbnomics" | "trading_economics" | "ipman_synthetic" | null;
+type PmiSource = "calendar_db" | "dbnomics" | "trading_economics" | "empire_state" | "ipman_synthetic" | null;
 
 // ── Score Formula ─────────────────────────────────────────────────────────────
 // All formulas output 0–100 (integer)
@@ -200,6 +221,10 @@ async function fetchIsmPmi(): Promise<{ pmi: number | null; pmiSource: PmiSource
   }
 
   // ── Primary: DBnomics ISM Manufacturing PMI ─────────────────────────────
+  // PENTING: DBnomics menghentikan update ISM PMI. Data valid terakhir 2025-08,
+  // setelah itu nilainya korup (10-11, di luar range PMI). Tanpa validasi umur,
+  // kode diam-diam memakai data >1 tahun seolah-olah terkini → SUPPLY CHAIN LAGGING.
+  const PMI_MAX_AGE_DAYS = 60; // PMI rilis bulanan → 60 hari masih wajar
   try {
     const dbData = await fetchJsonWithRetry<any>(
       `${DBNOMICS_BASE}/series/ISM/pmi/pm?observations=1&format=json`,
@@ -213,14 +238,24 @@ async function fetchIsmPmi(): Promise<{ pmi: number | null; pmiSource: PmiSource
       // Walk backwards to find the latest VALID PMI (must be 20–65 range for sanity)
       for (let i = periods.length - 1; i >= 0; i--) {
         const val = values[i];
-        if (typeof val === "number" && val >= 20 && val <= 65) {
-          silentLogger.info(`[GeoRisk] DBnomics ISM PMI: ${val} (${periods[i]})`);
-          const result = { pmi: val, pmiSource: "dbnomics" as PmiSource };
-          setCache("pmi:ism", result);
-          return result;
+        const period = periods[i];
+        if (typeof val !== "number" || val < 20 || val > 65) continue;
+
+        // Validasi UMUR data — tolak kalau terlalu basi
+        const ageDays = periodAgeDays(period);
+        if (ageDays !== null && ageDays > PMI_MAX_AGE_DAYS) {
+          silentLogger.warn(
+            `[GeoRisk] DBnomics ISM PMI TERLALU BASI: ${val} @ ${period} (${ageDays} hari > ${PMI_MAX_AGE_DAYS} hari) — dilewati, pakai sumber lain.`
+          );
+          break; // jangan pakai data basi; jatuh ke fallback berikutnya
         }
+
+        silentLogger.info(`[GeoRisk] DBnomics ISM PMI: ${val} (${period}, ${ageDays ?? "?"} hari)`);
+        const result = { pmi: val, pmiSource: "dbnomics" as PmiSource };
+        setCache("pmi:ism", result);
+        return result;
       }
-      silentLogger.warn("[GeoRisk] DBnomics ISM PMI: no valid values in range 20-65");
+      silentLogger.warn("[GeoRisk] DBnomics ISM PMI: tidak ada nilai valid & fresh");
     }
   } catch (err: any) {
     silentLogger.warn("[GeoRisk] DBnomics ISM PMI failed:", err.message);
@@ -253,24 +288,35 @@ async function fetchIsmPmi(): Promise<{ pmi: number | null; pmiSource: PmiSource
     }
   }
 
-  // ── Fallback 2: FRED IPMAN synthetic proxy ──────────────────────────────
-  // IPMAN = Industrial Production: Manufacturing (2017=100 index)
-  // We convert to a pseudo-PMI: index > 100 ≈ expansion, < 100 ≈ contraction
-  // Linear map: 95 → PMI 45, 100 → PMI 50, 105 → PMI 55
+  // ── Fallback 2: FRED Empire State Mfg (GACDISA066MSFRBNY) — DIFFUSION INDEX ──
+  // PENTING: ini diffusion index survei manufaktur (net % responden melaporkan
+  // perbaikan). Netral = 0. Konsepnya IDENTIK dengan PMI (netral = 50), hanya
+  // skala berbeda → dikonversi: PMI ≈ 50 + (index / 2).
+  // Seri ini update BULANAN dengan lag ~30 hari (lebih segar dari IPMAN 61 hari).
+  // Menggantikan "IPMAN synthetic" yang merupakan FABRIKASI: IPMAN = indeks VOLUME
+  // produksi (bukan diffusion index), dan rumus `50 + (ipman - 100)` tidak punya
+  // makna statistik — selalu menghasilkan ~49-50 apa pun kondisi nyatanya.
   try {
-    const ipman = await fredLatest(FRED_SERIES.PMI_FALLBACK, 6);
-    if (ipman !== null) {
-      const syntheticPmi = parseFloat((50 + (ipman - 100)).toFixed(1));
-      const clampedPmi = Math.min(65, Math.max(35, syntheticPmi));
-      silentLogger.warn(`[GeoRisk] IPMAN synthetic PMI: ${clampedPmi} (raw IPMAN=${ipman})`);
-      const result = { pmi: clampedPmi, pmiSource: "ipman_synthetic" as PmiSource };
+    const empireState = await fredLatest(FRED_SERIES.EMPIRE_STATE, 6);
+    if (empireState !== null) {
+      // Konversi ke skala PMI: index 0 (netral) → 50, +20 → 60, -20 → 40
+      const convertedPmi = parseFloat((50 + empireState / 2).toFixed(1));
+      const clampedPmi = Math.min(65, Math.max(35, convertedPmi));
+      silentLogger.info(
+        `[GeoRisk] Empire State Mfg → PMI proxy: ${clampedPmi} (raw index=${empireState})`,
+      );
+      const result = { pmi: clampedPmi, pmiSource: "empire_state" as PmiSource };
       setCache("pmi:ism", result);
       return result;
     }
   } catch (err: any) {
-    silentLogger.warn("[GeoRisk] IPMAN fallback failed:", err.message);
+    silentLogger.warn("[GeoRisk] Empire State Mfg fallback failed:", err.message);
   }
 
+  // Semua sumber gagal → kembalikan null (UI menampilkan N/A).
+  // JANGAN fabrikasi angka: lebih baik jujur "data tidak tersedia" daripada
+  // menampilkan angka palsu yang terlihat valid.
+  silentLogger.warn("[GeoRisk] Semua sumber PMI gagal — supply chain akan tampil N/A");
   return { pmi: null, pmiSource: null };
 }
 

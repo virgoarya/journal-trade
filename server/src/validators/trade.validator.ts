@@ -14,8 +14,9 @@ export const logTradeSchema = z.object({
   stopLoss: z.number().positive("Stop loss harus lebih dari 0"),
   takeProfit: z.number().positive("Take profit harus lebih dari 0").optional().nullable(),
   lotSize: z.number().positive("Ukuran lot harus positif"),
-  sizeUnit: z.enum(["LOT", "CONTRACT"]).default("LOT"),
-  actualPnl: z.number(),
+    sizeUnit: z.enum(["LOT", "CONTRACT"]).default("LOT"),
+    sizeType: z.enum(["standard", "micro", "mini"]).default("standard"),
+    actualPnl: z.number(),
 
   result: z.enum(TRADE_RESULTS as readonly ["WIN", "LOSS", "BREAKEVEN"]),
   rMultiple: z.number().optional().nullable(),
@@ -28,6 +29,14 @@ export const logTradeSchema = z.object({
   session: z.enum(["Asia", "London", "NY AM", "NY PM", "Other", "NY"]).optional().nullable(),
   marketCondition: z.enum(["TRENDING", "RANGING", "VOLATILE", "LIQUID", "ALL"]).optional().nullable(),
   riskPercent: z.number().min(0).max(100).optional().nullable(),
+
+  // Institutional Prop-Firm Fields
+  grossPnl: z.number().optional().nullable(),
+  commission: z.number().min(0).optional().nullable(),
+  swap: z.number().optional().nullable(),
+  worstPriceReached: z.number().positive("Harga worst price harus positif").optional().nullable(),
+  bestPriceReached: z.number().positive("Harga best price harus positif").optional().nullable(),
+  ruleViolations: z.array(z.string()).optional().nullable(),
 });
 
 export const updateTradeSchema = logTradeSchema.partial();

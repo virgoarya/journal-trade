@@ -1,6 +1,17 @@
 import axios from "axios";
 import { env } from "../config/env";
 import { silentLogger } from "../utils/silent-logger";
+import { fredYoY } from "../utils/fred-api.helper";
+
+const FRED_SERIES = {
+  CPI: "CPIAUCSL",
+  // DFF = daily effective fed funds rate (update harian).
+  // FEDFUNDS (monthly) punya lag ~2 bulan → jangan dipakai lagi.
+  FEDFUNDS: "DFF",
+  VIX: "VIXCLS",
+  PMI_FALLBACK: "IPMAN",
+  ONRRP: "RPTC3M",
+};
 
 // ─── Types ───────────────────────────────────────────────────────
 export type MacroQuadrant =
@@ -19,6 +30,31 @@ export interface SubScore {
   status: MomentumStatus;
 }
 
+export interface RegimeVector {
+  x: number; // Growth Impulse (-1 to +1)
+  y: number; // Inflation Impulse (-1 to +1)
+  angle: number; // Degrees
+  magnitude: number;
+  targetQuadrant: MacroQuadrant;
+  label: string; // e.g. "Migrating towards GOLDILOCKS"
+}
+
+export interface MarkovProbabilities {
+  goldilocks: number;
+  reflation: number;
+  stagflation: number;
+  deflation: number;
+  transition: number;
+  divergenceBadge: string | null;
+}
+
+export interface SecondDerivativeImpulse {
+  growthImpulse: number;
+  growthLabel: string;
+  inflationImpulse: number;
+  inflationLabel: string;
+}
+
 export interface RatioMetric {
   current: number;
   ema10: number;
@@ -28,6 +64,8 @@ export interface RatioMetric {
   pressure?: InflationPressure;
   label: string;
   subScores?: Record<string, SubScore | { value: number | null; status: string }>;
+  impulse?: number;
+  impulseLabel?: string;
 }
 
 export interface ConfidenceMetric {
@@ -47,9 +85,12 @@ export interface MacroRegimeSnapshot {
   cpiYoY: number | null;
   growth: RatioMetric;
   inflation: RatioMetric;
-  liquidity: RatioMetric & { riskState: LiquidityRisk };
+  liquidity: RatioMetric & { riskState: LiquidityRisk; netLiquidityImpulse?: number };
   confidence: ConfidenceMetric;
   position: { x: number; y: number };
+  vector?: RegimeVector;
+  probabilities?: MarkovProbabilities;
+  secondDerivative?: SecondDerivativeImpulse;
   history: Array<{
     date: string;
     growthRatio: number;
@@ -278,6 +319,142 @@ function calculateROC(data: number[], period: number = 5): number[] {
   return roc;
 }
 
+// ─── Second Derivative Impulse: (ROC_5d - ROC_20d) / sigma_20d ──
+function calculateImpulse(
+  data: number[],
+  periodFast: number = 5,
+  periodSlow: number = 20,
+): { impulse: number; label: string } {
+  if (data.length < periodSlow + 5) {
+    return { impulse: 0, label: "STABLE" };
+  }
+
+  const rocFast = calculateROC(data, periodFast);
+  const rocSlow = calculateROC(data, periodSlow);
+
+  const lastFast = rocFast[rocFast.length - 1];
+  const lastSlow = rocSlow[rocSlow.length - 1];
+
+  // Calculate 20d standard deviation of ROC fast
+  const windowSlice = rocFast.slice(-periodSlow);
+  const mean = windowSlice.reduce((a, b) => a + b, 0) / windowSlice.length;
+  const variance =
+    windowSlice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+    windowSlice.length;
+  const sigma = Math.max(0.15, Math.sqrt(variance));
+
+  const impulseRaw = (lastFast - lastSlow) / sigma;
+  const impulse = parseFloat(Math.max(-3, Math.min(3, impulseRaw)).toFixed(4));
+
+  let label = "STABLE";
+  if (impulse >= 1.0) {
+    label = "BULLISH DIVERGENCE";
+  } else if (impulse >= 0.5) {
+    label = "BOTTOMING OUT";
+  } else if (impulse <= -1.0) {
+    label = "BEARISH DIVERGENCE";
+  } else if (impulse <= -0.5) {
+    label = "TOPPING OUT";
+  }
+
+  return { impulse, label };
+}
+
+// ─── Regime Migration Vector (Trajectory in 2x2 Grid) ───────────
+function calculateRegimeVector(
+  growthImpulse: number,
+  inflationImpulse: number,
+): RegimeVector {
+  // Normalize vector to [-1, 1]
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+  const x = clamp(growthImpulse / 2);
+  const y = clamp(inflationImpulse / 2);
+
+  const angleRad = Math.atan2(y, x);
+  const angle = Math.round((angleRad * 180) / Math.PI);
+  const magnitude = parseFloat(Math.min(1, Math.sqrt(x * x + y * y)).toFixed(3));
+
+  let targetQuadrant: MacroQuadrant = "Transition";
+  if (x >= 0.05 && y <= -0.05) targetQuadrant = "Goldilocks";
+  else if (x >= 0.05 && y >= 0.05) targetQuadrant = "Reflation";
+  else if (x <= -0.05 && y >= 0.05) targetQuadrant = "Stagflation";
+  else if (x <= -0.05 && y <= -0.05) targetQuadrant = "Deflation";
+
+  let label = `Migrating towards ${targetQuadrant.toUpperCase()}`;
+  if (magnitude < 0.15) {
+    label = "Vector Neutral (Low Velocity)";
+  }
+
+  return {
+    x: parseFloat(x.toFixed(4)),
+    y: parseFloat(y.toFixed(4)),
+    angle,
+    magnitude,
+    targetQuadrant,
+    label,
+  };
+}
+
+// ─── Markov Transition Probabilities ─────────────────────────────
+function calculateMarkovProbabilities(
+  currentQuadrant: MacroQuadrant,
+  posX: number,
+  posY: number,
+  vector: RegimeVector,
+): MarkovProbabilities {
+  // Centers of the 4 quadrants in normalized coordinates [-0.5, 0.5]
+  const centers: Record<"Goldilocks" | "Reflation" | "Stagflation" | "Deflation", { x: number; y: number }> = {
+    Goldilocks: { x: 0.5, y: -0.5 },
+    Reflation: { x: 0.5, y: 0.5 },
+    Stagflation: { x: -0.5, y: 0.5 },
+    Deflation: { x: -0.5, y: -0.5 },
+  };
+
+  // Projected position in 10-20 days
+  const projX = posX + vector.x * 0.4;
+  const projY = posY + vector.y * 0.4;
+
+  const weights: Record<string, number> = {};
+  for (const [quad, pos] of Object.entries(centers)) {
+    const dist = Math.hypot(projX - pos.x, projY - pos.y);
+    // Gaussian kernel score
+    weights[quad] = Math.exp(-Math.pow(dist / 0.7, 2));
+  }
+  // Transition gets weight if near center
+  const centerDist = Math.hypot(projX, projY);
+  weights["Transition"] = Math.exp(-Math.pow(centerDist / 0.4, 2)) * 0.8;
+
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  const p = (k: string) => Math.round((weights[k] / total) * 100);
+
+  const goldilocks = p("Goldilocks");
+  const reflation = p("Reflation");
+  const stagflation = p("Stagflation");
+  const deflation = p("Deflation");
+  const transition = Math.max(0, 100 - (goldilocks + reflation + stagflation + deflation));
+
+  // Early warning divergence badge logic
+  let divergenceBadge: string | null = null;
+  if (deflation >= 45 && (currentQuadrant === "Goldilocks" || currentQuadrant === "Reflation")) {
+    divergenceBadge = "MACRO DIVERGENCE: BEARISH TRAP RISK";
+  } else if (stagflation >= 50 && currentQuadrant === "Goldilocks") {
+    divergenceBadge = "MARGIN COMPRESSION RISK";
+  } else if (goldilocks >= 45 && (currentQuadrant === "Stagflation" || currentQuadrant === "Deflation")) {
+    divergenceBadge = "BULLISH RECOVERY SIGNAL";
+  } else if (reflation >= 50 && currentQuadrant === "Deflation") {
+    divergenceBadge = "REFLATIONARY IMPULSE";
+  }
+
+  return {
+    goldilocks,
+    reflation,
+    stagflation,
+    deflation,
+    transition,
+    divergenceBadge,
+  };
+}
+
 function calculateComposite(
   ratios: { values: number[]; weight: number }[],
 ): number[] {
@@ -374,21 +551,8 @@ async function fetchLatestCpiYoY(): Promise<number | null> {
     return env.MACRO_CPI_YOY_OVERRIDE;
   }
 
-  const key = env.FRED_API_KEY;
-  if (!key) return null;
-
   try {
-    const response = await axios.get(
-      `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${key}&file_type=json&sort_order=desc&limit=24`,
-      { timeout: 15000 },
-    );
-    const observations = response.data?.observations ?? [];
-    const values = observations
-      .map((obs: any) => parseFloat(obs.value))
-      .filter((value: number) => Number.isFinite(value));
-
-    if (values.length < 13) return null;
-    return ((values[0] / values[12]) - 1) * 100;
+    return await fredYoY(FRED_SERIES.CPI);
   } catch (error: any) {
     silentLogger.warn("[MacroRegime] CPI fetch failed:", error.message);
     return null;
@@ -398,7 +562,7 @@ async function fetchLatestCpiYoY(): Promise<number | null> {
 // ─── Cache ──────────────────────────────────────────────────────
 let cachedSnapshot: MacroRegimeSnapshot | null = null;
 let cachedAt: number = 0;
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit — regime dihitung dari ETF quotes harian
 
 // ─── Main Service ───────────────────────────────────────────────
 export const macroRegimeService = {
@@ -758,6 +922,16 @@ export const macroRegimeService = {
     const posX = clamp(growthDelta * 100, -1, 1);
     const posY = clamp(inflationDelta * 100, -1, 1);
 
+    // ── Calculate Second Derivative Impulse & Trajectory Vector ──
+    const growthImpulseData = calculateImpulse(growthCompositeRatios);
+    const inflationImpulseData = calculateImpulse(inflationCompositeRatios);
+    const vector = calculateRegimeVector(growthImpulseData.impulse, inflationImpulseData.impulse);
+    const probabilities = calculateMarkovProbabilities(quadrant, posX, posY, vector);
+
+    // Calculate Net Liquidity Velocity (ROC-14d)
+    const liquidityRoc14 = calculateROC(liquidityRatios, 14);
+    const netLiquidityImpulse = parseFloat((liquidityRoc14[liquidityRoc14.length - 1] ?? 0).toFixed(4));
+
     // ── Assemble snapshot ────────────────────────────────────────
     const snapshot: MacroRegimeSnapshot = {
       quadrant,
@@ -778,6 +952,8 @@ export const macroRegimeService = {
           iwmTlt: { ratio: hasIwmTlt ? parseFloat(iwmTltRatios[lastIdx].toFixed(6)) : 0, status: iwmTltStatus },
           xliXlu: { ratio: hasXliXlu ? parseFloat(xliXluRatios[lastIdx].toFixed(6)) : 0, status: xliXluStatus },
         },
+        impulse: growthImpulseData.impulse,
+        impulseLabel: growthImpulseData.label,
       },
       inflation: {
         current: parseFloat(currentInflation.toFixed(6)),
@@ -792,6 +968,8 @@ export const macroRegimeService = {
           cpiYoY: { value: cpiYoY, status: cpiStatus },
           gldUup: { ratio: hasGldUup ? parseFloat(gldUupRatios[lastIdx].toFixed(6)) : 0, status: gldUupStatus },
         },
+        impulse: inflationImpulseData.impulse,
+        impulseLabel: inflationImpulseData.label,
       },
       liquidity: {
         current: parseFloat(currentLiquidity.toFixed(6)),
@@ -801,11 +979,20 @@ export const macroRegimeService = {
         status: liquidityStatus,
         label: "HYG / SHY",
         riskState: liquidityRisk,
+        netLiquidityImpulse,
       },
       confidence,
       position: {
         x: parseFloat(posX.toFixed(4)),
         y: parseFloat(posY.toFixed(4)),
+      },
+      vector,
+      probabilities,
+      secondDerivative: {
+        growthImpulse: growthImpulseData.impulse,
+        growthLabel: growthImpulseData.label,
+        inflationImpulse: inflationImpulseData.impulse,
+        inflationLabel: inflationImpulseData.label,
       },
       history,
       fetchedAt: new Date().toISOString(),

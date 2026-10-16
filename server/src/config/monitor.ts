@@ -31,7 +31,11 @@ export const monitorConfig: MonitorConfig = {
   reportDir: process.env.MONITOR_REPORT_DIR || path.join(__dirname, "..", "..", "monitoring-reports"),
   llmModel: process.env.MONITOR_LLM_MODEL || "auto-free-model",
   nineRouterUrl: process.env.NINE_ROUTER_URL || "http://127.0.0.1:20128",
-  nineRouterApiKey: process.env.NINE_ROUTER_API_KEY || "1oBaWtEsZuqVsfzLoHlALKBtNcTQuFHt5AHGrRS9Zw",
+  // SECURITY: never hardcode a credential fallback here. The literal that used
+  // to sit on this line is the real 9Router key — it shipped in source and in
+  // git history (and was even used as a UI placeholder). Rotate it and keep the
+  // value in .env only; when unset, the monitor simply skips LLM summaries.
+  nineRouterApiKey: process.env.NINE_ROUTER_API_KEY || "",
   alertWebhook: process.env.MONITOR_ALERT_WEBHOOK,
   thresholds: {
     mt5DisconnectPerHour: 3,

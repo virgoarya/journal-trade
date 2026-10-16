@@ -23,7 +23,7 @@ export function EconomicCalendarPanel({ className }: { className?: string }) {
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TimeFilter>("today");
+  const [filter, setFilter] = useState<TimeFilter>("all");
   const [impactFilter, setImpactFilter] = useState<string>("All");
   const [currencyFilter, setCurrencyFilter] = useState<string>("All");
   const [mounted, setMounted] = useState(false);

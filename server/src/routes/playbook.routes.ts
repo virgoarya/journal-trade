@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { playbookService } from "../services/playbook.service";
 import { tradingAccountService } from "../services/trading-account.service";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { createPlaybookSchema, updatePlaybookSchema } from "../validators/playbook.validator";
 import { objectIdParamSchema } from "../validators/common.validator";
 import { apiResponse } from "../utils/api-response";
@@ -127,4 +127,16 @@ router.post("/:id/assign-trade", validate({ params: objectIdParamSchema, body: z
   } catch (error) { next(error); }
 });
 
+router.get("/matrix", async (req, res, next) => {
+  try {
+    const account = await tradingAccountService.getActiveAccount(req.user.id);
+    if (!account) return apiResponse.success(res, []);
+    
+    const matrix = await playbookService.getPlaybookMatrix(req.user.id, account.id);
+    return apiResponse.success(res, matrix);
+  } catch (error) { next(error); }
+});
+
 export default router;
+
+

@@ -28,10 +28,8 @@ export function CreatePlaybookForm({
     timeframe: "",
     markets: "",
     rules: "",
-    htfKeyLevel: "",
     ictPoi: "" as "OrderBlock" | "FVG" | "Breaker" | "Rejection" | "iFVG" | "",
     msnrLevel: "" as "APEX" | "QM" | "OCL" | "TrendLine" | "SBR" | "RBS" | "",
-    htfTimeframe: "",
     entryTimeframe: "",
     entryChecklist: [] as string[],
   });
@@ -48,10 +46,8 @@ export function CreatePlaybookForm({
         timeframe: initialData.timeframe || "",
         markets: initialData.markets?.join(', ') || "",
         rules: initialData.rules?.join('\n') || "",
-        htfKeyLevel: initialData.htfKeyLevel || "",
         ictPoi: initialData.ictPoi || "",
         msnrLevel: initialData.msnrLevel || "",
-        htfTimeframe: initialData.htfTimeframe || "",
         entryTimeframe: initialData.entryTimeframe || "",
         entryChecklist: initialData.entryChecklist || [],
       });
@@ -69,10 +65,8 @@ export function CreatePlaybookForm({
       timeframe: formData.timeframe,
       markets: formData.markets.split(',').map(m => m.trim()).filter(m => m),
       rules: formData.rules.split('\n').filter(r => r.trim()),
-      htfKeyLevel: formData.htfKeyLevel || undefined,
       ictPoi: formData.ictPoi || undefined,
       msnrLevel: formData.msnrLevel || undefined,
-      htfTimeframe: formData.htfTimeframe || undefined,
       entryTimeframe: formData.entryTimeframe || undefined,
       entryChecklist: formData.entryChecklist,
       ...(mode === 'create' ? { tags: [] } : {}),
@@ -98,21 +92,6 @@ export function CreatePlaybookForm({
       setLoading(false);
     }
   };
-
-  const handleEntryChecklistChange = (item: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      entryChecklist: checked
-        ? [...prev.entryChecklist, item]
-        : prev.entryChecklist.filter(i => i !== item)
-    }));
-  };
-
-  // If compact mode (for assignment modal), render a simplified version
-  if (compact) {
-    // For now, still render full form but can be adjusted later
-    // Could be a modal-within-modal that's smaller
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -144,12 +123,8 @@ export function CreatePlaybookForm({
             className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
           >
             <option value="ICT">ICT</option>
-
             <option value="MSNR">MSNR</option>
             <option value="SMC">SMC</option>
-            <option value="PA">Price Action</option>
-            <option value="IND">Indicator-based</option>
-            <option value="HYBRID">Hybrid</option>
           </select>
         </div>
         <div>
@@ -171,14 +146,14 @@ export function CreatePlaybookForm({
         </div>
         <div>
           <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">
-            Timeframe *
+            High Timeframe Direction *
           </label>
           <input
             name="timeframe"
             type="text"
             value={formData.timeframe}
             onChange={(e) => setFormData(prev => ({ ...prev, timeframe: e.target.value }))}
-            placeholder="ex: M15, H1"
+            placeholder="ex: Daily Bullish, H4 Bearish"
             required
             className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
           />
@@ -201,32 +176,10 @@ export function CreatePlaybookForm({
 
       {/* HTF / Market Context Section */}
       <div className="pt-4 border-t border-white/5 space-y-4">
-        <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-[0.2em]">Market Context (HTF)</h3>
+        <h3 className="text-[11px] font-bold text-accent-gold uppercase tracking-[0.2em]">High Timeframe POI</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">HTF Timeframe</label>
-            <input
-              name="htfTimeframe"
-              type="text"
-              value={formData.htfTimeframe}
-              onChange={(e) => setFormData(prev => ({ ...prev, htfTimeframe: e.target.value }))}
-              placeholder="Daily / H4"
-              className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">HTF Key Level</label>
-            <input
-              name="htfKeyLevel"
-              type="text"
-              value={formData.htfKeyLevel}
-              onChange={(e) => setFormData(prev => ({ ...prev, htfKeyLevel: e.target.value }))}
-              placeholder="e.g. 1.1200"
-              className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">ICT POI</label>
+            <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">SMC/ICT POI</label>
             <select
               name="ictPoi"
               value={formData.ictPoi}
@@ -281,18 +234,7 @@ export function CreatePlaybookForm({
         />
       </div>
 
-      {/* Description */}
-      <div>
-        <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Description</label>
-        <textarea
-          name="description"
-          rows={2}
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          placeholder="Brief description of your strategy"
-          className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-text-primary text-sm focus:border-accent-gold outline-none resize-none"
-        />
-      </div>
+
 
       {/* Rules */}
       <div>

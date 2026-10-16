@@ -18,6 +18,19 @@
   --color-data-loss: #FF3864;
   --color-data-warning: #FFA726;
 
+  /* Login Page (Discord-style palette) — tokenised so the login surface
+     respects theme changes instead of hardcoding hex in the component. */
+  --color-login-bg: #313338;
+  --color-login-text: #F2F3F5;
+  --color-login-secondary: #B5BAC1;
+  --color-login-muted: #949BA4;
+  --color-login-faint: #6D6F78;
+  --color-login-brand: #5865F2;
+  --color-login-brand-glow: rgba(88, 101, 242, 0.08);
+  --color-login-card-top: rgba(255, 255, 255, 0.06);
+  --color-login-card-mid: rgba(43, 45, 49, 0.6);
+  --color-login-card-bottom: rgba(30, 31, 34, 0.95);
+
   /* Access Denied Page Colors */
   --color-on-surface: #E5E1E7;
   --color-outline: #99907C;
@@ -120,7 +133,26 @@
   100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
 }
 
+/* Fase 2.3 — Realtime Hardening: flash harga saat nilai berubah */
+@keyframes flashUp {
+  0% { background-color: rgba(57,255,136,0.28); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashDown {
+  0% { background-color: rgba(255,56,100,0.28); }
+  100% { background-color: transparent; }
+}
+
 @layer utilities {
+  .flash-up {
+    animation: flashUp 600ms ease-out;
+  }
+
+  .flash-down {
+    animation: flashDown 600ms ease-out;
+  }
+
   .scrollbar-hide {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -320,6 +352,42 @@
     margin-top: 0.75rem;
   }
 
+
+  /* ============== ACCESSIBILITY: Focus Visible Styles ============== */
+  *:focus-visible {
+    outline: 2px solid var(--color-accent-gold);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--color-accent-gold);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2);
+  }
+
+  /* Skip navigation link */
+  .skip-nav {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    background: var(--color-accent-gold);
+    color: var(--color-bg-void);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    z-index: 100;
+    transition: top 0.2s;
+  }
+
+  .skip-nav:focus {
+    top: 0;
+  }
 
   .btn-gold {
     @apply bg-accent-gold text-bg-void font-semibold px-6 py-2.5 rounded-md transition-all hover:brightness-110 active:scale-95 shadow-sm;

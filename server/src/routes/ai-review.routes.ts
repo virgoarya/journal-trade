@@ -3,7 +3,7 @@ import { aiReviewService } from "../services/ai-review.service";
 import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
 import { objectIdParamSchema } from "../validators/common.validator";
-import { validate } from "../middleware/validate";
+import { validate } from "../middleware/validation";
 import { Trade } from "../models/Trade";
 import { AiReview } from "../models/AiReview";
 

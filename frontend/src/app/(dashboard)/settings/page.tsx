@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
+import { useAvatarSync } from "@/hooks/useAvatarSync";
 import { toast } from "sonner";
 import { tradingAccountService, TradingAccount } from "@/services/trading-account.service";
 import { settingsService, UserSettingsData } from "@/services/settings.service";
@@ -22,6 +23,17 @@ interface SettingsSection {
 
 export default function SettingsPage() {
   const { data: session, isPending: sessionPending } = useSession();
+  const { avatarUrl, refresh } = useAvatarSync();
+  const [mounted, setMounted] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
   const [activeAccount, setActiveAccount] = useState<TradingAccount | null>(null);
   const [activeSection, setActiveSection] = useState("profile");
   const [isLoading, setIsLoading] = useState(false);
@@ -526,10 +538,16 @@ export default function SettingsPage() {
                 <div className="flex items-start space-x-6 mb-8">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full bg-accent-gold/10 border-2 border-accent-gold/30 flex items-center justify-center overflow-hidden">
-                      {sessionPending ? (
+                      {!mounted || sessionPending ? (
                         <Loader2 className="w-6 h-6 text-accent-gold animate-spin" />
-                      ) : session?.user?.image ? (
-                        <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : session?.user?.image && !avatarError ? (
+                        <img 
+                          src={session.user.image} 
+                          alt="Avatar" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={() => { setAvatarError(true); void refresh(); }}
+                        />
                       ) : (
                         <span className="text-2xl font-mono font-bold text-accent-gold">
                           {getInitials(session?.user?.name || "HT")}
@@ -542,10 +560,10 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-text-primary text-lg mb-0.5">
-                      {session?.user?.name || "Elite Hunter"}
+                      {mounted && session?.user?.name ? session.user.name : "Elite Hunter"}
                     </h3>
                     <p className="text-sm text-text-secondary mb-4 uppercase tracking-widest text-[10px]">
-                      {(session?.user as any)?.role === "admin" ? "Founder Member" : "Elite Member"}
+                      {mounted && (session?.user as any)?.role === "admin" ? "Founder Member" : "Elite Member"}
                     </p>
                     <div className="flex space-x-2">
                       <button className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-bg-elevated text-text-secondary rounded-lg border border-white/5 hover:border-accent-gold/40 hover:text-accent-gold transition-all">
@@ -564,7 +582,7 @@ export default function SettingsPage() {
                       <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Display Name</label>
                       <input
                         type="text"
-                        defaultValue={session?.user?.name || ""}
+                        value={mounted && session?.user?.name ? session.user.name : ""}
                         readOnly
                         className="w-full bg-bg-input/50 border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none opacity-80 cursor-not-allowed"
                       />
@@ -574,7 +592,7 @@ export default function SettingsPage() {
                       <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-[0.15em] mb-2">Email Address</label>
                       <input
                         type="email"
-                        defaultValue={session?.user?.email || ""}
+                        value={mounted && session?.user?.email ? session.user.email : ""}
                         readOnly
                         className="w-full bg-bg-input/50 border border-white/5 rounded-xl px-4 py-3 text-text-primary text-sm focus:border-accent-gold focus:outline-none opacity-80 cursor-not-allowed"
                       />

@@ -11,18 +11,26 @@ import { PipelinePerformance } from "./components/PipelinePerformance";
 import { AITradeHistories } from "./components/AITradeHistories";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
-import { LLMConsensusBreakdown } from "./components/LLMConsensusBreakdown";
-
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
+import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
+import { TradingDisabledBanner } from "./components/TradingDisabledBanner";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain, Loader2 } from "lucide-react";
 import { Suspense } from "react";
 import { brokerRegistrationService } from "@/services/broker-registration.service";
 import { useSession } from "@/lib/auth-client";
+import PaymentModal from "@/components/PaymentModal";
+import TokenRefillModal from "@/components/TokenRefillModal";
+import { usePaymentGate } from "./hooks/usePaymentGate";
+import { toast } from "sonner";
 
 type Tab = "trading" | "backtest";
+
+// ============================================================================
+// Main Page Component
+// ============================================================================
 
 export default function AITradingPage() {
   return (
@@ -38,6 +46,10 @@ export default function AITradingPage() {
   );
 }
 
+// ============================================================================
+// Content Component (with Payment Gate Logic)
+// ============================================================================
+
 function AITradingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,6 +59,26 @@ function AITradingPageContent() {
   const [activeTab, setActiveTab] = useState<Tab>("trading");
   const [isTradingDrawerOpen, setIsTradingDrawerOpen] = useState(false);
 
+  // ── Payment Gate Logic ─────────────────────────────────────────────────
+  const userId = session?.user?.id;
+  // ?full=1 forces the real payment flow even in development
+  const forceFullFlow = !!searchParams.get("full");
+  const { status: paymentStatus, loading: paymentLoading, gateAction, refetch: refetchPaymentStatus } = usePaymentGate(userId, forceFullFlow);
+
+  // Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRefillModal, setShowRefillModal] = useState(false);
+  const [paymentPackage, setPaymentPackage] = useState<"package" | "token_topup" | "none">("package");
+  const [paymentIsBooster, setPaymentIsBooster] = useState(false);
+  const [paymentDismissed, setPaymentDismissed] = useState(false);
+
+  // Close modal handler
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentDismissed(true);
+  };
+
+  // ── Original Logic ─────────────────────────────────────────────────────
   const {
     isConnected,
     isReconnecting,
@@ -55,6 +87,7 @@ function AITradingPageContent() {
     connectError,
     connectMT5,
     disconnectMT5,
+    connectionStatus,
     accountInfo,
     accountLoading,
     refetchAccountInfo,
@@ -80,8 +113,71 @@ function AITradingPageContent() {
     refreshPipelineData,
   } = useAiTrading();
 
+  // Auto-open modal ketika gateAction mendeteksi package (belum terdaftar)
+  // Development bypass default; use /ai-trading?full=1 to test the full payment flow.
   useEffect(() => {
-    if (tabParam === "backtest" || tabParam === "trading") {
+    if (process.env.NODE_ENV === "development" && !searchParams.get("full")) {
+      return;
+    }
+
+    if (paymentDismissed) return;
+    if (paymentLoading) return;
+
+    // Payment gate is independent of the MT5 connection: prompt as soon as the
+    // page opens and the backend says access has not been granted yet.
+    if (gateAction === "package" && !showPaymentModal) {
+      setPaymentPackage("package");
+      setPaymentIsBooster(paymentStatus?.isBooster ?? false);
+      setShowPaymentModal(true);
+    } else if (gateAction === "token_topup" && !showRefillModal) {
+      setShowRefillModal(true);
+    }
+  }, [gateAction, paymentLoading, showPaymentModal, showRefillModal, paymentStatus?.isBooster, searchParams, paymentDismissed]);
+
+  // Handle payment success callback from PaymentModal
+  const handlePaymentSuccess = () => {
+    // Reset dismissed state so modal won't reappear
+    setPaymentDismissed(false);
+    // Refresh payment status after successful payment
+    refetchPaymentStatus();
+  };
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development" && !searchParams.get("full")) {
+      setRegCheck("ok");
+      return;
+    }
+
+    const checkBrokerRegistration = async () => {
+      if (sessionPending || !session?.user?.id) return;
+      try {
+        const res = await brokerRegistrationService.getStatus();
+        const status = res.data;
+        if (status && !status.needsRegistration) {
+          setRegCheck("ok");
+        } else {
+          setRegCheck("redirect");
+          toast.info("Harap daftarkan broker Anda terlebih dahulu.", {
+            action: {
+              label: "Daftar Sekarang",
+              onClick: () => router.push("/broker-registration"),
+            },
+            duration: 5000,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch broker registration:", error);
+        setRegCheck("redirect");
+        toast.error("Gagal memeriksa pendaftaran broker. Silakan coba lagi.", {
+          duration: 5000,
+        });
+      }
+    };
+    checkBrokerRegistration();
+  }, [session, sessionPending, router, searchParams]);
+
+  useEffect(() => {
+    if (tabParam) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -92,18 +188,42 @@ function AITradingPageContent() {
       refetchPositions();
       refreshPipelineData();
     }
-  }, [isConnected]); // Removed unnecessary dependencies
-
-  useEffect(() => {
-    // Local dev: bypass broker-registration gate entirely
-    setRegCheck("dev");
-  }, []);
+  }, [isConnected]);
 
   useEffect(() => {
     if (regCheck === "redirect") {
       router.push("/broker-registration");
     }
   }, [regCheck, router]);
+
+  // ── Block access if payment required (setelah semua hooks dipanggil) ──
+  const isPaymentRequired = gateAction === "package" && paymentDismissed;
+  const isTokenTopupRequired = gateAction === "token_topup" && !showRefillModal;
+
+  if (isPaymentRequired || isTokenTopupRequired) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-[#0A0A0F] border border-[#D4AF37]/30 rounded-3xl p-8 max-w-md text-center">
+          <div className="text-4xl mb-4">🔒</div>
+          <h2 className="text-xl font-bold text-[#D4AF37] mb-2">Akses Diblokir</h2>
+          <p className="text-gray-400 text-sm mb-6">
+            {isPaymentRequired
+              ? "Selesaikan pembayaran untuk mengakses AI Trading."
+              : "Token LLM Anda habis. Isi ulang untuk melanjutkan."}
+          </p>
+          <button
+            onClick={() => {
+              setPaymentDismissed(false);
+              setShowPaymentModal(true);
+            }}
+            className="px-6 py-3 bg-gradient-to-r from-[#D4AF37] to-[#F3E5AB] text-black font-bold rounded-xl hover:brightness-110 transition-all"
+          >
+            {isPaymentRequired ? "Lanjutkan Pembayaran" : "Isi Ulang Token"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (regCheck === "loading" || regCheck === "redirect") {
     return (
@@ -132,6 +252,22 @@ function AITradingPageContent() {
             error={connectError}
           />
         </div>
+
+        {/* Payment gate must also be reachable before MT5 is connected */}
+        <PaymentModal
+          userId={userId || "anonymous"}
+          isBooster={paymentStatus?.isBooster ?? false}
+          isOpen={showPaymentModal}
+          onClose={handleClosePaymentModal}
+          onSuccess={handlePaymentSuccess}
+        />
+
+        <TokenRefillModal
+          userId={userId || "anonymous"}
+          isOpen={showRefillModal}
+          onClose={() => setShowRefillModal(false)}
+          onSuccess={handlePaymentSuccess}
+        />
       </div>
     );
   }
@@ -214,38 +350,48 @@ function AITradingPageContent() {
           </div>
 
           {activeTab === "trading" && (
-            <button
-              onClick={disconnectMT5}
-              className="px-4 py-1.5 bg-black/40 hover:bg-red-900/40 text-text-muted hover:text-red-400 text-xs tracking-wider uppercase rounded-lg border border-accent-gold/20 hover:border-red-500/50 transition-all shadow-[0_0_10px_rgba(255,0,0,0)] hover:shadow-[0_0_10px_rgba(255,0,0,0.2)]"
-            >
-              Disconnect
-            </button>
+            <div className="flex items-center gap-3">
+
+              <button
+                onClick={disconnectMT5}
+                className="px-4 py-1.5 bg-black/40 hover:bg-red-900/40 text-text-muted hover:text-red-400 text-xs tracking-wider uppercase rounded-lg border border-accent-gold/20 hover:border-red-500/50 transition-all shadow-[0_0_10px_rgba(255,0,0,0)] hover:shadow-[0_0_10px_rgba(255,0,0,0.2)]"
+              >
+                Disconnect
+              </button>
+            </div>
           )}
         </div>
       </header>
+
+      {/* Payment Status Banner - Full width below header */}
+      {activeTab === "trading" && (
+        <div className="mb-4">
+          <PaymentStatusBanner userId={userId} onTopup={() => setShowRefillModal(true)} />
+        </div>
+      )}
 
       {/* Tab Content */}
       {activeTab === "trading" && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* Left: Main content */}
           <div className="md:col-span-2 xl:col-span-3 space-y-4">
-          <AccountOverview
-            accountInfo={accountInfo}
-            isLoading={accountLoading}
-            positions={positions}
-          />
+            <AccountOverview
+              accountInfo={accountInfo}
+              isLoading={accountLoading}
+              positions={positions}
+            />
 
-             <PositionsTable
-               positions={positions}
-               pendingOrders={orders}
-               onClose={closePosition}
-               onModify={modifyPosition}
-               isLoading={positionsLoading}
-               error={positionsError}
-               onRetry={refetchPositions}
-             />
+            <PositionsTable
+              positions={positions}
+              pendingOrders={orders}
+              onClose={closePosition}
+              onModify={modifyPosition}
+              isLoading={positionsLoading}
+              error={positionsError}
+              onRetry={refetchPositions}
+            />
 
-             {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
+            {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
 
             <LLMConsensusViz
               votes={lastLlmVotes}
@@ -301,28 +447,28 @@ function AITradingPageContent() {
             `}>
               <TradingPanel
                 pipelineRunning={pipelineStatus?.running ?? false}
-              pipelinePaused={pipelineStatus?.paused ?? false}
-              isStarting={isPipelineStarting}
-              isStopping={isPipelineStopping}
-              skillConfig={skillConfig}
-            />
+                pipelinePaused={pipelineStatus?.paused ?? false}
+                isStarting={isPipelineStarting}
+                isStopping={isPipelineStopping}
+                skillConfig={skillConfig}
+              />
 
-            {allAnalyses && allAnalyses.length > 0 ? allAnalyses.map((a) => (
-              <MethodologyConfluence
-                key={a.symbol}
-                confluence={a.confluence}
-                marketStructure={a.marketStructure}
-                symbol={a.symbol}
-                isRunning={pipelineStatus?.running ?? false}
-              />
-            )) : (
-              <MethodologyConfluence
-                confluence={lastAnalysis?.confluence}
-                marketStructure={lastAnalysis?.marketStructure}
-                symbol={lastAnalysis?.symbol}
-                isRunning={pipelineStatus?.running ?? false}
-              />
-            )}
+              {allAnalyses && allAnalyses.length > 0 ? allAnalyses.map((a) => (
+                <MethodologyConfluence
+                  key={a.symbol}
+                  confluence={a.confluence}
+                  marketStructure={a.marketStructure}
+                  symbol={a.symbol}
+                  isRunning={pipelineStatus?.running ?? false}
+                />
+              )) : (
+                <MethodologyConfluence
+                  confluence={lastAnalysis?.confluence}
+                  marketStructure={lastAnalysis?.marketStructure}
+                  symbol={lastAnalysis?.symbol}
+                  isRunning={pipelineStatus?.running ?? false}
+                />
+              )}
             </div>
 
             {/* Mobile Footer (Close Button Backup) */}
@@ -342,6 +488,24 @@ function AITradingPageContent() {
       )}
 
       {activeTab === "backtest" && <BacktestTab onBacktestComplete={() => setSkillVersion(skillVersion + 1)} onApplyToPipeline={() => setSkillVersion(skillVersion + 1)} />}
+
+      {/* ================================================================== */}
+      {/* Payment Gate Modal — Auto-triggered on page load if needed */}
+      {/* ================================================================== */}
+      <PaymentModal
+        userId={userId || "anonymous"}
+        isBooster={paymentStatus?.isBooster ?? false}
+        isOpen={showPaymentModal}
+        onClose={handleClosePaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
+
+      <TokenRefillModal
+        userId={userId || "anonymous"}
+        isOpen={showRefillModal}
+        onClose={() => setShowRefillModal(false)}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

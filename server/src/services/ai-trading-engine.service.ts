@@ -20,6 +20,8 @@ import {
   DEFAULT_METHODOLOGY_WEIGHTS,
 } from "./strategies/index";
 
+import { areCorrelated } from "./strategies/smt-correlation.config";
+
 import { type Candle } from "./strategies/market-structure.service";
 export { type Candle };
 
@@ -59,8 +61,8 @@ export interface MultiStrategySymbolAnalysis {
 class AITradingEngine {
   private candleCache = new Map<string, { rates: MT5Rate[]; timestamp: number }>();
   private symbolCache = new Map<string, { analysis: MultiStrategySymbolAnalysis; timestamp: number }>();
-  private readonly SYMBOL_CACHE_TTL_MS = 60 * 1000; // 1 minute cache for symbol analysis
-  private readonly CACHE_TTL_MS = 5000;
+  private readonly CACHE_TTL_MS = 1000; // 1s candle cache for ultra-fresh price action
+  private readonly SYMBOL_CACHE_TTL_MS = 5000; // 5s symbol cache (faster reaction)
 
   private async getCachedRates(symbol: string, timeframe: string, count: number): Promise<MT5Rate[]> {
     const key = `${symbol}_${timeframe}_${count}`;
@@ -124,7 +126,10 @@ class AITradingEngine {
 
     const dailyCandles: Candle[] = (dailyRates.length > 0 ? dailyRates : directionRates).map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const directionCandles: Candle[] = directionRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    // M15 structure: CLOSED candles only (exclude forming candle at index -1)
+    const setupCandlesClosed: Candle[] = setupRates.slice(0, -1).map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
     const setupCandles: Candle[] = setupRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
+    // M5 entry: allow forming candle (real-time trigger)
     const entryCandles: Candle[] = entryRates.map((r) => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
 
     // ── 1. Market Structure Analysis & Alignment ───────────────────
@@ -132,7 +137,8 @@ class AITradingEngine {
     // Use Pure Price Action for Daily Trend (Intraday Bias) instead of Macro Swing Structure
     dailyStructure.trend = marketStructureService.analyzeDailyPriceAction(dailyCandles);
     const directionStructure = marketStructureService.analyzeMarketStructure(directionCandles);
-    const setupStructure = marketStructureService.analyzeMarketStructure(setupCandles);
+    // M15 structure: use CLOSED candles only (exclude forming candle)
+    const setupStructure = marketStructureService.analyzeMarketStructure(setupCandlesClosed);
     const entryStructure = marketStructureService.analyzeMarketStructure(entryCandles);
 
     // Relax alignment: allow 2-of-3 TF aligned OR direction TF aligned (major trend dominates)
@@ -183,9 +189,12 @@ class AITradingEngine {
       methodologyWeights,
       activeMethodologies,
       undefined, // minConfidence (use default)
-      directionStructure.trend
+      directionStructure.trend,
+      // Real-time spread from broker (symbolInfo already fetched earlier)
+      // We pass spread (in points) and point size for the frontend to display.
+      (symbolInfo as any)?.spread,
+      (symbolInfo as any)?.point
     );
-
     const result: MultiStrategySymbolAnalysis = {
       symbol,
       marketStructure: directionStructure,
@@ -227,6 +236,74 @@ class AITradingEngine {
         if (res) results.push(res);
       }
     }
+    
+    // ── SMT Divergence Check (Cross-Pair Comparison) ────────────────
+    // After all symbols analyzed, check for SMT divergence between correlated pairs
+    for (let i = 0; i < results.length; i++) {
+      const resultA = results[i];
+      const ictSignalsA = resultA.methodologySignals.ict;
+      
+      // Find ICT signals with SMT_DIVERGENCE type
+      const smtSignalsA = ictSignalsA.filter(sig => sig.signalType === "SMT_DIVERGENCE");
+      
+      if (smtSignalsA.length > 0) {
+        // Check against other analyzed symbols
+        for (let j = 0; j < results.length; j++) {
+          if (i === j) continue;
+          
+          const resultB = results[j];
+          const correlation = areCorrelated(resultA.symbol, resultB.symbol);
+          
+          if (correlation.correlated) {
+            // Both symbols at key level with SMT data - potential divergence
+            const ictSignalsB = resultB.methodologySignals.ict;
+            const smtSignalsB = ictSignalsB.filter(sig => sig.signalType === "SMT_DIVERGENCE");
+            
+            if (smtSignalsB.length > 0) {
+              // Compare internal structures
+              const stateA = smtSignalsA[0]; // Use first SMT signal
+              const stateB = smtSignalsB[0];
+              
+              // Divergence detection:
+              // If both at key level but internal structures differ = SMT Divergence
+              const aStructure = stateA.reason.includes("BULLISH") ? "BULLISH" : 
+                                 stateA.reason.includes("BEARISH") ? "BEARISH" : "NEUTRAL";
+              const bStructure = stateB.reason.includes("BULLISH") ? "BULLISH" : 
+                                 stateB.reason.includes("BEARISH") ? "BEARISH" : "NEUTRAL";
+              
+              // For positively correlated: divergence = structures differ
+              // For negatively correlated: divergence = structures same
+              let divergenceDetected = false;
+              
+              if (correlation.correlation === "POSITIVE") {
+                divergenceDetected = (aStructure === "BULLISH" && bStructure === "BEARISH") ||
+                                    (aStructure === "BEARISH" && bStructure === "BULLISH");
+              } else {
+                // Negative correlation: both should move opposite
+                // Divergence = both same direction (shouldn't happen)
+                divergenceDetected = (aStructure === bStructure) && aStructure !== "NEUTRAL";
+              }
+              
+              if (divergenceDetected) {
+                // Boost confidence for both symbols' SMT signals
+                for (const sig of smtSignalsA) {
+                  sig.confidence = Math.min(95, sig.confidence + 15);
+                  sig.reason += ` | SMT Confirmed: ${resultA.symbol} vs ${resultB.symbol} (${correlation.correlation})`;
+                }
+                for (const sig of smtSignalsB) {
+                  sig.confidence = Math.min(95, sig.confidence + 15);
+                  sig.reason += ` | SMT Confirmed: ${resultB.symbol} vs ${resultA.symbol} (${correlation.correlation})`;
+                }
+                
+                // Log the divergence detection
+                silentLogger.info(`[AI-Engine] SMT Divergence detected: ${resultA.symbol} (${aStructure}) vs ${resultB.symbol} (${bStructure})`);
+              }
+            }
+          }
+        }
+      }
+    }
+    
     return results;
   }
 

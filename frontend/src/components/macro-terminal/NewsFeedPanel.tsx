@@ -156,6 +156,14 @@ export function NewsFeedPanel({ className }: { className?: string }) {
     setLoading(true);
     try {
       const res = await fetch("/api/v1/market-data/news");
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Non-JSON response (${contentType}): ${text.substring(0, 100)}`);
+      }
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         const mappedNews = data.data.map((item: any, index: number) => ({

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, PlugZap, Eye, EyeOff, Key, ShieldCheck, ChevronDown, ChevronUp, Copy, CheckCircle2, Terminal } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 
 interface MT5Credentials {
   apiKey?: string;
@@ -34,6 +35,14 @@ export function ConnectionPanel({
     e.preventDefault();
     const cleanApiKey = apiKey.trim();
     const cleanUrl = mcpUrl.trim() || "http://127.0.0.1:22346/mcp";
+
+    if (process.env.NODE_ENV === "development" && navigator.userAgent.includes("Windows")) {
+      try {
+        await apiClient.get("/api/v1/mt5/open-desktop");
+      } catch (launchError) {
+        console.warn("Could not auto-open MT5 Desktop:", launchError);
+      }
+    }
 
     await onConnect({
       apiKey: cleanApiKey,
@@ -104,15 +113,16 @@ export function ConnectionPanel({
                   type={showApiKey ? "text" : "password"}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="e.g. 1oBaWtEsZuqVsfzLoHlALKBtNcTQuFHt5AHGrRS9Zw"
+                  placeholder="Paste your MT5 MCP API key"
                   className="w-full px-4 py-3 bg-bg-input border border-border-subtle rounded-xl text-text-primary placeholder-text-muted/40 focus:border-accent-gold focus:ring-1 focus:ring-accent-gold outline-none transition-all shadow-sm pr-12 font-mono text-sm"
                   required
                 />
                 <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
-                >
+                                type="button"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors p-1"
+                                aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                              >
                   {showApiKey ? (
                     <EyeOff className="w-4 h-4" />
                   ) : (
@@ -128,10 +138,12 @@ export function ConnectionPanel({
             {/* Advanced Toggle */}
             <div>
               <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1.5 transition-colors"
-              >
+                              type="button"
+                              onClick={() => setShowAdvanced(!showAdvanced)}
+                              className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1.5 transition-colors"
+                              aria-expanded={showAdvanced}
+                              aria-label="Toggle advanced settings"
+                            >
                 {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 <span>Opsi Lanjutan (Address & Port)</span>
               </button>
@@ -207,9 +219,10 @@ export function ConnectionPanel({
                 </h2>
               </div>
               <button 
-                onClick={() => setShowGuide(false)} 
-                className="text-text-muted hover:text-white p-1 rounded-lg hover:bg-surface transition-colors"
-              >
+                              onClick={() => setShowGuide(false)} 
+                              className="text-text-muted hover:text-white p-1 rounded-lg hover:bg-surface transition-colors"
+                              aria-label="Close guide"
+                            >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>

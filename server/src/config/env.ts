@@ -96,6 +96,9 @@ const envSchema = z.object({
   AITRADOS_SECRET_KEY: z.string().optional(),
   FLOW_LLM_API_KEY: z.string().optional(),
 
+  // Internal self-call base URL (defaults to own PORT)
+  SELF_API_URL: z.string().optional(),
+
   // 9Router
   NINE_ROUTER_URL: z.string().optional(),
   NINE_ROUTER_API_KEY: z.string().optional(),
@@ -118,4 +121,7 @@ if (!_env.success) {
 }
 
 export const env = _env.data;
+
+/** Base URL untuk internal self-call antar service. Default: http://localhost:{PORT} */
+export const selfApiUrl = env.SELF_API_URL ?? `http://localhost:${env.PORT}`;
 

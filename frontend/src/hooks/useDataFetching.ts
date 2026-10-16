@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { logger } from "@/lib/logger";
 import type {
   Asset,
   LiquidityData,
@@ -18,6 +19,7 @@ export type DataStatusState = {
   news: DataStatus;
   geoRisk: DataStatus;
   quant: DataStatus;
+  differentials: DataStatus;
   nexus: DataStatus;
   tga: DataStatus;
   cot: DataStatus;
@@ -90,6 +92,7 @@ export function useDataFetching() {
     news: "stale",
     geoRisk: "stale",
     quant: "stale",
+    differentials: "stale",
     nexus: "stale",
     tga: "stale",
     cot: "stale",
@@ -116,10 +119,6 @@ export function useDataFetching() {
     },
     [],
   );
-
-  useEffect(() => {
-    fetchSnapshot();
-  }, []);
   
   const fetchWithTimeout = async (
     url: string,
@@ -131,17 +130,17 @@ export function useDataFetching() {
 
     try {
       const response = await fetch(url, { ...options, signal: controller.signal });
-      console.log(`[DataFetch] ${key} response:`, response.status);
+      logger.debug(`[DataFetch] ${key} response:`, response.status);
 
       if (response.status === 429) {
-        console.warn(`[DataFetch] ${key} rate limited (429)`);
+        logger.warn(`[DataFetch] ${key} rate limited (429)`);
       }
       return response;
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        console.warn(`[DataFetch] ${key} timeout after ${FETCH_TIMEOUT_MS}ms`);
+        logger.warn(`[DataFetch] ${key} timeout after ${FETCH_TIMEOUT_MS}ms`);
       } else {
-        console.warn(`[DataFetch] ${key} fetch error:`, error.message);
+        logger.warn(`[DataFetch] ${key} fetch error:`, error.message);
       }
       return { ok: false, status: 0, json: () => Promise.resolve(null) } as any;
     } finally {
@@ -167,14 +166,14 @@ export function useDataFetching() {
           retryCountsRef.current[key] = (retryCountsRef.current[key] || 0) + 1;
           return fetchWithRetry(url, key, options);
         }
-        console.warn(`[DataFetch] ${key} max retries exceeded`);
+        logger.warn(`[DataFetch] ${key} max retries exceeded`);
         return { ok: false, status: 429, json: () => Promise.resolve(null) } as any;
       }
 
       retryCountsRef.current[key] = 0;
       return response;
     } catch (error: any) {
-      console.warn(`[DataFetch] ${key} retry failed:`, error.message);
+      logger.warn(`[DataFetch] ${key} retry failed:`, error.message);
       return { ok: false, status: 500, json: () => Promise.resolve(null) } as any;
     }
   };
@@ -195,7 +194,7 @@ export function useDataFetching() {
     // Fetch all responses in parallel, settling independently
     const responseResults = await Promise.allSettled(
       fetchTasks.map(task => fetchWithRetry(task.url, task.key).catch(error => {
-        console.warn(`[DataFetch] ${task.key} network error:`, error.message);
+        logger.warn(`[DataFetch] ${task.key} network error:`, error.message);
         return null;
       }))
     );
@@ -217,12 +216,12 @@ export function useDataFetching() {
     ] = responses;
 
     // Parse JSON independently for each response
-    const parseJson = async (res: any) => {
+    const parseJson = async (res: Response | null): Promise<any | null> => {
       if (!res || typeof res.json !== "function") return null;
       try {
         return await res.json();
       } catch (error: any) {
-        console.warn("[DataFetch] JSON parse error:", error.message);
+        logger.warn("[DataFetch] JSON parse error:", error.message);
         return null;
       }
     };
@@ -336,14 +335,34 @@ export function useDataFetching() {
       setStatus("quotes", quoteStatus === "error" ? "error" : "stale");
     }
 
-    // Process liquidity data
-    if (liquidityData?.success && liquidityData.data) {
-      setLiquidity({
-        ...liquidityData.data,
-        status: liquidityData.data.status ?? "UNKNOWN",
-        tga: tgaData?.success && tgaData.data ? tgaData.data : undefined,
+    // Process liquidity & TGA data safely and independently
+    const hasLiquidity = liquidityData?.success && liquidityData.data;
+    const hasTga = tgaData?.success && tgaData.data;
+
+    if (hasLiquidity || hasTga) {
+      setLiquidity((prev) => {
+        const baseLiquidity = hasLiquidity
+          ? {
+              ...liquidityData.data,
+              status: liquidityData.data.status ?? "UNKNOWN",
+            }
+          : (prev || {
+              value: 0,
+              change: 0,
+              status: "UNKNOWN",
+              date: new Date().toISOString(),
+              trend: [],
+              history: [],
+            });
+
+        return {
+          ...baseLiquidity,
+          tga: hasTga ? tgaData.data : prev?.tga,
+        };
       });
-      setStatus("liquidity", "live");
+
+      if (hasLiquidity) setStatus("liquidity", "live");
+      if (hasTga) setStatus("tga", "live");
     }
 
     // Process regime data
@@ -404,7 +423,39 @@ export function useDataFetching() {
       setStatus("geoRisk", geoRiskData.rateLimited ? "stale" : "live");
       setLastUpdated(new Date());
     }
+
+    // Tandai waktu refresh terakhir untuk SEMUA snapshot (bukan hanya geoRisk).
+    // Tanpa ini, indikator "last updated" tidak bergerak walau data baru ditarik.
+    setLastUpdated(new Date());
   }, [setStatus]);
+
+  // ── Auto-refresh snapshot secara berkala ──
+  // PENTING: sebelumnya fetchSnapshot() hanya dipanggil SEKALI saat mount →
+  // data di panel (quotes, liquidity, regime, calendar, news, geoRisk, tga)
+  // tidak pernah update sampai user reload halaman → terlihat "lagging".
+  // Sekarang refresh tiap 60 detik agar selalu dekat real-time.
+  const SNAPSHOT_REFRESH_MS = 60_000;
+  useEffect(() => {
+    fetchSnapshot();
+
+    const interval = setInterval(() => {
+      if (mountedRef.current) fetchSnapshot();
+    }, SNAPSHOT_REFRESH_MS);
+
+    return () => clearInterval(interval);
+  }, [fetchSnapshot]);
+
+  // Refresh tambahan saat tab kembali aktif (browser throttles timers di tab
+  // background, jadi data bisa basi saat user kembali ke tab ini).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && mountedRef.current) {
+        fetchSnapshot();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchSnapshot]);
 
   return {
     assets,
@@ -434,7 +485,11 @@ function getStatusFromResponse(
   if (!res || !data) return "error";
   if (!res.ok || res.status === 429 || data?.rateLimited) return "stale";
   if (!data?.success) return "error";
-  const fetchedAt = data?.fetchedAt ?? data?.date ?? undefined;
+  // PENTING: JANGAN pakai new Date() sebagai fallback — itu membuat data basi
+  // selalu terlihat "live". Kalau API tidak melaporkan fetchedAt, anggap "cache"
+  // (jujur) supaya indikator freshness tidak berbohong.
+  const fetchedAt = data?.fetchedAt;
+  if (!fetchedAt) return "cache";
   return getFreshnessStatus(fetchedAt);
 }
 

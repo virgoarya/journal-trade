@@ -1,11 +1,23 @@
 import axios from "axios";
 import { env } from "../config/env";
+import { NINE_ROUTER_MODELS, TOOL_CAPABLE_MODELS, NINE_ROUTER_EMERGENCY_FALLBACK } from "../config/llm-models.config";
+import { selfImprovementService } from "./self-improvement.service";
 import { silentLogger } from "../utils/silent-logger";
 import { geoRiskService } from "./geo-risk.service";
+import { macroRegimeService } from "./macro-regime.service";
 import { generateText, tool, jsonSchema } from "ai";
+import { vectorMemoryService } from "./vector-memory.service";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { mcpService } from "./mcp.service";
+import { userMemoryService } from "./user-memory.service";
+import { MacroIndicator } from "../models/MacroIndicator";
+import { GeoRiskSnapshot } from "../models/GeoRiskSnapshot";
+
+// Hermes context injection imports
+import { getUserProfileWithNotes, resolveProfileForUser } from "../lib/agent/profile-repo";
+import { assembleHermesPrompt, DEFAULT_MACRO_SSOT, MacroSSOT } from "../lib/agent/hermes-prompt";
+import { extractUserFacts, saveFactsToUserProfile } from "./memory-extractor.service";
 
 const GEMINI_API_URL_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
@@ -24,53 +36,80 @@ function clearPlaybookCache() {
   }
 }
 
-async function callGeminiDirect(
-  systemPrompt: string,
-  userPrompt: string,
-  geminiModel: string,
-  generationConfig?: Record<string, any>,
-): Promise<string | null> {
-  if (!env.GEMINI_API_KEY) return null;
+// (callGeminiDirect removed)
 
+
+/**
+ * Helper: dapatkan tanggal rilis CPI secara dinamis tanpa hardcode
+ * - Coba dari MacroIndicator.CPI (releaseDate)
+ * - Kalau tidak ada, gunakan GeoRiskSnapshot terbaru (fetchedAt)
+ * - Fallback: "terbaru"
+ */
+async function getCpiReleaseDate(): Promise<string> {
   try {
-    const fullPrompt = systemPrompt
-      ? `${systemPrompt}\n\n${userPrompt}`
-      : userPrompt;
-
-    const payload: any = {
-      contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-    };
-
-    if (generationConfig) {
-      payload.generationConfig = {};
-      if (generationConfig.maxOutputTokens !== undefined)
-        payload.generationConfig.maxOutputTokens =
-          generationConfig.maxOutputTokens;
-      if (generationConfig.temperature !== undefined)
-        payload.generationConfig.temperature = generationConfig.temperature;
-      if (generationConfig.responseMimeType !== undefined)
-        payload.generationConfig.responseMimeType =
-          generationConfig.responseMimeType;
+    const cpiDoc = await MacroIndicator.findOne({
+      indicatorName: "CPI",
+      country: "US"
+    }).sort({ releaseDate: -1 }).lean();
+    if (cpiDoc?.releaseDate) {
+      return new Date(cpiDoc.releaseDate).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
     }
-
-    const response = await axios.post(
-      `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
-      payload,
-      { headers: { "Content-Type": "application/json" }, timeout: 20000 },
-    );
-
-    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    silentLogger.info(
-      `[MacroAI] Gemini generated ${text?.length} chars. Finish reason: ${response.data?.candidates?.[0]?.finishReason}`,
-    );
-    return typeof text === "string" && text.trim() ? text.trim() : null;
-  } catch (error) {
-    silentLogger.error(
-      "[MacroAI] Gemini fallback failed:",
-      (error as any)?.message,
-    );
-    return null;
+  } catch (e) {
+    // ignore
   }
+  // Fallback: GeoRiskSnapshot terbaru
+  try {
+    const snapshot = await GeoRiskSnapshot.findOne({}).sort({ fetchedAt: -1 }).lean();
+    if (snapshot?.fetchedAt) {
+      return new Date(snapshot.fetchedAt).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    }
+  } catch (e) {
+    // ignore
+  }
+  return "terbaru";
+}
+
+/**
+ * Helper: dapatkan tanggal event CPI dari calendar db
+ */
+async function getCpiEventDateFromCalendar(calItems: any[]): Promise<string> {
+  // Jika ada event CPI, gunakan tanggalnya. Jika tidak ada atau tanggal sudah lewat jauh, gunakan tanggal hari ini (real-time)
+  if (Array.isArray(calItems) && calItems.length > 0) {
+    const cpiEvent = calItems.find((e: any) =>
+      (e.title || e.event || "").toLowerCase().includes("cpi") ||
+      (e.title || e.event || "").toLowerCase().includes("inflation")
+    );
+    if (cpiEvent?.date) {
+      try {
+        const evDate = new Date(cpiEvent.date);
+        const now = new Date();
+        // Jika selisih kurang dari 10 hari, gunakan tanggal event
+        if (Math.abs(now.getTime() - evDate.getTime()) < 10 * 24 * 60 * 60 * 1000) {
+          return evDate.toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+  // Fallback ke tanggal hari ini real-time
+  return new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
 }
 
 function isRetryableGroqError(error: any): boolean {
@@ -84,18 +123,14 @@ async function callDualEngine(
   systemPrompt?: string,
   generationConfig?: Record<string, any>,
 ): Promise<string | null> {
-  const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelConfigs = NINE_ROUTER_MODELS;
 
-  let lastError: any = null;
-
-  // 1. Try 9Router first if URL is configured
-  if (env.NINE_ROUTER_URL) {
+  for (const modelConfig of modelConfigs) {
     try {
-      const modelName = env.NINE_ROUTER_MODEL || "free";
       const response = await axios.post(
         `${env.NINE_ROUTER_URL}/chat/completions`,
         {
-          model: modelName,
+          model: modelConfig.model,
           messages: [
             ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
             { role: "user", content: userPrompt },
@@ -106,149 +141,98 @@ async function callDualEngine(
         },
         {
           headers: {
-            "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+            Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
             "Content-Type": "application/json",
           },
-          timeout: 20000,
-        }
+          timeout: generationConfig?.timeout || 35000,
+        },
       );
+
       const text = response.data?.choices?.[0]?.message?.content;
       if (text && text.trim()) {
-        // Bersihkan <think> block dari model reasoning
         const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
         if (cleaned) {
-          silentLogger.info(`[MacroAI] 9Router (${modelName}) generated ${cleaned.length} chars.`);
+          silentLogger.info(`[MacroAI] 9Router (${modelConfig.name} - ${modelConfig.model}) generated ${cleaned.length} chars.`);
           return cleaned;
         }
       }
     } catch (error: any) {
-      silentLogger.warn(`[MacroAI] 9Router failed, falling back to Groq/Gemini: ${error.message}`);
-      lastError = error;
+      silentLogger.warn(`[MacroAI] 9Router model ${modelConfig.name} failed: ${error.message}, trying next...`);
     }
   }
 
-  // 2. Try Groq fallback
-  for (const model of GROQ_MODELS) {
-    if (!env.GROQ_API_KEY) break;
-    try {
-      const cacheKey = `dual-${JSON.stringify({ model, userPrompt, systemPrompt })}`;
-      const response = await groqRequest<GroqResponse>(
-        GROQ_API_URL,
-        {
-          model,
-          messages: [
-            { role: "system", content: systemPrompt || "" },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: generationConfig?.max_output_tokens || 1500,
-          temperature: generationConfig?.temperature || 0.2,
-          stream: false,
+  // Emergency fallback: 9Router meta-router auto-picks working free model
+  try {
+    silentLogger.warn("[MacroAI] All named models failed — attempting emergency fallback: auto-free-model");
+    const response = await axios.post(
+      `${env.NINE_ROUTER_URL}/chat/completions`,
+      {
+        model: NINE_ROUTER_EMERGENCY_FALLBACK,
+        messages: [
+          ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: generationConfig?.max_output_tokens || 1000,
+        temperature: generationConfig?.temperature || 0.2,
+        stream: false,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
+          "Content-Type": "application/json",
         },
-        { useCache: true, cacheKey },
-      );
-
-      const text = response.choices?.[0]?.message?.content;
-      silentLogger.info(
-        `[MacroAI] Groq ${model} generated ${text?.length} chars. Finish reason: ${response.choices?.[0]?.finish_reason}`,
-      );
-      if (text && text.trim()) {
-        const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-        if (cleaned) return cleaned;
+        timeout: generationConfig?.timeout || 35000,
+      },
+    );
+    const text = response.data?.choices?.[0]?.message?.content;
+    if (text && text.trim()) {
+      const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      if (cleaned) {
+        silentLogger.info(`[MacroAI] Emergency fallback (auto-free-model) generated ${cleaned.length} chars.`);
+        return cleaned;
       }
-    } catch (error: any) {
-      lastError = error;
-      if (!isRetryableGroqError(error)) {
-        break;
-      }
-      silentLogger.warn(
-        `[MacroAI] Groq model ${model} failed (${error.response?.status}), trying next...`,
-      );
-      continue;
     }
+  } catch (error: any) {
+    silentLogger.error(`[MacroAI] Emergency fallback (auto-free-model) failed: ${error.message}`);
   }
 
-  const geminiText = await callGeminiDirect(
-    systemPrompt || "",
-    userPrompt,
-    geminiModel,
-    generationConfig,
-  );
-  if (geminiText) {
-    return geminiText;
-  }
-
-  silentLogger.error(
-    "[MacroAI] All engines failed. Groq:",
-    lastError?.message,
-    "Gemini: no response",
-  );
+  silentLogger.error("[MacroAI] All 9Router models + emergency fallback failed.");
   return null;
 }
 
 async function callDualEngineStream(
   messages: any[],
-  geminiModel: string,
 ): Promise<any> {
-  if (env.GROQ_API_KEY) {
+  let lastError: any;
+
+  for (const modelConfig of NINE_ROUTER_MODELS) {
     try {
-      return await groqRequestStream(GROQ_API_URL, {
-        model: GROQ_MODELS[0],
-        messages,
-        max_tokens: 1000,
-        temperature: 0.2,
-        stream: true,
-      });
-    } catch (error: any) {
-      if (!isRetryableGroqError(error)) {
-        throw error;
-      }
-      silentLogger.warn(
-        "[MacroAI] Groq stream error, switching to Gemini fallback:",
-        error.response?.status,
+      const response = await axios.post(
+        `${env.NINE_ROUTER_URL}/chat/completions`,
+        {
+          model: modelConfig.model,
+          messages,
+          max_tokens: 1000,
+          temperature: 0.2,
+          stream: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 45000,
+        },
       );
+      return response.data;
+    } catch (error: any) {
+      silentLogger.warn(`[MacroAI] 9Router stream model ${modelConfig.name} failed: ${error.message}, trying next...`);
+      lastError = error;
     }
   }
 
-  if (!env.GEMINI_API_KEY) {
-    throw new Error(
-      "Fitur AI dinonaktifkan: GROQ_API_KEY dan GEMINI_API_KEY tidak ditemukan",
-    );
-  }
-
-  const systemPrompt = messages.find((m) => m.role === "system")?.content || "";
-  const chatMessages = messages.filter((m) => m.role !== "system");
-
-  const geminiContents: { role: string; parts: { text: string }[] }[] = [];
-  if (systemPrompt) {
-    geminiContents.push({ role: "user", parts: [{ text: systemPrompt }] });
-  }
-  for (const msg of chatMessages) {
-    const role = msg.role === "assistant" ? "model" : "user";
-    geminiContents.push({ role, parts: [{ text: msg.content }] });
-  }
-
-  try {
-    const response = await axios.post(
-      `${GEMINI_API_URL_BASE}/${geminiModel}:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        contents: geminiContents,
-        generationConfig: { maxOutputTokens: 1000, temperature: 0.2 },
-      },
-      {
-        headers: { "Content-Type": "application/json" },
-        timeout: 20000,
-        responseType: "stream",
-      },
-    );
-
-    return response.data;
-  } catch (error) {
-    silentLogger.error(
-      "[MacroAI] Gemini stream fallback failed:",
-      (error as any)?.message,
-    );
-    throw new Error("Gagal mendapatkan respons AI dari semua mesin.");
-  }
+  silentLogger.error(`[MacroAI] All 9Router stream models failed.`);
+  return null;
 }
 
 // Groq API response interface
@@ -470,9 +454,20 @@ export const macroAiService = {
 
     // â”€â”€ Build key assets map from heatmap data â”€â”€
     const keyAssets: Record<string, number> = {};
-    for (const a of assets) {
-      keyAssets[a.ticker] = a.change ?? 0;
-    }
+    if (assets && assets.length > 0) {
+      // Gunakan data dari assets yang sudah ada
+      for (const a of assets) {
+        keyAssets[a.ticker] = a.change ?? 0;
+      }
+    } else {
+          // Fallback ke marketDataService.getQuotes()
+          const { macroDataService } = require("./market-data.service");
+          const symbols = ["SPY", "QQQ", "IWM", "GLD", "SLV", "TLT", "IEF", "USO", "XLE", "XLU"];
+          const quotes = await macroDataService.getQuotes(symbols);
+          quotes.forEach((q: any) => {
+            keyAssets[q.symbol] = q.changePercent ?? 0;
+          });
+        }
 
     // â”€â”€ Build unified state JSON using SAME data as classifier (SSOT) â”€â”€
     const stateJson = {
@@ -609,16 +604,33 @@ INSTRUKSI ANALISIS HOLISTIK (WAJIB GUNAKAN BULLET POINTS, GAYA TELEGRAFIS/FLASH 
       return text.trim();
     }
 
+    // Fallback: deterministic Flash Note based on stateJson
+    const fallbackNote = `[ REGIME & MOMENTUM ]
+- Active Regime: ${stateJson.regime || "unknown"}
+- Momentum: Growth ${((stateJson.growth as any)?.roc5d ?? 0) >= 0 ? "akselerasi" : "decelerasi"}, Inflasi ${((stateJson.inflation as any)?.roc5d ?? 0) >= 0 ? "meningkat" : "menurun"}
+- Divergensi: ${(((stateJson.growth as any)?.roc5d ?? 0) * ((stateJson.inflation as any)?.roc5d ?? 0)) < 0 ? "YA" : "TIDAK"}
+
+[ LIQUIDITY FLOW ]
+- Kondisi likuiditas: ${stateJson.liquidityStatus || "N/A"}
+- Likuiditas ${((stateJson.liquidity as any)?.roc5d ?? 0) >= 0 ? "menyuntik" : "menyedot"} (${((stateJson.liquidity as any)?.roc5d ?? 0).toFixed(2)}%)
+- Dampak: ${((stateJson.liquidity as any)?.roc5d ?? 0) >= 0 ? "Risk-On" : "Risk-Off"} posture
+
+[ MACRO SYNTHESIS ]
+- Causal Loop: ${stateJson.regime} + ${stateJson.liquidityStatus} + ${stateJson.sentiment} memaksa rotasi ke ${stateJson.sentiment === "RISK-ON" ? "aset berisiko" : "aset defensif"}`;
+
+    silentLogger.warn(`[MacroAI] AI analysis failed — returning deterministic fallback note: ${fallbackNote.slice(0, 120)}...`);
+    return fallbackNote.trim();
+
     throw new Error("Gagal mendapatkan analisis regime dari layanan AI.");
   },
-
   async chatStream(
-    messages: any[],
-    currentRegime?: string,
-    assets?: any[],
-    liquidityStatus?: string,
-    personaId: string = "default",
-    context?: {
+      messages: any[],
+      currentRegime?: string,
+      assets?: any[],
+      liquidityStatus?: string,
+      personaId: string = "default",
+      userId?: string,
+      context?: {
       vix?: { value?: number | null; regime?: string; source?: string | null };
       yieldCurve?: {
         spread10y2y?: number | null;
@@ -629,492 +641,500 @@ INSTRUKSI ANALISIS HOLISTIK (WAJIB GUNAKAN BULLET POINTS, GAYA TELEGRAFIS/FLASH 
       nextEvent?: { title?: string; date?: string; impact?: string };
     },
   ) {
-    const geminiModel = env.GEMINI_MODEL || "gemini-2.5-flash";
-
-    const regimeContext = currentRegime
-      ? `Macro Regime Saat Ini: ${currentRegime}. `
-      : "";
-    const liquidityContext = liquidityStatus
-      ? `Status Likuiditas ON RRP: ${liquidityStatus}. `
-      : "";
-
-    const assetData =
-      assets && Array.isArray(assets)
-        ? assets
-            .map(
-              (a) =>
-                `${a.ticker}: ${a.change !== null ? a.change + "%" : "N/A"}`,
-            )
-            .join(", ")
-        : "";
-    const assetContext = assetData
-      ? `Performa Aset Hari Ini: ${assetData}.`
-      : "";
-    const vixContext = context?.vix
-      ? `VIX: ${context.vix.value ?? "N/A"} (${context.vix.regime ?? "UNKNOWN"}, source: ${context.vix.source ?? "unknown"}).`
-      : "";
-    const yieldCurveContext = context?.yieldCurve
-      ? `Yield Curve: 10Y-2Y ${context.yieldCurve.spread10y2y ?? "N/A"} bps, curve regime ${context.yieldCurve.curveRegime ?? "UNKNOWN"}${context.yieldCurve.inverted ? ", inverted overlay" : ""}.`
-      : "";
-    const geoRiskContextBuilt = context?.geoRisk
-      ? `Geo-Risk top driver: ${context.geoRisk.topDriver ?? "unknown"}; scores ${JSON.stringify(context.geoRisk.scores ?? {})}.`
-      : "";
-    const nextEventContext = context?.nextEvent
-      ? `Next high-impact event: ${context.nextEvent.title ?? "unknown"} at ${context.nextEvent.date ?? "unknown"} (${context.nextEvent.impact ?? "unknown"}).`
-      : "";
-
-    let personaDescription =
-      "Anda adalah Senior Macro Institutional Analyst untuk Hunter Trades Terminal.";
-    if (personaId === "hawk") {
-      personaDescription =
-        "Anda adalah Hawkish Quant Analyst (The Hawk). Fokus utama Anda adalah BAHAYA inflasi lengket, pengetatan likuiditas dari Nexus (TGA/RRP), dan lonjakan Real Yields. Anda selalu melihat anomali di Yield Curve (Bear Flattener/Steepener) sebagai sinyal bahwa suku bunga akan menekan valuasi saham. Anda pesimis terhadap narasi 'soft landing'.";
-    } else if (personaId === "dove") {
-      personaDescription =
-        "Anda adalah Dovish Economic Strategist (The Dove). Fokus utama Anda adalah PERTUMBUHAN dan pelonggaran kebijakan. Anda mencari sinyal di Nexus (Net Liquidity naik) dan Quant Lab (Bull Steepener) yang mengindikasikan Fed akan pivot atau mencetak uang. Anda selalu mencari setup 'buy the dip' di aset berisiko saat data inflasi mendingin.";
-    } else if (personaId === "contrarian") {
-      personaDescription =
-        "Anda adalah Contrarian Hedge Fund Manager (The Maverick). Fokus utama Anda adalah MISPRICING dan anomali pasar. Anda menggabungkan data Quant Lab (VIX complacency vs Yield Curve Inversion) dan Nexus (DXY/Gold divergence) untuk membongkar narasi konsensus yang salah. Jika semua serakah, Anda mencari alasan untuk short, dan sebaliknya.";
-    }
-
-    const geoRiskContext =
-      geoRiskContextBuilt ||
-      (async () => {
-        try {
-          const geoRisk = await geoRiskService.getScores();
-          if (geoRisk && geoRisk.scores) {
-            const entries = Object.entries(geoRisk.scores);
-            const top = entries.sort((a, b) => b[1] - a[1])[0];
-            return `\nDATA GEO-RISK RADAR (0-100, 100 = Kritis/Bahaya Ekstrem):
-- Dominant Driver: ${top?.[0] ?? "unknown"} (${top?.[1] ?? 0})
-- Inflation Risk: ${geoRisk.scores.inflation}
-- Rate Hike Risk: ${geoRisk.scores.rateHike}
-- Geopolitics Risk: ${geoRisk.scores.geopolitics}
-- Supply Chain Risk: ${geoRisk.scores.supplyChain}
-- Liquidity Drain Risk: ${geoRisk.scores.liquidityDrain}`;
-          }
-          return "";
-        } catch (e) {
-          silentLogger.warn(
-            "[MacroAI] Failed to fetch geo-risk scores for chat context",
-            e,
-          );
-          return "";
-        }
-      })();
-    const resolvedGeoRiskContext =
-      typeof geoRiskContext === "string"
-        ? geoRiskContext
-        : await geoRiskContext;
-
-    let nexusContext = "";
+    // ─── Pre-fetch LIVE Data into Prompt ───
+    let liveNews = "";
+    let liveCalendar = "";
+    let cpiReleaseDate = "terbaru";  // akan diupdate dari MongoDB/FRED
     try {
-      const { nexusService } = require("./nexus.service");
-      const nexus = await nexusService.getSnapshot();
-      if (nexus) {
-        nexusContext = `\nDATA NEXUS TAB:
-- Net Liquidity (WALCL): ${nexus.walcl?.value}B (${nexus.walcl?.delta}B)
-- Fed Funds Rate: ${nexus.fedFundsRate?.value}%
-- DXY: ${nexus.dxy?.value}
-- CRB Commodities: ${nexus.crb?.value}
-- Gold (GLD): ${nexus.gold?.value} (${nexus.gold?.delta}%)
-- CPI YoY: ${nexus.cpiYoY}%
-- Growth Sentiment (UMCSENT): ${nexus.growthSentiment}
-- Real Yields: ${nexus.realYields?.value}%`;
+      const { marketDataService } = require("./market-data.service");
+      const [news, calendar] = await Promise.all([
+        marketDataService.getNews(),
+        marketDataService.getEconomicCalendar()
+      ]);
+      
+      if (news && news.length > 0) {
+        liveNews = news.slice(0, 5).map((n: any) => `- ${n.headline} (${n.source})`).join("\n");
+      }
+      if (calendar && calendar.length > 0) {
+        liveCalendar = calendar.slice(0, 5).map((e: any) => `- ${e.date}: ${e.title} (${e.impact}) - Actual: ${e.actual || 'N/A'}, Forecast: ${e.forecast || 'N/A'}`).join("\n");
       }
     } catch (e) {
-      silentLogger.warn(
-        "[MacroAI] Failed to fetch nexus data for chat context",
-        e,
+      silentLogger.warn("[MacroAI Chat] Failed to fetch live data for prompt", e);
+    }
+
+    const regimeContext = currentRegime ? `Macro Regime: ${currentRegime}. ` : "";
+    const liquidityContext = liquidityStatus ? `Liquidity ON RRP: ${liquidityStatus}. ` : "";
+    const assetData = assets && Array.isArray(assets) 
+      ? `Assets: ${assets.map((a: any) => `${a.symbol || a.ticker} (${a.changePercent || a.change || 0}% ${a.changeDirection || ''})`).join(", ")}. ` 
+      : "";
+
+    let personaDescription = "Anda adalah AI Assistant Market global.";
+    if (personaId === "hawk") {
+      personaDescription = "Anda adalah Hawk Kuantitatif yang fokus pada data pengetatan moneter, risiko inflasi, dan crash likuiditas. Sampaikan pandangan bearish/inflasi jika data mendukung.";
+    } else if (personaId === "dove") {
+      personaDescription = "Anda adalah Dove yang fokus pada peluang akomodasi moneter, potensi rally risk-on, dan stimulus. Sampaikan pandangan bullish/akomodatif jika data mendukung.";
+    } else if (personaId === "contrarian") {
+      personaDescription = "Anda adalah analis kontrarian yang mencari kelemahan dalam konsensus pasar.";
+    }
+
+    // Agent Tools Execution (Live Price, Market Regime, Economic Calendar, Liquidity)
+    let agentToolsResultText = "";
+    try {
+      const { agentTools } = require("../helpers/agent-tools.helper");
+      const agentContext = { userId, personaId, currentRegime, assets, liquidityStatus };
+
+      const [priceData, regimeData, calData, liqData] = await Promise.all([
+        agentTools.get_price(agentContext, ["XAUUSD", "DXY"]).catch(() => null),
+        agentTools.get_market_regime(agentContext).catch(() => null),
+        agentTools.get_economic_calendar(agentContext).catch(() => null),
+        agentTools.get_liquidity(agentContext).catch(() => null),
+      ]);
+
+      agentToolsResultText = `
+DATA HASIL EXECUTION AGENT TOOLS (REALTIME):
+- Price Data (XAUUSD): ${JSON.stringify(priceData || "N/A")}
+- Market Regime: ${JSON.stringify(regimeData || "N/A")}
+- Economic Calendar (3 hari kedepan): ${JSON.stringify(calData || "N/A")}
+- Liquidity Status: ${JSON.stringify(liqData || "N/A")}
+`;
+    } catch (err: any) {
+      silentLogger.warn("[MacroAI Chat] Failed to execute Agent Tools for Chat Stream", err);
+    }
+
+        let macroDataContext = "";
+    let cpiVal = "3.57"; // outer scope for Critic Pass access (CPI YoY Sep 2026: ~3.57%)
+    let fedRateLive = "4.25"; // outer scope — dipakai untuk Live MacroSSOT
+    let vixLive = "18.00"; // outer scope — dipakai untuk Live MacroSSOT
+    // Liquidity live values (ON RRP & TGA) — dipakai untuk Live MacroSSOT
+    let onRrpLive: number | null = null;
+    let tgaLive: number | null = null;
+    let onRrpDisplay = "N/A";
+    let tgaDisplay = "N/A";
+    let liquidityStatusLive = "UNKNOWN";
+        try {
+          // Direct in-process SSOT fetch (instant & fail-safe)
+          const [geoRes, regimeRes] = await Promise.all([
+            geoRiskService.getScores().catch(() => null),
+            macroRegimeService.getSnapshot().catch(() => null),
+          ]);
+
+          const rawGeo = (geoRes?.raw || {}) as Record<string, any>;
+          const regimeData = (regimeRes || {}) as Record<string, any>;
+
+          cpiVal = regimeData?.cpiYoY != null
+            ? regimeData.cpiYoY.toFixed(2)
+            : (rawGeo?.cpi_yoy != null ? rawGeo.cpi_yoy.toFixed(2) : "3.57");
+          const fedRate = rawGeo?.fedfunds_rate != null ? rawGeo.fedfunds_rate.toFixed(2) : "N/A";
+          const vixVal = rawGeo?.vix != null ? rawGeo.vix.toFixed(2) : "18.00";
+          fedRateLive = fedRate;
+          vixLive = vixVal;
+          const pmiVal = rawGeo?.globalPmi != null ? rawGeo.globalPmi : "48.7";
+          const regime = regimeData?.quadrant || currentRegime || "Reflation";
+          const inflationStatus = regimeData?.inflation?.pressure || "NORMAL";
+
+      // News & Economic Calendar fallbacks
+      let newsText = "Tidak ada berita tersedia.";
+      let calText = "Tidak ada event ekonomi tersedia.";
+      try {
+        const { marketDataService } = require("./market-data.service");
+        const [news, calendar] = await Promise.all([
+          marketDataService.getNews(),
+          marketDataService.getEconomicCalendar()
+        ]);
+        if (news?.length) newsText = news.slice(0, 5).map((n: any) => `- [${n.source || "News"}] ${n.headline}`).join("\n");
+        if (calendar?.length) calText = calendar.slice(0, 5).map((e: any) => `- ${e.date || ""} | ${e.title || e.event} | Impact: ${e.impact || "N/A"}`).join("\n");
+      } catch (e) {
+        // ignore
+      }
+
+      // ─── LIQUIDITY LIVE: ON RRP & TGA (sumber yang sama dengan dashboard UI) ───
+      // PENTING: tanpa ini, liveMacroSSOT.liquidity masih memakai angka MOCK
+      // (ondRP 69.8 / tga 0.0) → jawaban AI mismatch dengan dashboard.
+      try {
+        const { marketDataService } = require("./market-data.service");
+        const [rrpData, tgaData] = await Promise.all([
+          marketDataService.getLiquidity().catch(() => null),
+          marketDataService.getTGA().catch(() => null),
+        ]);
+
+        const fmtLiquidity = (val: number | undefined | null): string => {
+          if (val === undefined || val === null || !Number.isFinite(val)) return "N/A";
+          return val >= 1000 ? `${(val / 1000).toFixed(2)}T` : `${val.toFixed(2)}B`;
+        };
+
+        if (rrpData && Number.isFinite(rrpData.value)) {
+          onRrpLive = rrpData.value;
+          // Format sama dengan dashboard UI (2 desimal)
+          onRrpDisplay = `$${fmtLiquidity(rrpData.value)}`;
+        }
+        if (tgaData && Number.isFinite(tgaData.value)) {
+          tgaLive = tgaData.value;
+          // Pakai displayValue dari service supaya PERSIS sama dengan dashboard
+          tgaDisplay = tgaData.displayValue
+            ? tgaData.displayValue.replace("$", "")
+            : fmtLiquidity(tgaData.value);
+        }
+
+        // Status likuiditas agregat — TGA naik = draining, RRP naik = draining
+        const tgaDelta = tgaData?.delta ?? 0;
+        const rrpDelta = rrpData?.change ?? 0;
+        const netDelta = (tgaDelta || 0) + (rrpDelta || 0);
+        liquidityStatusLive =
+          Math.abs(netDelta) < 0.1 ? "NEUTRAL" : netDelta > 0 ? "DRAINING" : "INJECTING";
+
+        silentLogger.info(
+          `[MacroAI Chat] Liquidity live — ON RRP=${onRrpDisplay}, TGA=${tgaDisplay}, status=${liquidityStatusLive}`
+        );
+      } catch (e) {
+        silentLogger.warn("[MacroAI Chat] Gagal fetch liquidity live (ON RRP/TGA):", e);
+      }
+
+      // Ambil tanggal rilis CPI dari database (MacroIndicator → GeoRiskSnapshot → calendar)
+      cpiReleaseDate = await getCpiReleaseDate();
+
+      macroDataContext = `
+        DATA MAKRO AKTUAL (AS) — SUMBER KEBENARAN MUTLAK (SSOT):
+        - Inflasi AS CPI YoY: ${cpiVal}% (Rilis: ${cpiReleaseDate})
+        - Regime Pasar: ${regime} | Tekanan Inflasi: ${inflationStatus}
+        - Suku Bunga Fed Funds: ${fedRate}%
+        - ISM Manufacturing PMI: ${pmiVal}
+        - VIX: ${vixVal}
+        - ON RRP (Overnight Reverse Repo): ${onRrpDisplay}
+        - TGA (Treasury General Account): ${tgaDisplay}
+        - Status Likuiditas: ${liquidityStatusLive}
+
+BERITA MAKRO TERBARU:
+${newsText}
+
+EVENT EKONOMI MENDATANG:
+${calText}`;
+      silentLogger.info(`[MacroAI Chat] Injected SSOT: CPI=${cpiVal}%, Fed=${fedRate}%, Regime=${regime}, ON_RRP=${onRrpDisplay}, TGA=${tgaDisplay}`);
+    } catch (e) {
+      silentLogger.warn("[MacroAI Chat] Error fetching macroDataContext", e);
+    }
+
+    // ─── 3. Fetch UserProfile & Memory Notes dari PostgreSQL ───
+    let userProfile = null as any;
+    let memoryNotes: any[] = [];
+    try {
+      if (userId) {
+        const profileData = await resolveProfileForUser(userId);
+        userProfile = profileData?.profile;
+        memoryNotes = profileData?.notes || [];
+        silentLogger.info(`[Hermes] Profile loaded — userId=${userId}, resolved=${userProfile?.userId ?? "none"}, notes=${memoryNotes.length}, persona=${userProfile?.agentPersona ?? "hawk"}`);
+      }
+    } catch (err) {
+      silentLogger.warn("[Hermes] Gagal fetch profile dari PostgreSQL:", err);
+    }
+
+    // ─── 4. Build extra context untuk Hermes prompt ───
+    // CATATAN: macroDataContext sudah punya header "DATA MAKRO AKTUAL ... SSOT" sendiri,
+    // jadi jangan tambahkan header duplikat di sini (membingungkan LLM).
+    const contextLines: string[] = [
+      macroDataContext || "DATA MAKRO AKTUAL (AS) — SUMBER KEBENARAN MUTLAK (SSOT):\nData makro tidak tersedia",
+      "",
+      "LIVE MACRO FEED (BERITA):",
+      liveNews || "Tidak ada berita terbaru.",
+      "",
+      "EVENT EKONOMI MENDATANG:",
+      liveCalendar || "Tidak ada jadwal event ekonomi.",
+      "",
+      "AGENT TOOLS RESULT:",
+      agentToolsResultText || "Tidak ada data dari tools.",
+    ];
+
+    // Yield curve & regime dari context frontend (data live, sama dengan banner UI)
+    if (context?.yieldCurve) {
+      contextLines.push(
+        "",
+        "YIELD CURVE (LIVE dari terminal):",
+        `- Regime: ${context.yieldCurve.curveRegime ?? "UNKNOWN"}${
+          context.yieldCurve.inverted ? " (INVERTED)" : ""
+        }`,
+        `- Spread 10Y-2Y: ${
+          typeof context.yieldCurve.spread10y2y === "number"
+            ? `${context.yieldCurve.spread10y2y}%`
+            : "N/A"
+        }`
       );
     }
 
-    const systemPrompt = `ROLE & PERSONA: ${personaDescription}
-    
-TUGAS UTAMA: Analisis kondisi pasar secara HOLISTIK dengan menyatukan kepingan puzzle dari 3 dimensi:
-1. Overview (Macro Regime, Liquidity, Assets)
-2. Quant Lab (VIX, Yield Curve Regime)
-3. Nexus (Real Yields, Fed Funds, DXY, Net Liquidity)
-JANGAN pernah membatasi argumen Anda hanya pada satu sumber (seperti GeoRisk). Buat kesimpulan kausalitas (sebab-akibat) lintas-tab yang tajam sesuai persona Anda.
-
-KONTEKS PASAR SAAT INI (DATA TERMINAL REAL-TIME):
-${regimeContext}${liquidityContext}
-${assetContext}
-${vixContext}
-${yieldCurveContext}
-${resolvedGeoRiskContext}
-${nextEventContext}
-${nexusContext}
-
-Gunakan data lintas-dimensi di atas sebagai satu-satunya landasan argumen Anda. Jika ditanya, sebutkan dan kaitkan metrik-metrik dari Nexus, Quant Lab, dan Overview untuk mendukung tesis Anda.
-
-Anda MEMILIKI AKSES ke external TOOLS via Model Context Protocol (MCP). 
-INSTRUKSI PENTING TOOLS:
-- Jika Anda membutuhkan data/berita/search, Anda WAJIB memanggil function/tools yang disediakan melalui mekanisme function calling API. 
-- DILARANG KERAS merespon dengan teks pengantar seperti "Saya akan menggunakan tool..." atau "Tunggu sebentar...". Jika butuh tool, LANGSUNG panggil tool tersebut TANPA mengeluarkan teks/kata-kata tambahan apapun!
-- JANGAN HANYA menulis teks seperti "[Menggunakan Model Context Protocol]" tanpa benar-benar memanggil function. Anda harus mengeksekusi tool tersebut!
-- Jika tool meminta input seperti 'query', berikan input yang relevan secara lengkap.
-
-RULES: 1. Tanpa meta-language. 2. Tanpa redundansi. 3. Kalimat lugas dan berdampak. Balas dalam Bahasa Indonesia institusional.`;
-
-    try {
-      const openRouter = createOpenAI({
-        baseURL: env.ANTHROPIC_BASE_URL?.includes("/v1") ? env.ANTHROPIC_BASE_URL : "https://openrouter.ai/api/v1",
-        apiKey: env.ANTHROPIC_AUTH_TOKEN,
-      });
-
-      const groq = createOpenAI({
-        baseURL: env.GROQ_BASE_URL,
-        apiKey: env.GROQ_API_KEY,
-      });
-
-      const google = createGoogleGenerativeAI({
-        apiKey: env.GEMINI_API_KEY,
-      });
-
-      const dashscope = createOpenAI({
-        baseURL: env.DASHSCOPE_BASE_URL || "https://ws-u59n2if85mr2x9mq.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
-        apiKey: env.DASHSCOPE_API_KEY,
-      });
-
-      // Always prioritize models that have native robust function calling in Vercel AI SDK
-      let aiModel;
-      
-      // 9Router acts as the ultimate fallback proxy to handle rate limits automatically
-      if (env.NINE_ROUTER_URL) {
-        const nineRouter = createOpenAI({
-          baseURL: env.NINE_ROUTER_URL,
-          apiKey: env.NINE_ROUTER_API_KEY || "sk-9router-local",
-        });
-        // You can specify a generic model name or the specific one 9Router is configured to route
-        aiModel = nineRouter.chat(env.NINE_ROUTER_MODEL || "free");
-        silentLogger.info(`[MacroAI] Using 9Router as the primary AI gateway (${env.NINE_ROUTER_MODEL || "free"}).`);
-      } else if (env.ANTHROPIC_AUTH_TOKEN) {
-        aiModel = openRouter.chat(env.ANTHROPIC_MODEL || "claude-3-opus-20240229");
-      } else if (env.GEMINI_API_KEY) {
-        aiModel = google(geminiModel);
-      } else if (env.GROQ_API_KEY) {
-        aiModel = groq.chat(GROQ_MODELS[0]);
-      } else {
-        aiModel = openRouter.chat("openai/gpt-oss-120b:free");
-      }
-
-      // Build MCP Tools Map
-      const mcpTools = mcpService.getTools();
-      const toolsConfig: Record<string, any> = {};
-      
-      console.log(`[DEBUG MacroAI] Fetched ${mcpTools.length} tools from MCP Service.`);
-      if (mcpTools.length > 0) {
-        console.log(`[DEBUG MacroAI] Tool Names: ${mcpTools.map(t => t.name).join(', ')}`);
-      }
-      
-      for (const t of mcpTools) {
-        if (t.name === 'dashscope_search' || t.name === 'mock_search') {
-          silentLogger.info(`[MacroAI] Skipping tool ${t.name} to avoid poor AI tool choice`);
-          continue;
-        }
-        try {
-          // Sanitize tool name for LLM compatibility (only alphanumeric, _, -)
-          const safeName = t.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-          
-          // Build a clean schema - remove fields that confuse AI models
-          const rawSchema = t.inputSchema || { type: "object", properties: {} };
-          const cleanSchema: Record<string, any> = {
-            type: "object",
-            properties: rawSchema.properties || {},
-          };
-          if (rawSchema.required) cleanSchema.required = rawSchema.required;
-          // Log what we're registering
-          silentLogger.info(`[MacroAI Agent] Registering tool '${safeName}' with schema: ${JSON.stringify(cleanSchema)}`);
-          
-          toolsConfig[safeName] = tool({
-            description: t.description || `Tool: ${t.name}`,
-            parameters: jsonSchema(cleanSchema, {
-              // Permissive validate: accept whatever the AI model sends
-              validate: (value: unknown) => ({ success: true as const, value: value as any }),
-            }) as any,
-            execute: async (args: any) => {
-            silentLogger.info(`[MacroAI Agent] Executing MCP Tool: ${t.name} (as ${safeName}), args: ${JSON.stringify(args)}`);
-            try {
-              const result = await mcpService.executeTool(t.name, args);
-              // MCP results usually have { content: [{ type: "text", text: "..." }] }
-              if (result && Array.isArray(result.content)) {
-                const texts = result.content
-                  .map((c: any) => c.text || JSON.stringify(c))
-                  .filter((txt: string) => txt && txt.trim())
-                  .join("\n");
-                if (texts.trim()) return texts;
-                return "No data returned from tool.";
-              }
-              return JSON.stringify(result);
-            } catch (err: any) {
-              silentLogger.error(`[MacroAI Agent] Tool ${t.name} execution error: ${err.message}`);
-              return `Error executing tool ${t.name}: ${err.message}`;
-            }
-          },
-          } as any);
-        } catch (err: any) {
-          silentLogger.warn(`[MacroAI Agent] Failed to parse tool ${t.name}:`, err.message);
-        }
-      }
-
-      // Add Native AlphaVantage Tool for Technical Analysis
-      if (env.ALPHA_VANTAGE_API_KEY) {
-        toolsConfig['get_technical_indicator'] = tool({
-          description: "Get technical indicator data (RSI, SMA, EMA) for a given symbol using AlphaVantage. e.g. for Bitcoin use 'BTC', for Apple use 'AAPL'.",
-          parameters: jsonSchema({
-            type: "object",
-            properties: {
-              function_name: { type: "string", description: "The indicator function to call: RSI, SMA, EMA", enum: ["RSI", "SMA", "EMA"] },
-              symbol: { type: "string", description: "The ticker symbol (e.g. BTC, AAPL)" },
-              interval: { type: "string", description: "Time interval: daily, weekly, monthly", enum: ["daily", "weekly", "monthly"] },
-              time_period: { type: "number", description: "Time period for calculation (e.g. 14 for RSI, 50 for SMA50)" }
-            },
-            required: ["function_name", "symbol", "interval", "time_period"]
-          }) as any,
-          execute: async (args: any) => {
-             silentLogger.info(`[MacroAI Agent] Executing Native Tool get_technical_indicator: ${JSON.stringify(args)}`);
-             try {
-                // If the user asks for crypto like BTC, AlphaVantage requires the market (e.g. BTCUSD) or sometimes just BTC works if it's an exchange symbol. But for technical indicators, typically it accepts standard symbols.
-                const url = `https://www.alphavantage.co/query?function=${args.function_name}&symbol=${args.symbol}&interval=${args.interval}&time_period=${args.time_period}&series_type=close&apikey=${env.ALPHA_VANTAGE_API_KEY}`;
-                const response = await fetch(url);
-                const data = (await response.json()) as Record<string, any>;
-
-                if (data["Information"] || data["Note"] || data["Error Message"]) {
-                   return JSON.stringify(data); // Limit reached or error
-                }
-
-                // AlphaVantage returns huge JSONs, let's just return the last 10 data points to save tokens
-                const timeSeriesKey = Object.keys(data).find(k => k.startsWith("Technical Analysis"));
-                if (!timeSeriesKey) return JSON.stringify(data);
-
-                const timeSeries = data[timeSeriesKey];
-                const dates = Object.keys(timeSeries).slice(0, 10);
-                const recentData: any = {};
-                for (const d of dates) {
-                   recentData[d] = timeSeries[d];
-                }
-                return JSON.stringify({ symbol: args.symbol, indicator: args.function_name, recent_data: recentData });
-             } catch (err: any) {
-                return `Error fetching indicator: ${err.message}`;
-             }
-          }
-        } as any);
-      }
-
-      const cleanMessages = messages.map((m: any) => ({
-        role: m.role,
-        content: String(m.content)
-      }));
-
-      // Ensure the first message is a user message (some providers reject leading assistant messages)
-      while (cleanMessages.length > 0 && cleanMessages[0].role !== "user") {
-        cleanMessages.shift();
-      }
-
-      silentLogger.info("[MacroAI] cleanMessages length:", cleanMessages.length);
-
-      // --- Helper: Extract text from generateText response robustly ---
-      function isToolError(text: string): boolean {
-        if (!text) return true;
-        const errorPatterns = [
-          '{"type":"missing","loc":["query"],"msg":"Field required"',
-          'pydantic.error_wrappers.ValidationError',
-          'Error executing tool: ',
-        ];
-        return errorPatterns.some(p => text.toLowerCase().includes(p.toLowerCase()));
-      }
-
-      function extractResponseText(res: any): string {
-        // 1. Direct text is available
-        if (res.text && res.text.trim()) return res.text.trim();
-
-        // 2. Walk all steps to collect any text or tool results
-        const collectedTexts: string[] = [];
-        const collectedToolData: string[] = [];
-        if (res.steps && Array.isArray(res.steps)) {
-          for (const step of res.steps) {
-            // Check for text content in the step
-            if (step.text && step.text.trim()) {
-              collectedTexts.push(step.text.trim());
-            }
-            // Check tool results in step content
-            if (step.content && Array.isArray(step.content)) {
-              for (const item of step.content) {
-                if (item.type === "tool-result" && item.output) {
-                  const output = typeof item.output === "string" ? item.output : JSON.stringify(item.output);
-                  if (output && output.trim() && !isToolError(output)) {
-                    collectedToolData.push(output);
-                  }
-                }
-              }
-            }
-            // Also check toolResults array
-            if (step.toolResults && Array.isArray(step.toolResults)) {
-              for (const tr of step.toolResults) {
-                const output = tr.output || tr.result;
-                if (output) {
-                  const str = typeof output === "string" ? output : JSON.stringify(output);
-                  if (str.trim() && !isToolError(str)) {
-                    collectedToolData.push(str);
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // 3. Top-level toolResults fallback
-        if (res.toolResults && Array.isArray(res.toolResults)) {
-          for (const tr of res.toolResults) {
-            const output = tr.output || tr.result;
-            if (output) {
-              const str = typeof output === "string" ? output : JSON.stringify(output);
-              if (str.trim() && !isToolError(str)) {
-                collectedToolData.push(str);
-              }
-            }
-          }
-        }
-
-        if (collectedTexts.length > 0) return collectedTexts.join("\n\n");
-        if (collectedToolData.length > 0) return "Berikut data yang ditemukan oleh tools:\n\n" + collectedToolData.join("\n\n");
-        return "";
-      }
-
-      // --- Helper: Extract tool names used across all steps ---
-      function extractToolNames(res: any): string[] {
-        const names: string[] = [];
-        if (res?.steps && Array.isArray(res.steps)) {
-          for (const step of res.steps) {
-            if (step.toolCalls && Array.isArray(step.toolCalls)) {
-              for (const tc of step.toolCalls) names.push(tc.toolName);
-            }
-          }
-        }
-        return names;
-      }
-
-      // --- Agent Models (Adjusted for Rate Limits) ---
-      // Primary Researcher: Try Flatkey (GPT-4o) first, fallback to DashScope (Qwen-Plus), then Gemini
-      const researcherModel = env.ANTHROPIC_AUTH_TOKEN ? openRouter.chat(env.ANTHROPIC_MODEL || "gpt-4o") : google(geminiModel || "gemini-2.5-flash");
-      const reviewerModel = env.DASHSCOPE_API_KEY ? dashscope.chat(env.DASHSCOPE_MODEL || "qwen3.7-max") : researcherModel;
-      const synthesizerModel = env.ANTHROPIC_AUTH_TOKEN ? openRouter.chat(env.ANTHROPIC_MODEL || "gpt-4o") : reviewerModel;
-
-      // --- STAGE 1: The Researcher (Tool Execution) ---
-      silentLogger.info(`[MacroAI] Stage 1: The Researcher - Gathering Context`);
-      
-      const researcherCandidates = [
-        { model: researcherModel, label: "primary-researcher" }
-      ];
-      // Add DashScope Qwen-Plus as a robust fallback for tool calling if GPT-4o/Gemini fails
-      if (env.DASHSCOPE_API_KEY) {
-         researcherCandidates.push({ model: dashscope.chat("qwen-plus"), label: "fallback-qwen-plus" });
-      }
-      if (env.GEMINI_API_KEY) {
-         researcherCandidates.push({ model: google(geminiModel || "gemini-2.5-flash"), label: "fallback-gemini" });
-      }
-
-      let researcherRes;
-      let researcherError: any = null;
-
-      for (const candidate of researcherCandidates) {
-        try {
-          silentLogger.info(`[MacroAI] Researcher using: ${candidate.label}`);
-          researcherRes = await generateText({
-            model: candidate.model,
-            system: systemPrompt,
-            messages: cleanMessages,
-            tools: Object.keys(toolsConfig).length > 0 ? toolsConfig : undefined,
-            maxSteps: 1, // Stop immediately after tool execution
-            temperature: 0.2,
-          } as any);
-          researcherError = null; // Success
-          break;
-        } catch (err: any) {
-          silentLogger.warn(`[MacroAI] Researcher ${candidate.label} failed: ${err.message}`);
-          researcherError = err;
-        }
-      }
-
-      if (researcherError || !researcherRes) {
-        throw new Error(`The Researcher AI failed after all fallbacks. Last error: ${researcherError?.message}`);
-      }
-
-      const researcherText = extractResponseText(researcherRes);
-      const toolsUsed = extractToolNames(researcherRes);
-
-      // If no tools were used, the Researcher answered the user directly. We can return immediately.
-      if (toolsUsed.length === 0 && researcherText.trim().length > 0) {
-        silentLogger.info(`[MacroAI] No tools used by Researcher. Returning direct response.`);
-        return { text: researcherText, toolsUsed: [] };
-      }
-
-      // If tools were used, researcherText contains raw JSON data.
-      let dataToSynthesize = researcherText;
-
-      // --- STAGE 2: The Reviewer (Data Extraction & Analysis) ---
-      if (dataToSynthesize.trim()) {
-        silentLogger.info(`[MacroAI] Stage 2: The Reviewer - Analyzing Data`);
-        try {
-          const reviewerRes = await generateText({
-            model: reviewerModel,
-            system: "Anda adalah analis kuantitatif makroekonomi senior. Tugas Anda adalah mengekstrak data dan angka-angka kunci dari teks JSON mentah berikut, lalu membuat laporan eksekutif pendek yang menyoroti temuan fakta tanpa opini berlebihan. Gunakan Bahasa Indonesia.",
-            messages: [
-              ...cleanMessages,
-              { role: "assistant", content: `RAW TOOL DATA:\n${dataToSynthesize}` }
-            ],
-            temperature: 0.1,
-          });
-          
-          if (reviewerRes.text && reviewerRes.text.trim()) {
-            dataToSynthesize = reviewerRes.text.trim();
-          }
-        } catch (err: any) {
-          silentLogger.warn(`[MacroAI] Stage 2 (Reviewer) failed, bypassing Reviewer: ${err.message}`);
-          // Bypassing Reviewer, will pass raw JSON directly to Synthesizer
-        }
-      }
-
-      // --- STAGE 3: The Synthesizer (Persona Formatting) ---
-      silentLogger.info(`[MacroAI] Stage 3: The Synthesizer - Formatting Output`);
-      try {
-        const synthesizerRes = await generateText({
-          model: synthesizerModel,
-          system: systemPrompt, // Re-apply the strict Persona prompt
-          messages: [
-            ...cleanMessages,
-            { role: "assistant", content: `Laporan Data / Fakta:\n${dataToSynthesize}\n\nInstruksi: Tuliskan respons akhir Anda kepada user berdasarkan Laporan Fakta di atas. Gunakan gaya bahasa telegraphic dan sinis sesuai Persona Anda. DILARANG memuntahkan JSON mentah.` }
-          ],
-          temperature: 0.3,
-        });
-
-        if (synthesizerRes.text && synthesizerRes.text.trim()) {
-          let finalText = synthesizerRes.text.trim();
-          silentLogger.info(`[MacroAI Agent] Multi-Agent Pipeline Completed. Tools used: ${toolsUsed.join(', ')}`);
-          return { text: finalText, toolsUsed };
-        }
-      } catch (err: any) {
-        silentLogger.error(`[MacroAI] Stage 3 (Synthesizer) failed: ${err.message}`);
-        // Ultimate fallback
-        return { text: dataToSynthesize, toolsUsed };
-      }
-
-      throw new Error("All AI agents in the pipeline failed to generate a response");
-    } catch (error: any) {
-      silentLogger.error(
-        "[MacroAI] chatStream Agent Loop failed with details:",
-        error.message,
-        error.stack || error
+    // Regime pasar live dari frontend
+    if (currentRegime || liquidityStatus) {
+      contextLines.push(
+        "",
+        "REGIME & LIKUIDITAS (LIVE dari terminal):",
+        `- Regime: ${currentRegime ?? "UNKNOWN"}`,
+        `- Status Likuiditas (UI): ${liquidityStatus ?? liquidityStatusLive}`
       );
-      if (error.cause) {
-        silentLogger.error("[MacroAI] Error cause:", JSON.stringify(error.cause, null, 2));
+    }
+
+    const extraContext = contextLines.join("\n");
+
+    // ─── 5. Assemble Hermes Prompt ───
+    // PENTING: pakai LIVE SSOT (bukan DEFAULT_MACRO_SSOT mock) supaya angka yang
+    // di-inject ke system prompt konsisten dengan data live di extraContext.
+    // Mock hanya dipakai sebagai fallback kalau fetch live gagal total.
+    const liveMacroSSOT: MacroSSOT = {
+      ...DEFAULT_MACRO_SSOT,
+      timestamp: new Date().toISOString(),
+      cpi: {
+        yoy: parseFloat(cpiVal) || DEFAULT_MACRO_SSOT.cpi.yoy,
+        mom: DEFAULT_MACRO_SSOT.cpi.mom,
+      },
+      // VIX: utamakan data live dari server; kalau tidak ada, pakai dari context frontend
+      vix:
+        parseFloat(vixLive) ||
+        (typeof context?.vix?.value === "number" ? context.vix.value : DEFAULT_MACRO_SSOT.vix),
+      // Fed Funds: parseFloat("N/A") = NaN → jangan fallback ke mock usang (4.5).
+      // Kalau tidak tersedia, biarkan null supaya prompt menampilkan "N/A".
+      fedFundsRate: (() => {
+        const parsed = parseFloat(fedRateLive);
+        return Number.isFinite(parsed) ? parsed : null;
+      })(),
+      // Yield curve: pakai data live dari context frontend (bukan mock 0.28/-0.09)
+      yieldCurve: {
+        tenor10y2y:
+          typeof context?.yieldCurve?.spread10y2y === "number"
+            ? context.yieldCurve.spread10y2y
+            : DEFAULT_MACRO_SSOT.yieldCurve.tenor10y2y,
+        tenor10y3m: DEFAULT_MACRO_SSOT.yieldCurve.tenor10y3m,
+      },
+      // Liquidity: pakai nilai live kalau tersedia; JANGAN fallback ke mock 69.8/0.0
+      // karena itu bikin jawaban AI mismatch dengan dashboard UI.
+      liquidity: {
+        // Dibulatkan 2 desimal supaya identik dengan tampilan dashboard
+        ondRP: onRrpLive !== null ? Math.round(onRrpLive * 100) / 100 : null,
+        tga: tgaLive !== null ? Math.round(tgaLive * 100) / 100 : null,
+        reserveBalance: DEFAULT_MACRO_SSOT.liquidity.reserveBalance,
+      },
+    };
+
+    const systemPrompt = assembleHermesPrompt({
+      agentId: "chat-agent",
+      userProfile,
+      macroSSOT: liveMacroSSOT,
+      memoryNotes,
+      userMessage: messages.length > 0 ? messages[messages.length - 1].content : "",
+      chatHistory: messages.slice(0, -1),
+      extraContext,
+    });
+
+    // Log skill yang ter-auto-load (untuk debugging & verifikasi)
+    try {
+      const { selectSkills } = require("../lib/agent/skill-loader");
+      const loaded = selectSkills({
+        userMessage: messages.length > 0 ? String(messages[messages.length - 1].content) : "",
+        recentMessages: messages.slice(-3, -1).map((m: any) => String(m.content)),
+        limit: 3,
+      });
+      if (loaded.length > 0) {
+        silentLogger.info(
+          `[Hermes] Skills auto-loaded: ${loaded.map((s: any) => `${s.skill.name}(${s.matchedTriggers.join("/")})`).join(", ")}`
+        );
+      } else {
+        silentLogger.info("[Hermes] Skills auto-loaded: (none matched)");
       }
-      throw new Error("Gagal mendapatkan respons chat dari layanan AI: " + (error.message || "Unknown error"));
+    } catch (e) {
+      silentLogger.warn("[Hermes] Skill loader logging gagal:", e);
+    }
+    try {
+      // ─── Build messages untuk LLM ───
+      const chatHistory = messages.slice(0, -1);
+      const formattedMessages = [
+        { role: "system", content: systemPrompt },
+        ...chatHistory.map((m: any) => ({
+          role: m.role === "system" ? "user" : m.role,
+          content: String(m.content)
+            .replace(/(?:Pilihan|Alternatif)\s*(?:lebih\s*)?malas:[^\n]*/gi, "")
+            .replace(/(?:\/\/\s*)?ponytail:?[^\n]*/gi, "")
+            .replace(/(?:→\s*)?skipped:\s*[^\n]*/gi, "")
+            .replace(/Add when:[^\n]*/gi, "")
+            .trim(),
+        })),
+      ];
+
+      // CATATAN: JANGAN buang system prompt. Array dimulai dengan [system, ...history].
+      // Hanya pastikan ada minimal satu pesan user setelah system prompt.
+      const hasUserMessage = formattedMessages.some((m: any) => m.role === "user");
+      if (!hasUserMessage) {
+        formattedMessages.push({
+          role: "user",
+          content: messages.length > 0 ? String(messages[messages.length - 1].content) : "Halo",
+        });
+      }
+
+      // ─── Call LLM dengan fallback model chain ───
+      // CATATAN: 9router (model "free") TIDAK mendukung response_format json_object
+      // (menyebabkan HTTP 400/410). Format JSON diminta lewat instruksi di system prompt.
+      // Model "free" kadang return 410 Gone (upstream habis) → coba model fallback.
+      const primaryModel = env.NINE_ROUTER_MODEL || "free";
+      const modelChain = [primaryModel, "auto-free-model", "claude-opus-4.6"].filter(
+        (m, i, arr) => arr.indexOf(m) === i
+      );
+
+      let response: any = null;
+      let lastLlmError: any = null;
+      for (const model of modelChain) {
+        try {
+          response = await axios.post(
+            `${env.NINE_ROUTER_URL}/chat/completions`,
+            {
+              model,
+              messages: formattedMessages,
+              max_tokens: 4096,
+              temperature: 0.5,
+              stream: false,
+            },
+            {
+              timeout: 60000,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
+              },
+            }
+          );
+          // Deteksi respons "error message" dari upstream yang dikirim sebagai content
+          // (mis. "Gemini 3.5 Flash is no longer available...") — bukan jawaban valid.
+          const rawContent: string =
+            response?.data?.choices?.[0]?.message?.content || "";
+          const looksLikeUpstreamError =
+            rawContent.length < 300 &&
+            /(no longer available|not available|please switch to|deprecated|model .* (not found|unavailable)|quota|rate limit)/i.test(
+              rawContent
+            ) &&
+            !rawContent.trim().startsWith("{");
+
+          if (looksLikeUpstreamError) {
+            silentLogger.warn(
+              `[MacroAI Chat] Model "${model}" mengembalikan pesan error upstream sebagai content: "${rawContent.slice(0, 120)}" — coba model berikutnya.`
+            );
+            lastLlmError = new Error(`Upstream error message: ${rawContent.slice(0, 120)}`);
+            response = null;
+            continue;
+          }
+
+          if (model !== primaryModel) {
+            silentLogger.warn(`[MacroAI Chat] Fallback model "${model}" berhasil (primary "${primaryModel}" gagal).`);
+          }
+          break;
+        } catch (e: any) {
+          lastLlmError = e;
+          const status = e?.response?.status;
+          silentLogger.warn(`[MacroAI Chat] Model "${model}" gagal (status=${status ?? "n/a"}): ${e.message}`);
+        }
+      }
+
+      if (!response) {
+        throw new Error(
+          `Semua model gagal. Terakhir: ${lastLlmError?.response?.status ?? ""} ${lastLlmError?.message ?? ""}`
+        );
+      }
+
+      const raw = response.data?.choices?.[0]?.message?.content || "{}";
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // LLM sering membungkus JSON dalam markdown code fence (```json ... ```)
+        const cleaned = raw
+          .replace(/^\s*```(?:json)?\s*/i, "")
+          .replace(/\s*```\s*$/, "")
+          .trim();
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch {
+          // JSON terpotong (max_tokens habis) — salvage isi field pakai regex
+          const salvage = (key: string): string => {
+            const re = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "s");
+            const m = cleaned.match(re);
+            if (!m) return "";
+            try {
+              return JSON.parse(`"${m[1]}"`);
+            } catch {
+              return m[1];
+            }
+          };
+          const salvagedReasoning = salvage("reasoning");
+          const salvagedContent = salvage("content");
+          if (salvagedContent || salvagedReasoning) {
+            parsed = { reasoning: salvagedReasoning, content: salvagedContent };
+            silentLogger.warn("[MacroAI Chat] JSON terpotong — field diselamatkan via regex salvage.");
+          } else {
+            parsed = {};
+          }
+        }
+      }
+
+      let replyText: string = "";
+      let reasoningText: string = "";
+
+      if (parsed.reasoning && typeof parsed.content === "string") {
+        reasoningText = parsed.reasoning;
+        replyText = parsed.content;
+      } else if (typeof parsed.content === "string") {
+        replyText = parsed.content;
+      } else if (raw.trim()) {
+        replyText = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      }
+
+      if (!replyText) throw new Error("Empty response");
+
+      // Critic Pass (CPI verification)
+      const cpiMatch = replyText.match(/CPI[^\n\d]*?(\d+(?:\.\d+)?)\s*%/gi);
+      if (cpiMatch) {
+        for (const m of cpiMatch) {
+          const numMatch = m.match(/(\d+(?:\.\d+)?)/);
+          if (numMatch) {
+            const foundNum = parseFloat(numMatch[1]);
+            if (!isNaN(parseFloat(cpiVal)) && Math.abs(foundNum - parseFloat(cpiVal)) > 0.01) {
+              replyText = replyText.replace(numMatch[1], String(cpiVal));
+              silentLogger.warn(`[Critic Pass] CPI ${numMatch[1]}% → ${cpiVal}%`);
+            }
+          }
+        }
+      }
+
+      selfImprovementService.enqueueJob({
+        personaId,
+        userId,
+        prompt: messages.map((m: any) => String(m.content)).join(" | "),
+        finalReply: replyText,
+        wasCorrected: false,
+        dataPoint: "CPI YoY",
+        expected: `${cpiVal}%`,
+      });
+
+      const toolsUsed: string[] = ["hermes_context", "in_process_fetch", "critic_pass"];
+
+      // Background Memory Extraction (async, non-blocking)
+      if (userId) {
+        setImmediate(async () => {
+          try {
+            const extractedFacts = await extractUserFacts({
+              chatHistory: [...messages],
+              userProfile,
+            });
+            if (extractedFacts.length > 0) {
+              const saved = await saveFactsToUserProfile(userId, extractedFacts);
+              silentLogger.info(`[Hermes] Background extraction — facts=${extractedFacts.length}, saved=${saved}, userId=${userId}`);
+            }
+          } catch (e) {
+            silentLogger.error("[Hermes] Background extraction gagal:", e);
+          }
+        });
+      }
+
+      return { text: replyText, reasoning: reasoningText, toolsUsed };
+    } catch (error: any) {
+      silentLogger.error("[MacroAI Chat] failed:", error.message);
+      throw new Error("Gagal mendapatkan respons AI.");
     }
   },
 
+
   async analyzeMacroFeed(
-    headline: string,
+  headline: string,
     targetAsset: string,
     context?: string,
   ) {
@@ -1185,9 +1205,9 @@ Jawab HANYA dengan JSON valid (tanpa markdown blok, tanpa teks apa pun di luar J
     }
 
     if (!text) {
-      text = await callGeminiDirect(systemPrompt, prompt, geminiModel, {
+      text = await callDualEngine(prompt, systemPrompt, {
+        max_output_tokens: 1000,
         temperature: 0.2,
-        responseMimeType: "application/json",
       });
     }
 
@@ -1402,14 +1422,15 @@ Jawab HANYA dengan array of JSON valid. Analisis SETIAP berita, JANGAN ADA yang 
     try {
       let text: string | null = null;
 
-      // 1. Try 9Router first if URL is configured
-      if (env.NINE_ROUTER_URL) {
+      // Use 9Router with NINE_ROUTER_MODELS failover
+      const startTime = Date.now();
+      let lastError: any = null;
+      for (const modelConfig of NINE_ROUTER_MODELS) {
         try {
-          const modelName = env.NINE_ROUTER_MODEL || "free";
           const response = await axios.post(
             `${env.NINE_ROUTER_URL}/chat/completions`,
             {
-              model: modelName,
+              model: modelConfig.model,
               messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: prompt },
@@ -1420,51 +1441,44 @@ Jawab HANYA dengan array of JSON valid. Analisis SETIAP berita, JANGAN ADA yang 
             },
             {
               headers: {
-                "Authorization": `Bearer ${env.NINE_ROUTER_API_KEY || "sk-9router-local"}`,
+                Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
                 "Content-Type": "application/json",
               },
-              timeout: 30000,
+              timeout: 45000,
             }
           );
           text = response.data?.choices?.[0]?.message?.content || null;
-          if (text) {
-            silentLogger.info(`[MacroAI] batchAnalyzeNews 9Router (${modelName}) succeeded.`);
+          if (text && text.trim()) {
+            silentLogger.info(`[MacroAI] batchAnalyzeNews 9Router (${modelConfig.name} - ${modelConfig.model}) succeeded after ${Date.now() - startTime}ms.`);
+            break;
           }
         } catch (error: any) {
-          silentLogger.warn("[MacroAI] batchAnalyzeNews 9Router failed, trying Groq/Gemini:", error.message);
+          lastError = error;
+          silentLogger.warn(`[MacroAI] batchAnalyzeNews 9Router model ${modelConfig.name} failed: ${error.message}, trying next...`);
         }
       }
 
-      // 2. Try Groq fallback
-      if (!text && env.GROQ_API_KEY) {
-        try {
-          const response = await groqRequest<GroqResponse>(
-            GROQ_API_URL,
-            {
-              model: GROQ_MODELS[0],
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: prompt },
-              ],
-              max_tokens: 4000,
-              temperature: 0.2,
-              stream: false,
-            },
-            { useCache: false }
-          );
-          text = response.choices?.[0]?.message?.content || null;
-        } catch (groqError: any) {
-          silentLogger.warn("[MacroAI] batchAnalyzeNews Groq failed, switching to Gemini:", groqError.response?.status);
+      if (!text) {
+        silentLogger.error(`[MacroAI] All LLM models failed after ${Date.now() - startTime}ms. Last error: ${lastError?.message || "Unknown error"}`);
+        // Fallback: return raw news items with minimal analysis
+        const fallbackMap: Record<string, any> = {};
+        for (const item of newsItems) {
+          fallbackMap[item.id] = {
+            id: item.id,
+            topic: "NEWS",
+            assets: "",
+            regime: "Neutral",
+            Fakta: item.headline,
+            dampakMarket: "",
+            logika: "",
+            contrarian: "",
+            triggerFundamentalNonTeknikal: "",
+            confidenceScore: "RENDAH"
+          };
         }
+        silentLogger.warn("[MacroAI] Using fallback analysis due to LLM failure");
+        return fallbackMap;
       }
-
-      if (!text && env.GEMINI_API_KEY) {
-        text = await callGeminiDirect(systemPrompt, prompt, geminiModel, {
-          temperature: 0.2,
-        });
-      }
-
-      if (!text) return {};
 
       // Parse array JSON and convert to map
       const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();

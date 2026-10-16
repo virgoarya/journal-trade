@@ -38,17 +38,19 @@ export function evaluateWaterfall(
   const items: ChecklistItem[] = steps.map((step) => {
     let status: "PASSED" | "WAITING" | "FAILED";
 
-    if (step.isIndependent) {
-      status = step.condition ? "PASSED" : "WAITING";
-    } else if (step.isFailable) {
-      // Failable: evaluate independently regardless of prior state
+    if (step.isFailable) {
       status = step.condition ? "PASSED" : "FAILED";
       if (status !== "PASSED") {
-        priorAllPassed = false;
         hasFailed = true;
+        // If a failable step is NOT independent, its failure also cascades to subsequent steps.
+        if (!step.isIndependent) {
+          priorAllPassed = false;
+        }
       }
+    } else if (step.isIndependent) {
+      status = step.condition ? "PASSED" : "WAITING";
     } else {
-      // Non-failable: cascade WAITING if prior steps didn't pass
+      // Non-failable, non-independent: cascade WAITING if prior steps didn't pass
       if (!priorAllPassed) {
         status = "WAITING";
       } else if (step.condition) {
@@ -207,13 +209,13 @@ export function analyzeDaily3CandleBias(candles?: Candle[]): Daily3CandleBias {
 /**
  * Calculates Risk-to-Reward ratio dynamically.
  */
-export function calculateRR(entry: number, sl: number, tp: number): { rrRatio: number; isRRValid: boolean } {
+export function calculateRR(entry: number, sl: number, tp: number, minSlDist: number = 0): { rrRatio: number; isRRValid: boolean } {
   const slDist = Math.abs(entry - sl);
   const tpDist = Math.abs(tp - entry);
   const rrRatio = slDist > 0 ? tpDist / slDist : 0;
   return {
     rrRatio,
-    isRRValid: rrRatio >= 2.0,
+    isRRValid: rrRatio >= 2.0 && slDist >= minSlDist,
   };
 }
 
@@ -336,13 +338,14 @@ export function validateEntryAndRisk(
   slPrice: number,
   tpPrice: number,
   entryTfLabel: string,
+  minSlDist: number = 0,
 ): { entryOk: boolean; rrOk: boolean; rrRatio: number } {
   const entryOk = isEntryRetested;
 
   const slDist = Math.abs(entryPrice - slPrice);
   const tpDist = Math.abs(tpPrice - entryPrice);
   const rrRatio = slDist > 0 ? tpDist / slDist : 0;
-  const rrOk = rrRatio >= 2.0;
+  const rrOk = rrRatio >= 2.0 && slDist >= minSlDist;
 
   return { entryOk, rrOk, rrRatio };
 }

@@ -38,17 +38,35 @@ if (fs.existsSync(patchPath)) {
 
 try {
     const zip = new AdmZip();
-    
-    // Helper to add local folder recursively excluding node_modules
+
+    // Never ship secrets or runtime noise inside an OTA patch. The packaged
+    // installer provides server/.env via extraResources; the patch must not
+    // contain it (a patch.zip once leaked 33 production keys into a public repo).
+    const FORBIDDEN = [
+        /(^|\/)\.env(\.|$)/,        // .env, .env.local, .env.production ...
+        /(^|\/)logs?(\/|$)/,         // logs/, log/
+        /\.log$/i,                   // any *.log
+        /(^|\/)monitoring-reports(\/|$)/,
+        /(^|\/)node_modules(\/|$)/,
+    ];
+    const isForbidden = (relPath) =>
+        FORBIDDEN.some((re) => re.test(relPath.replace(/\\/g, '/')));
+
+    // Helper to add local folder recursively excluding node_modules & secrets
     function addDirToZip(dirPath, zipPath) {
         if (!fs.existsSync(dirPath)) return;
         const items = fs.readdirSync(dirPath);
         for (const item of items) {
             if (item === 'node_modules') continue;
-            
+
             const fullPath = path.join(dirPath, item);
             const relativePath = zipPath ? `${zipPath}/${item}` : item;
-            
+
+            if (isForbidden(relativePath)) {
+                console.log(`  ⊘ Excluded from patch: ${relativePath}`);
+                continue;
+            }
+
             if (fs.statSync(fullPath).isDirectory()) {
                 addDirToZip(fullPath, relativePath);
             } else {
@@ -62,6 +80,18 @@ try {
     addDirToZip(path.join(resourcesDir, 'frontend'), 'frontend');
 
     zip.writeZip(patchPath);
+
+    // Build-time assertion: fail the build if anything forbidden slipped in.
+    const violations = zip
+        .getEntries()
+        .map((e) => e.entryName.replace(/\\/g, '/'))
+        .filter(isForbidden);
+    if (violations.length > 0) {
+        console.error('\n❌ ABORT: patch.zip contains forbidden files:');
+        for (const v of violations.slice(0, 20)) console.error(`   - ${v}`);
+        try { fs.rmSync(patchPath, { force: true }); } catch (e) {}
+        process.exit(1);
+    }
 } catch (error) {
     console.error(`❌ Failed to create zip file using adm-zip:`, error.message);
     process.exit(1);
@@ -87,5 +117,5 @@ fs.writeFileSync(path.join(patchDir, 'version.json'), JSON.stringify(versionData
 console.log(`\n✅ OTA Patch built successfully!`);
 console.log(`📂 Output Directory: ${patchDir}`);
 console.log(`\nNext Steps:`);
-console.log(`1. Commit and push the contents of 'desktop/dist-patch' to GitHub.`);
+console.log(`1. Commit and push the contents of 'update/' to GitHub (main branch).`);
 console.log(`2. Ensure they are available at the URL configured in the app.`);

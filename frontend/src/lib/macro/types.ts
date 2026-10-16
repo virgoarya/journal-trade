@@ -33,6 +33,33 @@ export interface RegimeMetricData {
   pressure?: "HOT" | "NORMAL" | "COLD";
   label: string;
   subScores?: Record<string, { ratio?: number; value?: number | null; status: string }>;
+  impulse?: number;
+  impulseLabel?: string;
+}
+
+export interface RegimeVectorData {
+  x: number;
+  y: number;
+  angle: number;
+  magnitude: number;
+  targetQuadrant: string;
+  label: string;
+}
+
+export interface MarkovProbabilitiesData {
+  goldilocks: number;
+  reflation: number;
+  stagflation: number;
+  deflation: number;
+  transition: number;
+  divergenceBadge: string | null;
+}
+
+export interface SecondDerivativeData {
+  growthImpulse: number;
+  growthLabel: string;
+  inflationImpulse: number;
+  inflationLabel: string;
 }
 
 export interface RegimeConfidenceData {
@@ -52,9 +79,12 @@ export interface RegimeSnapshotData {
   cpiYoY?: number | null;
   growth: RegimeMetricData;
   inflation: RegimeMetricData;
-  liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED" };
+  liquidity: RegimeMetricData & { riskState: "HEALTHY" | "STRESSED"; netLiquidityImpulse?: number };
   confidence: RegimeConfidenceData;
   position: { x: number; y: number };
+  vector?: RegimeVectorData;
+  probabilities?: MarkovProbabilitiesData;
+  secondDerivative?: SecondDerivativeData;
   history: Array<{
     date: string;
     growthRatio: number;

@@ -10,7 +10,7 @@ publish:
   provider: github
   owner: virgoarya
   repo: journal-trade
-  releaseType: draft
+  releaseType: release
 
 win:
   target:
@@ -26,7 +26,7 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  differentialPackage: false
+  differentialPackage: true
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
@@ -48,7 +48,7 @@ extraResources:
     to: server/dist
   - from: ../server/package.json
     to: server/package.json
-  - from: ../server/.env
-    to: server/.env
+  - from: ../server/.env.example
+    to: server/.env.example
 
 compression: store

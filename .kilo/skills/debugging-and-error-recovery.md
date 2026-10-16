@@ -53,10 +53,11 @@ Baca file `.kilo/LESSONS.md` untuk referensi.
 |-------|------|--------------|
 | `TypeError: fetch failed` | WebSocket/Network | TLS? Ngrok? Pakai SSE? → Baca lesson 20260719 |
 | `webidl.util.markAsUncloneable` | Node.js | Versi `undici`? → Hapus undici, baca lesson 20260720 |
-| Build PyInstaller stuck | Python Build | Flag `-y` ada? → Baca lesson 20260720 |
-| `MT5 connection failed` | Python/MT5 | MT5 terminal terbuka? Login benar? |
-| `PrismaClientKnownRequestError` | Database | Migration up to date? `npx prisma migrate dev`? |
-| `NextAuth session undefined` | Auth | Cookie domain? `NEXTAUTH_URL` env var set? |
+|| Build PyInstaller stuck | Python Build | Flag `-y` ada? → Baca lesson 20260720 |
+|| `MT5 connection failed` | Python/MT5 | MT5 terminal terbuka? Login benar? |
+|| `PrismaClientKnownRequestError` | Database | Migration up to date? `npx prisma migrate dev`? |
+|| `NextAuth session undefined` | Auth | Cookie domain? `NEXTAUTH_URL` env var set? |
+|| **File `.exe` Windows terkunci "another program is using"** | Windows Installer / Download | 1) File masih didownload? Tunggu ukuran stabil. 2) AV/Defender scan? Tunggu atau `Unblock-File` (hapus ADS `Zone.Identifier`). 3) Jalankan manual via Windows Explorer → klik kanan → **Run as administrator** (bukan lewat terminal). 4) Kalau masih gagal, restart computer lalu coba lagi. |
 
 ---
 

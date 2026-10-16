@@ -1,0 +1,168 @@
+name: Node.js CI
+
+# Monorepo layout: server/ (Express 5 + TS), frontend/ (Next.js), desktop/ (Electron).
+# There is no root application — every job installs and runs inside its subproject.
+# The root package.json only provides thin `npm run <x>` delegators.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_ENV: test
+
+jobs:
+  server:
+    name: Server (typecheck + build + tests)
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        options: >-
+          --health-cmd mongo --health-interval 10s --health-timeout 5s --health-retries 3
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 3
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm run test
+        timeout-minutes: 10
+
+  frontend:
+    name: Frontend (typecheck + lint + tests + build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test
+        timeout-minutes: 10
+
+      - name: Production build (standalone)
+        run: npm run build
+
+  security-scan:
+    name: Security (gitleaks + secret hygiene)
+    runs-on: ubuntu-latest
+    # NOTE: deliberately has NO `needs:` — this job must never be skipped
+    # because another job failed. A gated scanner that never runs is not a
+    # scanner. (A previous revision had `needs: test`; the test job died on
+    # `npm ci` at the repo root, so gitleaks never executed at all.)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scanning with gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auth bypass verification
+        run: |
+          if grep -rn "x-integration-test" server/src/middleware/auth.ts | grep -v 'NODE_ENV === "test"'; then
+            echo "❌ Auth bypass still active outside test environments"
+            exit 1
+          fi
+
+      - name: Legacy validation middleware must be gone
+        run: |
+          if [ -f "server/src/middleware/validate.ts" ]; then
+            echo "❌ Legacy validate.ts still exists"
+            exit 1
+          fi
+
+      - name: Dev secret files must not be tracked in git
+        run: |
+          leaked=$(git ls-files | grep -E '(^|/)\.env$' || true)
+          if [ -n "$leaked" ]; then
+            echo "❌ .env file(s) tracked in git:"
+            echo "$leaked"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Server dependency audit
+        working-directory: server
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  release-gate:
+    name: Release gate (dependency pins)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Desktop dependencies must be pinned to exact versions
+        run: node scripts/check-desktop-pins.mjs

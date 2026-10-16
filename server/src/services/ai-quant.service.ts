@@ -40,9 +40,13 @@ DATA PASAR (REAL-TIME)
 - Regime Yield Curve: ${curveRegime}
 - 3-Month Yield: ${snapshot.y3m}%
 - 2-Year Yield: ${snapshot.y2y}%
+- 5-Year Yield: ${snapshot.y5}%
 - 10-Year Yield: ${snapshot.y10}%
+- 30-Year Yield: ${snapshot.y30}%
 - Spread 10Y-3M (Fed's Recession Gauge): ${snapshot.spread10y3m} bps
 - Spread 10Y-2Y (Market Leading Indicator): ${snapshot.spread10y2y} bps
+- Spread 30Y-5Y (Long-end Steepness): ${snapshot.spread30y5y} bps
+- Spread 30Y-3M (Full Curve Steepness): ${snapshot.spread30y3m} bps
 - VIX (Market Stress Indicator): ${snapshot.vix}${macroContext}
 
 ═══════════════════════════════════
@@ -109,6 +113,9 @@ ATURAN FORMAT OUTPUT
 - WAJIB konsisten secara internal: narasi obligasi, ekuitas, dan emas HARUS selaras dengan rule-based logic di atas.
 - Bahasa Indonesia profesional setara riset Goldman Sachs/JPMorgan.
 - Gunakan **bold** dan bullet points untuk keterbacaan. Tajam dan padat.
+- **PANJANG**: Setiap dari 4 poin MAKSIMAL 3 paragraf pendek. Total maksimal ~600 kata. PADAT, bukan bertele-tele.
+- **SELESAIKAN SETIAP KALIMAT.** Jangan berhenti di tengah kalimat atau di tengah daftar. Kalau ruang hampir habis, ringkas dan tutup dengan kesimpulan utuh.
+- Setiap poin WAJIB diakhiri kalimat lengkap dengan tanda titik.
 `;
 
     let msg: any;
@@ -130,7 +137,7 @@ ATURAN FORMAT OUTPUT
             messages: [
               { role: "user", content: prompt }
             ],
-            max_tokens: 1500,
+            max_tokens: 4000,
             stream: false
           })
         });
@@ -157,7 +164,7 @@ ATURAN FORMAT OUTPUT
           console.log("Trying fallback AI model for Quant:", model);
           msg = await anthropic.messages.create({
             model: model,
-            max_tokens: 1500,
+            max_tokens: 4000,
             messages: [
               { role: "user", content: prompt }
             ]
@@ -194,7 +201,7 @@ ATURAN FORMAT OUTPUT
               },
               { role: "user", content: prompt }
             ],
-            max_tokens: 1500
+            max_tokens: 4000
           })
         });
 

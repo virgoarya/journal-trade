@@ -1,0 +1,27 @@
+# Gitleaks configuration for Journal Trade
+# https://github.com/gitleaks/gitleaks
+
+title = "Journal Trade gitleaks config"
+
+[extend]
+useDefault = true
+
+# Allow known false positives
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|api[_-]?secret|api[_-]?token)['"\s]*[:=]['"\s]*[a-z0-9_\-]{32,}'''
+keywords = ["api_key", "apikey", "api_secret", "apisecret", "api_token", "apitoken"]
+
+# Allow test fixtures
+[allowlist]
+description = "Test fixtures and mock data"
+paths = [
+    '''/test/''',
+    '''/tests/''',
+    '''/__tests__/''',
+    '''\.test\.''',
+    '''\.spec\.''',
+    '''/fixtures/''',
+    '''/mocks/''',
+]

@@ -252,7 +252,7 @@ class MSNRStrategy {
     for (let i = validSignals.length - 1; i >= 0; i--) {
       const sig = validSignals[i];
       const validation = this.buildMSNRChecklist(sig, fractal);
-      sig.checklistItems = validation.items;
+      sig.checklistItems = this.buildMSNRDisplayItems(sig, fractal);
       
       if (sig.confidence > 0 && !validation.passed) {
         validSignals.splice(i, 1);
@@ -274,7 +274,7 @@ class MSNRStrategy {
         checklistItems: []
       };
       const validation = this.buildMSNRChecklist(dummySig, fractal);
-      dummySig.checklistItems = validation.items;
+      dummySig.checklistItems = this.buildMSNRDisplayItems(dummySig, fractal);
       validSignals.push(dummySig);
     }
 
@@ -465,12 +465,12 @@ class MSNRStrategy {
         isIndependent: true,
       },
       {
-        id: "msnr-cisd",
-        label: (status, isPassed) => cisd ? `CISD ${cisd.type} at ${cisd.price.toFixed(5)}` : `CISD not detected`,
-        timeframe: htfTfLabel,
-        condition: !!cisd,
-        details: (status) => cisd ? `CISD price ${cisd.price.toFixed(5)}` : "",
+        id: "msnr-ltf-confirm",
+        label: (status, isPassed) => `⑤ MSNR LTF Confirmation (${entryTfLabel})`,
+        timeframe: entryTfLabel,
+        condition: this.confirmMSNRLTF(fractal),
         isIndependent: true,
+        details: (status) => "Konfirmasi MSNR di LTF.",
       },
       {
         id: "msnr-entry",
@@ -487,6 +487,78 @@ class MSNRStrategy {
         details: (status) => status === "PASSED" ? `R:R 1:${entryRiskValidation.rrRatio.toFixed(2)} | SL: ${sig.sl.toFixed(5)} | TP: ${sig.tp.toFixed(5)}` : `Menunggu titik entry tervalidasi`,
       },
     ]);
+  }
+
+  /** Display checklist rapi (engine-flow + target level saat WAITING). UI only, tidak dipakai engine buat drop. */
+  private buildMSNRDisplayItems(sig: MSNRSignal, fractal?: import("./market-structure.service").FractalContext): ChecklistItem[] {
+    const isBuy = sig.direction === "BUY";
+    const { rrRatio, isRRValid } = calculateRR(sig.entry, sig.sl, sig.tp);
+    const setupTfLabel = fractal?.setupTimeframeStr || "H1";
+    const htfTfLabel = fractal?.directionTimeframeStr || "H4";
+    const entryTfLabel = fractal?.entryTimeframeStr || "M15";
+    const { relHigh, relLow } = getSwingPrices(fractal);
+    const hasTurtleSoup = sig.signalType === "TURTLE_SOUP_OB" || sig.signalType === "TURTLE_SOUP_CISD";
+    const hasSnrTap = sig.signalType === "QML_BULLISH" || sig.signalType === "QML_BEARISH" || sig.signalType === "RBS" || sig.signalType === "SBR";
+    const hasMSS = sig.signalType !== "TURTLE_SOUP_OB" && sig.signalType !== "TURTLE_SOUP_CISD";
+    const entryObs = (fractal?.entryStr?.orderBlocks ?? []).filter(ob => ob.type === (isBuy ? "BULLISH" : "BEARISH"));
+    const hasOB = entryObs.length > 0;
+    const entryOb = entryObs.find(ob => sig.entry >= ob.bottom && sig.entry <= ob.top) ?? entryObs[0];
+    const lastCandle = fractal?.entry && fractal.entry.length > 0 ? fractal.entry[fractal.entry.length - 1] : null;
+    const currentPrice = lastCandle ? lastCandle.close : 0;
+    const isEntryRetested = checkEntryRetest(currentPrice, sig.entry, isBuy);
+    const mk = (id: string, label: string, condition: boolean, opts?: { isIndependent?: boolean; isFailable?: boolean; value?: string; details?: string; timeframe?: string }): ChecklistItem => {
+      const status: "PASSED" | "WAITING" | "FAILED" = condition ? "PASSED" : (opts?.isIndependent ? "WAITING" : "FAILED");
+      return { id, label, status, value: opts?.value, timeframe: opts?.timeframe, details: opts?.details };
+    };
+    return [
+      mk("msnr-snr-tap", `① HTF SNR Tap (${htfTfLabel} ${hasSnrTap ? sig.signalType : "level"})`, hasSnrTap || hasTurtleSoup, { isIndependent: true, value: hasSnrTap || hasTurtleSoup ? "Tapped" : "N/A", details: "Harga tap Malaysian SNR / QML level." }),
+            mk("msnr-turtle", (hasTurtleSoup || hasSnrTap) ? `② Turtle Soup — Liquidity Inducement Swept` : `② Turtle Soup — Menunggu Sweep @ ${isBuy ? relLow : relHigh}`, hasTurtleSoup || hasSnrTap, { isFailable: true, isIndependent: true, value: (hasTurtleSoup || hasSnrTap) ? "Swept" : `Target @ ${isBuy ? relLow : relHigh}`, details: (hasTurtleSoup || hasSnrTap) ? "Swing liquidity disapu (wick rejection) — syarat mutlak MSNR." : `Menunggu harga sapu ${isBuy ? "Sell-Side Liquidity" : "Buy-Side Liquidity"} di level ${isBuy ? relLow : relHigh}.` }),
+            mk("msnr-mss", `③ LTF MSS + Displacement (${entryTfLabel})`, hasMSS, { isFailable: true, isIndependent: true, value: hasMSS ? "Confirmed" : "N/A", details: "Break swing dengan body close ≥ min ATR displacement." }),
+            mk("msnr-ob", hasOB ? `④ LTF ${isBuy ? "Bullish" : "Bearish"} Order Block (${entryOb ? `${entryOb.bottom.toFixed(5)}-${entryOb.top.toFixed(5)}` : "N/A"}` : `④ LTF ${isBuy ? "Bullish" : "Bearish"} OB Menunggu @ ${isBuy ? relLow : relHigh}`, hasOB, { isFailable: true, isIndependent: true, value: hasOB ? (entryOb ? `${entryOb.bottom.toFixed(5)}-${entryOb.top.toFixed(5)}` : "Detected") : `Target @ ${isBuy ? relLow : relHigh}`, details: hasOB ? "OB terbentuk sebelum/selama MSS." : `Menunggu OB terbentuk di zona ${isBuy ? "Discount" : "Premium"}.` }),
+            mk("msnr-entry", `⑤ Entry Retest OB (Pending ${sig.direction} Limit @ ${sig.entry.toFixed(5)})`, hasOB && isEntryRetested, { isFailable: true, isIndependent: true, value: hasOB && isEntryRetested ? "Retested" : "Not Retested", details: `Pending ${sig.direction} Limit di ${sig.entry.toFixed(5)}.` }),
+            mk("msnr-rr", `⑥ Risk-to-Reward 1:2 ${isRRValid ? "terpenuhi" : "belum"}`, isRRValid, { isFailable: true, isIndependent: true, details: isRRValid ? `R:R 1:${rrRatio.toFixed(2)} | SL ${sig.sl.toFixed(5)} | TP ${sig.tp.toFixed(5)}` : "RR < 1:2, signal di-drop engine." }),
+    ];
+  }
+
+  /** Validate MSNR confirmation di LTF (M15).
+   *  MSNR = Turtle Soup (sweep) + MSS (Market Structure Shift) + displacement.
+   *  LTF confirmation: harus ada swing break dengan displacement candle
+   *  (body close ≥ min ATR) yang mengonfirmasi reversal setelah sweep. */
+  private confirmMSNRLTF(fractal?: import("./market-structure.service").FractalContext): boolean {
+    if (!fractal || !fractal.entryStr) return false;
+    const ltfCandles = fractal.entry || [];
+    const ltfStr = fractal.entryStr;
+    if (ltfCandles.length < 5) return false;
+
+    const swingHighs = ltfStr.swingHighs || [];
+    const swingLows = ltfStr.swingLows || [];
+    if (swingHighs.length === 0 && swingLows.length === 0) return false;
+
+    const atr = atrService.calculate(ltfCandles);
+    const last = ltfCandles[ltfCandles.length - 1];
+
+    // Check for MSS: last candle breaks a recent swing with displacement
+    // BUY: bullish candle closes above recent swing high
+    const recentHighs = swingHighs.slice(-5);
+    for (const swing of recentHighs) {
+      if (last.close > swing.price && last.close > last.open) {
+        const bodySize = Math.abs(last.close - last.open);
+        const hasDisplacement = atr > 0 ? bodySize >= atr * 0.8 : bodySize >= (last.high - last.low) * 0.4;
+        if (hasDisplacement) return true;
+      }
+    }
+
+    // SELL: bearish candle closes below recent swing low
+    const recentLows = swingLows.slice(-5);
+    for (const swing of recentLows) {
+      if (last.close < swing.price && last.close < last.open) {
+        const bodySize = Math.abs(last.close - last.open);
+        const hasDisplacement = atr > 0 ? bodySize >= atr * 0.8 : bodySize >= (last.high - last.low) * 0.4;
+        if (hasDisplacement) return true;
+      }
+    }
+
+    return false;
   }
 }
 

@@ -3,58 +3,116 @@
 ## Project Identity
 - **Name**: Hunter Trades Journal & AI Trading
 - **User**: Bang Vir
-- **Tech Stack**:
-  - **Desktop App**: Electron (server manager + full UI window + system tray).
-  - **Frontend**: Next.js 16 (App Router, standalone output), Tailwind CSS, Lightweight Charts, React.
-  - **Backend**: Node.js (Express API + WebSocket server), Mongoose, Better Auth (Discord).
-  - **Desktop App**: Electron (server manager + full UI window + system tray).
-  - **Frontend**: Next.js 16 (App Router, standalone output), Tailwind CSS, Lightweight Charts, React.
-  - **Backend**: Node.js (Express API + WebSocket server), Mongoose, Better Auth (Discord).
-  - **MT5 Integration**: Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via SSEClientTransport & EventSource polyfill.
+- **Tech Stack** (versi terverifikasi dari `package.json` — Sept 2026):
+  - **Desktop App**: Electron `^35.0.0` + `electron-builder ^26` (server orchestrator, multi-process manager, system tray, splash window, `electron-updater ^6.8.9`, patch distribution via `dist-patch/patch.zip`).
+  - **Frontend**: Next.js `16.2.1` (App Router, standalone output, build via `--webpack`), React `19.2.4`, Tailwind CSS v4, `lucide-react`, `recharts ^3.8.1`, `framer-motion ^12.38.0`, Three.js `^0.185.1` + `@react-three/fiber` (visualizer 3D), `react-markdown` + `remark-gfm`, `sonner` (toast).
+  - **Backend**: Node.js + Express `5.2.1` (REST API + WebSocket via `ws ^8.21.0`), Mongoose `9.3.3` / MongoDB `7.1.1`, Better Auth `1.5.6` + `@better-auth/mongo-adapter`, Zod `4.3.6` (validasi), `decimal.js` (akuransi R-multiple), `pino` (logging), `node-cron`, `express-rate-limit`, `puppeteer`, `yahoo-finance2`.
+  - **AI/LLM**: 9router (`http://localhost:20128/v1`, auto-free-model via provider `custom`) + Vercel AI SDK `ai ^7.0.14` dengan `@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/groq`, `@anthropic-ai/sdk`, `@google/generative-ai`. LLM Consensus = voting multi-model dengan threshold 70%.
+  - **Payment**: `midtrans-client` (Midtrans Snap).
+  - **MT5 Integration**: Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via `@modelcontextprotocol/sdk ^1.29.0` / `SSEClientTransport` + EventSource polyfill, DAN Python bridge (`server/mcp-mt5-server/server.py`, `gui.py`, build via `build.bat` → `Hunter Trades AI Trading.exe`).
 - **Design Philosophy**: Terminal Noir (Dark theme dengan Gold accent, premium UI/UX, responsive, micro-animations).
+- **Testing**: Vitest `^4.1.9` di kedua workspace (server pakai `--pool=forks --max-workers=1` karena native MT5 binding).
 
 ## Current Architecture State
 - **Desktop App**: Electron wrapper yang menjalankan backend + frontend sebagai child processes.
   - BrowserWindow menampilkan full web UI (`http://localhost:3000`).
   - System tray untuk background operation.
-  - Bisa diakses juga dari browser desktop/mobile di jaringan yang sama.
+  - Bisa diakses dari browser desktop/mobile di jaringan yang sama.
   - Installer .exe via `electron-builder` + NSIS.
+  - **First-Run Setup Wizard**: Jika `server.env` tidak ada di `%APPDATA%/hunter-trades/`, setup window muncul untuk mengisi konfigurasi (DATABASE_URL, BETTER_AUTH_SECRET, DISCORD_*, 9Router). Config disimpan ke `server.env` dan startup lanjut normal.
 - **Backend**: Express server (port 5000) + WebSocket server. MongoDB Atlas (cloud).
 - **Frontend**: Next.js standalone (port 3000). API proxy ke backend via rewrites.
 - **MT5 Integration**:
-  - Backend Node.js langsung terhubung ke Native MCP Server yang berjalan langsung di dalam aplikasi MetaTrader 5 (`http://127.0.0.1:22346/mcp`).
+  - Backend Node.js langsung terhubung ke Native MCP Server (`http://127.0.0.1:22346/mcp`).
   - Menggunakan API Key untuk otentikasi.
-  - Polling real-time data tick / chart / order langsung via Model Context Protocol (MCP) tanpa membutuhkan Python client atau bridge terpisah.
+  - Polling real-time data tick / chart / order langsung via MCP tanpa Python bridge.
 - **Auth**: Better Auth + Discord OAuth (hanya member komunitas Discord yang bisa akses).
 - **Payment**: Midtrans (planned untuk versi berbayar).
+
+## Backend Services (server/src/services/) — 51+ layanan aktif
+| Service | Fungsi Utama |
+|---------|--------------|
+| `mt5-mcp.service.ts` | SSE/WebSocket RPC Client ke MT5 MCP Server |
+| `mt5-scheduler.service.ts` | Auto-sync data tick & chart MT5 secara berkala |
+| `ai-trading-engine.service.ts` | Pipeline eksekusi order trading murni AI (BUY/SELL) |
+| `llm-consensus.service.ts` | Multi-LLM Consensus Voting (threshold 70%) |
+| `agent-consensus.service.ts` | Agent consensus pipeline orchestration |
+| `risk-manager.service.ts` | Dynamic lot sizing, margin check, circuit breaker |
+| `backtest.service.ts` & `auto-backtest.service.ts` | Backtesting engine & automated cron backtesting |
+| `trading-pipeline.service.ts` | End-to-end signal processing, analysis, & execution |
+| `macro-ai.service.ts` & `macro-regime.service.ts` | Deteksi rezim makro, yield curve, & kuantifikasi geo-risk |
+| `nexus.service.ts` | Multi-agent AI orchestration |
+| `ai-coach.service.ts` & `ai-review.service.ts` | Post-trade AI review & coaching psikologi trader |
+| `user-memory.service.ts` & `vector-memory.service.ts` | Persistent User Agent Memory & Vector store |
+| `proactive-alert.service.ts` & `proactive-watcher.service.ts` | Real-time market proactive alert monitor |
+| `playbook.service.ts` | Management Playbook Strategi (ICT, MSNR, SMC) |
+| `self-improvement.service.ts` | Agent self-learning loop (update LESSONS.md) |
+| `strategies/` | Strategy validation modules (ATR, SMC, ICT, MSNR, SMT correlation, IPDA, Context) |
+
+## Backend Models (server/src/models/) — 25 Model Mongoose
+- **Trading Core**: `Trade`, `AITradingSession`, `AITradeLog`, `AiReview`, `TradingAccount`, `MT5Connection`
+- **Analytics & Snapshots**: `DailySnapshot`, `GeoRiskSnapshot`, `MacroIndicator`, `YieldCurveSnapshot`, `AgentInsight`
+- **Playbook & Knowledge**: `Playbook`, `BacktestExperience`, `AIBacktestSkill`
+- **Memory & Agent State**: `ChatSession`, `ReflectionLog`, `UserAgentMemory`, `UserSettings`, `VectorMemory`
+- **System & Billing**: `Notification`, `Registration`, `Subscription`, `TokenBalance`, `Transaction`
+
+## Backend Routes (server/src/routes/) — 25 Route Files
+- Core Trading: `trade.routes.ts`, `trading-account.routes.ts`, `mt5.routes.ts`, `playbook.routes.ts`
+- AI & Agents: `ai-trading.routes.ts`, `ai-review.routes.ts`, `ai-coach.routes.ts`, `agent-consensus.routes.ts`, `nexus.routes.ts`
+- Macro & Analytics: `macro-ai.routes.ts`, `macro-regime.routes.ts`, `macro-ai-observer.routes.ts`, `geo-risk.routes.ts`, `quant.routes.ts`, `analytics.routes.ts`, `market-data.routes.ts`
+- User & System: `auth.routes.ts`, `auth-v1.routes.ts`, `settings.routes.ts`, `notification.routes.ts`, `payment.routes.ts`, `backtest.routes.ts`, `broker-registration-v1.routes.ts`, `dev-test.routes.ts`
+
+## Frontend Structure (frontend/src/)
+- **Pages (20 Routes)**:
+  - `(dashboard)/dashboard`: Dashboard utama trading terminal
+  - `(dashboard)/ai-trading`: Dashboard AI Trading & Execution stream
+  - `(dashboard)/ai-review`: Post-trade AI Review & performance insights
+  - `(dashboard)/macro-terminal`: Macro Hub (Overview, Intelligence, COT, Nexus, Quant Lab)
+  - `(dashboard)/playbook` & `playbook-form`: Strategi & Checklist Management (streamlined ke ICT, MSNR, SMC)
+  - `(dashboard)/analytics`, `(dashboard)/log-trade`, `(dashboard)/settings`, `(dashboard)/onboarding`
+- **Components Categories (8 Dir)**:
+  - `macro-terminal`, `trade`, `playbook`, `ai-review`, `analytics`, `dashboard`, `layout`, `root`
+- **Services (13 Files)**:
+  - `ai-coach.service.ts`, `ai-review.service.ts`, `ai-trading.service.ts`, `analytics.service.ts`, `backtest.service.ts`, `broker-registration.service.ts`, `journal.service.ts`, `mt5.service.ts`, `notification.service.ts`, `playbook.service.ts`, `settings.service.ts`, `trade.service.ts`, `trading-account.service.ts`
+
+## Key Features Already Working
+1. **Pure AI Order Decision** — AI memutuskan BUY/SELL tanpa toggle manual user
+2. **Confluence Filtering** — Priority methodology SMC/ICT + multi-timeframe alignment
+3. **LLM Reasoning Cards** — Setiap model AI menampilkan reasoning terpisah
+4. **Default Risk 0.5%** — Dynamic lot sizing + daily loss % circuit breaker
+5. **Pending Orders** — Tampilan terpisah di bawah Open Positions
+6. **AI Trade Coach** — Analisis psikologi trading via 9router
+7. **Auto-backtest** — Cron-based backtest berkelanjutan
+8. **Macro Regime Detection** — VIX, yield curve, geo risk monitoring
+9. **Playbook System** — Dokumentasi strategi trading pribadi
+10. **GitHub Releases Auto-Update** — electron-updater
+
+## Macro Terminal — Charting, Palette, Screener & Realtime (Fase 1–3)
+- **Charting** (`components/macro-terminal/MacroPriceChart.tsx`): lightweight-charts v5, 3 pane (candle+overlay / volume / oscillator), 8 timeframe, 6 indikator (SMA/EMA/VWAP/BB/RSI/MACD). Fungsi indikator murni di `frontend/src/lib/indicators.ts`.
+- **Command Palette** (`Ctrl+K`): registry + fuzzy filter di `lib/commands.ts` (pure — `createContext` juga di sini untuk memutus circular import hook↔overlay), provider `hooks/useCommandPalette.tsx`, overlay `components/macro-terminal/CommandPalette.tsx`. Wiring di `layout.tsx`: **sudah di Overview** → kirim event DOM `macro:open-instrument` (chart sudah mendengarkan); **dari tab lain** → simbol ditulis ke `sessionStorage` (`PENDING_INSTRUMENT_KEY`) lalu `router.push("/macro-terminal/overview")`, dan chart membacanya sekali saat mount. Chart menunda fetch pertama dengan flag `pendingChecked` supaya tidak fetch simbol default dulu.
+- **Screener + Sparkline**: `MacroScreener.tsx` (tabel 8 instrumen, sort semua kolom, filter kategori, sparkline inline, tombol buka chart) + `Sparkline.tsx` (SVG `polyline` murni, tanpa library chart tambahan). Dipasang di tab Intelligence — di **dua branch** (legacy + widget workspace). **WAJIB full-width, di LUAR grid 5 kolom**: tabelnya punya 7 kolom, dan sebagai anak grid tanpa `col-span` ia hanya mendapat 1 kolom (~280px) sehingga kolom Harga/Chg/Sparkline/Aksi terpotong. Di branch workspace slot-nya `{ i: "macro-screener", w: 12 }` di `DEFAULT_LAYOUTS.intelligence`.
+- **Realtime Hardening (Fase 2.3)**: `hooks/useAdaptivePolling.ts` — polling pause saat tab hidden atau panel di luar viewport (IntersectionObserver, dengan guard `typeof === "undefined"` untuk jsdom/SSR), resume instan saat kembali aktif. `hooks/useFlashOnChange.ts` — kelas `flash-up`/`flash-down` 600ms saat nilai berubah; keyframes di `app/globals.css` `@layer utilities`.
+- **Backend provider modular** (`server/src/services/macro/providers/`): `yahoo`, `stooq`, `mt5`, `fred` (candle/quote) + `tradingview` (economic calendar), `finnhub` & `rss` (news). `macro-data.service.ts` hanya orkestrasi + cache + ingest.
+- **Status**: seluruh Fase 1–3 ada di source **dan sudah ter-bundle di EXE** (`desktop/dist-app/win-unpacked`, BUILD_ID `wGsXGt6-xpiI1KIvC3npL`). Test: frontend 164, server 109. `SCHEMA_VERSION` workspace = **3** (bump saat menambah slot `macro-screener`).
+- **Temuan yang BELUM dikerjakan**: `MacroPriceChart` hanya terpasang di branch **legacy** `overview/page.tsx`. `DEFAULT_LAYOUTS.overview` (widget workspace) **tidak punya slot `price-chart`**, jadi bila flag `NEXT_PUBLIC_WIDGET_WORKSPACE_ENABLED` dinyalakan, chart hilang dan wiring Command Palette ikut mati di branch itu. Perbaikannya butuh: entry `price-chart` di `DEFAULT_LAYOUTS.overview` + geser `y` enam widget lain, `WidgetShell` di `WidgetGrid`, dan bump `SCHEMA_VERSION` lagi.
+
+## Development Constraints
+- User benci delay → semua harus real-time
+- User tidak suka complex process managers (PM2, Task Scheduler)
+- User prefer simple, reliable solutions
+- Agent harus mandiri — cek LESSONS.md sebelum mulai
+- Bahasa komunikasi: Bahasa Indonesia
+
+## Recent Sprint (September 2026)
+- 8 agent team dibentuk: LYRA (design), AXIS (backend), NOVA (frontend), RIKU (mobile), KIRA (orchestration), FORGE (devops), VERA (QA), SAGE (docs)
+- Dokumentasi baru: infrastructure.md, workflow.md, test-plan.md, README.md
+- Mockup visual: overview, signal detail, jurnal (HTML, Terminal Noir theme)
+- Storybook stories untuk 3 komponen React
+- **PENTING**: Backend `server/` SUDAH LENGKAP. Jangan buat folder `backend/` baru.
 
 ## User Preferences
 - **Bahasa**: Selalu gunakan bahasa Indonesia saat berkomunikasi.
 - **Speed**: User benci delay. Data tick MT5 harus real-time tanpa delay.
-- **Autonomy**: Agen harus mandiri, cek `LESSONS.md` sebelum memulai tugas, jangan menebak root cause.
+- **Autonomy**: Agen harus mandiri, cek LESSONS.md sebelum memulai tugas, jangan menebak root cause.
 - **Deployment**: Desktop installer .exe. User install sekali, klik icon, semuanya jalan.
 - **Accessibility**: Web UI harus bisa diakses dari browser + mobile (server desktop harus nyala).
-
-## Recent Refactors
-- **AI Trading Engine & UI Overhaul (v1.0.13)**: Refactoring total pipeline trading dengan Pure AI order decision (tanpa toggle manual), default risk 0.5% & daily loss % circuit breaker, NET tab confluence filtering priority methodology, LLM reasoning cards per model, serta pembagian tampilan Pending Orders card di bawah Open Positions card.
-- **Native MT5 MCP Migration**: Mengganti Python bridge (`Hunter Trades AI Trading.exe`) dengan koneksi langsung ke fitur Native MCP Server yang sudah terintegrasi di MetaTrader 5 desktop (`http://127.0.0.1:22346/mcp`). Mengurangi overhead memory, latency, dan kompleksitas packaging.
-- **GitHub Releases Auto-Update**: Integrasi `electron-updater` dan `UpdateNotification` UI component di Next.js layout. Aplikasi otomatis memeriksa pembaruan di latar belakang, mengunduh patch, dan menyediakan tombol "Restart & Perbarui" tanpa perlu re-install manual.
-- **Electron Desktop App**: Membungkus seluruh stack (backend + frontend) dalam Electron installer .exe via NSIS.
-
-## Project Structure
-```
-D:\Journal Trade\
-├── desktop/           → Electron app (main.js, preload.js, splash, builder config)
-├── frontend/          → Next.js 16 App Router (standalone output)
-│   ├── src/app/       → Pages dan API routes
-│   └── public/        → Static assets
-├── server/            → Express backend
-│   └── src/           → TypeScript source (mt5-streamer.ts connects to MT5 MCP)
-└── .kilo/             → Agent config, memory, skills
-```
-
-## Environment Setup
-- server/.env: Contains all backend API keys and secrets. **DO NOT COMMIT THIS FILE.**
-  - ENCRYPTION_KEY: A 48-character persistent key has been generated and set. This key is used for encrypting and decrypting sensitive data like MT5 passwords in the database. Without it, the server will use an ephemeral key, and encrypted data will be unrecoverable across restarts.
-  - NODE_ENV: Set to development. In production, this should be production to disable dev-only features.
-- rontend/.env: Contains frontend-specific environment variables.

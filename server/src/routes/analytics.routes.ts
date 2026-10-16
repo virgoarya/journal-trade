@@ -4,6 +4,8 @@ import { apiResponse } from "../utils/api-response";
 import { requireAuth } from "../middleware/auth";
 import { tradingAccountService } from "../services/trading-account.service";
 import { riskService } from "../services/risk.service";
+import { journalInsightService } from "../services/journal-insight.service"; // NEW
+import { aiLimiter } from "../middleware/rate-limit";
 
 const router = Router();
 
@@ -94,6 +96,22 @@ router.get("/risk-status", async (req: any, res, next) => {
     if (!account) return apiResponse.success(res, { level: "safe", drawdown: 0, limit: 5, marginUsed: 0, marginAvailable: 0 });
     const data = await riskService.getRiskStatus(account.id, req.user.id);
     return apiResponse.success(res, data);
+  } catch (error) { next(error); }
+});
+
+// NEW: Self-Learning Trade Journal Patterns
+router.get("/patterns", aiLimiter, async (req: any, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const period = (req.query.period as "week" | "month") || "month";
+    if (!["week", "month"].includes(period)) {
+      return res.status(400).json({ error: "Invalid period. Must be 'week' or 'month'." });
+    }
+
+    const result = await journalInsightService.analyze(userId, period);
+    return apiResponse.success(res, result);
   } catch (error) { next(error); }
 });
 
