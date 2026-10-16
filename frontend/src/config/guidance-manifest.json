@@ -12,7 +12,7 @@
           "position": "right"
         },
         {
-          "target": "a[href='/log-trade'], a[href='/journal']",
+          "target": "a[href='/log-trade']",
           "title": "Log Your Trades",
           "description": "Record your trades with detailed entry, exit, and notes",
           "position": "right"
@@ -24,13 +24,19 @@
           "position": "right"
         },
         {
+          "target": "a[href='/macro-terminal']",
+          "title": "Macro Terminal",
+          "description": "Real-time macro indicators, COT data, and market regime analysis",
+          "position": "right"
+        },
+        {
           "target": "a[href='/ai-trading']",
           "title": "AI Trading Assistant",
           "description": "Get AI-powered trade analysis and market insights",
           "position": "right"
         },
         {
-          "target": "a[href='/playbooks']",
+          "target": "a[href='/playbook']",
           "title": "Trading Playbooks",
           "description": "Create and follow structured trading strategies",
           "position": "right"

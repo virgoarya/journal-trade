@@ -95,6 +95,25 @@ export function GuidanceProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, activeTour: tourId }));
   }, []);
 
+  // Auto-start onboarding tour for first-time users
+  useEffect(() => {
+    if (isLoading || tours.length === 0) return;
+
+    const onboardingTour = tours.find((t) => t.id === 'onboarding');
+    if (!onboardingTour) return;
+
+    const isAlreadyCompleted = state.completedTours.includes('onboarding');
+    const isAlreadyDismissed = state.dismissedTours.includes('onboarding');
+
+    if (!isAlreadyCompleted && !isAlreadyDismissed) {
+      const timer = setTimeout(() => {
+        startTour('onboarding');
+      }, 1000); // 1s delay for better UX
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, tours, state.completedTours, state.dismissedTours, startTour]);
+
   const completeTour = useCallback((tourId: string) => {
     setState((prev) => ({
       ...prev,

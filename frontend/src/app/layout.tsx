@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { OtaUpdaterModal } from "@/components/OtaUpdaterModal";
+import { GuidanceProvider } from "@/components/guidance";
 import Script from "next/script";
 import "./globals.css";
 
@@ -57,7 +58,9 @@ export default function RootLayout({
         <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/10 blur-[120px] pointer-events-none -z-10"></div>
         <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/5 blur-[100px] pointer-events-none -z-10"></div>
 
-        {children}
+        <GuidanceProvider>
+          {children}
+        </GuidanceProvider>
         <OtaUpdaterModal />
         <Toaster position="top-right" richColors />
       </body>
