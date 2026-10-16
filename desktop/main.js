@@ -1161,7 +1161,7 @@ app.whenReady().then(async () => {
 
     // Wait for backend to be ready (frontend depends on it)
     console.log("[MAIN] Waiting for backend server on port 5000 (max 120s)...");
-    await waitForServer(BACKEND_PORT, "/health", 120000, "Backend API", () => backendLastStderr);
+    await waitForServer(BACKEND_PORT, "/health", 300000, "Backend API", () => backendLastStderr);
     console.log("[MAIN] ✅ Backend is ready!");
 
     // Wait for frontend

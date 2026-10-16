@@ -67,7 +67,6 @@ export function Card({
                             aria-label={collapsed ? "Expand card" : "Collapse card"}
                             aria-expanded={!collapsed}
                 className="text-gray-500 hover:text-white transition p-1"
-                aria-label={collapsed ? "Expand" : "Collapse"}
               >
                 {collapsed ? (
                   <ChevronDown className="w-3.5 h-3.5" />

@@ -150,19 +150,16 @@ const serverNpmrcSrc = path.join(projectRoot, 'server', '.npmrc');
 if (fs.existsSync(serverNpmrcSrc)) {
     fs.copyFileSync(serverNpmrcSrc, path.join(targetServer, '.npmrc'));
 }
-console.log(`[4.1/6] Installing backend dependencies (npm ci)...`);
-// Clean node_modules before npm ci to avoid ENOTEMPTY on Windows
+// Fast build: skip heavy npm ci, copy node_modules directly from root/server or use robocopy
+console.log(`[4.1/6] Copying backend dependencies directly (skipping npm ci)...`);
 const targetNodeModules = path.join(targetServer, 'node_modules');
-if (fs.existsSync(targetNodeModules)) {
-    console.log('  Cleaning existing node_modules...');
-    removeDirRobust(targetNodeModules);
-}
-try {
-    execSync('npm ci', { cwd: targetServer, stdio: 'inherit' });
-} catch (e) {
-    console.error(`[buildApp] npm ci failed for server: ${e.message}`);
-    console.error('[buildApp] Refusing to fall back to copying node_modules from the dev tree.');
-    process.exit(1);
+const devServerNodeModules = path.join(projectRoot, 'server', 'node_modules');
+if (fs.existsSync(devServerNodeModules)) {
+    runRobocopy(devServerNodeModules, targetNodeModules);
+    console.log('  ✓ Copied existing server node_modules');
+} else {
+    console.log('  ⚠️ Dev server node_modules not found, running npm install...');
+    execSync('npm install --no-audit --no-fund', { cwd: targetServer, stdio: 'inherit' });
 }
 
 // 4.2/6 Generate Prisma client (postinstall may be blocked by allowScripts)
