@@ -127,26 +127,40 @@ export function Walkthrough({ steps, isActive, onComplete, onSkip, showProgress 
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - reduced opacity for better visibility */}
       <div
         ref={overlayRef}
-        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+        className="fixed inset-0 z-[9998] bg-black/30 animate-in fade-in duration-300"
         onClick={onSkip}
         aria-hidden="true"
       />
 
-      {/* Target highlight */}
+      {/* Target highlight with stronger contrast */}
       {targetRect && (
-        <div
-          className="fixed z-[9998] border-2 border-accent-gold rounded-lg pointer-events-none animate-in fade-in duration-200"
-          style={{
-            top: targetRect.top - 4,
-            left: targetRect.left - 4,
-            width: targetRect.width + 8,
-            height: targetRect.height + 8,
-            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.6)',
-          }}
-        />
+        <>
+          {/* Dark overlay everywhere except target */}
+          <div
+            className="fixed inset-0 z-[9998] pointer-events-none animate-in fade-in duration-200"
+            style={{
+              background: 'radial-gradient(circle at ' + 
+                (targetRect.left + targetRect.width / 2) + 'px ' + 
+                (targetRect.top + targetRect.height / 2) + 'px, ' +
+                'transparent ' + Math.max(targetRect.width, targetRect.height) + 'px, ' +
+                'rgba(0, 0, 0, 0.4) 100%)',
+            }}
+          />
+          {/* Gold border around target */}
+          <div
+            className="fixed z-[9999] border-2 border-accent-gold rounded-lg pointer-events-none animate-in fade-in duration-200"
+            style={{
+              top: targetRect.top - 4,
+              left: targetRect.left - 4,
+              width: targetRect.width + 8,
+              height: targetRect.height + 8,
+              boxShadow: '0 0 0 4px rgba(212, 175, 55, 0.3), 0 0 20px rgba(212, 175, 55, 0.2)',
+            }}
+          />
+        </>
       )}
 
       {/* Tooltip */}
