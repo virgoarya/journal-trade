@@ -14,10 +14,15 @@
 
 ### 🎓 In-App Guidance (Whatfix Pattern)
 - **Komponen panduan interaktif modular** (`frontend/src/components/guidance/`): tooltips
-  kontekstual, dynamic step manifest, dan progress state persistence.
+  kontekstual, dynamic step manifest, dan progress state persistence
+  (`storageKey: hunter-trades-guidance:v2`).
 - **Integrasi ke aplikasi (pekerjaan rilis ini):** `GuidanceProvider` dipasang di
-  `app/layout.tsx`, logika auto-start first-run ditambahkan, dan selector manifest
-  diselaraskan dengan route nyata (`/playbook`, `macro-terminal`, `analytics`, `ai-review`).
+  `app/(dashboard)/layout.tsx`, logika auto-start first-run ditambahkan (tour `onboarding`
+  berjalan otomatis bila belum pernah diselesaikan/di-dismiss), dan selector manifest
+  diselaraskan dengan route nyata (`/log-trade`, `/dashboard`, `/macro-terminal`,
+  `/ai-trading`, `/playbook`).
+- **Perilaku penutupan:** guidance tidak lagi tertutup karena klik di luar area backdrop;
+  hanya tombol **Skip/Finish** yang menutup (fix `7ec3e81`).
 - **⚠️ Koreksi klaim:** commit `4916798` menulis *"Mengintegrasikan"* padahal saat itu baru
   **komponen** yang dibangun — provider belum pernah dipasang (dead code, `startTour()`
   nol pemanggil). Entri ini menggantikan klaim tersebut. Integrasi diselesaikan pada rilis
