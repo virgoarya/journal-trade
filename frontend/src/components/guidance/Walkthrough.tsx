@@ -81,9 +81,7 @@ export function Walkthrough({ steps, isActive, onComplete, onSkip, showProgress 
     if (!isActive) return;
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        onSkip();
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         handleNext();
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
@@ -127,11 +125,10 @@ export function Walkthrough({ steps, isActive, onComplete, onSkip, showProgress 
 
   return (
     <>
-      {/* Overlay - reduced opacity for better visibility */}
+      {/* Overlay - blocks clicks but does NOT close guidance */}
       <div
         ref={overlayRef}
         className="fixed inset-0 z-[9998] bg-black/30 animate-in fade-in duration-300"
-        onClick={onSkip}
         aria-hidden="true"
       />
 
