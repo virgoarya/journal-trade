@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Login + OAuth Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
   });
 
   test('should show login or auth option', async ({ page }) => {

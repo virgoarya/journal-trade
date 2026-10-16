@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Trading Pipeline Status', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
   });
 
   test('should display pipeline status section', async ({ page }) => {

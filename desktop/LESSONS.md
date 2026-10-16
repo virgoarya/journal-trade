@@ -1,5 +1,12 @@
 # LESSONS.md — Agent Self-Learning Log
 
+## 2026-10-16T10:00:00.000Z — Agent Memory & Delegation Discipline (dari Kira)
+
+**Lesson:**
+- **Brief & decision → file permanen:** Memory agent terbatas & hilang saat restart. Semua brief, plan, dan decision WAJIB disimpan di file (`.hermes/plans/`, `LESSONS.md`, dst), bukan di head memory.
+- **Cek file sebelum nanya:** Jangan nanya hal yang sudah ada answer di plan/LESSONS file. Baca dulu, baru execute.
+- **Jangan delegasi kalau bisa execute sendiri:** Task yang sudah clear → langsung jalanin. Delegasi hanya untuk parallel workstream yang genuinely independent.
+
 ## 2026-10-16T01:30:00.000Z — Build & Startup Precision
 
 **Lesson:**

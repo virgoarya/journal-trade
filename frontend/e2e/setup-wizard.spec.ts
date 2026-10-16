@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Setup Wizard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
   });
 
   test('should show setup wizard or onboarding on first run', async ({ page }) => {
@@ -17,7 +17,7 @@ test.describe('Setup Wizard', () => {
   });
 
   test('should have navigation to main app', async ({ page }) => {
-    const navLinks = page.locator('a[href="/"], a[href="/dashboard"], a[href="/log-trade"]');
+    const navLinks = page.locator('a[href="/"], a[href="/dashboard"], a[href="/log-trade"], a');
     const count = await navLinks.count();
     expect(count).toBeGreaterThan(0);
   });

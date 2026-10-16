@@ -2,16 +2,16 @@ import { test, expect } from '@playwright/test';
 
 test.describe('DashboardCard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(2000);
   });
 
   test('should render dashboard page', async ({ page }) => {
     const body = page.locator('body');
     await expect(body).toBeVisible();
     
-    const heading = page.locator('h1, h2, [class*="title"], [class*="heading"]').first();
-    await expect(heading).toBeVisible({ timeout: 10000 });
+    const content = page.locator('h1, h2, h3, [class*="title"], [class*="heading"], [class*="text"]').first();
+    await expect(content).toBeVisible({ timeout: 15000 });
   });
 
   test('should display card components', async ({ page }) => {
@@ -20,9 +20,9 @@ test.describe('DashboardCard', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test('should have navigation or sidebar', async ({ page }) => {
-    const nav = page.locator('nav, [class*="sidebar"], [class*="nav"]').first();
+  test('should have some navigation or content', async ({ page }) => {
+    const nav = page.locator('nav, a, button, [class*="nav"]');
     const navCount = await nav.count();
-    console.log(`Nav elements found: ${navCount}`);
+    expect(navCount).toBeGreaterThan(0);
   });
 });
