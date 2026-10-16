@@ -21,7 +21,7 @@ interface GuidanceContextValue {
 
 const GuidanceContext = createContext<GuidanceContextValue | null>(null);
 
-const STORAGE_KEY = 'hunter-trades-guidance';
+const STORAGE_KEY = 'hunter-trades-guidance:v2';
 
 function loadState(): GuidanceState {
   if (typeof window === 'undefined') {

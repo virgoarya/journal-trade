@@ -68,6 +68,6 @@
     "allowSkip": true,
     "showProgress": true,
     "keyboardNavigation": true,
-    "storageKey": "hunter-trades-guidance"
+    "storageKey": "hunter-trades-guidance:v2"
   }
 }

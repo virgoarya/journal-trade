@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { UpdateNotification } from "@/components/layout/UpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { GuidanceProvider } from "@/components/guidance";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
@@ -172,9 +173,11 @@ export default function DashboardLayout({
              <div className="absolute top-3/4 right-1/3 w-1 h-1 rounded-full bg-accent-gold/20 shadow-[0_0_6px_rgba(212,175,55,0.3)] animate-[floatDust_16s_ease-in-out_infinite_1s]" />
           </div>
 
-          <ErrorBoundary label="Halaman">
-            {children}
-          </ErrorBoundary>
+          <GuidanceProvider>
+            <ErrorBoundary label="Halaman">
+              {children}
+            </ErrorBoundary>
+          </GuidanceProvider>
         </main>
       </div>
 
