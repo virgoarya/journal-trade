@@ -103,6 +103,25 @@ if (exists(serverDist)) {
   }
 }
 
+// 2b. Frontend build must not predate any frontend source file.
+//     Same class of hole as the server check above: a frontend change committed
+//     without a rebuild ships old UI while every artifact-to-artifact check
+//     still agrees with itself. Compare against the source build's BUILD_ID,
+//     not the bundle copy, so the check fires before anything is packed.
+//     Caveat: git operations refresh mtimes, so a checkout can look "newer"
+//     than a build that is in fact current — treat a hit as "verify by hand".
+const feBuildId = p("frontend", ".next", "BUILD_ID");
+if (exists(feBuildId)) {
+  const builtM = fs.statSync(feBuildId).mtimeMs;
+  const srcM = newestMtime(p("frontend", "src"), null);
+  if (srcM > builtM) {
+    fail(
+      "frontend/.next is STALE: frontend/src has files newer than BUILD_ID. " +
+        "Rebuild (`npm run build:frontend`) — shipping this bundle ships old UI code.",
+    );
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * 3. Secret containment — the real gate.
  *    Read every credential value from the dev .env files and assert the
