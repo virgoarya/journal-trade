@@ -119,7 +119,7 @@ server/scripts/probe-*.mjs
 
 # OTA Patch artifacts (contain build output, never commit)
 desktop/dist-patch/
-update/
+
 
 # Runtime monitoring output (written by system-monitor-agent, contains live data)
 server/monitoring-reports/
