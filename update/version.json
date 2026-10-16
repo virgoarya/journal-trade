@@ -1,7 +1,7 @@
 {
-  "version": "1.2.2",
-  "releaseDate": "2026-10-16T06:00:00.000Z",
+  "version": "1.2.1",
+  "releaseDate": "2026-10-16T12:37:03.510Z",
   "patchUrl": "https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/patch.zip",
-  "checksum": "5685d0b89a261f76cc7ed06fd10c20b0234c97086ca505075aa4a05a69d22216",
-  "notes": "OTA v1.2.2 - In-App Guidance + OTA fix"
+  "checksum": "077e824512813c7ea28514831e6f1f1e19635306f6acdfc45ce326fc72b15710",
+  "notes": "Update patch for 1.2.1"
 }
