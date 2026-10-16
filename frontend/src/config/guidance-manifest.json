@@ -1,0 +1,67 @@
+{
+  "tours": [
+    {
+      "id": "onboarding",
+      "title": "Welcome to Hunter Trades",
+      "description": "Learn the key features of your trading journal",
+      "steps": [
+        {
+          "target": "nav, [role='navigation']",
+          "title": "Navigation",
+          "description": "Access all sections of your trading journal from here",
+          "position": "right"
+        },
+        {
+          "target": "a[href='/log-trade'], a[href='/journal']",
+          "title": "Log Your Trades",
+          "description": "Record your trades with detailed entry, exit, and notes",
+          "position": "right"
+        },
+        {
+          "target": "a[href='/dashboard']",
+          "title": "Dashboard Analytics",
+          "description": "View your performance metrics, win rate, and equity curve",
+          "position": "right"
+        },
+        {
+          "target": "a[href='/ai-trading']",
+          "title": "AI Trading Assistant",
+          "description": "Get AI-powered trade analysis and market insights",
+          "position": "right"
+        },
+        {
+          "target": "a[href='/playbooks']",
+          "title": "Trading Playbooks",
+          "description": "Create and follow structured trading strategies",
+          "position": "right"
+        }
+      ]
+    },
+    {
+      "id": "trade-entry",
+      "title": "How to Log a Trade",
+      "description": "Step-by-step guide to recording a trade",
+      "steps": [
+        {
+          "target": "form input, form select, form textarea",
+          "title": "Fill Trade Details",
+          "description": "Enter your entry, exit, stop loss, and take profit levels",
+          "position": "right"
+        },
+        {
+          "target": "form button[type='submit']",
+          "title": "Save Trade",
+          "description": "Submit your trade to save it to your journal",
+          "position": "top"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "animateSteps": true,
+    "allowSkip": true,
+    "showProgress": true,
+    "keyboardNavigation": true,
+    "storageKey": "hunter-trades-guidance"
+  }
+}
