@@ -207,39 +207,7 @@ try {
     initAutoBacktestCron();
     console.log("[STARTUP] Auto-backtest cron initialized.");
 
-    console.log("[STARTUP] Registering additional MCP servers (FlowLLM, Aitrados)...");
-    const mcpBinPath = (name: string) => {
-      if (process.platform === "win32") {
-        return path.join(__dirname, "..", ".venv-mcp", "Scripts", `${name}.exe`);
-      }
-      const candidates = [`/usr/local/bin/${name}`, `/usr/bin/${name}`];
-      return candidates.find(fs.existsSync) || `/usr/local/bin/${name}`;
-    };
-
-    if (env.FLOW_LLM_API_KEY || env.TUSHARE_API_TOKEN || env.DASHSCOPE_API_KEY || env.TAVILY_API_KEY) {
-      const financeMcpPath = mcpBinPath("finance-mcp");
-      if (!fs.existsSync(financeMcpPath)) {
-        console.warn(`[MCP] FlowLLM-Finance binary not found at ${financeMcpPath}, skipping`);
-      } else {
-        console.log("Starting FlowLLM MCP Server (this may take 10-20 seconds)...");
-        mcpService.registerServer(
-          "FlowLLM-Finance",
-          financeMcpPath,
-          ["config=default", "mcp.transport=stdio", "llm.default.model_name=qwen3-30b-a3b-thinking-2507"],
-          {
-            FLOW_LLM_API_KEY: env.FLOW_LLM_API_KEY || "",
-            TUSHARE_API_TOKEN: env.TUSHARE_API_TOKEN || "",
-            TAVILY_API_KEY: env.TAVILY_API_KEY || "",
-            DASHSCOPE_API_KEY: env.DASHSCOPE_API_KEY || "",
-            PYTHONIOENCODING: "utf-8",
-            PYTHONUNBUFFERED: "1",
-          }
-        ).catch(e => console.error("FlowLLM MCP error:", e));
-      }
-    }
-
-    // if (env.AITRADOS_SECRET_KEY) {
-    //   const aitradosMcpPath = mcpBinPath("finance-trading-ai-agents-mcp");
+    // FlowLLM MCP removed — binary finance-mcp.exe never existed, DASHSCOPE_API_KEY was unused (Opsi B approved by Bang Vir)
     //   if (!fs.existsSync(aitradosMcpPath)) {
     //     console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
     //   } else {

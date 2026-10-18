@@ -57,12 +57,7 @@ const envSchema = z.object({
     .min(1)
     .optional()
     .default("anthropic/claude-3-5-haiku-latest"),
-
-  // Alibaba DashScope
-  DASHSCOPE_API_KEY: z.string().min(1).optional(),
-  DASHSCOPE_BASE_URL: z.string().url().optional(),
-  DASHSCOPE_MODEL: z.string().min(1).optional().default("qwen3.7-max"),
-
+ 
   // Groq (fallback for free AI)
   GROQ_API_KEY: z.string().min(1).optional(),
   GROQ_BASE_URL: z.string().optional().default("https://api.groq.com/openai/v1"),
