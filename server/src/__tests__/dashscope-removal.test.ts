@@ -30,17 +30,17 @@ describe("Opsi B: DASHSCOPE + FlowLLM MCP removal verification", () => {
     expect(indexSource).not.toContain("DASHSCOPE_API_KEY");
   });
 
-  it("llm-models.config.ts should NOT contain deepseek/qwen entry", () => {
+  it("llm-models.config.ts should contain 6 LLM providers (deepseek via 9Router, not FlowLLM)", () => {
     const modelsSource = readFileSync(join(__dirname, "../config/llm-models.config.ts"), "utf-8");
-    expect(modelsSource).not.toContain("deepseek");
+    expect(modelsSource).toContain("deepseek");
     expect(modelsSource).not.toContain("qwen");
     expect(modelsSource).not.toContain("Qwen");
   });
 
-  it("NINE_ROUTER_MODELS should have exactly 5 models (deepseek removed)", async () => {
+  it("NINE_ROUTER_MODELS should have exactly 6 models", async () => {
     const { NINE_ROUTER_MODELS } = await import("../config/llm-models.config");
-    expect(NINE_ROUTER_MODELS).toHaveLength(5);
+    expect(NINE_ROUTER_MODELS).toHaveLength(6);
     const names = NINE_ROUTER_MODELS.map((m: any) => m.name);
-    expect(names).not.toContain("deepseek");
+    expect(names).toContain("deepseek");
   });
 });
