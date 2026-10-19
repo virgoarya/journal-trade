@@ -111,6 +111,17 @@ export interface PipelineConfig {
     threshold?: number;
     providerTimeoutMs?: number;
   };
+  // NEW: Agent Consensus config
+  agentConsensus?: {
+    enabled: boolean;
+    threshold?: number;
+    memoryEnabled?: boolean;
+    agentWeights?: {
+      hawk?: number;
+      dove?: number;
+      contrarian?: number;
+    };
+  };
   smartRisk?: {
     enabled: boolean;
     capitalPreservation?: {
@@ -155,6 +166,20 @@ export interface LLMConsensusResult {
   details: string;
 }
 
+export interface AgentVote {
+  persona: string;
+  bias: string;
+  reasoning: string;
+}
+
+export interface AgentConsensusResult {
+  verdict: "GOOD" | "BAD" | "SKIP";
+  consensus: string;
+  goodVotes: number;
+  totalVotes: number;
+  votes: AgentVote[];
+}
+
 export interface PipelineStatus {
   running: boolean;
   paused: boolean;
@@ -181,6 +206,7 @@ export interface PipelineStatus {
   lastAnalysis: MultiStrategyAnalysis | null;
   allAnalyses: MultiStrategyAnalysis[];
   lastError: string | null;
+  agentConsensus?: AgentConsensusResult | null;
 }
 
 export interface TradingSignal {

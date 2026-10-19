@@ -57,6 +57,7 @@ interface AiTradingContextType {
   lastAnalysis: MultiStrategyAnalysis | null;
   allAnalyses: MultiStrategyAnalysis[];
   lastLlmVotes: LLMConsensusResult | null;
+  agentConsensus: import("@/services/ai-trading.service").AgentConsensusResult | null;
   startPipeline: (config: PipelineConfig) => Promise<boolean>;
   stopPipeline: () => Promise<void>;
   pausePipeline: () => Promise<void>;
@@ -317,6 +318,7 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       lastAnalysis,
       allAnalyses,
       lastLlmVotes: lastLLMVotes,
+      agentConsensus: pipelineStatus?.agentConsensus ?? null,
       startPipeline,
       stopPipeline,
       pausePipeline,

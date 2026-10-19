@@ -11,6 +11,7 @@ import { PipelinePerformance } from "./components/PipelinePerformance";
 import { AITradeHistories } from "./components/AITradeHistories";
 import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
+import { AgentBreakdown } from "./components/AgentBreakdown";
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
@@ -105,6 +106,7 @@ function AITradingPageContent() {
     lastAnalysis,
     allAnalyses,
     lastLlmVotes,
+    agentConsensus,
     llmModels,
     skillConfig,
     setSkillConfig,
@@ -397,6 +399,12 @@ function AITradingPageContent() {
               votes={lastLlmVotes}
               modelStatus={llmModels}
               threshold={pipelineStatus?.config?.llmConsensus?.threshold ?? 0.5}
+            />
+
+            {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
+            <AgentBreakdown
+              agentConsensus={agentConsensus ?? undefined}
+              threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
             />
 
             {pipelineStatus?.running && (
