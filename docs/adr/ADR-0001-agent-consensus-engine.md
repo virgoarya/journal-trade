@@ -1,6 +1,9 @@
 # ADR-0001 — Agent Consensus Engine untuk AI Trading
 
 - **Status:** ✅ **Accepted** — 2026-10-19
+- **⚠️ Sebagian digantikan:** klausul *rollout* (shadow mode) digantikan oleh
+  [ADR-0002](ADR-0002-agent-consensus-rollout.md) — rollout jadi **full replace**.
+  Keputusan memory/threshold/agent-count/pgvector di ADR ini tetap berlaku.
 - **Owner keputusan:** Bang Vir (Vir.Trades)
 - **Penulis:** Sage (Docs/DX)
 - **Kontributor analisis:** KIRA (orkestrasi), Axis (backend), Forge (infra), Vera (QA)

@@ -41,4 +41,5 @@ Tidak perlu ADR untuk: penamaan variabel, refactor kecil, atau hal yang bisa dib
 
 | ADR | Judul | Status |
 |---|---|---|
-| [0001](ADR-0001-agent-consensus-engine.md) | Agent Consensus Engine untuk AI Trading | ✅ Accepted |
+| [0001](ADR-0001-agent-consensus-engine.md) | Agent Consensus Engine untuk AI Trading | ✅ Accepted (rollout digantikan ADR-0002) |
+| [0002](ADR-0002-agent-consensus-rollout.md) | Strategi Rollout: Full Replace LLM → Agent Consensus | ✅ Accepted |
