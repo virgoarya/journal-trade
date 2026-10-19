@@ -80,3 +80,20 @@ NINE_ROUTER_API_KEY=your-9router-key
 2. **Skala Produksi (Production)**:
    - Hubungkan backend ke **9Router** jika aplikasi diakses oleh banyak user komunitas secara simultan. 9Router secara cerdas mendistribusikan request untuk mencegah error batas kuota (Rate Limit Exceeded).
    - Gunakan **Claude 3.5 Haiku** melalui `ANTHROPIC_MODEL` sebagai jalan tengah terbaik antara biaya dan kecerdasan analisis makro.
+
+---
+
+## 🧠 3. Agent Consensus Engine — AI Trading
+
+Konsensus di halaman **AI Trading** dipindahkan dari **LLM Consensus** (voting 6 model) ke **Agent Consensus Engine**: tiga agent berpersona dengan memory. (Lihat `wiki/entities/agent-consensus-engine.md`, `docs/adr/ADR-0001`, `docs/adr/ADR-0002`.)
+
+| Aspek | Detail |
+|---|---|
+| Provider | 9Router — model `oc/longcat-2.5-preview-free` (1.000.000 ctx) |
+| Mode | Parallel debate (pipeline) / sequential chain (endpoint langsung) |
+| Memory | PostgreSQL — `DATABASE_URL_AGENT` → `agent_db` (per-user) |
+| Voting | Terbobot: Hawk 1.5 · Dove 1.0 · Contrarian 1.0; threshold ≥60% → `GOOD`/`BAD`/`SKIP` |
+| Activation | Feature flag `agentConsensus.enabled` (default `false`) di pipeline config |
+| Rollback | `llm-consensus.service.ts` tidak dihapus — jadi `else if` (fallback) |
+
+**Alur:** SMC/ICT/MSNR confluence → Agent Consensus → verdict + reasoning + confidence.

@@ -1,3 +1,5 @@
+> **⚠️ STATUS (2026-10-19): DEPRECATED.** Model token top-up sudah dipensiunkan. User membawa API key sendiri (9Router) — lihat `docs/adr/ADR-0001` & `docs/AI_PROVIDER_STRATEGY.md`. Bagian *Registration* dan *Subscription* **tidak berlaku lagi**.
+
 # Technical Design Document: Payment & Token System for Hunter Trades Journal
 
 ## 1. Database Schema
