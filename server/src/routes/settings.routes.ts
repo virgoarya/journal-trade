@@ -27,7 +27,7 @@ const updateSettingsSchema = z.object({
   }).optional(),
 });
 
-const aiTradingSettingsSchema = z.object({
+export const aiTradingSettingsSchema = z.object({
   methodologyWeights: z.record(z.string(), z.number()).optional(),
   activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "crt"])).optional(),
   llmConsensus: z.object({
@@ -36,7 +36,24 @@ const aiTradingSettingsSchema = z.object({
     threshold: z.number().min(0.1).max(1.0).optional(),
     providerTimeoutMs: z.number().int().min(1000).max(30000).optional(),
   }).optional(),
+  // ADR-0002 rollback flag. Previously absent here, which made the whole
+  // Agent Consensus path unreachable — nothing could ever set enabled = true.
+  agentConsensus: z.object({
+    enabled: z.boolean().optional(),
+    debateMode: z.enum(["parallel", "sequential"]).optional(),
+    memoryEnabled: z.boolean().optional(),
+    toolEnabled: z.boolean().optional(),
+    threshold: z.number().min(0.1).max(1.0).optional(),
+  }).optional(),
 });
+
+const DEFAULT_AGENT_CONSENSUS = {
+  enabled: false,
+  debateMode: "parallel" as const,
+  memoryEnabled: true,
+  toolEnabled: true,
+  threshold: 0.6,
+};
 
 const router = Router();
 router.use(requireAuth);
@@ -86,6 +103,7 @@ router.get("/ai-trading", async (req, res, next) => {
       methodologyWeights: appliedMethWeights || settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
       activeMethodologies: appliedActiveMeth || settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+      agentConsensus: settings.aiTrading?.agentConsensus || DEFAULT_AGENT_CONSENSUS,
       savedPipelineConfig: configToReturn,
       lastAutoBacktestAt: settings.lastAutoBacktestAt,
     });
@@ -96,7 +114,7 @@ router.get("/ai-trading", async (req, res, next) => {
 router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { methodologyWeights, activeMethodologies, llmConsensus } = req.body;
+    const { methodologyWeights, activeMethodologies, llmConsensus, agentConsensus } = req.body;
 
     // Keep both sources in sync: aiTrading.* (panel defaults) AND the
     // per-broker applied config — otherwise GET prefers brokerConfig and the
@@ -114,6 +132,13 @@ router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), 
       update[`savedPipelineConfigs.${brokerServer}.activeMethodologies`] = activeMethodologies;
     }
     if (llmConsensus) update["aiTrading.llmConsensus"] = llmConsensus;
+    // agentConsensus must be written to BOTH stores: the pipeline start route
+    // merges savedPipelineConfigs[server].agentConsensus, so writing only
+    // aiTrading.* would leave the flag unreachable at run time.
+    if (agentConsensus) {
+      update["aiTrading.agentConsensus"] = agentConsensus;
+      update[`savedPipelineConfigs.${brokerServer}.agentConsensus`] = agentConsensus;
+    }
     
     const settings = await UserSettings.findOneAndUpdate(
       { userId },
@@ -125,6 +150,7 @@ router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), 
       methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
       activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
+      agentConsensus: settings.aiTrading?.agentConsensus || DEFAULT_AGENT_CONSENSUS,
     });
   } catch (error) { next(error); }
 });

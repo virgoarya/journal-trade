@@ -537,7 +537,15 @@ router.post(
                ...(settings.aiTrading?.llmConsensus || {}),
                ...(configToUse.llmConsensus || {}),
                enabled: true // FORCE LLM TO ALWAYS BE ACTIVE
-            }
+            },
+            // Agent Consensus is deliberately NOT force-enabled: it stays off
+            // unless the user turns it on in settings. This is the ADR-0002
+            // rollback flag — without this merge the flag was unreachable and
+            // the whole Agent Consensus path could never run.
+            agentConsensus: {
+              ...(settings.aiTrading?.agentConsensus || {}),
+              ...(configToUse.agentConsensus || {}),
+            },
           };
           
           // Also fallback methodologies if missing
