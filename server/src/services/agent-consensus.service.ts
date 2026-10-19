@@ -290,6 +290,47 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
   }
 
   /**
+   * Adapt DebateResult → LLMConsensusResult format for pipeline compatibility.
+   * Extracts verdict from consensus text, maps per-agent votes.
+   */
+  adaptDebateResult(debateResult: {
+    hawk: { reply: string };
+    dove: { reply: string };
+    contrarian: { reply: string };
+    consensus: string;
+    debateMode: string;
+  }): {
+    verdict: "GOOD" | "BAD" | "SKIP";
+    consensus: string;
+    goodVotes: number;
+    totalVotes: number;
+    votes: Array<{ persona: string; bias: string; reasoning: string }>;
+  } {
+    const lower = debateResult.consensus.toLowerCase();
+    let verdict: "GOOD" | "BAD" | "SKIP";
+    if (lower.includes("bullish") && lower.includes("high")) verdict = "GOOD";
+    else if (lower.includes("bearish") && lower.includes("high")) verdict = "BAD";
+    else if (lower.includes("mixed") || lower.includes("neutral") || lower.includes("wait")) verdict = "SKIP";
+    else if (lower.includes("bullish")) verdict = "GOOD";
+    else if (lower.includes("bearish")) verdict = "BAD";
+    else verdict = "SKIP";
+
+    const goodVotes = verdict === "GOOD" ? 2 : verdict === "BAD" ? 0 : 1;
+
+    return {
+      verdict,
+      consensus: debateResult.consensus,
+      goodVotes,
+      totalVotes: 3,
+      votes: [
+        { persona: "hawk", bias: debateResult.hawk.reply.includes("BEARISH") ? "BEARISH" : "BULLISH", reasoning: debateResult.hawk.reply },
+        { persona: "dove", bias: debateResult.dove.reply.includes("BULLISH") ? "BULLISH" : "BEARISH", reasoning: debateResult.dove.reply },
+        { persona: "contrarian", bias: debateResult.contrarian.reply.includes("NEUTRAL") ? "NEUTRAL" : "BEARISH", reasoning: debateResult.contrarian.reply },
+      ],
+    };
+  }
+
+  /**
    * Build persona-specific memory context for agent prompts.
    * Returns structured memory text tailored to each agent's role:
    * - Hawk: risk preference, past stop-outs, liquidity sensitivity
