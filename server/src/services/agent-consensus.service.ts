@@ -2,6 +2,7 @@ import { HawkAgent, DoveAgent, ContrarianAgent } from "../agents/specific.agents
 import { AgentInsight } from "../models/AgentInsight";
 import { silentLogger } from "../utils/silent-logger";
 import { userMemoryService } from "./user-memory.service";
+import { AITradeLog } from "../models/AITradeLog";
 
 export interface DebateResult {
   hawk: { reply: string; toolsUsed: string[] };
@@ -245,6 +246,47 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
     }
 
     return { verdict, consensusScore, finalBias, bullishScore, bearishScore };
+  }
+
+  /**
+   * Build trade history context for agent prompts.
+   * Fetches recent AITradeLog from MongoDB and formats as "past performance evidence".
+   */
+  async buildTradeHistoryContext(userId: string): Promise<string> {
+    const trades = await AITradeLog.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    if (!trades || trades.length === 0) {
+      return `[RIWAYAT TRADING: User belum memiliki riwayat trading. Agent akan belajar dari interaksi pertama.]`;
+    }
+
+    const totalTrades = trades.length;
+    const wins = trades.filter((t: any) => t.profit > 0).length;
+    const losses = trades.filter((t: any) => t.profit < 0).length;
+    const winRate = Math.round((wins / totalTrades) * 100);
+    const totalProfit = trades.reduce((sum: number, t: any) => sum + (t.profit || 0), 0);
+    const avgProfit = Math.round(totalProfit / totalTrades);
+
+    // Build symbol frequency
+    const symbolCount: Record<string, number> = {};
+    trades.forEach((t: any) => {
+      symbolCount[t.symbol] = (symbolCount[t.symbol] || 0) + 1;
+    });
+    const topSymbols = Object.entries(symbolCount)
+      .sort((a: any, b: any) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([sym, cnt]) => `${sym}(${cnt}x)`)
+      .join(", ");
+
+    return `[RIWAYAT TRADING USER - EVIDENCE PERFORMANCE]:
+- Total trade: ${totalTrades}
+- Win rate: ${winRate}% (${wins}W / ${losses}L)
+- Total profit: $${totalProfit}
+- Rata-rata profit: $${avgProfit}/trade
+- Symbol teratas: ${topSymbols}
+- Trade terakhir: ${trades[0]?.symbol || "N/A"} ${trades[0]?.direction || ""} @ ${trades[0]?.entry?.toFixed(5) || "N/A"}`;
   }
 
   /**
