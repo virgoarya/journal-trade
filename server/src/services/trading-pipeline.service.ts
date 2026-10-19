@@ -1264,11 +1264,17 @@ busySymbols: new Set<string>(),
             `[2/4] [${signal.symbol}] AGENT CONSENSUS: Running multi-agent debate...`,
           );
 
-          // Build enriched context with memory + trade history
-          const memoryContext = pipeline.config.agentConsensus?.memoryEnabled
-            ? await agentConsensusService.buildMemoryContext(userId, "hawk")
-            : "";
-          const tradeContext = pipeline.config.agentConsensus?.memoryEnabled
+          // Build enriched context: per-persona memory + shared trade history.
+          // Each agent must receive its OWN persona memory — passing one
+          // persona's memory to all three left Dove and Contrarian blind.
+          const memoryEnabled = pipeline.config.agentConsensus?.memoryEnabled ?? false;
+          const personaMemory: Record<string, string> = {};
+          if (memoryEnabled) {
+            for (const persona of ["hawk", "dove", "contrarian"] as const) {
+              personaMemory[persona] = await agentConsensusService.buildMemoryContext(userId, persona);
+            }
+          }
+          const tradeContext = memoryEnabled
             ? await agentConsensusService.buildTradeHistoryContext(userId)
             : "";
 
@@ -1283,7 +1289,6 @@ Reason: ${signal.reason}
 Market Trend: ${analysis.marketStructure.trend.direction}
 Regime: ${currentRegime}
 
-${memoryContext}
 ${tradeContext}
 
 Provide verdict: GOOD/BAD/SKIP with reasoning.`;
@@ -1294,6 +1299,7 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
               currentRegime,
               assets: [{ symbol: signal.symbol, ticker: signal.symbol }],
               userId,
+              personaMemory,
             },
           );
 

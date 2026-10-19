@@ -54,6 +54,31 @@ function parseConfidence(reply: string): number {
   return 0.5;
 }
 
+/** Confidence assumed for facts written before the `confidence` field existed. */
+const NEUTRAL_CONFIDENCE = 0.5;
+
+/**
+ * Rank facts by confidence (desc), then recency (desc), and take the top N —
+ * ADR-0001 specifies "top-5 by confidence". Facts predating the `confidence`
+ * field are treated as neutral (0.5) so they still compete rather than being
+ * dropped, with recency as the tie-break.
+ */
+function topByConfidence<T extends { confidence?: number; date?: Date | string }>(
+  facts: T[],
+  n: number,
+): T[] {
+  return [...(facts || [])]
+    .sort((a, b) => {
+      const ca = a.confidence ?? NEUTRAL_CONFIDENCE;
+      const cb = b.confidence ?? NEUTRAL_CONFIDENCE;
+      if (cb !== ca) return cb - ca;
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return db - da;
+    })
+    .slice(0, n);
+}
+
 class AgentConsensusService {
 
   /**
@@ -67,10 +92,17 @@ class AgentConsensusService {
 
     silentLogger.info("[AgentConsensus] Running PARALLEL debate...");
 
+    // Each persona gets its OWN memory block appended to the shared prompt.
+    // Previously one persona's memory was passed to all three agents, so Dove
+    // and Contrarian never saw their own memory.
+    const personaMemory: Record<string, string> = context?.personaMemory || {};
+    const promptFor = (persona: string) =>
+      personaMemory[persona] ? `${userPrompt}\n\n${personaMemory[persona]}` : userPrompt;
+
     const [hawkRes, doveRes, contrarianRes] = await Promise.all([
-      hawk.think(userPrompt, context),
-      dove.think(userPrompt, context),
-      contrarian.think(userPrompt, context),
+      hawk.think(promptFor("hawk"), context),
+      dove.think(promptFor("dove"), context),
+      contrarian.think(promptFor("contrarian"), context),
     ]);
 
     const consensus = await this.synthesize(hawkRes.reply, doveRes.reply, contrarianRes.reply, userPrompt, context);
@@ -397,12 +429,12 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
     const memory = await userMemoryService.getOrCreate(userId);
     const activeName = (memory.name || "").trim() || "Trader";
 
-    // Get persona-specific facts (top 5 by recency)
+    // Top-5 by confidence (ADR-0001). Facts written before the `confidence`
+    // field existed are treated as neutral 0.5 and compete on recency.
     const personaMemory = memory.agentMemories?.find((m: any) => m.personaId === personaId);
-    const personaFacts = personaMemory?.facts?.slice(-5) || [];
+    const personaFacts = topByConfidence(personaMemory?.facts || [], 5);
 
-    // Get general facts (top 5)
-    const generalFacts = memory.learnedFacts?.slice(-5) || [];
+    const generalFacts = topByConfidence(memory.learnedFacts || [], 5);
 
     // Persona-specific context instructions
     const personaInstructions: Record<string, string> = {
