@@ -14,6 +14,7 @@ import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { AgentBreakdown } from "./components/AgentBreakdown";
 import { TradeHistoryDashboard } from "./components/TradeHistoryDashboard";
 import { MemoryInsights } from "./components/MemoryInsights";
+import { PerformanceAnalytics } from "./components/PerformanceAnalytics";
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
@@ -424,6 +425,9 @@ function AITradingPageContent() {
 
                 {/* Memory Insights — Pattern display + edit/delete */}
                 {userId && <MemoryInsights userId={userId} />}
+
+                {/* Performance Analytics — Agent win rate + methodology comparison */}
+                <PerformanceAnalytics triggerRefresh={pipelineStatus?.metrics?.totalTrades} />
               </>
             )}
           </div>
