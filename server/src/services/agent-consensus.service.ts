@@ -1,6 +1,7 @@
 import { HawkAgent, DoveAgent, ContrarianAgent } from "../agents/specific.agents";
 import { AgentInsight } from "../models/AgentInsight";
 import { silentLogger } from "../utils/silent-logger";
+import { userMemoryService } from "./user-memory.service";
 
 export interface DebateResult {
   hawk: { reply: string; toolsUsed: string[] };
@@ -195,6 +196,62 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
     synthesizer.systemPrompt = "ROLE: Head of Institutional Desk. Anda adalah penulis sintesis konsensus yang objektif, presisi, dan actionable. Bukan hawkish, bukan dovish — netral dan data-driven.";
     const result = await synthesizer.think(consensusPrompt, context);
     return result.reply;
+  }
+
+  /**
+   * Build persona-specific memory context for agent prompts.
+   * Returns structured memory text tailored to each agent's role:
+   * - Hawk: risk preference, past stop-outs, liquidity sensitivity
+   * - Dove: opportunity patterns, winning trades, momentum signals
+   * - Contrarian: past consensus failures, anomaly detection
+   */
+  async buildMemoryContext(userId: string, personaId: string): Promise<string> {
+    const memory = await userMemoryService.getOrCreate(userId);
+    const activeName = (memory.name || "").trim() || "Trader";
+
+    // Get persona-specific facts (top 5 by recency)
+    const personaMemory = memory.agentMemories?.find((m: any) => m.personaId === personaId);
+    const personaFacts = personaMemory?.facts?.slice(-5) || [];
+
+    // Get general facts (top 5)
+    const generalFacts = memory.learnedFacts?.slice(-5) || [];
+
+    // Persona-specific context instructions
+    const personaInstructions: Record<string, string> = {
+      hawk: `[FOKUS ANALISIS: Risiko, stop-out, dan sensitivitas likuiditas]
+- Utamakan capital preservation
+- Identifikasi tail risk yang mungkin terlewat
+- Evaluasi dampak likuiditas terhadap posisi`,
+      dove: `[FOKUS ANALISI: Peluang, momentum, dan winning patterns]
+- Identifikasi peluang bullish yang belum terekspresi
+- Evaluasi momentum dan trend continuation
+- Cari setup risk/reward yang menguntungkan`,
+      contrarian: `[FOKUS ANALISI: Skeptisisme, anomali, dan kegagalan konsensus]
+- Tantang asumsi mayoritas
+- Identifikasi risiko tersembunyi (tail risk)
+- Cari pola anomali yang diabaikan`,
+    };
+
+    const instruction = personaInstructions[personaId] || "";
+
+    const factsSection = [
+      generalFacts.length > 0
+        ? `Fakta umum user:\n${generalFacts.map((f: any) => `- ${f.fact}`).join("\n")}`
+        : "",
+      personaFacts.length > 0
+        ? `Fakta spesifik untuk persona ${personaId}:\n${personaFacts.map((f: any) => `- [${f.category || "insight"}] ${f.fact}`).join("\n")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    return `[KONTEKS MEMORI UNTUK ${activeName.toUpperCase()}]
+Persona: ${personaId}
+Total interaksi: ${memory.interactionCount || 1}
+
+${instruction}
+
+${factsSection || "Belum ada memori tersimpan. Agent akan belajar dari interaksi pertama."}`;
   }
 
   private extractConviction(text: string): "TINGGI" | "SEDANG" | "RENDAH" {
