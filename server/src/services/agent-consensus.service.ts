@@ -199,6 +199,55 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
   }
 
   /**
+   * Calculate weighted consensus from agent votes.
+   * Weights: Hawk=1.5 (risk priority), Dove=1.0, Contrarian=1.0
+   * Threshold: ≥60% for GOOD/BAD verdict, else SKIP
+   */
+  async calculateWeightedConsensus(
+    votes: Array<{ persona: string; bias: string; confidence: number; weight: number }>,
+  ): Promise<{ verdict: "GOOD" | "BAD" | "SKIP"; consensusScore: number; finalBias: string; bullishScore: number; bearishScore: number }> {
+    const weights: Record<string, number> = { hawk: 1.5, dove: 1.0, contrarian: 1.0 };
+
+    let bullishWeighted = 0;
+    let bearishWeighted = 0;
+    let totalWeight = 0;
+
+    for (const vote of votes) {
+      const w = weights[vote.persona] ?? vote.weight ?? 1.0;
+      totalWeight += w;
+      if (vote.bias === "BULLISH") {
+        bullishWeighted += vote.confidence * w;
+      } else if (vote.bias === "BEARISH") {
+        bearishWeighted += vote.confidence * w;
+      }
+    }
+
+    const bullishScore = totalWeight > 0 ? bullishWeighted / totalWeight : 0;
+    const bearishScore = totalWeight > 0 ? bearishWeighted / totalWeight : 0;
+
+    const THRESHOLD = 0.6;
+    let verdict: "GOOD" | "BAD" | "SKIP";
+    let finalBias: string;
+    let consensusScore: number;
+
+    if (bullishScore >= THRESHOLD) {
+      verdict = "GOOD";
+      finalBias = "BULLISH";
+      consensusScore = bullishScore;
+    } else if (bearishScore >= THRESHOLD) {
+      verdict = "BAD";
+      finalBias = "BEARISH";
+      consensusScore = bearishScore;
+    } else {
+      verdict = "SKIP";
+      finalBias = bullishScore >= bearishScore ? "BULLISH" : "BEARISH";
+      consensusScore = Math.max(bullishScore, bearishScore);
+    }
+
+    return { verdict, consensusScore, finalBias, bullishScore, bearishScore };
+  }
+
+  /**
    * Build persona-specific memory context for agent prompts.
    * Returns structured memory text tailored to each agent's role:
    * - Hawk: risk preference, past stop-outs, liquidity sensitivity
