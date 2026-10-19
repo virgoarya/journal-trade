@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Shield, TrendingUp, AlertTriangle } from "lucide-react";
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import type { AgentConsensusResult, AgentVote } from "@/services/ai-trading.service";
 
 // ─── Types & Constants ───────────────────────────────────
@@ -92,6 +93,94 @@ function getVerdictStyle(verdict: string) {
 
 // ─── Sub-Components ──────────────────────────────────────
 
+function AgentRadarChart({ votes }: { votes: AgentVote[] }) {
+  const data = votes.map((vote) => {
+    const persona = getPersonaConfig(vote.persona);
+    const biasValue = vote.bias === "BULLISH" ? 80 : vote.bias === "BEARISH" ? 20 : 50;
+    return {
+      agent: persona.label,
+      bias: biasValue,
+      fullMark: 100,
+    };
+  });
+
+  return (
+    <div className="h-48 w-full" role="img" aria-label="Agent bias radar chart">
+      <ResponsiveContainer width="100%" height="100%">
+        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+          <PolarGrid stroke="#D4AF37" strokeOpacity={0.2} />
+          <PolarAngleAxis dataKey="agent" tick={{ fill: "#9CA3AF", fontSize: 10 }} />
+          <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+          <Radar
+            name="Agent Bias"
+            dataKey="bias"
+            stroke="#D4AF37"
+            fill="#D4AF37"
+            fillOpacity={0.3}
+            strokeWidth={2}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ConfidenceMeter({ vote }: { vote: AgentVote }) {
+  const confidence = vote.bias === "BULLISH" ? 80 : vote.bias === "BEARISH" ? 20 : 50;
+  const percentage = Math.round(confidence);
+  const colorClass = vote.bias === "BULLISH" ? "bg-neon-green" : vote.bias === "BEARISH" ? "bg-neon-red" : "bg-yellow-500";
+
+  return (
+    <div className="space-y-1" role="meter" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100} aria-label={`${vote.persona} confidence: ${percentage}%`}>
+      <div className="flex justify-between text-[10px]">
+        <span className="text-text-muted">Confidence</span>
+        <span className="text-text-muted">{percentage}%</span>
+      </div>
+      <div className="h-1.5 bg-black/60 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function VoteDistribution({ votes }: { votes: AgentVote[] }) {
+  const weights: Record<string, number> = { hawk: 1.5, dove: 1.0, contrarian: 1.0 };
+  const totalWeight = votes.reduce((sum, v) => sum + (weights[v.persona] || 1), 0);
+
+  return (
+    <div className="space-y-2" role="list" aria-label="Vote distribution by agent">
+      <p className="text-[10px] font-bold text-accent-gold uppercase tracking-widest">Vote Distribution</p>
+      {votes.map((vote) => {
+        const weight = weights[vote.persona] || 1;
+        const share = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
+        const persona = getPersonaConfig(vote.persona);
+        const biasStyle = getBiasStyle(vote.bias);
+
+        return (
+          <div key={vote.persona} className="flex items-center gap-2" role="listitem">
+            <span className="text-sm w-6 text-center" aria-hidden="true">{persona.emoji}</span>
+            <div className="flex-1">
+              <div className="flex justify-between text-[10px] mb-0.5">
+                <span className="text-text-muted">{persona.label} (×{weight})</span>
+                <span className={biasStyle.text}>{Math.round(share)}%</span>
+              </div>
+              <div className="h-1.5 bg-black/60 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${biasStyle.bg}`}
+                  style={{ width: `${share}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ConsensusMeter({ score, threshold }: { score: number; threshold: number }) {
   const percentage = Math.round(score * 100);
   const thresholdPercent = Math.round(threshold * 100);
@@ -150,7 +239,8 @@ function AgentCard({ vote, defaultOpen = false }: { vote: AgentVote; defaultOpen
         )}
       </button>
       {isOpen && (
-        <div className="px-3 pb-3 pt-1 border-t border-white/5">
+        <div className="px-3 pb-3 pt-1 border-t border-white/5 space-y-2">
+          <ConfidenceMeter vote={vote} />
           <p className="text-xs text-text-muted leading-relaxed whitespace-pre-wrap">
             {vote.reasoning}
           </p>
@@ -203,6 +293,19 @@ export function AgentBreakdown({ agentConsensus, threshold = 0.6 }: Props) {
 
       {/* Consensus Meter */}
       <ConsensusMeter score={consensusScore} threshold={threshold} />
+
+      {/* Radar Chart — Agent Bias Visualization */}
+      <div className="border-t border-white/5 pt-3">
+        <p className="text-[10px] font-bold text-accent-gold uppercase tracking-widest mb-2">
+          Agent Bias Radar
+        </p>
+        <AgentRadarChart votes={sortedVotes} />
+      </div>
+
+      {/* Vote Distribution — Weighted Voting Visualization */}
+      <div className="border-t border-white/5 pt-3">
+        <VoteDistribution votes={sortedVotes} />
+      </div>
 
       {/* Agent Cards */}
       <div className="space-y-2" role="list" aria-label="Agent breakdown">
