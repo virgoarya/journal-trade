@@ -2,6 +2,7 @@ import { mt5McpService, CircuitBreaker } from "./mt5-mcp.service";
 import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategySymbolAnalysis, type Candle } from "./ai-trading-engine.service";
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
+import { agentConsensusService } from "./agent-consensus.service";
 import { marketRegimeService } from "./market-regime.service";
 
 import { tradeExitStrategyService } from "./trade-exit-strategy.service";
@@ -49,6 +50,13 @@ export interface PipelineConfig {
   activeMethodologies?: MethodologyName[];
   // NEW: LLM Consensus settings
   llmConsensus?: LLMConsensusConfig;
+  // NEW: Agent Consensus Engine settings (replaces llmConsensus when enabled)
+  agentConsensus?: {
+    enabled: boolean;
+    debateMode: "parallel" | "sequential";
+    memoryEnabled: boolean;
+    toolEnabled: boolean;
+  };
   smartRisk?: {
     enabled: boolean;
     capitalPreservation?: {
@@ -174,6 +182,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   methodologyWeights: { ...DEFAULT_METHODOLOGY_WEIGHTS },
   activeMethodologies: Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
   llmConsensus: { enabled: false, minProviders: 4, threshold: 0.7, providerTimeoutMs: 45000 },
+  agentConsensus: { enabled: false, debateMode: "parallel", memoryEnabled: true, toolEnabled: true },
 };
 
 // Re-entrancy guards for the 2s interval jobs: setInterval callbacks are async and can
@@ -1236,7 +1245,73 @@ busySymbols: new Set<string>(),
         const llmProviders = llmConsensusService.getAvailableProviders();
         pipeline.llmCircuitOpen = llmProviders.filter(p => p.available).length === 0;
 
-        if (pipeline.config.llmConsensus?.enabled) {
+        if (pipeline.config.agentConsensus?.enabled) {
+          // ── Agent Consensus Engine (Hawk/Dove/Contrarian + memory) ──
+          const agentSignalKey = `${signal.symbol}_${signal.direction}_${Math.round(signal.entry * 100000)}`;
+          const AGENT_DEDUP_TTL_MS = 60 * 60 * 1000;
+          if (pipeline.lastLlmSignalKey === agentSignalKey && Date.now() - pipeline.lastLlmVerdictTime < AGENT_DEDUP_TTL_MS) {
+            this.addLog(userId, "CONFLUENCE",
+              `[2/4] [${signal.symbol}] AGENT SKIPPED: already evaluated within 1 hour.`,
+            );
+            continue;
+          }
+          pipeline.lastLlmSignalKey = agentSignalKey;
+          pipeline.lastLlmVerdictTime = Date.now();
+
+          this.addLog(userId, "CONFLUENCE",
+            `[2/4] [${signal.symbol}] AGENT CONSENSUS: Running multi-agent debate...`,
+          );
+
+          // Build enriched context with memory + trade history
+          const memoryContext = pipeline.config.agentConsensus?.memoryEnabled
+            ? await agentConsensusService.buildMemoryContext(userId, "hawk")
+            : "";
+          const tradeContext = pipeline.config.agentConsensus?.memoryEnabled
+            ? await agentConsensusService.buildTradeHistoryContext(userId)
+            : "";
+
+          const agentPrompt = `Evaluate this trading signal:
+Symbol: ${signal.symbol}
+Direction: ${signal.direction}
+Confidence: ${signal.confidence}
+Entry: ${signal.entry}
+SL: ${signal.sl}
+TP: ${signal.tp}
+Reason: ${signal.reason}
+Market Trend: ${analysis.marketStructure.trend.direction}
+Regime: ${currentRegime}
+
+${memoryContext}
+${tradeContext}
+
+Provide verdict: GOOD/BAD/SKIP with reasoning.`;
+
+          const agentResult = await agentConsensusService.runParallelDebate(
+            agentPrompt,
+            {
+              currentRegime,
+              assets: [{ symbol: signal.symbol, ticker: signal.symbol }],
+              userId,
+            },
+          );
+
+          const adapted = agentConsensusService.adaptDebateResult(agentResult);
+          const isTrade = adapted.verdict === "GOOD";
+
+          this.addLog(userId, "CONFLUENCE",
+            `[2/4] [${signal.symbol}] AGENT CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}`,
+            { agentConsensus: adapted },
+          );
+          this.addLog(userId, "CONFLUENCE",
+            `[2/4] [${signal.symbol}] Agent Votes: ${adapted.goodVotes}/${adapted.totalVotes} GOOD`,
+          );
+          for (const vote of adapted.votes) {
+            this.addLog(userId, "CONFLUENCE",
+              `[2/4] [${signal.symbol}] ${vote.persona}: ${vote.bias} — ${vote.reasoning.substring(0, 100)}`,
+            );
+          }
+
+        } else if (pipeline.config.llmConsensus?.enabled) {
           if (pipeline.llmCircuitOpen) {
             this.addLog(userId, "ERROR", `[2/4] [${signal.symbol}] All LLM providers circuit OPEN. Skipping LLM Voting, relying on technicals.`);
           } else {
