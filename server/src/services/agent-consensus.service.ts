@@ -19,6 +19,41 @@ export interface SingleAgentResult {
   toolsUsed: string[];
 }
 
+// ── Bias / confidence extraction from free-text agent replies ──
+
+/**
+ * Classify a reply as BULLISH / BEARISH / NEUTRAL by keyword tallies.
+ * No reply / no signal → NEUTRAL (contributes no weight to either side).
+ */
+function parseBias(reply: string): "BULLISH" | "BEARISH" | "NEUTRAL" {
+  const lower = (reply || "").toLowerCase();
+  if (!lower.trim()) return "NEUTRAL";
+  const bull = (lower.match(/bull|long|buy/g) || []).length;
+  const bear = (lower.match(/bear|short|sell/g) || []).length;
+  if (bull > bear) return "BULLISH";
+  if (bear > bull) return "BEARISH";
+  return "NEUTRAL";
+}
+
+/**
+ * Extract a 0–1 confidence score from a reply.
+ * Prefers an explicit "NN%" figure, falls back to hedge words, else 0.5.
+ */
+function parseConfidence(reply: string): number {
+  const text = reply || "";
+  const pct = text.match(/(\d{1,3})\s*%/);
+  if (pct) {
+    const n = parseInt(pct[1], 10);
+    if (!isNaN(n)) return Math.min(1, Math.max(0, n / 100));
+  }
+  const lower = text.toLowerCase();
+  if (lower.includes("very high")) return 0.95;
+  if (lower.includes("high")) return 0.8;
+  if (lower.includes("moderate") || lower.includes("medium")) return 0.5;
+  if (lower.includes("low")) return 0.3;
+  return 0.5;
+}
+
 class AgentConsensusService {
 
   /**
@@ -202,11 +237,15 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
   /**
    * Calculate weighted consensus from agent votes.
    * Weights: Hawk=1.5 (risk priority), Dove=1.0, Contrarian=1.0
-   * Threshold: ≥60% for GOOD/BAD verdict, else SKIP
+   * Threshold: ≥`threshold` (default 0.6, per ADR-0001) for GOOD/BAD, else SKIP.
+   *
+   * Synchronous — no I/O. Called by adaptDebateResult() so the ADR threshold
+   * is actually enforced in the pipeline, not just in unit tests.
    */
-  async calculateWeightedConsensus(
+  calculateWeightedConsensus(
     votes: Array<{ persona: string; bias: string; confidence: number; weight: number }>,
-  ): Promise<{ verdict: "GOOD" | "BAD" | "SKIP"; consensusScore: number; finalBias: string; bullishScore: number; bearishScore: number }> {
+    threshold = 0.6,
+  ): { verdict: "GOOD" | "BAD" | "SKIP"; consensusScore: number; finalBias: string; bullishScore: number; bearishScore: number } {
     const weights: Record<string, number> = { hawk: 1.5, dove: 1.0, contrarian: 1.0 };
 
     let bullishWeighted = 0;
@@ -226,7 +265,7 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
     const bullishScore = totalWeight > 0 ? bullishWeighted / totalWeight : 0;
     const bearishScore = totalWeight > 0 ? bearishWeighted / totalWeight : 0;
 
-    const THRESHOLD = 0.6;
+    const THRESHOLD = threshold;
     let verdict: "GOOD" | "BAD" | "SKIP";
     let finalBias: string;
     let consensusScore: number;
@@ -253,26 +292,31 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
    * Fetches recent AITradeLog from MongoDB and formats as "past performance evidence".
    */
   async buildTradeHistoryContext(userId: string): Promise<string> {
-    const trades = await AITradeLog.find({ userId })
+    const trades = (await AITradeLog.find({ userId })
       .sort({ createdAt: -1 })
       .limit(10)
-      .lean();
+      .lean()) as any[];
 
-    if (!trades || trades.length === 0) {
+    // Only settled trades count as evidence: open positions and cancelled
+    // pending orders carry no `pnl`, and including them would skew win rate.
+    const settled = (trades || []).filter((t: any) => t.pnl != null);
+
+    if (settled.length === 0) {
       return `[RIWAYAT TRADING: User belum memiliki riwayat trading. Agent akan belajar dari interaksi pertama.]`;
     }
 
-    const totalTrades = trades.length;
-    const wins = trades.filter((t: any) => t.profit > 0).length;
-    const losses = trades.filter((t: any) => t.profit < 0).length;
+    const totalTrades = settled.length;
+    const wins = settled.filter((t: any) => t.pnl > 0).length;
+    const losses = settled.filter((t: any) => t.pnl < 0).length;
     const winRate = Math.round((wins / totalTrades) * 100);
-    const totalProfit = trades.reduce((sum: number, t: any) => sum + (t.profit || 0), 0);
+    const totalProfit = settled.reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
     const avgProfit = Math.round(totalProfit / totalTrades);
 
-    // Build symbol frequency
+    // Build symbol frequency — symbol lives under `signal`.
     const symbolCount: Record<string, number> = {};
-    trades.forEach((t: any) => {
-      symbolCount[t.symbol] = (symbolCount[t.symbol] || 0) + 1;
+    settled.forEach((t: any) => {
+      const sym = t.signal?.symbol ?? "UNKNOWN";
+      symbolCount[sym] = (symbolCount[sym] || 0) + 1;
     });
     const topSymbols = Object.entries(symbolCount)
       .sort((a: any, b: any) => b[1] - a[1])
@@ -286,47 +330,59 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
 - Total profit: $${totalProfit}
 - Rata-rata profit: $${avgProfit}/trade
 - Symbol teratas: ${topSymbols}
-- Trade terakhir: ${trades[0]?.symbol || "N/A"} ${trades[0]?.direction || ""} @ ${trades[0]?.entry?.toFixed(5) || "N/A"}`;
+- Trade terakhir: ${settled[0]?.signal?.symbol || "N/A"} ${settled[0]?.signal?.direction || ""} @ ${settled[0]?.signal?.entry?.toFixed(5) || "N/A"}`;
   }
 
   /**
    * Adapt DebateResult → LLMConsensusResult format for pipeline compatibility.
-   * Extracts verdict from consensus text, maps per-agent votes.
+   *
+   * Verdict comes from calculateWeightedConsensus() (ADR-0001: weighted votes,
+   * Hawk=1.5 / Dove=1.0 / Contrarian=1.0, threshold ≥0.6) — NOT from keyword
+   * matching, which never enforced the ADR.
+   *
+   * Bias + confidence are parsed from each persona's free-text reply.
    */
-  adaptDebateResult(debateResult: {
-    hawk: { reply: string };
-    dove: { reply: string };
-    contrarian: { reply: string };
-    consensus: string;
-    debateMode: string;
-  }): {
+  adaptDebateResult(
+    debateResult: {
+      hawk: { reply: string };
+      dove: { reply: string };
+      contrarian: { reply: string };
+      consensus: string;
+      debateMode: string;
+    },
+    threshold = 0.6,
+  ): {
     verdict: "GOOD" | "BAD" | "SKIP";
     consensus: string;
     goodVotes: number;
     totalVotes: number;
     votes: Array<{ persona: string; bias: string; reasoning: string }>;
   } {
-    const lower = debateResult.consensus.toLowerCase();
-    let verdict: "GOOD" | "BAD" | "SKIP";
-    if (lower.includes("bullish") && lower.includes("high")) verdict = "GOOD";
-    else if (lower.includes("bearish") && lower.includes("high")) verdict = "BAD";
-    else if (lower.includes("mixed") || lower.includes("neutral") || lower.includes("wait")) verdict = "SKIP";
-    else if (lower.includes("bullish")) verdict = "GOOD";
-    else if (lower.includes("bearish")) verdict = "BAD";
-    else verdict = "SKIP";
+    const personas = [
+      { id: "hawk", reply: debateResult.hawk?.reply ?? "" },
+      { id: "dove", reply: debateResult.dove?.reply ?? "" },
+      { id: "contrarian", reply: debateResult.contrarian?.reply ?? "" },
+    ];
 
-    const goodVotes = verdict === "GOOD" ? 2 : verdict === "BAD" ? 0 : 1;
+    const votes = personas.map((p) => ({
+      persona: p.id,
+      bias: parseBias(p.reply),
+      confidence: parseConfidence(p.reply),
+      weight: 0, // persona weight map takes precedence over this field
+    }));
+
+    const weighted = this.calculateWeightedConsensus(votes, threshold);
 
     return {
-      verdict,
+      verdict: weighted.verdict,
       consensus: debateResult.consensus,
-      goodVotes,
-      totalVotes: 3,
-      votes: [
-        { persona: "hawk", bias: debateResult.hawk.reply.includes("BEARISH") ? "BEARISH" : "BULLISH", reasoning: debateResult.hawk.reply },
-        { persona: "dove", bias: debateResult.dove.reply.includes("BULLISH") ? "BULLISH" : "BEARISH", reasoning: debateResult.dove.reply },
-        { persona: "contrarian", bias: debateResult.contrarian.reply.includes("NEUTRAL") ? "NEUTRAL" : "BEARISH", reasoning: debateResult.contrarian.reply },
-      ],
+      goodVotes: votes.filter((v) => v.bias === "BULLISH").length,
+      totalVotes: votes.length,
+      votes: personas.map((p) => ({
+        persona: p.id,
+        bias: parseBias(p.reply),
+        reasoning: p.reply,
+      })),
     };
   }
 

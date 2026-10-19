@@ -56,10 +56,12 @@ describe("Task 1.4: Trade History Link", () => {
   });
 
   it("should fetch recent trades and build summary", async () => {
+    // Real AITradeLog shape: symbol/direction/entry nested under `signal`,
+    // P&L in `pnl` (there is no top-level `profit` field).
     const mockTrades = [
-      { symbol: "EURUSD", direction: "BUY", profit: 100, isWin: true, createdAt: new Date() },
-      { symbol: "GBPUSD", direction: "SELL", profit: -50, isWin: false, createdAt: new Date() },
-      { symbol: "EURUSD", direction: "BUY", profit: 75, isWin: true, createdAt: new Date() },
+      { signal: { symbol: "EURUSD", direction: "BUY", entry: 1.085 }, pnl: 100, createdAt: new Date() },
+      { signal: { symbol: "GBPUSD", direction: "SELL", entry: 1.265 }, pnl: -50, createdAt: new Date() },
+      { signal: { symbol: "EURUSD", direction: "BUY", entry: 1.087 }, pnl: 75, createdAt: new Date() },
     ];
 
     (AITradeLog.find as any).mockReturnValue({
@@ -92,8 +94,8 @@ describe("Task 1.4: Trade History Link", () => {
 
   it("should include win rate and profit metrics", async () => {
     const mockTrades = [
-      { symbol: "EURUSD", direction: "BUY", profit: 200, isWin: true, createdAt: new Date() },
-      { symbol: "EURUSD", direction: "SELL", profit: -100, isWin: false, createdAt: new Date() },
+      { signal: { symbol: "EURUSD", direction: "BUY", entry: 1.085 }, pnl: 200, createdAt: new Date() },
+      { signal: { symbol: "EURUSD", direction: "SELL", entry: 1.087 }, pnl: -100, createdAt: new Date() },
     ];
 
     (AITradeLog.find as any).mockReturnValue({

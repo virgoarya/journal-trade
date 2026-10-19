@@ -6,6 +6,8 @@ export interface IAgentMemoryEntry {
     date: Date;
     fact: string;
     category?: "user_preference" | "market_insight" | "persona_feedback";
+    /** 0–1 confidence used to rank facts for prompt injection (ADR-0001). */
+    confidence?: number;
   }>;
 }
 
@@ -13,7 +15,7 @@ export interface IUserAgentMemory extends Document {
   userId: string;
   name?: string; // nama yang user pakai di chat
   preferences: Record<string, string>; // preferensi user (fokus trading, gaya analisis, dll)
-  learnedFacts: Array<{ date: Date; fact: string }>; // fakta umum yang dipelajari agent dari interaksi
+  learnedFacts: Array<{ date: Date; fact: string; confidence?: number }>; // fakta umum yang dipelajari agent dari interaksi
   agentMemories?: IAgentMemoryEntry[]; // memori spesifik per persona (Hawk, Dove, Contrarian)
   marketPreferences?: {
     preferredRegimes?: string[];
@@ -40,6 +42,7 @@ const AgentMemoryEntrySchema = new Schema(
           enum: ["user_preference", "market_insight", "persona_feedback"],
           default: "user_preference",
         },
+        confidence: { type: Number, default: 0.5, min: 0, max: 1 },
       },
     ],
   },
@@ -55,6 +58,7 @@ const UserAgentMemorySchema = new Schema<IUserAgentMemory>(
       {
         date: { type: Date, default: Date.now },
         fact: { type: String, required: true },
+        confidence: { type: Number, default: 0.5, min: 0, max: 1 },
       },
     ],
     agentMemories: { type: [AgentMemoryEntrySchema], default: [] },

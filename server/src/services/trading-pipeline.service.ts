@@ -55,6 +55,8 @@ export interface PipelineConfig {
     enabled: boolean;
     debateMode: "parallel" | "sequential";
     memoryEnabled: boolean;
+    /** Minimum weighted score for a GOOD/BAD verdict (ADR-0001: 0.6). */
+    threshold: number;
     toolEnabled: boolean;
   };
   smartRisk?: {
@@ -182,7 +184,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   methodologyWeights: { ...DEFAULT_METHODOLOGY_WEIGHTS },
   activeMethodologies: Object.keys(DEFAULT_METHODOLOGY_WEIGHTS) as MethodologyName[],
   llmConsensus: { enabled: false, minProviders: 4, threshold: 0.7, providerTimeoutMs: 45000 },
-  agentConsensus: { enabled: false, debateMode: "parallel", memoryEnabled: true, toolEnabled: true },
+  agentConsensus: { enabled: false, debateMode: "parallel", memoryEnabled: true, toolEnabled: true, threshold: 0.6 },
 };
 
 // Re-entrancy guards for the 2s interval jobs: setInterval callbacks are async and can
@@ -1220,7 +1222,7 @@ busySymbols: new Set<string>(),
           const positions = await mt5McpService.getPositions();
           currentPosCount = positions.length;
           symbolPosCount = positions.filter(p => p.symbol === signal.symbol).length;
-        } catch {}
+        } catch { /* ignore: position lookup is best-effort */ }
         const symbolPendingCount = Array.from(pipeline.pendingOrders.values())
           .filter(o => o.symbol === signal.symbol).length;
         if (symbolPosCount > 0 || symbolPendingCount > 0) {
@@ -1295,7 +1297,10 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             },
           );
 
-          const adapted = agentConsensusService.adaptDebateResult(agentResult);
+          const adapted = agentConsensusService.adaptDebateResult(
+            agentResult,
+            pipeline.config.agentConsensus.threshold,
+          );
           const isTrade = adapted.verdict === "GOOD";
 
           this.addLog(userId, "CONFLUENCE",
@@ -1335,7 +1340,7 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             let llmMethV: string | undefined;
             let llmMethWR: number | undefined;
             let llmMethPnL: number | undefined;
-            try { const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch {}
+            try { const s = await aiBacktestSkillService.getSkill(userId); if (s) { const sr = s.symbolRankings?.find((x: any) => x.symbol === signal.symbol); if (sr) llmSymScore = sr.score; const mr = s.methodologyRankings?.find((x: any) => x.methodology === analysis.confluence.finalSignal?.primaryMethodology); if (mr) { llmMethV = mr.verdict; llmMethWR = mr.avgWinRate; llmMethPnL = mr.totalPnL; } } } catch { /* ignore: skill rankings are optional */ }
 
             const activeMeth = pipeline.config.activeMethodologies || ["smc", "ict", "msnr"];
             const checklist = analysis.confluence.finalSignal?.checklistItems || [];
