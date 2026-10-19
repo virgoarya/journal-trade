@@ -13,6 +13,7 @@ import { PipelineLogs } from "./components/PipelineLogs";
 import { LLMConsensusViz } from "./components/LLMConsensusViz";
 import { AgentBreakdown } from "./components/AgentBreakdown";
 import { TradeHistoryDashboard } from "./components/TradeHistoryDashboard";
+import { MemoryInsights } from "./components/MemoryInsights";
 import { BacktestTab } from "./components/BacktestTab";
 import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
@@ -420,6 +421,9 @@ function AITradingPageContent() {
 
                 {/* Trade History Dashboard — Win/Loss Analytics */}
                 <TradeHistoryDashboard triggerRefresh={pipelineStatus?.metrics?.totalTrades} />
+
+                {/* Memory Insights — Pattern display + edit/delete */}
+                {userId && <MemoryInsights userId={userId} />}
               </>
             )}
           </div>
