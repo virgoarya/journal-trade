@@ -20,7 +20,7 @@
     "test": "npm run test:server && npm run test:frontend",
     "test:server": "npm --prefix server test",
     "test:frontend": "npm --prefix frontend test",
-    "lint": "npm --prefix frontend run lint",
+    "lint": "npm --prefix server run lint && npm --prefix frontend run lint",
     "typecheck": "npm --prefix server run typecheck && npm --prefix frontend run typecheck",
     "preflight": "node scripts/preflight-release.mjs",
     "preflight:bundle": "node scripts/preflight-release.mjs --strict-bundle",

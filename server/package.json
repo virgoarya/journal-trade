@@ -10,6 +10,7 @@
     "proxy": "npx 9router",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --pool=forks --max-workers=1",
+    "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
@@ -52,11 +53,15 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@types/node-cron": "^3.0.11",
     "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.71.2",
+    "@typescript-eslint/parser": "^8.71.2",
+    "eslint": "^9.39.5",
     "prisma": "^5.22.0",
     "tsx": "^4.23.13",
     "typescript": "^5.7.3",
