@@ -24,6 +24,6 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-    timeout: 120000, // 2 min for server start
+    timeout: 300000, // 5 min for server start (D: drive slow filesystem)
   },
 });
