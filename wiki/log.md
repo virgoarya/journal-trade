@@ -18,3 +18,9 @@
   - entities/user-agent-memory.md (UserAgentMemory, VectorMemory embeddings, reflection logs)
 - Updated SCHEMA.md tag taxonomy (added macro, consensus, ai, memory).
 - Updated index.md: 9 total pages indexed.
+
+## [2026-10-19] update | Agent Consensus Engine — ADR-0001 + ADR-0002
+- Rewrote entities/agent-consensus-engine.md to reflect Agent Consensus as active consensus path (ADR-0002 full replace).
+- Added: weighted voting (Hawk 1.5, Dove 1.0, Contrarian 1.0), ≥60% threshold, memory injection Top-5, PostgreSQL agent_db, pgvector hybrid, rollback path (llm-consensus.service.ts retained).
+- Sources: docs/adr/ADR-0001-agent-consensus-engine.md, docs/adr/ADR-0002-agent-consensus-rollout.md.
+- Updated index.md summary.
