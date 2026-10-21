@@ -10,7 +10,7 @@ import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
 import { AITradeHistories } from "./components/AITradeHistories";
 import { PipelineLogs } from "./components/PipelineLogs";
-import { LLMConsensusViz } from "./components/LLMConsensusViz";
+
 import { AgentBreakdown } from "./components/AgentBreakdown";
 import { TradeHistoryDashboard } from "./components/TradeHistoryDashboard";
 import { MemoryInsights } from "./components/MemoryInsights";
@@ -108,9 +108,7 @@ function AITradingPageContent() {
     isPipelineStopping,
     lastAnalysis,
     allAnalyses,
-    lastLlmVotes,
     agentConsensus,
-    llmModels,
     skillConfig,
     setSkillConfig,
     skillVersion,
@@ -398,12 +396,7 @@ function AITradingPageContent() {
 
             {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
 
-            <LLMConsensusViz
-              votes={lastLlmVotes}
-              modelStatus={llmModels}
-              threshold={pipelineStatus?.config?.llmConsensus?.threshold ?? 0.5}
-            />
-
+            {/* Agent Consensus is the primary consensus UI. LLMConsensus remains a backend rollback path only. */}
             {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
             <AgentBreakdown
               agentConsensus={agentConsensus ?? undefined}
