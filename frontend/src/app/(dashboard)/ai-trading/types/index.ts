@@ -5,6 +5,8 @@ import type {
   MethodologyWeights,
   LLMConsensusVote,
   LLMConsensusResult,
+  AgentVote,
+  AgentConsensusResult,
   ACCOUNTInfo,
   Position,
   SymbolInfo,
@@ -174,7 +176,7 @@ export interface LogoProps {
 
 export type { MethodologyName, MethodologyWeights };
 export type { ACCOUNTInfo, Position, SymbolInfo, Rate, TradingSignal, PipelineLog, PipelineStatus, PipelineConfig };
-export type { LLMConsensusVote, LLMConsensusResult };
+export type { LLMConsensusVote, LLMConsensusResult, AgentVote, AgentConsensusResult };
 export type { MultiStrategyAnalysis, ConfluenceResult, MarketStructureSummary, MethodologySignalResult, MethodologyBreakdown };
 export type { AIBacktestSkill, AutoBacktestSummary, PipelinePerformance };
 

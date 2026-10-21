@@ -114,7 +114,7 @@ function ComparisonBar({
           <span className="text-[10px] text-white w-12 text-right">{formatPercent(agentValue)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-text-muted w-12">LLM</span>
+          <span className="text-[10px] text-text-muted w-12">Baseline</span>
           <div className="flex-1 h-2 bg-black/60 rounded-full overflow-hidden">
             <div
               className="h-full bg-gray-500 rounded-full transition-all duration-500"
@@ -243,7 +243,7 @@ export function PerformanceAnalytics({ triggerRefresh }: Props) {
   const pnlColor = data.totalPnL >= 0 ? "text-neon-green" : "text-neon-red";
   const winRateColor = data.winRate >= 50 ? "text-neon-green" : "text-neon-red";
 
-  // Mock LLM comparison data (will be replaced with real data when available)
+  // Baseline comparison series (placeholder — replaced with real benchmark data)
   const llmComparison: ComparisonData = {
     agent: {
       winRate: data.winRate,

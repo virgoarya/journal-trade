@@ -7,7 +7,20 @@ import {
   type PipelineLog,
   type MultiStrategyAnalysis,
   type LLMConsensusResult,
+  type AgentConsensusResult,
 } from "@/services/ai-trading.service";
+
+/**
+ * Agent Consensus (ADR-0002) is the primary path; the 6-LLM consensus is the
+ * legacy fallback. Both engines expose the same card shape (`votes[]` +
+ * `verdict` + `goodVotes`/`totalVotes`), so one slot carries either one.
+ */
+type ConsensusLike = LLMConsensusResult | AgentConsensusResult;
+
+/** Reads `agentConsensus` first, then falls back to the legacy `llmConsensus`. */
+function readConsensus(logData: any): ConsensusLike | null {
+  return logData?.agentConsensus ?? logData?.llmConsensus ?? null;
+}
 
 /**
  * usePipelineData - Unified pipeline state management.
@@ -16,7 +29,7 @@ import {
  * - Pipeline status
  * - Logs
  * - Last analysis
- * - LLM consensus votes
+ * - Consensus votes (Agent Consensus first, 6-LLM as legacy fallback)
  *
  * Components should NOT fetch `getPipelineStatus()` or `getPipelineLogs()` directly.
  */
@@ -25,7 +38,7 @@ export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [logs, setLogs] = useState<PipelineLog[]>([]);
   const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);
-  const [lastLLMVotes, setLastLLMVotes] = useState<LLMConsensusResult | null>(null);
+  const [lastLLMVotes, setLastLLMVotes] = useState<ConsensusLike | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
@@ -53,12 +66,13 @@ export function usePipelineData(opts: { pollIntervalMs?: number } = {}) {
 
       if (logsRes.success && logsRes.data) {
         setLogs(logsRes.data.logs);
-        // Extract latest LLM consensus from CONFLUENCE logs
-        const llmLogs = logsRes.data.logs.filter(
-          (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
+        // Extract latest consensus from CONFLUENCE logs — Agent Consensus
+        // (ADR-0002) first, 6-LLM consensus as the legacy fallback.
+        const consensusLogs = logsRes.data.logs.filter(
+          (l: PipelineLog) => l.type === "CONFLUENCE" && readConsensus(l.data),
         );
-        if (llmLogs.length > 0) {
-          const latest = (llmLogs[llmLogs.length - 1].data as any).llmConsensus as LLMConsensusResult;
+        if (consensusLogs.length > 0) {
+          const latest = readConsensus(consensusLogs[consensusLogs.length - 1].data);
           if (latest?.votes) setLastLLMVotes(latest);
         }
       }

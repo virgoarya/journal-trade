@@ -9,6 +9,7 @@ import {
   type PipelineStatus,
   type MultiStrategyAnalysis,
   type LLMConsensusResult,
+  type AgentConsensusResult,
   type PipelineLog,
   type ACCOUNTInfo,
   type Position,
@@ -56,7 +57,7 @@ interface AiTradingContextType {
   isPipelineStopping: boolean;
   lastAnalysis: MultiStrategyAnalysis | null;
   allAnalyses: MultiStrategyAnalysis[];
-  lastLlmVotes: LLMConsensusResult | null;
+  lastLlmVotes: LLMConsensusResult | AgentConsensusResult | null;
   agentConsensus: import("@/services/ai-trading.service").AgentConsensusResult | null;
   startPipeline: (config: PipelineConfig) => Promise<boolean>;
   stopPipeline: () => Promise<void>;

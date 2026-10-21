@@ -8,8 +8,21 @@ import {
   type PipelineLog,
   type MultiStrategyAnalysis,
   type LLMConsensusResult,
+  type AgentConsensusResult,
 } from "@/services/ai-trading.service";
 import { toast } from "sonner";
+
+/**
+ * Agent Consensus (ADR-0002) is the primary path; the 6-LLM consensus is the
+ * legacy fallback. Both engines expose the same card shape (`votes[]` +
+ * `verdict` + `goodVotes`/`totalVotes`), so one slot carries either one.
+ */
+type ConsensusLike = LLMConsensusResult | AgentConsensusResult;
+
+/** Reads `agentConsensus` first, then falls back to the legacy `llmConsensus`. */
+function readConsensus(logData: any): ConsensusLike | null {
+  return logData?.agentConsensus ?? logData?.llmConsensus ?? null;
+}
 
 export function usePipeline() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
@@ -18,7 +31,7 @@ export function usePipeline() {
   const [lastAnalysis, setLastAnalysis] = useState<MultiStrategyAnalysis | null>(null);
   const [allAnalyses, setAllAnalyses] = useState<MultiStrategyAnalysis[]>([]);
   const [isStopping, setIsStopping] = useState(false);
-  const [lastLLMVotes, setLastLLMVotes] = useState<LLMConsensusResult | null>(null);
+  const [lastLLMVotes, setLastLLMVotes] = useState<ConsensusLike | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const lastLogTimeRef = useRef<string | null>(null);
   const consecutiveErrorsRef = useRef(0);
@@ -152,12 +165,13 @@ export function usePipeline() {
             });
           }
 
-          // Extract latest LLM consensus from CONFLUENCE logs
-          const llmLogs = res.data.logs.filter(
-            (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
+          // Extract latest consensus from CONFLUENCE logs — Agent Consensus
+          // (ADR-0002) first, 6-LLM consensus as the legacy fallback.
+          const consensusLogs = res.data.logs.filter(
+            (l: PipelineLog) => l.type === "CONFLUENCE" && readConsensus(l.data),
           );
-          if (llmLogs.length > 0) {
-            const latest = (llmLogs[llmLogs.length - 1].data as any).llmConsensus as LLMConsensusResult;
+          if (consensusLogs.length > 0) {
+            const latest = readConsensus(consensusLogs[consensusLogs.length - 1].data);
             if (latest?.votes) setLastLLMVotes(latest);
           }
 
@@ -215,11 +229,12 @@ export function usePipeline() {
           setAllAnalyses(res.data.status.allAnalyses);
         }
         setLogs(res.data.logs);
-        const llmLogs = res.data.logs.filter(
-          (l: PipelineLog) => l.type === "CONFLUENCE" && (l.data as any)?.llmConsensus,
+        // Agent Consensus (ADR-0002) first, 6-LLM consensus as the legacy fallback.
+        const consensusLogs = res.data.logs.filter(
+          (l: PipelineLog) => l.type === "CONFLUENCE" && readConsensus(l.data),
         );
-        if (llmLogs.length > 0) {
-          const latest = (llmLogs[llmLogs.length - 1].data as any).llmConsensus as LLMConsensusResult;
+        if (consensusLogs.length > 0) {
+          const latest = readConsensus(consensusLogs[consensusLogs.length - 1].data);
           if (latest?.votes) setLastLLMVotes(latest);
         }
       }
