@@ -32,3 +32,12 @@
 - DevOps & Tooling: Setup ESLint flat config v9 dan konsolidasi coverage e2e (`f8ba0a6`, `e2cde18`, `e7089f7`).
 - UX & Guidance: Fix overlay walkthrough onboarding agar mendukung click-outside dismiss (`e9b2bd2`).
 - Infrastruktur: Verifikasi koneksi MongoDB Atlas via SRV record (shards `159.143.58.x`) dan fallback lokal port 27017.
+
+## [2026-10-21] update | agent-consensus-engine.md — verifikasi ulang vs kode (DOCS-1)
+- Rewrote wiki/entities/agent-consensus-engine.md: orientasi + keadaan kode terverifikasi, bukan salinan ADR.
+- Koreksi fakta: memory yang benar-benar di-inject ke prompt konsensus adalah **MongoDB** `UserAgentMemory` (koleksi `user_agent_memories`) via `userMemoryService`, BUKAN PostgreSQL/Prisma seperti klaim versi sebelumnya. Prisma/PostgreSQL (`agent_db`: `UserProfile`/`UserMemoryNote`) dipakai jalur lain (profile-repo, memory-extractor, ai-coach).
+- Menghapus bagian "Gap yang diketahui" yang sudah usang: isolasi memory per-persona (`e37bb1b`) dan ranking top-5 by confidence (`topByConfidence`) sudah ADA di kode; bagian itu masih mengklaim keduanya belum dikerjakan.
+- Tambah: rumus voting terbobot (denominator = total bobot SEMUA vote), tabel persona, daftar endpoint API (router wajib `requireAuth`), dedup 1 jam, TTL 7 hari `AgentInsight`, dan rollback flag (`llmConsensus.enabled` di-force `true`, `agentConsensus` sengaja tidak).
+- Tambah bagian "Catatan implementasi & divergensi": `confidence` fakta selalu default 0.5 (mekanisme benar, data seragam), jalur chat `getPromptContext` masih recency, skor UI (`goodVotes/totalVotes`) != skor verdict terbobot, `toolEnabled` belum dibaca.
+- Verifikasi pass-2 terhadap kode: kontrol UI `AgentConsensusConfig.tsx` + wiring `TradingPanel.tsx` / `AiTradingContext.tsx` ternyata **sudah committed** (`223f3d5`) — catatan divergensi #6 dikoreksi (sebelumnya tertulis "belum committed"). Ditambah divergensi #8 (rute `/parallel` & `/sequential` tanpa prefix) dan referensi silang yang menggantung diperbaiki.
+- Updated index.md (ringkasan + Last updated 2026-10-21).

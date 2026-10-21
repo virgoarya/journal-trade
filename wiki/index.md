@@ -2,10 +2,10 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-10-19 | Total pages: 9
+> Last updated: 2026-10-21 | Total pages: 9
 
 ## Entities
-- [[agent-consensus-engine]] — Agent Consensus Engine: Hawk/Dove/Contrarian + memory PostgreSQL, jalur aktif pengganti LLM Consensus (ADR-0002)
+- [[agent-consensus-engine]] — Agent Consensus Engine: Hawk/Dove/Contrarian + memory agent (MongoDB `UserAgentMemory`), jalur konsensus pengganti LLM Consensus (ADR-0002; flag default off, rollback ke `llm-consensus.service.ts`)
 - [[hunter-trades-journal]] — Platform trading journal berbasis AI dengan MT5 MCP integration
 - [[ict-strategy]] — Strategi ICT + CRT: 9 paths deteksi, AMD filter, OTE 70.5%, RR minimum 1:2
 - [[journal-insight-service]] — Service backend analisis pola emosi, performa waktu (NY Time UTC-4), dan insight LLM
