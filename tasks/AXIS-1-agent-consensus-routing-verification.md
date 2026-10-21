@@ -169,4 +169,12 @@ npx vitest run src/__tests__/settings-agent-consensus-flag.test.ts \
 | `server/src/validators/ai-trading.validator.ts` | 83-99 (`pipelineConfigSchema` — tanpa `agentConsensus`) | — |
 | `frontend/src/app/(dashboard)/ai-trading/components/TradingPanel.tsx` | 96 (`useAppliedConfig: true`) | — |
 | `docs/adr/ADR-0002-agent-consensus-rollout.md` | 44-51 (batasan rollback) | — |
-| `server/src/__tests__/agent-consensus-routing-e2e.test.ts` | 399 baris — bukti eksekusi | commit AXIS-1 |
+| `server/src/__tests__/agent-consensus-routing-e2e.test.ts` | 481 baris — bukti eksekusi | `8c1db56` |
+| `tasks/AXIS-1-agent-consensus-routing-verification.md` | laporan ini | `8c1db56` |
+
+## Commit
+
+- Test + laporan: **`8c1db562f34ce671d984c6de144f0217877b0df7`**
+  (`test(agent-consensus): prove agentConsensus routing + probe missing verdict gate (AXIS-1)`)
+- Baris produksi yang diverifikasi: `f685ac05` (predicate 1250) dan `938d6048`
+  (settings 138-140 + merge 545-548) — keduanya ancestor dari `877513c`.
