@@ -1639,3 +1639,17 @@ useEffect(() => {
 **Penyebab**: Guard `write_file` menandai pembacaan ber-`limit` sebagai parsial, terlepas dari apakah limit melebihi jumlah baris.
 **Solusi**: Tulis ulang file lewat `execute_code` dengan Python `open(path, "w", encoding="utf-8", newline="\n")`. Ini melewati semua guard `write_file` dan lebih aman daripada `rm` + `write_file` (kegagalan write setelah `rm` meninggalkan file hilang).
 **Hindari**: Jangan mengulang `write_file` dengan isi yang sama — kegagalan tidak akan hilang sendiri. Untuk edit kecil, `patch` selalu lebih cepat dan tidak kena guard.
+
+### [20261021] Test yang Meng-Implementasi Ulang Predicate Tidak Bisa Gagal — Verifikasi Routing Harus Menjalankan Kode Asli
+**Area**: Backend / testing / verifikasi fitur flag
+**Gejala**: `agent-consensus-pipeline-integration.test.ts` menguji "routing agentConsensus" tapi isinya `if (pipelineConfig.agentConsensus?.enabled) { await agentConsensusService.runParallelDebate(...) } else { await llmConsensusService.evaluate(...) }` — predicate di-copy ke dalam test, bukan memanggil `TradingPipelineService`. Test lolos 100% selamanya walau kode produksi berubah/dirusak.
+**Penyebab**: Test meng-assert logika lokal, bukan integrasi nyata. Yang diuji adalah test itu sendiri.
+**Solusi**: Untuk verifikasi flag/routing, drive router HTTP asli + service asli, lalu tangkap objek config yang benar-benar dibaca di titik branch (mis. `AITradingSession.findOneAndUpdate({ pipelineConfig })`) dan assert nilai di sana. Lihat `server/src/__tests__/agent-consensus-routing-e2e.test.ts` (AXIS-1).
+**Hindari**: Jangan percaya test yang "meniru" struktur `if/else` produksi — ia tidak mendeteksi regresi routing sama sekali.
+
+### [20261021] Saat Menambah Branch Konsensus Baru, Gate Verdict Sering Terlewat
+**Area**: Backend / trading pipeline
+**Gejala**: Branch Agent Consensus di `trading-pipeline.service.ts:1250-1324` menghitung `isTrade` (baris 1310) tapi **hanya** memakainya untuk log — tidak ada `if (!isTrade) continue;`. Branch LLM yang lama punya gate itu di baris 1400. Akibat: verdict Agent `BAD`/`SKIP` tidak memblokir order; `openOrder()` tetap dipanggil.
+**Penyebab**: Branch baru disalin struktur logging dari branch lama, tapi gate kontrol-flow ikut tertinggal. `isTrade` jadi variabel mati untuk control flow (hanya dipakai string log).
+**Solusi**: Setiap kali menambah/mengubah branch keputusan, cek dua hal: (a) apakah nilai keputusan dipakai untuk `continue`/return, bukan cuma log; (b) apakah semua branch memiliki gate yang setara. Deteksi murah: cari variabel yang hanya muncul di template literal log.
+**Hindari**: Jangan mengubah behaviour semacam ini tanpa lapor KIRA dulu — buat child task dengan status `blocked` + usulan TDD, jangan langsung patch.
