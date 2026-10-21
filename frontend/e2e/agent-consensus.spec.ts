@@ -104,6 +104,15 @@ async function mockPage(page: Page) {
 }
 
 test.describe('Agent Consensus E2E', () => {
+  // `next dev` compiles a route on its FIRST request only. On this repo's D:
+  // drive that compile measured 59s (`GET /ai-trading 200 in 59s` in the dev
+  // server log), so tests 1-3 failed on `page.goto`/settle timeouts before any
+  // assertion ran. One warm-up request pays that cost once, per worker, before
+  // the first test — the assertions themselves are untouched.
+  test.beforeAll(async ({ request }) => {
+    await request.get('/ai-trading', { timeout: 180000 });
+  });
+
   test.beforeEach(async ({ page }) => {
     await mockPage(page);
     await page.goto('/ai-trading', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -166,14 +175,19 @@ test.describe('Agent Consensus E2E', () => {
 
   test('should degrade gracefully when agent consensus is unavailable', async ({ page }) => {
     // Re-registering mockPage would invert Playwright's route priority, so
-    // override just the two pipeline routes.
+    // override just the two pipeline routes. Order matters exactly as in
+    // mockPage(): the broad `pipeline/status` pattern also matches the
+    // `pipeline/status-with-logs` URL, and Playwright checks the LAST
+    // registered route first — so the specific route must go last or the app
+    // receives the wrong envelope ({status,logs} is expected) and never reaches
+    // the agentConsensus === null branch this test is about.
     await page.unroute('**/api/v1/ai-trading/pipeline/status-with-logs**');
     await page.unroute('**/api/v1/ai-trading/pipeline/status**');
-    await page.route('**/api/v1/ai-trading/pipeline/status-with-logs**', (route) =>
-      route.fulfill(ok({ status: { ...PIPELINE_STATUS, agentConsensus: null }, logs: [] }))
-    );
     await page.route('**/api/v1/ai-trading/pipeline/status**', (route) =>
       route.fulfill(ok({ ...PIPELINE_STATUS, agentConsensus: null }))
+    );
+    await page.route('**/api/v1/ai-trading/pipeline/status-with-logs**', (route) =>
+      route.fulfill(ok({ status: { ...PIPELINE_STATUS, agentConsensus: null }, logs: [] }))
     );
 
     await page.reload({ waitUntil: 'domcontentloaded' });
