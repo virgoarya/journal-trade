@@ -125,11 +125,12 @@ export function Walkthrough({ steps, isActive, onComplete, onSkip, showProgress 
 
   return (
     <>
-      {/* Overlay - blocks clicks but does NOT close guidance */}
+      {/* Overlay — click outside auto-dismisses (per QA: must not trap user interaction) */}
       <div
         ref={overlayRef}
         className="fixed inset-0 z-[9998] bg-black/30 animate-in fade-in duration-300"
         aria-hidden="true"
+        onClick={onSkip}
       />
 
       {/* Target highlight with stronger contrast */}
