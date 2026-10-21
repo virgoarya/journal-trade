@@ -24,7 +24,7 @@
           "position": "right"
         },
         {
-          "target": "a[href='/macro-terminal']",
+          "target": "a[href*='/macro-terminal']",
           "title": "Macro Terminal",
           "description": "Real-time macro indicators, COT data, and market regime analysis",
           "position": "right"

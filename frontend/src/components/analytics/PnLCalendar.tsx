@@ -70,10 +70,10 @@ export const PnLCalendar: React.FC<PnLCalendarProps> = ({ trades }) => {
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-bold text-text-primary uppercase tracking-widest text-sm">{monthYear}</h4>
         <div className="flex gap-2">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
+          <button aria-label="Previous month" onClick={handlePrevMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
             <ChevronLeft className="w-4 h-4 text-text-muted hover:text-accent-gold" />
           </button>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
+          <button aria-label="Next month" onClick={handleNextMonth} className="p-1 hover:bg-zinc-700/50 rounded-lg transition-all">
             <ChevronRight className="w-4 h-4 text-text-muted hover:text-accent-gold" />
           </button>
         </div>

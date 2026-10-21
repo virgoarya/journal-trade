@@ -312,7 +312,7 @@ export default function DashboardPage() {
       icon: TrendingDown
     },
     {
-      label: "Total Trade",
+      label: "Total Trades",
       value: analytics?.totalTrades?.toString() || "0",
       icon: Activity
     },
