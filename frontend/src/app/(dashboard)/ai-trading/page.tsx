@@ -62,6 +62,7 @@ function AITradingPageContent() {
   const tabParam = searchParams.get("tab") as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>("trading");
   const [isTradingDrawerOpen, setIsTradingDrawerOpen] = useState(false);
+  const [offlinePreview, setOfflinePreview] = useState(false);
 
   // ── Payment Gate Logic ─────────────────────────────────────────────────
   const userId = session?.user?.id;
@@ -283,7 +284,7 @@ function AITradingPageContent() {
   return (
     <div className="min-h-screen p-4 pb-24 font-mono">
       {/* Reconnecting Overlay */}
-      {isReconnecting && (
+      {isReconnecting && !offlinePreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="flex flex-col items-center gap-4 p-6 sm:p-8 rounded-2xl border border-accent-gold/30 bg-surface/90 shadow-2xl max-w-sm w-full text-center">
             <div className="w-12 h-12 border-4 border-accent-gold/20 border-t-accent-gold rounded-full animate-spin"></div>
@@ -302,6 +303,12 @@ function AITradingPageContent() {
                 className="w-full py-2 px-4 rounded-lg bg-surface-light hover:bg-accent-gold/20 text-accent-gold border border-accent-gold/30 text-xs font-semibold tracking-wider transition-all duration-200"
               >
                 Batalkan & Ganti Akun MT5
+              </button>
+              <button
+                onClick={() => setOfflinePreview(true)}
+                className="w-full py-2 px-4 rounded-lg bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold border border-accent-gold/30 text-xs font-semibold tracking-wider transition-all duration-200"
+              >
+                Lanjut Mode Offline / Preview
               </button>
               <button
                 onClick={() => router.push("/dashboard")}
