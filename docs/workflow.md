@@ -53,7 +53,8 @@ Tujuan utama dari arsitektur multi-agent ini adalah memisahkan tanggung jawab (*
 │  - Check Daily Loss Limit & Global Drawdown Circuit Breaker                       │
 │  - Verify Symbol Uniqueness (Strict 1 position per symbol)                        │
 │  - Check Currency Correlation Risk (Base/Quote cap)                               │
-│  - Trigger Multi-LLM Consensus Voting (>= threshold, e.g. 70%)                   │
+│  - Trigger Agent Consensus Engine: Hawk (1.5), Dove (1.0), Contrarian (1.0)       │
+│    weighted voting (>= 60%) + personalized persona memory (ADR-0001 & ADR-0002)   │
 └─────────────────────────────────────────┬─────────────────────────────────────────┘
                                           │
                                           ▼
@@ -100,10 +101,11 @@ Tujuan utama dari arsitektur multi-agent ini adalah memisahkan tanggung jawab (*
   3. **Symbol Isolation**: Memastikan **TIDAK ADA** posisi aktif di simbol yang sama (*Strict 1 position per symbol*).
   4. **Daily Loss & Drawdown Breaker**: Menghentikan trade jika PnL harian menyentuh batas kekalahan harian (`maxDailyRisk`) atau *Global Max Drawdown*.
   5. **Correlation Risk**: Memastikan maksimal 2 posisi per *Base Currency* dan 3 posisi per *Quote Currency*.
-  6. **LLM Consensus Voting**:
-     * Mengirimkan data setup ke 3-4 LLM Provider secara paralel (DeepSeek, GPT, Gemini, Mistral, Nemotron, Claude).
-     * Jika terjadi rate-limit atau timeout pada provider utama, fallback model diaktifkan secara otomatis.
-     * Konsensus harus mencapai ambang persetujuan (contoh: ≥ 70% vote "GOOD").
+  6. **Agent Consensus Engine (ADR-0001 & ADR-0002)**:
+     * Menjalankan debat terbobot 3 Persona: **Hawk** (Bobot 1.5 - risk & liquidity), **Dove** (Bobot 1.0 - opportunity & momentum), **Contrarian** (Bobot 1.0 - skeptic & anomalies).
+     * Memanfaatkan injeksi memori persona dari PostgreSQL (`agent_db`) dan riwayat trading pengguna.
+     * Konsensus harus mencapai ambang skor terbobot (≥ 60% untuk verdict `GOOD` / `BAD`, else `SKIP`).
+     * Fallback rollback path: jika `agentConsensus` dinonaktifkan di pipeline config, sistem beralih ke `llmConsensus` multi-model.
 * **Output**: Keputusan `RiskCheck` (`allowed: true/false`, `reason`, `warnings`).
 
 ### STAGE 4: PRECISION TRADE EXECUTION (`@ceo-trading` / `@axis`)

@@ -3,7 +3,7 @@
 > Trading journal + AI trading engine dengan integrasi **MetaTrader 5**.
 > Dijalankan sebagai aplikasi desktop Windows: user install sekali, klik icon, semua service jalan.
 
-Repositori: `journal-trade` · Versi saat ini: **1.2.0** · Nama aplikasi: **Hunter Trades**
+Repositori: `journal-trade` · Versi saat ini: **1.2.1** · Nama aplikasi: **Hunter Trades**
 
 ---
 
@@ -36,7 +36,7 @@ Langkah-langkah ini untuk **pengguna biasa** yang ingin memakai aplikasi — buk
 
 1. **Unduh installer**
    Buka halaman [GitHub Releases](https://github.com/virgoarya/journal-trade/releases) dan unduh
-   file bernama **`Hunter Trades Setup 1.2.0.exe`**.
+   file bernama **`Hunter Trades Setup 1.2.1.exe`**.
 
 2. **Jalankan installer**
    - Klik dua kali file `.exe` yang sudah diunduh.
@@ -114,7 +114,7 @@ akan tetap ada di sana. Klik kanan ikon tray untuk:
 
 ### Untuk user (install aplikasi production)
 
-1. Unduh **`Hunter Trades Setup 1.2.0.exe`** dari halaman GitHub Releases.
+1. Unduh **`Hunter Trades Setup 1.2.1.exe`** dari halaman GitHub Releases.
 2. Jalankan installer, pilih folder instalasi, selesaikan wizard.
 3. Klik icon **Hunter Trades** di Desktop atau Start Menu.
 4. **Hanya saat pertama kali:** jendela *Setup Configuration* muncul (karena
@@ -160,8 +160,9 @@ tiga hal dalam satu aplikasi desktop:
 1. **Trading journal** — pencatatan trade, analitik performa (win rate, profit factor, R-multiple,
    expectancy), review pasca-trade berbasis AI, dan playbook strategi.
 2. **AI trading engine** — pipeline otomatis *Signal → Analysis → Review → Execute* di atas
-   metodologi SMC / ICT / MSNR, dengan **LLM Consensus Voting** multi-model (threshold 70%)
-   sebagai gerbang sebelum order dikirim ke broker.
+   metodologi SMC / ICT / MSNR, dengan **Agent Consensus Engine** (Hawk 1.5, Dove 1.0, Contrarian 1.0 +
+   memori terpersonalisasi, threshold ≥60% terbobot, ADR-0001 & ADR-0002) sebagai gerbang sebelum
+   order dikirim ke broker (dengan fallback rollback ke LLM Consensus).
 3. **Macro terminal** — monitoring rezim makro: yield curve, liquidity flow (ON RRP via FRED),
    PMI, COT, geo-risk, dan Quant Lab.
 
@@ -186,8 +187,8 @@ dikirim ke server mana pun.
 |---|---|
 | **Desktop shell** | Electron `35.7.5` + `electron-builder 26` + `electron-updater 6.8.9` (orchestrator proses, system tray, splash, OTA patch) |
 | **Frontend** | Next.js `16.2.1` (App Router, output `standalone`, build `--webpack`), React `19.2.4`, Tailwind CSS v4, Recharts, Framer Motion, Three.js |
-| **Backend** | Node.js + Express `5.2.1`, TypeScript, WebSocket (`ws`), Mongoose `9.3.3` / MongoDB `7.1.1`, Better Auth `1.5.6` (Discord OAuth), Zod `4.3.6`, Pino, node-cron |
-| **AI / LLM** | 9Router gateway (`http://127.0.0.1:20128/v1`) + Vercel AI SDK — Claude, Gemini, Groq, DeepSeek, Mistral, Nemotron |
+| **Backend** | Node.js + Express `5.2.1`, TypeScript, WebSocket (`ws`), Mongoose `9.3.3` / MongoDB `7.1.1`, Prisma (PostgreSQL port 5432) untuk memori agen (`agent_db`), Better Auth `1.5.6` (Discord OAuth), Zod `4.3.6`, Pino, node-cron |
+| **AI / LLM** | Agent Consensus Engine (Hawk, Dove, Contrarian) + 9Router gateway (`http://127.0.0.1:20128/v1`) + Vercel AI SDK — Claude, Gemini, Groq, DeepSeek, Mistral, Nemotron |
 | **Integrasi MT5** | Native MetaTrader 5 MCP Server (`http://127.0.0.1:22346/mcp`) via `@modelcontextprotocol/sdk` + `SSEClientTransport`; fallback eksekusi order via Python `server/trade_api.py` |
 | **Pembayaran** | Midtrans Snap (`midtrans-client`) |
 | **Testing** | Vitest `4.1.9` — server memakai `--pool=forks --max-workers=1` karena native binding MT5 |
@@ -418,12 +419,12 @@ D:\Journal Trade\
 │   ├── src/
 │   │   ├── index.ts           Entry: Express + WebSocket + health check
 │   │   ├── config/env.ts      Validasi env (Zod) — sumber schema konfigurasi
-│   │   ├── models/            25 model Mongoose
-│   │   ├── routes/            25 file route (prefix /api/v1/)
-│   │   ├── services/          51+ service (pipeline, risk, LLM consensus, MT5, macro)
+│   │   ├── models/            25 model Mongoose + Prisma schema (PostgreSQL)
+│   │   ├── routes/            26 file route (prefix /api/v1/)
+│   │   ├── services/          52+ service (agent consensus, pipeline, risk, LLM consensus, MT5, macro)
 │   │   ├── strategies/        Modul strategi: SMC, ICT, MSNR, ATR, SMT, IPDA
 │   │   ├── cron/              Job terjadwal (auto-backtest)
-│   │   └── agents/            System monitor agent
+│   │   └── agents/            Hawk, Dove, Contrarian, system monitor agent
 │   ├── dist/                  Output build (yang ikut ke bundle)
 │   ├── .env.example           Template konfigurasi yang dikirim ke user
 │   ├── fetch_rates.py         Helper Python (data rates)
@@ -451,8 +452,10 @@ D:\Journal Trade\
 │   └── electron-builder.yml   Konfigurasi NSIS installer
 │
 ├── docs/              Dokumentasi
+│   ├── adr/                   Architecture Decision Records (ADR-0001, ADR-0002)
+│   ├── RELEASE_AND_OTA.md     Prosedur release, OTA, dan strict gate checklist
 │   ├── USER_GUIDE_MT5.md      Panduan user: install EXE + koneksi MT5
-│   ├── API_REFERENCE.md       Referensi endpoint /api/v1/
+│   ├── API_REFERENCE.md       Referensi endpoint /api/v1/ (termasuk /agent-consensus)
 │   ├── infrastructure.md      Arsitektur infrastruktur & deployment
 │   ├── workflow.md            Spesifikasi multi-agent pipeline (Signal→Trade)
 │   ├── AI_PROVIDER_STRATEGY.md
@@ -542,7 +545,8 @@ STAGE 2  MULTI-METHODOLOGY      @analyst-trading
 STAGE 3  RISK & CONSENSUS       @qa-trading / @volco
          margin level ≥ 150% · max open positions · 1 posisi per simbol ·
          daily loss breaker · korelasi mata uang ·
-         LLM Consensus Voting ≥ 70% (multi-provider paralel + fallback)
+         Agent Consensus Engine ≥ 60% terbobot (Hawk 1.5, Dove 1.0,
+         Contrarian 1.0 + memori persona, ADR-0001/0002; fallback LLM)
                     │
                     ▼
 STAGE 4  EXECUTION              @ceo-trading / @axis
@@ -556,7 +560,8 @@ circuit breaker daily loss, dan lock per-user & per-symbol untuk mencegah ekseku
 
 ### Lapisan data & keamanan
 
-- **MongoDB (Mongoose):** user, trade logs, sesi AI, playbook, snapshot makro, memory agent, billing.
+- **MongoDB (Mongoose):** user, trade logs, sesi AI, playbook, snapshot makro, billing.
+- **PostgreSQL (Prisma):** model ingatan agen (`UserProfile`, `UserMemoryNote`, `UserAgentMemory`) pada port `5432` (`agent_db`).
 - **Enkripsi kredensial:** AES-256-CBC untuk kredensial MT5 at-rest, key dari `ENCRYPTION_KEY`.
 - **Auth:** Better Auth + Discord OAuth, dengan verifikasi keanggotaan guild (`DISCORD_GUILD_ID`).
 - **Rate limiting:** `express-rate-limit` pada endpoint API dan auth.
@@ -589,6 +594,8 @@ circuit breaker daily loss, dan lock per-user & per-symbol untuk mencegah ekseku
 
 | Dokumen | Isi |
 |---|---|
+| [`docs/adr/`](docs/adr/) | Architecture Decision Records (ADR-0001, ADR-0002) |
+| [`docs/RELEASE_AND_OTA.md`](docs/RELEASE_AND_OTA.md) | Prosedur rilis, alur OTA, dan strict gate checklist |
 | [`docs/USER_GUIDE_MT5.md`](docs/USER_GUIDE_MT5.md) | Install EXE production + koneksi MetaTrader 5 (untuk user) |
 | [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) | Referensi endpoint `/api/v1/` |
 | [`docs/infrastructure.md`](docs/infrastructure.md) | Arsitektur infrastruktur & deployment |
@@ -606,4 +613,4 @@ UNLICENSED — proprietary. Seluruh hak cipta milik Hunter Trades.
 
 ---
 
-*Hunter Trades Journal · Terminal Noir · v1.2.0*
+*Hunter Trades Journal · Terminal Noir · v1.2.1*

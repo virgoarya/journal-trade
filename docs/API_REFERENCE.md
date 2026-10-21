@@ -258,3 +258,20 @@ Dashboard indeks ketegangan geopolitik global.
   - Mengambil skor risiko geopolitik global terkini (misal perang dagang, ketegangan teritorial, sanksi).
 - `POST /refresh` **[Auth Required]**
   - Memaksa penarikan berita terbaru dan mengkalkulasi ulang skor geopolitik.
+
+---
+
+## 🤖 17. Agent Consensus Engine (`/api/v1/agent-consensus`)
+Deliberasi multi-agent (Hawk, Dove, Contrarian) dengan memori terpersonalisasi untuk evaluasi sinyal trading.
+
+- `POST /` **[Auth Required]**
+  - Menjalankan sesi debat agen secara `parallel` (default) atau `sequential`.
+  - Body: `{ prompt: string, context?: any, mode?: "parallel" | "sequential" }`
+  - Response: Jawaban per persona (`hawk`, `dove`, `contrarian`), sintesis `consensus`, dan `debateMode`.
+- `GET /insights` **[Auth Required]**
+  - Mengambil riwayat insight debat dan reasoning agent milik user yang sedang login.
+  - Query params: `type` (default `proactive`), `personaId` (`hawk` | `dove` | `contrarian`), `limit` (default 10).
+- `POST /deep-research` **[Auth Required]**
+  - Memicu siklus penalaran analitis mendalam berbasis deep research service.
+- `POST /proactive/evaluate` **[Auth Required]**
+  - Evaluasi proaktif terhadap kondisi pasar terkini dan persistensi insight baru ke database.
