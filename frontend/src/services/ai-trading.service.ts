@@ -612,6 +612,12 @@ class AITradingService {
         threshold: number;
         providerTimeoutMs: number;
       };
+      agentConsensus?: {
+        enabled: boolean;
+        threshold: number;
+        debateMode: "parallel" | "sequential";
+        memoryEnabled: boolean;
+      };
       savedPipelineConfig?: PipelineConfig;
       lastAutoBacktestAt?: string;
     }>(`/api/v1/settings/ai-trading${query}`);
@@ -626,6 +632,13 @@ class AITradingService {
       minProviders?: number;
       threshold?: number;
       providerTimeoutMs?: number;
+    };
+    agentConsensus?: {
+      enabled?: boolean;
+      threshold?: number;
+      debateMode?: "parallel" | "sequential";
+      memoryEnabled?: boolean;
+      toolEnabled?: boolean;
     };
   }) {
     const res = await apiClient.patch<{

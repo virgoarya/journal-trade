@@ -177,7 +177,7 @@ export default function PaymentModal({
       features: [
         { title: "Akses AI Trading Engine 3 Bulan", sub: "Pipeline otomatis multi-metodologi" },
         { title: "300.000 Token AI Agent", sub: "Bisa diisi ulang (Refill)" },
-        { title: "Multi-LLM Consensus Engine", sub: "Qwen, Gemini, Claude" },
+        { title: "Agent Consensus Engine", sub: "Qwen, Gemini, Claude" },
         { title: "Journal & Analytics Sync", sub: "Real-time sync dari MT5" },
       ],
     },
@@ -196,7 +196,7 @@ export default function PaymentModal({
       features: [
         { title: "Akses AI Trading Engine 6 Bulan", sub: "Performa penuh tanpa pembatasan fitur" },
         { title: "300.000 Token AI Agent", sub: "Bisa diisi ulang (Refill)" },
-        { title: "Multi-LLM Consensus Engine", sub: "Qwen, Gemini, Claude" },
+        { title: "Agent Consensus Engine", sub: "Qwen, Gemini, Claude" },
         { title: "Free Profit Hunter EA 1 Bulan", sub: "Aktif langsung setelah pembayaran" },
         { title: "Journal & Analytics Sync", sub: "Real-time sync dari MT5" },
         { title: "Priority AI Engine Queue", sub: "Respon analisis real-time lebih cepat" },
@@ -217,7 +217,7 @@ export default function PaymentModal({
       features: [
         { title: "Akses AI Trading Engine LIFETIME", sub: "Sekali bayar untuk selamanya" },
         { title: "FREE UNLIMITED Token AI Agent", sub: "Tanpa batas kuota token seumur hidup" },
-        { title: "Multi-LLM Consensus Engine", sub: "Qwen, Gemini, Claude" },
+        { title: "Agent Consensus Engine", sub: "Qwen, Gemini, Claude" },
         { title: "Profit Hunter EA MT5 Lifetime", sub: "Expert Advisor otomatis seumur hidup" },
         { title: "Journal & Analytics Sync", sub: "Real-time sync dari MT5" },
         { title: "Discord VIP Exclusive Channel", sub: "Grup private sinyal & insight hunter" },

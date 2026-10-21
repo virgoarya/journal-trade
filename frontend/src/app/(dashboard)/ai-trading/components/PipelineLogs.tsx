@@ -326,7 +326,7 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
       if (stages.CONFLUENCE.status === "success") return { ...stages.CONFLUENCE, status: "success" };
       if (stages.CONFLUENCE.status === "active") return { ...stages.CONFLUENCE, status: "active" };
       if (stages.SIGNAL.status === "success" && stages.CONFLUENCE.status === "pending") {
-         return { status: "active", message: "Evaluating multi-methodology & LLM consensus..." };
+         return { status: "active", message: "Evaluating SMC/ICT/MSNR confluence & Agent Consensus..." };
       }
       return { status: "pending" };
     }
@@ -530,16 +530,25 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                     </div>
                     <div className="whitespace-pre-wrap">{renderLogMessage(currentStepDetail.message || "")}</div>
                     
-                    {currentStepDetail.data?.llmConsensus && (
+                    {(() => {
+                      // Agent Consensus (ADR-0002) is the primary path; the 6-LLM
+                      // consensus is the legacy fallback. Read agentConsensus first.
+                      const consensus = currentStepDetail.data?.agentConsensus ?? currentStepDetail.data?.llmConsensus;
+                      if (!consensus) return null;
+                      const isAgent = Boolean(currentStepDetail.data?.agentConsensus);
+                      const votes = consensus.votes || [];
+                      return (
                       <div className="mt-3 space-y-2 border-t border-accent-gold/20 pt-2 font-mono">
                         <div className="text-[10px] text-accent-gold font-bold uppercase tracking-widest flex items-center gap-1.5">
                           <BrainCircuit className="w-3.5 h-3.5" />
-                          LLM Consensus Cards ({currentStepDetail.data.llmConsensus.goodVotes || 0}/{currentStepDetail.data.llmConsensus.totalVotes || 0} GOOD - {currentStepDetail.data.llmConsensus.verdict})
+                          {isAgent ? "Agent" : "LLM"} Consensus Cards ({consensus.goodVotes || 0}/{consensus.totalVotes || 0} GOOD - {consensus.verdict})
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {(currentStepDetail.data.llmConsensus.votes || []).map((vote: any, idx: number) => {
-                            const isGood = vote.verdict === "GOOD";
-                            const isBad = vote.verdict === "BAD";
+                          {votes.map((vote: any, idx: number) => {
+                            const voteLabel = isAgent ? (vote.persona || "").toUpperCase() : (vote.modelLabel || vote.provider);
+                            const verdict = isAgent ? vote.bias : vote.verdict;
+                            const isGood = verdict === "GOOD" || verdict === "BULLISH";
+                            const isBad = verdict === "BAD" || verdict === "BEARISH";
                             const badgeBg = isGood
                               ? "bg-neon-green/10 text-neon-green border-neon-green/30"
                               : isBad
@@ -549,14 +558,14 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                               <div key={idx} className="bg-black/50 border border-accent-gold/15 rounded-lg p-2.5 text-[10px] space-y-1.5">
                                 <div className="flex items-center justify-between">
                                   <span className="font-bold text-gray-200 flex items-center gap-1">
-                                    🤖 {vote.modelLabel || vote.provider}
+                                    {isAgent ? "🧠" : "🤖"} {voteLabel}
                                   </span>
                                   <div className="flex items-center gap-1.5">
                                     {vote.latencyMs && (
                                       <span className="text-[9px] text-text-muted">{(vote.latencyMs / 1000).toFixed(1)}s</span>
                                     )}
                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${badgeBg}`}>
-                                      {vote.verdict}
+                                      {verdict}
                                     </span>
                                   </div>
                                 </div>
@@ -568,7 +577,8 @@ export function PipelineLogs({ logs, config, isLoading }: PipelineLogsProps) {
                           })}
                         </div>
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {currentStepDetail.data?.checklist && (
                       <div className="mt-3 space-y-1.5 border-t border-current/10 pt-2">

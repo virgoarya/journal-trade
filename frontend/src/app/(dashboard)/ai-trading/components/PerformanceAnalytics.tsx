@@ -303,10 +303,10 @@ export function PerformanceAnalytics({ triggerRefresh }: Props) {
         />
       </div>
 
-      {/* Agent vs LLM Comparison */}
+      {/* Agent Consensus Performance */}
       <div className="bg-black/30 border border-accent-gold/10 rounded-lg p-3 space-y-3">
         <p className="text-[9px] font-bold text-accent-gold-dim uppercase tracking-wider font-mono">
-          Agent vs LLM Consensus
+          Agent Consensus Performance
         </p>
         <ComparisonBar
           agentValue={llmComparison.agent.winRate}

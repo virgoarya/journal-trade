@@ -170,7 +170,7 @@ export default function TokenRefillModal({
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-300">
               <CheckCircle2 className="w-4 h-4 text-green-400" />
-              <span>Multi-LLM Consensus</span>
+              <span>Agent Consensus Engine</span>
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-300">
               <CheckCircle2 className="w-4 h-4 text-green-400" />

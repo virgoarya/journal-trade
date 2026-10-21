@@ -10,6 +10,7 @@ import PaymentModal from "@/components/PaymentModal";
 import { useTokenBalance } from "../hooks/useTokenBalance";
 
 import { LlmConsensusConfig } from "./LlmConsensusConfig";
+import { AgentConsensusConfig } from "./AgentConsensusConfig";
 
 interface TradingPanelProps {
   pipelineRunning: boolean;
@@ -51,6 +52,14 @@ export function TradingPanel({
     showConsensusPanelByDefault,
     setShowConsensusPanelByDefault,
     visualizationStyle,
+    agentConsensusEnabled,
+    setAgentConsensusEnabled,
+    agentConsensusThreshold,
+    setAgentConsensusThreshold,
+    agentConsensusDebateMode,
+    setAgentConsensusDebateMode,
+    agentConsensusMemoryEnabled,
+    setAgentConsensusMemoryEnabled,
     setVisualizationStyle,
   } = useAiTrading();
 
@@ -373,9 +382,13 @@ export function TradingPanel({
 
             <div className="col-span-2 pt-3 border-t border-accent-gold/10 flex flex-col gap-2">
               <div>
-                <p className="text-[9px] text-accent-gold mb-0.5 uppercase tracking-widest font-bold">LLM Nodes</p>
+                <p className="text-[9px] text-accent-gold mb-0.5 uppercase tracking-widest font-bold">
+                  {agentConsensusEnabled ? "Agent Consensus Nodes" : "LLM Nodes"}
+                </p>
                 <p className="text-[10px] text-text-muted">
-                  {llmModels.filter(m => m.status === "active").length}/{llmModels.length} active
+                  {agentConsensusEnabled
+                    ? "3/3 active · Hawk / Dove / Contrarian"
+                    : `${llmModels.filter(m => m.status === "active").length}/${llmModels.length} active`}
                 </p>
               </div>
             </div>
@@ -518,6 +531,17 @@ export function TradingPanel({
         onShowConsensusPanelByDefaultChange={setShowConsensusPanelByDefault}
         visualizationStyle={visualizationStyle}
         onVisualizationStyleChange={setVisualizationStyle}
+      />
+
+      <AgentConsensusConfig
+        enabled={agentConsensusEnabled}
+        threshold={agentConsensusThreshold}
+        debateMode={agentConsensusDebateMode}
+        memoryEnabled={agentConsensusMemoryEnabled}
+        onToggle={setAgentConsensusEnabled}
+        onThresholdChange={setAgentConsensusThreshold}
+        onDebateModeChange={setAgentConsensusDebateMode}
+        onMemoryChange={setAgentConsensusMemoryEnabled}
       />
 
       {/* Pipeline Controls (Tactile Switches) */}

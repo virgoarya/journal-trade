@@ -93,6 +93,14 @@ interface AiTradingContextType {
   setLlmMinProviders: React.Dispatch<React.SetStateAction<number>>;
   llmProviderTimeoutMs: number;
   setLlmProviderTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
+  agentConsensusEnabled: boolean;
+  setAgentConsensusEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  agentConsensusThreshold: number;
+  setAgentConsensusThreshold: React.Dispatch<React.SetStateAction<number>>;
+  agentConsensusDebateMode: "parallel" | "sequential";
+  setAgentConsensusDebateMode: React.Dispatch<React.SetStateAction<"parallel" | "sequential">>;
+  agentConsensusMemoryEnabled: boolean;
+  setAgentConsensusMemoryEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   isSavingSettings: boolean;
 
   // Consensus Panel State
@@ -163,6 +171,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [llmThreshold, setLlmThreshold] = useState(0.7);
   const [llmMinProviders, setLlmMinProviders] = useState(3);
   const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(25000);
+  const [agentConsensusEnabled, setAgentConsensusEnabled] = useState(false);
+  const [agentConsensusThreshold, setAgentConsensusThreshold] = useState(0.6);
+  const [agentConsensusDebateMode, setAgentConsensusDebateMode] = useState<"parallel" | "sequential">("parallel");
+  const [agentConsensusMemoryEnabled, setAgentConsensusMemoryEnabled] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Consensus Panel State
@@ -195,6 +207,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
         setLlmThreshold(res.data.llmConsensus?.threshold || 0.7);
         setLlmMinProviders(res.data.llmConsensus?.minProviders || 3);
         setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 25000);
+        setAgentConsensusEnabled(res.data.agentConsensus?.enabled ?? false);
+        setAgentConsensusThreshold(res.data.agentConsensus?.threshold ?? 0.6);
+        setAgentConsensusDebateMode(res.data.agentConsensus?.debateMode ?? "parallel");
+        setAgentConsensusMemoryEnabled(res.data.agentConsensus?.memoryEnabled ?? true);
         if (res.data.savedPipelineConfig) {
           setSavedPipelineConfig(res.data.savedPipelineConfig);
         }
@@ -257,13 +273,19 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
           minProviders: llmMinProviders,
           providerTimeoutMs: llmProviderTimeoutMs,
         },
+        agentConsensus: {
+          enabled: agentConsensusEnabled,
+          threshold: agentConsensusThreshold,
+          debateMode: agentConsensusDebateMode,
+          memoryEnabled: agentConsensusMemoryEnabled,
+        },
       });
     } catch (e) {
       console.error("Failed to save AI trading settings:", e);
     } finally {
       setIsSavingSettings(false);
     }
-  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs]);
+  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs, agentConsensusEnabled, agentConsensusThreshold, agentConsensusDebateMode, agentConsensusMemoryEnabled]);
 
   // Debounced save when settings change.
   // Skip until the initial backend load finished (else defaults would overwrite saved settings),
@@ -350,6 +372,14 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setLlmMinProviders,
       llmProviderTimeoutMs,
       setLlmProviderTimeoutMs,
+      agentConsensusEnabled,
+      setAgentConsensusEnabled,
+      agentConsensusThreshold,
+      setAgentConsensusThreshold,
+      agentConsensusDebateMode,
+      setAgentConsensusDebateMode,
+      agentConsensusMemoryEnabled,
+      setAgentConsensusMemoryEnabled,
       isSavingSettings,
       showContributionIndicators,
       setShowContributionIndicators,
@@ -418,6 +448,14 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setLlmMinProviders,
       llmProviderTimeoutMs,
       setLlmProviderTimeoutMs,
+      agentConsensusEnabled,
+      setAgentConsensusEnabled,
+      agentConsensusThreshold,
+      setAgentConsensusThreshold,
+      agentConsensusDebateMode,
+      setAgentConsensusDebateMode,
+      agentConsensusMemoryEnabled,
+      setAgentConsensusMemoryEnabled,
       isSavingSettings,
       showContributionIndicators,
       setShowContributionIndicators,
