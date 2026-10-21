@@ -1653,3 +1653,24 @@ useEffect(() => {
 **Penyebab**: Branch baru disalin struktur logging dari branch lama, tapi gate kontrol-flow ikut tertinggal. `isTrade` jadi variabel mati untuk control flow (hanya dipakai string log).
 **Solusi**: Setiap kali menambah/mengubah branch keputusan, cek dua hal: (a) apakah nilai keputusan dipakai untuk `continue`/return, bukan cuma log; (b) apakah semua branch memiliki gate yang setara. Deteksi murah: cari variabel yang hanya muncul di template literal log.
 **Hindari**: Jangan mengubah behaviour semacam ini tanpa lapor KIRA dulu — buat child task dengan status `blocked` + usulan TDD, jangan langsung patch.
+
+### [20261022] `npx vitest run` Gagal "5 Test Files" Padahal Suite Sehat — Playwright Spec Ikut Terkumpul
+**Area**: Frontend / testing / tooling
+**Gejala**: `npx vitest run` di root `frontend/` mengakhiri dengan `Test Files 5 failed | 17 passed (22)` dan `Errors 3 errors`, padahal `Tests 182 passed (182)`. Kelihatannya seperti regresi besar.
+**Penyebab**: `vitest.config.ts` tidak set `include`, jadi Vitest memakai default `**/*.{test,spec}.?(c|m)[jt]s?(x)` yang **juga menangkap spec Playwright di `e2e/`**. Spec Playwright memakai `test.describe()` dari `@playwright/test`; di dalam runner Vitest itu melempar error (dan di versi baru: "You are calling test.describe() from an async test.describe() block"), sehingga file-nya gagal dimuat — bukan gagal assertion.
+**Solusi**: Jalankan `npx vitest run src/` untuk suite unit. Angka yang benar untuk repo ini: **17 files / 182 tests, semua pass, exit 0** (~57s). Jangan pernah lapor "5 test files failed" tanpa memeriksa isi error-nya — `Tests 182 passed` di baris yang sama adalah petunjuk bahwa tidak ada assertion yang gagal.
+**Hindari**: Jangan menambal ini dengan memindah spec Playwright atau menambah `exclude` yang berisiko membuang test unit. Cukup panggil `vitest run src/`. Perbaikan permanen yang benar: tambahkan `include: ["src/**/*.{test,spec}.?(c|m)[jt]s?(x)"]` di `vitest.config.ts` (belum dikerjakan — di luar scope task UI-1).
+
+### [20261022] Gate ESLint `--max-warnings 0` Tidak Pernah Bisa Hijau — Ukur Delta Aturan vs HEAD, Bukan Angka Absolut
+**Area**: Frontend / tooling / verifikasi
+**Gejala**: Task mewajibkan `npx eslint . --max-warnings 0`, tapi `npx eslint .` di repo ini menghasilkan **645 problems (371 errors, 274 warnings)** — semuanya sudah ada sebelum perubahan kita (tercatat Vera di commit `74b1403`). Gate ini mustahil diluluskan dan membuat setiap commit tampak "gagal verifikasi".
+**Penyebab**: Utang lint lama di `src/` (mayoritas `react-hooks/set-state-in-effect`, `react-hooks/immutability`, `@typescript-eslint/no-explicit-any`, `preserve-manual-memoization`). Flag `--max-warnings 0` menjadikan seluruh utang itu kegagalan kita.
+**Solusi**: Verifikasi yang jujur = **delta aturan**, bukan angka absolut. Jalankan `npx eslint --format json <file>` pada state working tree DAN pada `HEAD` (stash → run → pop), lalu bandingkan **multiset `ruleId` per file** (invariant terhadap pergeseran baris). Hasil untuk task UI-1: `0 new problems, 4 fixed`. Catatan: header code-frame eslint (`path:line:col`) jangan sampai ikut ter-parsing sebagai nama file, dan pesan aturan panjang ter-wrap ke baris berikutnya — itu membuat parser stylish biasa menghasilkan hitungan salah.
+**Hindari**: Jangan "memperbaiki" dengan menambahkan `eslint-disable` massal atau menaikkan `--max-warnings` hanya supaya commit lolos — itu menghapus sinyal regresi. Laporkan angka absolut + delta, dan sebutkan bahwa 645 itu baseline HEAD.
+
+### [20261022] Premise Task Bisa Usang — Verifikasi Klaim "uncommitted" ke `git log` Sebelum Eksekusi
+**Area**: Workflow / kanban
+**Gejala**: Task UI-1 berbunyi "COMMIT uncommitted Agent Consensus UI writer — INI BLOCKING". Realitanya 8 file yang disebut **sudah** ter-commit di `223f3d5` (21 Okt 21:13) dan sudah masuk `main`. Tidak ada yang uncommitted.
+**Penyebab**: Task disusun dari observasi sebelum run sebelumnya; run-run sebelumnya crash/rate-limit sehingga status repo berubah tanpa task diperbarui.
+**Solusi**: Selalu mulai dengan `git status --short` + `git log --oneline -5` + `git show --stat <hash yang disebut di task>`, lalu cocokkan klaim task dengan isi repo. Kalau premise usang, kerjakan sisa kerja nyata dan koreksi premise di comment task — jangan mencari-cari pekerjaan yang tidak ada, dan jangan menyatakan "sudah selesai" hanya karena file-nya ada.
+**Hindari**: Jangan menebak "mungkin yang dimaksud file lain" dan mengubah file di luar daftar. Laporkan ketidaksesuaian dengan bukti (hash commit + `git status`) seperti yang Bang Vir harapkan.
