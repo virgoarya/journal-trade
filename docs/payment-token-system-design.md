@@ -1,4 +1,16 @@
-> **⚠️ STATUS (2026-10-19): DEPRECATED.** Model token top-up sudah dipensiunkan. User membawa API key sendiri (9Router) — lihat `docs/adr/ADR-0001` & `docs/AI_PROVIDER_STRATEGY.md`. Bagian *Registration* dan *Subscription* **tidak berlaku lagi**.
+> **⚠️ STATUS (2026-10-21): DEPRECATED — arah produk, bukan keadaan kode.**
+> Model token top-up (saldo token terkelola app + Midtrans) bukan lagi arah monetisasi: biaya LLM
+> ditanggung lewat kunci 9Router milik deployer (`NINE_ROUTER_URL` / `NINE_ROUTER_API_KEY`) — lihat
+> `docs/AI_PROVIDER_STRATEGY.md`. Bagian *TokenBalance*, *Subscription*, dan *Token Consumption*
+> tidak lagi relevan dengan arah produk.
+>
+> **Kode masih ada di repo (belum dihapus)** — terverifikasi 2026-10-21:
+> `server/src/services/payment.service.ts` (326 baris), `server/src/routes/payment.routes.ts`
+> (di-mount di `/api/v1/payment`), `frontend/src/components/PaymentModal.tsx` (dipakai di
+> `TradingPanel.tsx`), dan `frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts`.
+> Tidak ada ADR yang mencatat pivot monetisasi ini; [ADR-0001](../adr/ADR-0001-agent-consensus-engine.md)
+> hanya menyebut dokumen ini sebagai *to-do* ("perlu diperbarui setelah pivot monetisasi final").
+> Dokumen di bawah dipertahankan sebagai **arsitektur historis**.
 
 # Technical Design Document: Payment & Token System for Hunter Trades Journal
 
@@ -52,7 +64,7 @@
 }
 ```
 
-### 1.3 TokenBalance
+### 1.4 TokenBalance
 ```
 {
   _id: ObjectId,
@@ -63,7 +75,7 @@
 }
 ```
 
-### 1.4 Transaction
+### 1.5 Transaction
 ```
 {
   _id: ObjectId,

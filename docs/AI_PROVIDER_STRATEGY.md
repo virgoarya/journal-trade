@@ -89,11 +89,15 @@ Konsensus di halaman **AI Trading** dipindahkan dari **LLM Consensus** (voting 6
 
 | Aspek | Detail |
 |---|---|
-| Provider | 9Router — model `oc/longcat-2.5-preview-free` (1.000.000 ctx) |
+| Provider | **9Router** (`env.NINE_ROUTER_URL`) — rantai model di bawah |
 | Mode | Parallel debate (pipeline) / sequential chain (endpoint langsung) |
-| Memory | PostgreSQL — `DATABASE_URL_AGENT` → `agent_db` (per-user) |
+| Memory | **MongoDB** `UserAgentMemory` (koleksi `user_agent_memories`) via `userMemoryService` — inilah yang di-inject ke prompt konsensus. ⚠️ ADR-0001 menyebut PostgreSQL/Prisma (`DATABASE_URL_AGENT` → `agent_db`); jalur itu dipakai service lain (`profile-repo`, `memory-extractor`, `ai-coach`), bukan engine konsensus |
 | Voting | Terbobot: Hawk 1.5 · Dove 1.0 · Contrarian 1.0; threshold ≥60% → `GOOD`/`BAD`/`SKIP` |
 | Activation | Feature flag `agentConsensus.enabled` (default `false`) di pipeline config |
 | Rollback | `llm-consensus.service.ts` tidak dihapus — jadi `else if` (fallback) |
+
+**Rantai model 9Router** (`server/src/config/llm-models.config.ts`, dicoba berurutan oleh `base.agent.ts`):
+`gemini/gemini-3.5-flash-lite` → `mistral/mistral-medium-latest` → `openrouter/typesafe/jev-1.13`
+→ `deepseek/deepseek-v3.2` → `cf/@cf/meta/llama-3.1-8b-instruct-fp8-fast` → `claude-opus-4.6`.
 
 **Alur:** SMC/ICT/MSNR confluence → Agent Consensus → verdict + reasoning + confidence.
