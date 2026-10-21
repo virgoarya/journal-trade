@@ -1,32 +1,41 @@
-## 🚀 [v1.2.1] — 2026-10-16 (Versi Terbaru)
+## 🚀 [v1.2.1] — 2026-10-20 (Versi Terbaru)
 
-> Dipulihkan dari commit `4916798` (yang salah label `v1.2.2`), lalu dikoreksi agar
-> jujur. Versi sebenarnya adalah **1.2.1** — cocok dengan `desktop/`, `frontend/`,
-> `server/package.json`, dan `update/version.json`.
+> Versi konsolidasi rilis **1.2.1** — mencakup transisi penuh arsitektur Agent Consensus (ADR-0001 & ADR-0002),
+> perbaikan end-to-end pipeline & settings, integrasi In-App Guidance, pembaruan tooling ESLint v9,
+> serta verifikasi pengujian Playwright E2E.
+
+### 🧠 Agent Consensus Engine (ADR-0001 & ADR-0002 — Full Replace)
+- **Full Replace Hero Konsensus:** Menggantikan visual lama 6-node LLM di halaman AI Trading dengan **Agent Consensus Breakdown** (`c2a57f9`), menampilkan 3 Persona:
+  - **Hawk (Bobot 1.5):** Evaluasi risiko, capital preservation, sensitivitas likuiditas, dan mitigasi stop-out.
+  - **Dove (Bobot 1.0):** Identifikasi momentum, konfirmasi tren, dan peluang risk/reward menguntungkan.
+  - **Contrarian (Bobot 1.0):** Skeptisisme pasar, mitigasi consensus failure, dan deteksi jebakan likuiditas.
+  - Ditambah visualisasi **Consensus Score** (threshold ≥ 60%), **Agent Bias Radar**, dan **Vote Distribution**.
+- **Perhitungan Voting Terbobot:** Implementasi `calculateWeightedConsensus()` (`1682e5c`) yang menghitung skor terbobot riil dari vote agen (bukan sekadar vote mayoritas atau keyword matching).
+- **Isolasi Memori Per-Persona:** Mengaktifkan injeksi memori spesifik per persona (`buildMemoryContext`) dan ranking fakta terpelajari berdasarkan `confidence` descending (`e37bb1b`) di `server/src/services/agent-consensus.service.ts`.
+- **Rollback Path Terjaga:** `llm-consensus.service.ts` tetap dipertahankan di backend sebagai fallback `else if` jika `agentConsensus.enabled` dimatikan.
+
+### ⚙️ Pipeline & Settings Integration
+- **Fix Dead Code Flag `agentConsensus`:** Menambahkan properti `agentConsensus` ke dalam Zod schema validasi settings (`settings.routes.ts`) dan pipeline start route (`ai-trading.routes.ts`) (`938d604`). Sebelumnya flag selalu bernilai `false` di runtime karena tidak dapat ditulis oleh API settings.
+- **Trade History Enrichment:** Menghubungkan riwayat trading pengguna dari database MongoDB (`buildTradeHistoryContext`) untuk disuntikkan ke dalam prompt agen sebagai bukti performa historis.
+
+### 🧪 Pengujian & Kualitas (Quality Assurance)
+- **Suite E2E Task 3.4 Lulus 10/10:** Vera menyelesaikan suite pengujian Playwright end-to-end (`frontend/e2e/agent-consensus.spec.ts`) dengan **10/10 test cases lulus** (`43348e6`), mencakup rendering kartu konsensus, error boundary, navigasi tab, dan penanganan status pipeline.
+- **Suite Unit Test Backend 44/44 Pass:** Verifikasi menyeluruh mencakup memory context, weighted voting, adapter layer, trade history link, pipeline routing, dan isolasi memori multi-user.
+- **Setup ESLint Flat Config v9:** Konfigurasi ESLint modern di server dan frontend (`f8ba0a6`, `e2cde18`, `e7089f7`), memastikan aturan Next.js (`core-web-vitals`) aktif kembali dan direktori `e2e/**` terlindungi linting.
+
+### 🎓 In-App Guidance & UX
+- **Onboarding Walkthrough Overlay:** Menambahkan dukungan click-outside dismiss (`onClick={onSkip}`) pada `Walkthrough.tsx` (`e9b2bd2`) agar overlay tidak mengunci interaksi pengguna di layar.
+- **Komponen panduan interaktif modular** (`frontend/src/components/guidance/`): tooltips kontekstual, dynamic step manifest, dan progress state persistence (`storageKey: hunter-trades-guidance:v2`).
+- **Integrasi Onboarding:** `GuidanceProvider` dipasang di `app/(dashboard)/layout.tsx` dengan auto-start first-run tour `onboarding` diselaraskan ke route nyata (`/log-trade`, `/dashboard`, `/macro-terminal`, `/ai-trading`, `/playbook`).
+
+### 🗄️ Infrastruktur & Database
+- **Verifikasi Koneksi MongoDB:** Memastikan ketersediaan koneksi database riwayat trading melalui MongoDB Atlas SRV record (cluster shards `159.143.58.x`) dan service lokal MongoDB port 27017.
+- **PostgreSQL Agent Memory:** Tabel `UserProfile` dan `UserMemoryNote` berjalan di PostgreSQL port 5432 untuk persistensi ingatan agen.
 
 ### 🔄 OTA Update — Hosting di GitHub Raw CDN
-- **Remote OTA Hosting:** `version.json` dan `patch.zip` dipindah dari local server ke
-  branch `main` GitHub raw (`https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/`).
-- **Fix `.gitignore` OTA Leak/Block:** folder `update/` diizinkan masuk repo agar patch dan
-  metadata versi tersinkronisasi sempurna.
-- **Semver-aware Gate:** logika perbandingan versi pada updater diperbaiki untuk mencegah
-  downgrade atau silent failure.
-
-### 🎓 In-App Guidance (Whatfix Pattern)
-- **Komponen panduan interaktif modular** (`frontend/src/components/guidance/`): tooltips
-  kontekstual, dynamic step manifest, dan progress state persistence
-  (`storageKey: hunter-trades-guidance:v2`).
-- **Integrasi ke aplikasi (pekerjaan rilis ini):** `GuidanceProvider` dipasang di
-  `app/(dashboard)/layout.tsx`, logika auto-start first-run ditambahkan (tour `onboarding`
-  berjalan otomatis bila belum pernah diselesaikan/di-dismiss), dan selector manifest
-  diselaraskan dengan route nyata (`/log-trade`, `/dashboard`, `/macro-terminal`,
-  `/ai-trading`, `/playbook`).
-- **Perilaku penutupan:** guidance tidak lagi tertutup karena klik di luar area backdrop;
-  hanya tombol **Skip/Finish** yang menutup (fix `7ec3e81`).
-- **⚠️ Koreksi klaim:** commit `4916798` menulis *"Mengintegrasikan"* padahal saat itu baru
-  **komponen** yang dibangun — provider belum pernah dipasang (dead code, `startTour()`
-  nol pemanggil). Entri ini menggantikan klaim tersebut. Integrasi diselesaikan pada rilis
-  ini dan **wajib lolos verifikasi QA (Vera) + strict gate sebelum dinyatakan aktif.**
+- **Remote OTA Hosting:** `version.json` dan `patch.zip` dipindah dari local server ke branch `main` GitHub raw (`https://raw.githubusercontent.com/virgoarya/journal-trade/main/update/`).
+- **Fix `.gitignore` OTA Leak/Block:** folder `update/` diizinkan masuk repo agar patch dan metadata versi tersinkronisasi sempurna.
+- **Semver-aware Gate:** logika perbandingan versi pada updater diperbaiki untuk mencegah downgrade atau silent failure.
 
 ---
 

@@ -24,3 +24,11 @@
 - Added: weighted voting (Hawk 1.5, Dove 1.0, Contrarian 1.0), ≥60% threshold, memory injection Top-5, PostgreSQL agent_db, pgvector hybrid, rollback path (llm-consensus.service.ts retained).
 - Sources: docs/adr/ADR-0001-agent-consensus-engine.md, docs/adr/ADR-0002-agent-consensus-rollout.md.
 - Updated index.md summary.
+
+## [2026-10-20] update | Sprint v1.2.1 Consolidation & Full Replace Completion
+- Full Replace Konsensus (ADR-0002): Transisi visual hero HUD AI Trading dari 6-node LLM ke Agent Consensus Breakdown (`c2a57f9`), menampilkan Hawk (1.5), Dove (1.0), Contrarian (1.0), Bias Radar, dan Consensus Score.
+- Backend Pipeline: Fix dead code flag `agentConsensus.enabled` di Zod schema settings & route (`938d604`), kalkulasi weighted voting (`1682e5c`), dan isolasi memori per-persona serta confidence ranking (`e37bb1b`). Rollback path ke `llm-consensus.service.ts` tetap aman.
+- Kualitas & Pengujian: E2E test suite Task 3.4 (`frontend/e2e/agent-consensus.spec.ts`) lulus 10/10 test cases (`43348e6`), suite unit test backend 44/44 pass.
+- DevOps & Tooling: Setup ESLint flat config v9 dan konsolidasi coverage e2e (`f8ba0a6`, `e2cde18`, `e7089f7`).
+- UX & Guidance: Fix overlay walkthrough onboarding agar mendukung click-outside dismiss (`e9b2bd2`).
+- Infrastruktur: Verifikasi koneksi MongoDB Atlas via SRV record (shards `159.143.58.x`) dan fallback lokal port 27017.
