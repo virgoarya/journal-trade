@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, Plus, Target, TrendingUp, Eye, Edit, Trash2, Copy, Loader2 } from "lucide-react";
+import { Plus, Target, Edit, Loader2 } from "lucide-react";
 import { playbookService, type Strategy } from "@/services/playbook.service";
 import { PlaybookCard } from "@/components/playbook/PlaybookCard";
 import { CreatePlaybookForm } from "@/components/playbook/CreatePlaybookForm";
@@ -25,8 +25,8 @@ export default function PlaybookPage() {
         } else {
           setError(result.error || "Failed to load playbook");
         }
-      } catch (err: any) {
-        setError(err.message || "Network error");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Network error");
       } finally {
         setLoading(false);
       }
@@ -111,7 +111,7 @@ export default function PlaybookPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredStrategies.map((strategy) => (
           <PlaybookCard
-            key={strategy.id || (strategy as any)._id}
+            key={strategy.id}
             playbook={strategy}
             onView={() => setViewingStrategy(strategy)}
             onEdit={() => setEditingStrategy(strategy)}
@@ -120,11 +120,11 @@ export default function PlaybookPage() {
                 try {
                   const res = await playbookService.delete(strategyId);
                   if (res.success) {
-                    setStrategies(prev => prev.filter(item => (item.id || (item as any)._id) !== strategyId));
+                    setStrategies(prev => prev.filter(item => item.id !== strategyId));
                   } else {
                     alert(res.error || "Failed to delete strategy");
                   }
-                } catch (err: any) {
+                } catch {
                   alert("System error occurred while deleting");
                 }
               }
@@ -145,7 +145,15 @@ export default function PlaybookPage() {
           <div className="glass p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-accent-gold">Create New Playbook</h2>
-              <button onClick={() => setShowForm(false)} className="text-text-muted hover:text-accent-gold">✕</button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                aria-label="Close strategy form"
+                title="Close"
+                className="text-text-muted hover:text-accent-gold"
+              >
+                ✕
+              </button>
             </div>
             <CreatePlaybookForm
               onSubmit={(playbook) => {
@@ -173,7 +181,15 @@ export default function PlaybookPage() {
                   {viewingStrategy.marketCondition && ` • ${viewingStrategy.marketCondition}`}
                 </p>
               </div>
-              <button onClick={() => setViewingStrategy(null)} className="text-text-muted hover:text-accent-gold text-xl">✕</button>
+              <button
+                type="button"
+                onClick={() => setViewingStrategy(null)}
+                aria-label="Close strategy details"
+                title="Close"
+                className="text-text-muted hover:text-accent-gold text-xl"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="space-y-6">
@@ -326,15 +342,23 @@ export default function PlaybookPage() {
           <div className="glass p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-accent-gold">Edit Strategy</h2>
-              <button onClick={() => setEditingStrategy(null)} className="text-text-muted hover:text-accent-gold">✕</button>
+              <button
+                type="button"
+                onClick={() => setEditingStrategy(null)}
+                aria-label="Close edit strategy form"
+                title="Close"
+                className="text-text-muted hover:text-accent-gold"
+              >
+                ✕
+              </button>
             </div>
             <CreatePlaybookForm
               mode="edit"
               initialData={editingStrategy}
               onSubmit={(updated) => {
-                setStrategies(prev => prev.map(s => (s.id || (s as any)._id) === (updated.id || (updated as any)._id) ? updated : s));
+                setStrategies(prev => prev.map(s => s.id === updated.id ? updated : s));
                 setEditingStrategy(null);
-                if (viewingStrategy && (viewingStrategy.id === updated.id || (viewingStrategy as any)._id === (updated as any)._id)) {
+                if (viewingStrategy?.id === updated.id) {
                   setViewingStrategy(updated);
                 }
               }}
