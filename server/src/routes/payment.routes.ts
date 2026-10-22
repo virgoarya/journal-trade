@@ -16,7 +16,7 @@ const createTokenSchema = z.object({
   userId: z.string().min(1),
   amountIDR: z.number().positive(),
   isBooster: z.boolean().optional(),
-  orderType: z.enum(["registration", "token_topup", "package"]),
+  orderType: z.enum(["registration", "package"]),
   packageType: z.enum(["basic", "pro", "premium"]).optional(),
 });
 
@@ -52,10 +52,6 @@ router.get(
 );
 
 /** GET /api/payment/token-balance/:userId — compatibility route */
-router.get(
-  "/token-balance/:userId",
-  validate({ params: userIdParamSchema }),
-  getPaymentStatusHandler
-);
+// Token balance route removed: access is package-based.
 
 export default router;

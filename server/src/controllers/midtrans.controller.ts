@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { z } from "zod";
 import {
   createSnapToken,
   getTransactionStatus,
@@ -8,19 +7,11 @@ import {
   verifyMidtransSignature,
   parseOrderId,
   handlePaymentSuccess,
-  hasInsufficientToken,
   getPaymentStatus,
 } from "../services/payment.service";
 import { Transaction } from "../models/Transaction";
 
-/** Zod schema untuk body createPaymentToken */
-const createTokenSchema = z.object({
-  userId: z.string().min(1),
-  amountIDR: z.number().positive(),
-  isBooster: z.boolean().optional(),
-  orderType: z.enum(["registration", "token_topup", "package"]),
-  packageType: z.enum(["basic", "pro", "premium"]).optional(),
-});
+
 
 /** POST /api/payment/token — buat Snap Token */
 export async function createPaymentToken(req: Request, res: Response) {
@@ -32,11 +23,8 @@ export async function createPaymentToken(req: Request, res: Response) {
       return res.status(400).json({ error: "userId must be a single string" });
     }
 
-    // ponytail: prefix kept "reg"/"top"/"pkg" for parseOrderId compat
-    const typePrefix =
-      orderType === "registration" ? "reg" :
-      orderType === "token_topup" ? "top" :
-      "pkg";
+    // ponytail: prefix kept "reg"/"pkg" for parseOrderId compat
+    const typePrefix = orderType === "registration" ? "reg" : "pkg";
     const order_id =
       orderType === "package" && packageType
         ? `pkg_${userId}_${packageType}_${Date.now()}`
