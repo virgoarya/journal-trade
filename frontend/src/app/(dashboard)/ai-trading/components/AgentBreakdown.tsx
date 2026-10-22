@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Shield, TrendingUp, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, Shield, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import type { AgentConsensusResult, AgentVote } from "@/services/ai-trading.service";
 
@@ -10,6 +10,7 @@ import type { AgentConsensusResult, AgentVote } from "@/services/ai-trading.serv
 interface Props {
   agentConsensus?: AgentConsensusResult | null;
   threshold?: number;
+  onStartPipeline?: () => Promise<boolean>;
 }
 
 interface PersonaConfig {
@@ -252,12 +253,22 @@ function AgentCard({ vote, defaultOpen = false }: { vote: AgentVote; defaultOpen
 
 // ─── Main Export ─────────────────────────────────────────
 
-export function AgentBreakdown({ agentConsensus, threshold = 0.6 }: Props) {
+export function AgentBreakdown({ agentConsensus, threshold = 0.6, onStartPipeline }: Props) {
   if (!agentConsensus) {
     return (
-      <div className="glass rounded-lg p-4 text-center">
+      <div className="glass rounded-lg p-4 text-center space-y-3">
         <p className="text-text-muted text-sm">No agent consensus data available</p>
-        <p className="text-text-muted text-xs mt-1">Start the pipeline to see agent analysis</p>
+        <p className="text-text-muted text-xs">Start the pipeline to see agent analysis</p>
+        {onStartPipeline && (
+          <button
+            onClick={onStartPipeline}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent-gold/20 border border-accent-gold/40 text-accent-gold text-sm font-medium rounded-lg hover:bg-accent-gold/30 transition-colors"
+            aria-label="Start trading pipeline"
+          >
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            Start Pipeline
+          </button>
+        )}
       </div>
     );
   }

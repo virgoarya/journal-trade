@@ -25,6 +25,7 @@ import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain, Loader2 } from "lu
 import { Suspense } from "react";
 import { brokerRegistrationService } from "@/services/broker-registration.service";
 import { useSession } from "@/lib/auth-client";
+import type { PipelineConfig } from "@/services/ai-trading.service";
 import PaymentModal from "@/components/PaymentModal";
 import TokenRefillModal from "@/components/TokenRefillModal";
 import { usePaymentGate } from "./hooks/usePaymentGate";
@@ -104,13 +105,15 @@ function AITradingPageContent() {
     modifyPosition,
     refetchPositions,
     pipelineStatus,
-    pipelineLogs,
-    isPipelineStarting,
-    isPipelineStopping,
-    lastAnalysis,
-    allAnalyses,
-    agentConsensus,
-    skillConfig,
+        pipelineLogs,
+        isPipelineStarting,
+        isPipelineStopping,
+        lastAnalysis,
+        allAnalyses,
+        agentConsensus,
+        startPipeline,
+        savedPipelineConfig,
+        skillConfig,
     setSkillConfig,
     skillVersion,
     setSkillVersion,
@@ -404,11 +407,12 @@ function AITradingPageContent() {
             {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
 
             {/* Agent Consensus is the primary consensus UI. LLMConsensus remains a backend rollback path only. */}
-            {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
-            <AgentBreakdown
-              agentConsensus={agentConsensus ?? undefined}
-              threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
-            />
+                                    {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
+                                    <AgentBreakdown
+                                      agentConsensus={agentConsensus ?? undefined}
+                                      threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
+                                      onStartPipeline={() => startPipeline((savedPipelineConfig ?? pipelineStatus?.config ?? { useAppliedConfig: true }) as PipelineConfig)}
+                                    />
 
             {pipelineStatus?.running && (
               <>
