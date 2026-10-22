@@ -7,6 +7,7 @@ export interface ITransaction extends Document {
   currency: string; // 'IDR', 'USD'
   status: string; // 'completed', 'pending', 'failed'
   reference_id: string; // Midtrans transaction ID
+  order_id?: string; // Midtrans order ID; unique when present
   created_at: Date;
   updated_at: Date;
   description: string;
@@ -19,6 +20,7 @@ const TransactionSchema = new Schema<ITransaction>({
   currency: { type: String, enum: ['IDR', 'USD'], default: 'IDR' },
   status: { type: String, enum: ['completed', 'pending', 'failed'], default: 'pending' },
   reference_id: { type: String, required: true, index: true },
+  order_id: { type: String },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
   description: { type: String },
@@ -28,5 +30,10 @@ const TransactionSchema = new Schema<ITransaction>({
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
+
+TransactionSchema.index(
+  { order_id: 1 },
+  { unique: true, partialFilterExpression: { order_id: { $exists: true, $type: "string" } } }
+);
 
 export const Transaction = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema);

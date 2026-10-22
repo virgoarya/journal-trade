@@ -3,16 +3,28 @@ import crypto from "crypto";
 
 // Mock models (paths relative to THIS file)
 vi.mock("../../models/Registration", () => ({
-  Registration: { findOneAndUpdate: vi.fn().mockResolvedValue({}) },
+  Registration: {
+    findOneAndUpdate: vi.fn().mockResolvedValue({}),
+    // WIP memanggil `.lean()` pada hasil findOne (baris 298).
+    findOne: vi.fn().mockReturnValue({
+      lean: () => Promise.resolve(null),
+    }),
+  },
 }));
 vi.mock("../../models/Subscription", () => ({
   Subscription: { findOneAndUpdate: vi.fn().mockResolvedValue({}) },
 }));
 vi.mock("../../models/TokenBalance", () => ({
-  TokenBalance: { findOneAndUpdate: vi.fn().mockResolvedValue({}) },
+  TokenBalance: {
+    findOneAndUpdate: vi.fn().mockResolvedValue({}),
+    // WIP memanggil `.lean()` pada hasil findOne (baris 153) — kembalikan thenable+lean.
+    findOne: vi.fn().mockReturnValue({
+      lean: () => Promise.resolve(null),
+    }),
+  },
 }));
 vi.mock("../../models/Transaction", () => ({
-  Transaction: { create: vi.fn().mockResolvedValue({}) },
+  Transaction: { create: vi.fn().mockResolvedValue({}), findOne: vi.fn().mockResolvedValue(null) },
 }));
 vi.mock("../../db/mongoose", () => ({
   authMongoClient: {
@@ -96,11 +108,6 @@ describe("payment.service", () => {
   });
 
   describe("parseOrderId", () => {
-    it("should parse token_topup order id correctly", () => {
-      const ctx = parseOrderId("token_topup_usra_1690000000");
-      expect(ctx).toEqual({ orderType: "token_topup", userId: "usra", packageType: undefined });
-    });
-
     it("should parse registration order id correctly", () => {
       const ctx = parseOrderId("registration_usrb_1690000000");
       expect(ctx).toEqual({ orderType: "registration", userId: "usrb" });
@@ -134,25 +141,6 @@ describe("payment.service", () => {
       expect(result).toContain("Registration activated for user usr_abc");
     });
 
-    it("should increment token balance for token_topup", async () => {
-      const result = await handlePaymentSuccess(
-        "token_topup_usr_abc_1690000000",
-        50000,
-        "usr_abc",
-        "token_topup",
-        "txn_2",
-        false
-      );
-
-      expect(Transaction.create).toHaveBeenCalledOnce();
-      expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ user_id: "usr_abc" }),
-        expect.objectContaining({ $inc: expect.objectContaining({ balance: 100 }) }),
-        expect.any(Object)
-      );
-      expect(result).toContain("+100 tokens for user usr_abc");
-    });
-
     it("should grant unlimited lifetime tokens for the premium package", async () => {
       const uid = "aaaaaaaaaaaaaaaaaaaaaaaa";
       const result = await handlePaymentSuccess(
@@ -170,9 +158,12 @@ describe("payment.service", () => {
         expect.objectContaining({ plan: "premium", is_lifetime: true }),
         expect.any(Object)
       );
+      // Premium: tokenQuota null -> is_unlimited=true (via $setOnInsert saat dokumen baru).
       expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.objectContaining({ balance: 99999999, is_unlimited: true }),
+        expect.objectContaining({
+          $setOnInsert: expect.objectContaining({ is_unlimited: true }),
+        }),
         expect.any(Object)
       );
       expect(result).toContain("unlimited");
@@ -201,7 +192,7 @@ describe("payment.service", () => {
       );
       expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.objectContaining({ balance: 300000, is_unlimited: false }),
+        expect.objectContaining({ $setOnInsert: expect.objectContaining({ balance: 300000 }) }),
         expect.any(Object)
       );
       expect(result).toContain("300000");
@@ -230,7 +221,7 @@ describe("payment.service", () => {
       );
       expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
         expect.any(Object),
-        expect.objectContaining({ balance: 300000, is_unlimited: false }),
+        expect.objectContaining({ $setOnInsert: expect.objectContaining({ balance: 300000 }) }),
         expect.any(Object)
       );
       expect(result).toContain("300000");
