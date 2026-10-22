@@ -4,12 +4,10 @@ import { authMongoClient } from "../db/mongoose";
 import { env } from "../config/env";
 import { Registration } from "../models/Registration";
 import { Subscription } from "../models/Subscription";
-import { TokenBalance } from "../models/TokenBalance";
 import { Transaction } from "../models/Transaction";
 import {
   ORDER_PREFIX,
   ORDER_PREFIX_LEGACY,
-  getTokenQuota,
   PRICING,
 } from "../config/payment-pricing";
 
@@ -134,50 +132,6 @@ async function findAuthUser(userId: string): Promise<any> {
 }
 
 /**
- * B6: tambah kuota token TANPA menimpa saldo / is_unlimited yang sudah ada.
- *  - tokenQuota null (premium unlimited) -> `$set` is_unlimited=true, saldo tidak disentuh
- *  - tokenQuota angka -> `$inc` balance, `is_unlimited` tidak ditulis
- *  - dokumen belum ada -> dibuat dengan saldo awal = kuota
- */
-async function creditTokenBalance(
-  userObjectId: any,
-  tokenQuota: number | null,
-  initialBalanceIfNew: number
-): Promise<void> {
-  const baseFilter = { user_id: userObjectId };
-  const existing = await TokenBalance.findOne(baseFilter).lean();
-
-  const isUnlimited = tokenQuota === null;
-  const quota = tokenQuota ?? 0;
-
-  if (!existing) {
-    await TokenBalance.findOneAndUpdate(
-      baseFilter,
-      {
-        $setOnInsert: {
-          user_id: userObjectId,
-          balance: initialBalanceIfNew,
-          is_unlimited: isUnlimited,
-          refill_count: 0,
-          monthly_reset_date: new Date(Date.now() + PRICING.registration.durationMs),
-          last_updated: new Date(),
-        },
-      },
-      { upsert: true }
-    );
-    return;
-  }
-
-  const update: any = { $inc: { refill_count: 1 }, $set: { last_updated: new Date() } };
-  if (isUnlimited) {
-    update.$set.is_unlimited = true;
-  } else {
-    update.$inc.balance = quota;
-  }
-  await TokenBalance.findOneAndUpdate(baseFilter, update);
-}
-
-/**
  * Handle successful payment callback.
  * Returns a human-readable summary or throws.
  *
@@ -227,8 +181,6 @@ export async function handlePaymentSuccess(
         : `Package ${packageType} purchase${boosterDiscount ? " (Booster -10%)" : ""}`,
   });
 
-  const tokenQuota = getTokenQuota({ orderType, packageType });
-
   if (orderType === "registration") {
     const user = await findAuthUser(userId);
     if (!user) {
@@ -267,10 +219,7 @@ export async function handlePaymentSuccess(
       { upsert: true }
     );
 
-    // B6: saldo ditambah, bukan ditimpa.
-    await creditTokenBalance(userObjectId, tokenQuota, PRICING.registration.tokenQuota);
-
-    return `Registration activated for user ${userId}. Token balance: ${PRICING.registration.tokenQuota}`;
+    return `Registration activated for user ${userId}.`;
   }
 
   if (orderType === "package") {
@@ -342,16 +291,7 @@ export async function handlePaymentSuccess(
       { upsert: true }
     );
 
-    // B6: saldo ditambah; `is_unlimited` hanya berubah untuk premium.
-    await creditTokenBalance(
-      userObjectId,
-      tokenQuota,
-      tokenQuota ?? PRICING.packages.premium.tokenQuota ?? 0
-    );
-
-    return `Package ${packageType} activated for user ${userId}. Token balance: ${
-      isPremium ? "unlimited" : tokenQuota
-    }`;
+    return `Package ${packageType} activated for user ${userId}.`;
   }
 
   throw new Error(`Unsupported order type: ${orderType}`);

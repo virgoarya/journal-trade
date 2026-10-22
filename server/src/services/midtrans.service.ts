@@ -15,33 +15,30 @@ export interface PaymentPayload {
   userId: string;
   amountIDR: number;
   isBooster: boolean;
-  discount?: number; // bonus diskon Booster
-  orderType: 'registration' | 'token_topup' | 'package';
+  orderType: 'registration' | 'package';
   packageType?: 'basic' | 'pro' | 'premium';
   orderId?: string;
 }
 
-/** 1️⃣ Create Snap Token untuk registration / token topup */
+/** Create a Snap token using the server-validated final amount. */
 export async function createSnapToken(payload: PaymentPayload): Promise<string> {
-  const { userId, amountIDR, orderType, isBooster, discount, orderId, packageType } = payload;
+  const { userId, amountIDR, orderType, orderId, packageType } = payload;
 
   const order_id = orderId || `${orderType}_${userId.substring(0, 24)}_${Date.now()}`;
-  const gross_amount = new Decimal(amountIDR).mul(1 - (discount || 0)).toNumber();
+  const gross_amount = new Decimal(amountIDR).toNumber();
 
   const parameter = {
     order_id,
     gross_amount: gross_amount,
     items: [
       {
-        id: orderType === 'registration' ? 'reg_fee' : orderType === 'package' ? `pkg_${packageType}` : 'token_topup',
+        id: orderType === 'registration' ? 'reg_fee' : `pkg_${packageType}`,
         price: gross_amount,
         quantity: 1,
         name:
           orderType === 'registration'
             ? 'Registration & AI Trading Access'
-            : orderType === 'package'
-            ? `AI Trading Package - ${packageType?.toUpperCase()}`
-            : 'LLM Token Topup',
+            : `AI Trading Package - ${packageType?.toUpperCase()}`,
       },
     ],
     transaction_details: {

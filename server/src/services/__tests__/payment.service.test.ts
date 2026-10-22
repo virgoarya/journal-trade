@@ -14,15 +14,6 @@ vi.mock("../../models/Registration", () => ({
 vi.mock("../../models/Subscription", () => ({
   Subscription: { findOneAndUpdate: vi.fn().mockResolvedValue({}) },
 }));
-vi.mock("../../models/TokenBalance", () => ({
-  TokenBalance: {
-    findOneAndUpdate: vi.fn().mockResolvedValue({}),
-    // WIP memanggil `.lean()` pada hasil findOne (baris 153) — kembalikan thenable+lean.
-    findOne: vi.fn().mockReturnValue({
-      lean: () => Promise.resolve(null),
-    }),
-  },
-}));
 vi.mock("../../models/Transaction", () => ({
   Transaction: { create: vi.fn().mockResolvedValue({}), findOne: vi.fn().mockResolvedValue(null) },
 }));
@@ -68,7 +59,6 @@ import {
 import { Transaction } from "../../models/Transaction";
 import { Registration } from "../../models/Registration";
 import { Subscription } from "../../models/Subscription";
-import { TokenBalance } from "../../models/TokenBalance";
 
 const TEST_SERVER_KEY = "SB-Mid-server-testkey1234567890";
 
@@ -124,7 +114,7 @@ describe("payment.service", () => {
   });
 
   describe("handlePaymentSuccess", () => {
-    it("should create transaction + registration + subscription + token balance for registration", async () => {
+    it("should create transaction + registration + subscription for registration", async () => {
       const result = await handlePaymentSuccess(
         "registration_usr_abc_1690000000",
         100000,
@@ -137,7 +127,6 @@ describe("payment.service", () => {
       expect(Transaction.create).toHaveBeenCalledOnce();
       expect(Registration.findOneAndUpdate).toHaveBeenCalledOnce();
       expect(Subscription.findOneAndUpdate).toHaveBeenCalledOnce();
-      expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledOnce();
       expect(result).toContain("Registration activated for user usr_abc");
     });
 
@@ -158,18 +147,10 @@ describe("payment.service", () => {
         expect.objectContaining({ plan: "premium", is_lifetime: true }),
         expect.any(Object)
       );
-      // Premium: tokenQuota null -> is_unlimited=true (via $setOnInsert saat dokumen baru).
-      expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({
-          $setOnInsert: expect.objectContaining({ is_unlimited: true }),
-        }),
-        expect.any(Object)
-      );
-      expect(result).toContain("unlimited");
+      expect(result).toContain("Package premium activated");
     });
 
-    it("should grant 300k non-unlimited tokens + EA for the pro package", async () => {
+    it("should grant pro access + EA for the pro package", async () => {
       const uid = "bbbbbbbbbbbbbbbbbbbbbbbb";
       const result = await handlePaymentSuccess(
         `pkg_${uid}_pro_1690000000`,
@@ -190,15 +171,10 @@ describe("payment.service", () => {
         }),
         expect.any(Object)
       );
-      expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ $setOnInsert: expect.objectContaining({ balance: 300000 }) }),
-        expect.any(Object)
-      );
-      expect(result).toContain("300000");
+      expect(result).toContain("Package pro activated");
     });
 
-    it("should grant 300k non-unlimited tokens + 3-month access for the basic package", async () => {
+    it("should grant basic access for the basic package", async () => {
       const uid = "cccccccccccccccccccccccc";
       const result = await handlePaymentSuccess(
         `pkg_${uid}_basic_1690000000`,
@@ -219,12 +195,7 @@ describe("payment.service", () => {
         }),
         expect.any(Object)
       );
-      expect(TokenBalance.findOneAndUpdate).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ $setOnInsert: expect.objectContaining({ balance: 300000 }) }),
-        expect.any(Object)
-      );
-      expect(result).toContain("300000");
+      expect(result).toContain("Package basic activated");
     });
   });
 });

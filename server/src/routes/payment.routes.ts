@@ -8,6 +8,7 @@ import {
   getPaymentStatusHandler,
 } from "../controllers/midtrans.controller";
 import { validate, validateBody } from "../middleware/validate";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get(
 );
 
 /** POST /api/payment/confirm — finalisasi pembayaran dari client (fallback webhook) */
-router.post("/confirm", confirmPayment);
+router.post("/confirm", requireAuth, confirmPayment);
 
 /** POST /api/payment/callback — webhook Midtrans */
 router.post("/callback", midtransCallback);

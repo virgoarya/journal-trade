@@ -29,7 +29,6 @@ export type OrderType = "registration" | "package";
 
 interface PackagePrice {
   amountIDR: number;
-  tokenQuota: number | null;
   durationMs: number | null; // null = lifetime
   label: string;
 }
@@ -39,31 +38,27 @@ interface PackagePrice {
  * apa yang dikembalikan endpoint `GET /api/v1/payment/prices`.
  */
 export const PRICING = {
-  /** Registrasi komunitas: akses awal + kuota token bulanan. */
+  /** Registrasi komunitas: akses awal. */
   registration: {
     amountIDR: 150_000,
-    tokenQuota: 1000,
     durationMs: 30 * 24 * 60 * 60 * 1000, // 30 hari
     label: "Registration & AI Trading Access",
-  } satisfies PackagePrice & { tokenQuota: number },
+  } satisfies PackagePrice,
 
   /** Paket AI Trading (bukan langganan token). */
   packages: {
     basic: {
       amountIDR: 1_500_000,
-      tokenQuota: 300_000,
       durationMs: 90 * 24 * 60 * 60 * 1000, // 3 bulan
       label: "AI Trading Package - BASIC",
     },
     pro: {
       amountIDR: 2_500_000,
-      tokenQuota: 300_000,
       durationMs: 180 * 24 * 60 * 60 * 1000, // 6 bulan
       label: "AI Trading Package - PRO",
     },
     premium: {
       amountIDR: 3_500_000,
-      tokenQuota: null, // unlimited
       durationMs: null, // lifetime
       label: "AI Trading Package - PREMIUM",
     },
@@ -104,17 +99,6 @@ export function getAmountIDR(params: {
     return Math.round(base * (1 - PRICING.boosterDiscountRate));
   }
   return base;
-}
-
-/** Kuota token untuk sebuah order (null = unlimited). */
-export function getTokenQuota(params: {
-  orderType: OrderType;
-  packageType?: PackageType;
-}): number | null {
-  const { orderType, packageType } = params;
-  if (orderType === "registration") return PRICING.registration.tokenQuota;
-  if (!packageType) throw new Error("packageType is required for orderType 'package'");
-  return PRICING.packages[packageType].tokenQuota;
 }
 
 /**
@@ -159,7 +143,6 @@ export function getPricingCatalog(isBooster: boolean) {
     type: p,
     amountIDR: getAmountIDR({ orderType: "package", packageType: p, isBooster }),
     baseAmountIDR: PRICING.packages[p].amountIDR,
-    tokenQuota: PRICING.packages[p].tokenQuota,
     durationMs: PRICING.packages[p].durationMs,
     label: PRICING.packages[p].label,
   });

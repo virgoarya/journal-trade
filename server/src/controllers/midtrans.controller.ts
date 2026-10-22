@@ -10,6 +10,7 @@ import {
   getPaymentStatus,
 } from "../services/payment.service";
 import { Transaction } from "../models/Transaction";
+import { validateAmountIDR } from "../config/payment-pricing";
 
 
 
@@ -23,7 +24,18 @@ export async function createPaymentToken(req: Request, res: Response) {
       return res.status(400).json({ error: "userId must be a single string" });
     }
 
+    const pricing = validateAmountIDR({
+      orderType,
+      packageType: orderType === "package" ? packageType : undefined,
+      amountIDR,
+      isBooster: Boolean(isBooster),
+    });
+    if (!pricing.ok) {
+      return res.status(400).json({ error: pricing.error });
+    }
+
     // ponytail: prefix kept "reg"/"pkg" for parseOrderId compat
+    const validatedAmountIDR = pricing.amountIDR;
     const typePrefix = orderType === "registration" ? "reg" : "pkg";
     const order_id =
       orderType === "package" && packageType
@@ -32,9 +44,8 @@ export async function createPaymentToken(req: Request, res: Response) {
 
     const token = await createSnapToken({
       userId,
-      amountIDR,
-      isBooster,
-      discount: isBooster ? 0.1 : 0,
+      amountIDR: validatedAmountIDR,
+      isBooster: Boolean(isBooster),
       orderType,
       packageType: orderType === "package" ? packageType : undefined,
       orderId: order_id,
@@ -58,7 +69,7 @@ export async function checkStatus(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid orderId parameter" });
     }
     const status = await getTransactionStatus(orderId);
-    res.json({ orderId, status });
+    res.json({ orderId, ...status });
   } catch (err: any) {
     console.error("[Midtrans] getTransactionStatus error:", err.message);
     res.status(500).json({ error: "Failed to get status" });
