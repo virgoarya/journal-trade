@@ -101,3 +101,15 @@ Konsensus di halaman **AI Trading** dipindahkan dari **LLM Consensus** (voting 6
 → `deepseek/deepseek-v3.2` → `cf/@cf/meta/llama-3.1-8b-instruct-fp8-fast` → `claude-opus-4.6`.
 
 **Alur:** SMC/ICT/MSNR confluence → Agent Consensus → verdict + reasoning + confidence.
+
+## 💳 4. Payment Access — Package-Only Model
+
+AI Trading menggunakan **akses berbasis paket berbayar**, bukan token consumption per query:
+
+- User membeli paket melalui Midtrans; akses ditentukan oleh status paket (`hasAccess`), bukan saldo token.
+- Biaya inference LLM ditangani oleh deployer melalui **9Router** (`NINE_ROUTER_URL` / `NINE_ROUTER_API_KEY`). Setiap query tidak mengurangi token aplikasi.
+- `token_topup`, `tokenQuota`, dan `TokenBalance` bukan bagian dari payment flow aktif. Data/model legacy dapat dipertahankan untuk kompatibilitas historis, tetapi tidak dipakai sebagai gate atau kredit paket.
+- Harga dan diskon booster dihitung oleh server sebagai source of truth. Regression coverage memverifikasi premium tanpa booster `Rp3.500.000`, premium booster `Rp3.150.000`, dan menolak nominal client yang dimanipulasi.
+- Callback pembayaran idempotent melalui partial unique index `transactions.order_id`; callback duplikat tidak menggandakan akses.
+
+Dokumen desain token lama dipertahankan sebagai arsip historis di [`payment-token-system-design.md`](payment-token-system-design.md).

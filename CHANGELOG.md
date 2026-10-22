@@ -1,3 +1,18 @@
+## 🚧 [Unreleased] — Payment Package-Only
+
+### 💳 Payment Access
+- Mengubah payment gate AI Trading menjadi **package-only access** berbasis `hasAccess`; token tidak lagi dikonsumsi per query.
+- Menandai token top-up, token gate, dan token quota sebagai legacy historis. Biaya inference LLM ditangani deployer melalui 9Router.
+- Memusatkan validasi harga dan diskon booster di server: premium `Rp3.500.000`, premium booster `Rp3.150.000`; nominal client yang dimanipulasi ditolak.
+- Menambahkan flat polling contract dengan `transaction_status` dan autentikasi pada endpoint `/payment/confirm`.
+- Menjamin callback pembayaran idempotent menggunakan partial unique index `transactions.order_id`; callback duplikat tidak menggandakan akses.
+
+### 🧪 Verification
+- Vera final QA pada commit `5f29905076478fee2fc1dd97338ff234edb998dd`: payment tests `14/14`, server/frontend typecheck exit `0`, ESLint exit `0`, dan `git diff --check` exit `0`.
+- Regression coverage B1/B2 memverifikasi harga server-side dan payload Snap.
+
+---
+
 ## 🚀 [v1.2.1] — 2026-10-20 (Versi Terbaru)
 
 > Versi konsolidasi rilis **1.2.1** — mencakup transisi penuh arsitektur Agent Consensus (ADR-0001 & ADR-0002),

@@ -1,16 +1,18 @@
-> **⚠️ STATUS (2026-10-21): DEPRECATED — arah produk, bukan keadaan kode.**
-> Model token top-up (saldo token terkelola app + Midtrans) bukan lagi arah monetisasi: biaya LLM
-> ditanggung lewat kunci 9Router milik deployer (`NINE_ROUTER_URL` / `NINE_ROUTER_API_KEY`) — lihat
-> `docs/AI_PROVIDER_STRATEGY.md`. Bagian *TokenBalance*, *Subscription*, dan *Token Consumption*
-> tidak lagi relevan dengan arah produk.
+> **⚠️ STATUS (2026-10-22): LEGACY HISTORICAL DESIGN**
+> Model token top-up, token gate, dan token consumption per query sudah dipensiunkan dari payment flow aktif.
+> Model bisnis yang berlaku adalah **package-only access**: user membayar paket melalui Midtrans,
+> sedangkan biaya inference LLM ditangani deployer melalui 9Router (`NINE_ROUTER_URL` /
+> `NINE_ROUTER_API_KEY`). Tidak ada pengurangan token aplikasi pada setiap query.
 >
-> **Kode masih ada di repo (belum dihapus)** — terverifikasi 2026-10-21:
-> `server/src/services/payment.service.ts` (326 baris), `server/src/routes/payment.routes.ts`
-> (di-mount di `/api/v1/payment`), `frontend/src/components/PaymentModal.tsx` (dipakai di
-> `TradingPanel.tsx`), dan `frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts`.
-> Tidak ada ADR yang mencatat pivot monetisasi ini; [ADR-0001](../adr/ADR-0001-agent-consensus-engine.md)
-> hanya menyebut dokumen ini sebagai *to-do* ("perlu diperbarui setelah pivot monetisasi final").
-> Dokumen di bawah dipertahankan sebagai **arsitektur historis**.
+> **Source of truth saat ini:** `server/src/config/payment-pricing.ts`,
+> `server/src/services/payment.service.ts`, dan `server/src/routes/payment.routes.ts`. Gate memakai
+> status paket `hasAccess`; harga dan diskon booster dihitung/validasi server-side.
+> Callback pembayaran dilindungi idempotency melalui partial unique index `transactions.order_id`.
+>
+> `TokenBalance`, `token_topup`, dan token quota di bagian-bagian berikut dipertahankan hanya untuk
+> konteks sejarah/kompatibilitas data lama. Jangan gunakan bagian ini sebagai kontrak API aktif.
+> Lihat [`AI_PROVIDER_STRATEGY.md`](AI_PROVIDER_STRATEGY.md) untuk model provider yang berlaku.
+> Dokumen ini dipertahankan sebagai **arsitektur historis** agar keputusan lama tetap terlacak.
 
 # Technical Design Document: Payment & Token System for Hunter Trades Journal
 
