@@ -4,7 +4,31 @@ import { useState } from "react";
 import { CreditCard, Zap, X, Sparkles, Shield, CheckCircle2, Crown, Flame } from "lucide-react";
 import { toast } from "sonner";
 
-type PackageType = "basic" | "pro" | "premium" | "token_topup";
+type PackageType = "basic" | "pro" | "premium";
+
+type PaymentApiError = string | { message?: string } | Array<{ message?: string } | string>;
+type SnapResult = { message?: string };
+type SnapOptions = {
+  onSuccess: () => void;
+  onPending: () => void;
+  onError: (result: SnapResult) => void;
+  onClose: () => void;
+};
+
+type MidtransSnap = { pay: (token: string, options: SnapOptions) => void };
+
+type PaymentResponse = {
+  token?: string;
+  orderId?: string;
+  error?: PaymentApiError;
+  message?: string;
+};
+
+declare global {
+  interface Window {
+    snap?: MidtransSnap;
+  }
+}
 
 interface PaymentModalProps {
   userId: string;
@@ -30,7 +54,6 @@ export default function PaymentModal({
     basic: { price: 1_500_000, duration: "3 Bulan Akses" },
     pro: { price: 2_500_000, duration: "6 Bulan Akses" },
     premium: { price: 3_500_000, duration: "Lifetime Akses" },
-    token_topup: { price: 50_000, duration: "Isi Ulang" },
   };
 
   const getEffectivePrice = (pkgKey: "basic" | "pro" | "premium") => {
@@ -51,32 +74,31 @@ export default function PaymentModal({
   const handlePayment = async () => {
     setLoading(true);
     try {
-      const amountIDR =
-        selectedPackage === "token_topup"
-          ? pricing.token_topup.price
-          : getEffectivePrice(selectedPackage);
+      const amountIDR = getEffectivePrice(selectedPackage);
 
       // 1. Dapatkan Snap Token dari backend
-      const res = await fetch("/api/v1/payment/token", {
+      const res = await fetch("/api/v1/payment/package", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           amountIDR,
           isBooster,
-          orderType: selectedPackage === "token_topup" ? "token_topup" : "package",
-          packageType: selectedPackage === "token_topup" ? undefined : selectedPackage,
+          orderType: "package",
+          packageType: selectedPackage,
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as PaymentResponse;
       if (!res.ok || !data.token) {
         let errorMessage = "Gagal mendapatkan payment token";
         if (typeof data.error === "string") {
           errorMessage = data.error;
         } else if (typeof data.error === "object" && data.error !== null) {
           if (Array.isArray(data.error)) {
-            errorMessage = data.error.map((e: any) => e?.message || String(e)).join(", ");
+            errorMessage = data.error
+              .map((entry) => (typeof entry === "string" ? entry : entry.message || "Unknown payment error"))
+              .join(", ");
           } else {
             errorMessage = JSON.stringify(data.error);
           }
@@ -87,13 +109,13 @@ export default function PaymentModal({
       }
 
       // 2. Load Midtrans Snap JS & redirect ke UI
-      const snap = (window as any).snap;
+      const snap = window.snap;
       if (!snap) {
         throw new Error("Midtrans Snap tidak tersedia. Pastikan script sudah dimuat.");
       }
 
       snap.pay(data.token, {
-        onSuccess: async (result: any) => {
+        onSuccess: async () => {
           try {
             const confirmRes = await fetch("/api/v1/payment/confirm", {
               method: "POST",
@@ -106,13 +128,14 @@ export default function PaymentModal({
             }
             toast.success("✅ Pembayaran berhasil diproses!");
             handlePaymentSuccess();
-          } catch (err: any) {
-            console.error("[PaymentModal] Confirm error:", err.message);
-            toast.error("Pembayaran berhasil tapi gagal konfirmasi: " + err.message);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Unknown confirmation error";
+            console.error("[PaymentModal] Confirm error:", message);
+            toast.error("Pembayaran berhasil tapi gagal konfirmasi: " + message);
             handlePaymentSuccess();
           }
         },
-        onPending: (result: any) => {
+        onPending: () => {
           toast.info("⏳ Menunggu penyelesaian pembayaran di Midtrans.");
           const pollInterval = setInterval(async () => {
             try {
@@ -138,7 +161,7 @@ export default function PaymentModal({
           }, 5000);
           setTimeout(() => clearInterval(pollInterval), 300000);
         },
-        onError: (result: any) => {
+        onError: (result: SnapResult) => {
           toast.error("Gagal membayar: " + (result?.message || "Silakan coba lagi"));
         },
         onClose: () => {
@@ -146,9 +169,10 @@ export default function PaymentModal({
           onClose();
         },
       });
-    } catch (err: any) {
-      console.error("[PaymentModal] Error:", err.message);
-      toast.error("Error: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown payment error";
+      console.error("[PaymentModal] Error:", message);
+      toast.error("Error: " + message);
     } finally {
       setLoading(false);
     }
@@ -226,10 +250,7 @@ export default function PaymentModal({
     },
   ];
 
-  const selectedAmount =
-    selectedPackage === "token_topup"
-      ? pricing.token_topup.price
-      : getEffectivePrice(selectedPackage as "basic" | "pro" | "premium");
+  const selectedAmount = getEffectivePrice(selectedPackage);
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">

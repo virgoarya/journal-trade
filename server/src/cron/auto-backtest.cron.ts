@@ -160,7 +160,14 @@ export function initAutoBacktestCron() {
             symbols: (skillDoc?.symbolRankings || [])
               .slice(0, 5)
               .map((s: any) => s.symbol),
-            llmConsensus: { enabled: true, minProviders: 2, threshold: 0.7, providerTimeoutMs: 15000 }
+            // Preserve the user's persisted consensus settings. The cron must
+            // not force-enable the legacy LLM rollback lane.
+            ...(userSettings.savedPipelineConfig?.llmConsensus
+              ? { llmConsensus: userSettings.savedPipelineConfig.llmConsensus }
+              : {}),
+            ...(userSettings.savedPipelineConfig?.agentConsensus
+              ? { agentConsensus: userSettings.savedPipelineConfig.agentConsensus }
+              : {}),
           };
           userSettings.lastAutoBacktestAt = new Date();
           await userSettings.save();

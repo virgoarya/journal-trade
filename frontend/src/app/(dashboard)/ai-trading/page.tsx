@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { ConnectionPanel } from "./components/ConnectionPanel";
 import { AccountOverview } from "./components/AccountOverview";
 import { PositionsTable } from "./components/PositionsTable";
-import { PendingOrdersTable } from "./components/PendingOrdersTable";
 import { TradingPanel } from "./components/TradingPanel";
 import { MethodologyConfluence } from "./components/MethodologyConfluence";
 import { PipelinePerformance } from "./components/PipelinePerformance";
@@ -16,18 +15,15 @@ import { TradeHistoryDashboard } from "./components/TradeHistoryDashboard";
 import { MemoryInsights } from "./components/MemoryInsights";
 import { PerformanceAnalytics } from "./components/PerformanceAnalytics";
 import { BacktestTab } from "./components/BacktestTab";
-import { CorrelationHeatmap } from "./components/CorrelationHeatmap";
 import { PaymentStatusBanner } from "./components/PaymentStatusBanner";
-import { TradingDisabledBanner } from "./components/TradingDisabledBanner";
 import { AiTradingProvider, useAiTrading } from "./context/AiTradingContext";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BarChart3, Activity, Settings2, X, Brain, Loader2 } from "lucide-react";
+import { ArrowLeft, BarChart3, Activity, Settings2, X } from "lucide-react";
 import { Suspense } from "react";
 import { brokerRegistrationService } from "@/services/broker-registration.service";
 import { useSession } from "@/lib/auth-client";
 import type { PipelineConfig } from "@/services/ai-trading.service";
 import PaymentModal from "@/components/PaymentModal";
-import TokenRefillModal from "@/components/TokenRefillModal";
 import { usePaymentGate } from "./hooks/usePaymentGate";
 import { toast } from "sonner";
 
@@ -73,9 +69,7 @@ function AITradingPageContent() {
 
   // Modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showRefillModal, setShowRefillModal] = useState(false);
-  const [paymentPackage, setPaymentPackage] = useState<"package" | "token_topup" | "none">("package");
-  const [paymentIsBooster, setPaymentIsBooster] = useState(false);
+  const [, setPaymentIsBooster] = useState(false);
   const [paymentDismissed, setPaymentDismissed] = useState(false);
 
   // Close modal handler
@@ -89,11 +83,9 @@ function AITradingPageContent() {
     isConnected,
     isReconnecting,
     isConnecting,
-    isCheckingSession,
     connectError,
     connectMT5,
     disconnectMT5,
-    connectionStatus,
     accountInfo,
     accountLoading,
     refetchAccountInfo,
@@ -114,7 +106,6 @@ function AITradingPageContent() {
         startPipeline,
         savedPipelineConfig,
         skillConfig,
-    setSkillConfig,
     skillVersion,
     setSkillVersion,
     refreshPipelineData,
@@ -133,13 +124,11 @@ function AITradingPageContent() {
     // Payment gate is independent of the MT5 connection: prompt as soon as the
     // page opens and the backend says access has not been granted yet.
     if (gateAction === "package" && !showPaymentModal) {
-      setPaymentPackage("package");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPaymentIsBooster(paymentStatus?.isBooster ?? false);
       setShowPaymentModal(true);
-    } else if (gateAction === "token_topup" && !showRefillModal) {
-      setShowRefillModal(true);
     }
-  }, [gateAction, paymentLoading, showPaymentModal, showRefillModal, paymentStatus?.isBooster, searchParams, paymentDismissed]);
+  }, [gateAction, paymentLoading, showPaymentModal, paymentStatus?.isBooster, searchParams, paymentDismissed]);
 
   // Handle payment success callback from PaymentModal
   const handlePaymentSuccess = () => {
@@ -151,6 +140,7 @@ function AITradingPageContent() {
 
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && !searchParams.get("full")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRegCheck("ok");
       return;
     }
@@ -185,6 +175,7 @@ function AITradingPageContent() {
 
   useEffect(() => {
     if (tabParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -195,7 +186,7 @@ function AITradingPageContent() {
       refetchPositions();
       refreshPipelineData();
     }
-  }, [isConnected]);
+  }, [isConnected, refetchAccountInfo, refetchPositions, refreshPipelineData]);
 
   useEffect(() => {
     if (regCheck === "redirect") {
@@ -205,9 +196,8 @@ function AITradingPageContent() {
 
   // ── Block access if payment required (setelah semua hooks dipanggil) ──
   const isPaymentRequired = gateAction === "package" && paymentDismissed;
-  const isTokenTopupRequired = gateAction === "token_topup" && !showRefillModal;
 
-  if (isPaymentRequired || isTokenTopupRequired) {
+  if (isPaymentRequired) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="bg-[#0A0A0F] border border-[#D4AF37]/30 rounded-3xl p-8 max-w-md text-center">
@@ -269,12 +259,6 @@ function AITradingPageContent() {
           onSuccess={handlePaymentSuccess}
         />
 
-        <TokenRefillModal
-          userId={userId || "anonymous"}
-          isOpen={showRefillModal}
-          onClose={() => setShowRefillModal(false)}
-          onSuccess={handlePaymentSuccess}
-        />
       </div>
     );
   }
@@ -379,7 +363,7 @@ function AITradingPageContent() {
       {/* Payment Status Banner - Full width below header */}
       {activeTab === "trading" && (
         <div className="mb-4">
-          <PaymentStatusBanner userId={userId} onTopup={() => setShowRefillModal(true)} />
+          <PaymentStatusBanner userId={userId} onTopup={() => setShowPaymentModal(true)} />
         </div>
       )}
 
@@ -524,12 +508,6 @@ function AITradingPageContent() {
         onSuccess={handlePaymentSuccess}
       />
 
-      <TokenRefillModal
-        userId={userId || "anonymous"}
-        isOpen={showRefillModal}
-        onClose={() => setShowRefillModal(false)}
-        onSuccess={handlePaymentSuccess}
-      />
     </div>
   );
 }

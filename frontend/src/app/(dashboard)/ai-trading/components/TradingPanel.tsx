@@ -6,10 +6,8 @@ import { SkillDisplay } from "./SkillDisplay";
 import { toast } from "sonner";
 import { AIBacktestSkill } from "@/services/ai-trading.service";
 import { useState, useEffect } from "react";
-import PaymentModal from "@/components/PaymentModal";
-import { useTokenBalance } from "../hooks/useTokenBalance";
 
-import { LlmConsensusConfig } from "./LlmConsensusConfig";
+
 import { AgentConsensusConfig } from "./AgentConsensusConfig";
 
 interface TradingPanelProps {
@@ -42,16 +40,9 @@ export function TradingPanel({
     savedPipelineConfig,
     lastAutoBacktestAt,
     pipelineStatus,
-    llmMinProviders,
-    llmModels,
     accountInfo,
     setSkillConfig,
     skillVersion,
-    showContributionIndicators,
-    setShowContributionIndicators,
-    showConsensusPanelByDefault,
-    setShowConsensusPanelByDefault,
-    visualizationStyle,
     agentConsensusEnabled,
     setAgentConsensusEnabled,
     agentConsensusThreshold,
@@ -60,23 +51,7 @@ export function TradingPanel({
     setAgentConsensusDebateMode,
     agentConsensusMemoryEnabled,
     setAgentConsensusMemoryEnabled,
-    setVisualizationStyle,
   } = useAiTrading();
-
-  // State untuk kontrol Payment Modal
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentPackage, setPaymentPackage] = useState<"registration" | "token_topup">("token_topup");
-  const [paymentIsBooster, setPaymentIsBooster] = useState(false);
-
-  // Periksa saldo token
-  const userId = accountInfo?.login?.toString() || "anonymous";
-  const { hasInsufficient, loading: tokenLoading } = useTokenBalance(userId);
-
-  const openPaymentModal = (pkg: "registration" | "token_topup", isBooster = false) => {
-    setPaymentPackage(pkg);
-    setPaymentIsBooster(isBooster);
-    setShowPaymentModal(true);
-  };
 
   const handleStart = async () => {
     if (!savedPipelineConfig) {
@@ -84,14 +59,6 @@ export function TradingPanel({
       return;
     }
 
-    // Cek token sebelum start
-    if (hasInsufficient) {
-      toast.warning("Token LLM tidak cukup. Harap lakukan topup.");
-      openPaymentModal("token_topup", paymentIsBooster);
-      return;
-    }
-
-    // Clear any lingering circuit breaker alert before starting
     setCircuitBreakerAlert(null);
     await startPipeline({ ...savedPipelineConfig, useAppliedConfig: true });
   };
@@ -107,13 +74,6 @@ export function TradingPanel({
   }, [pipelineStatus?.circuitBreakerReason, pipelineRunning, pipelinePaused]);
 
   const displayConfig = pipelineRunning || pipelinePaused ? pipelineStatus?.config : savedPipelineConfig;
-
-  // Force LLM to be always active
-  const isLlmActive = true;
-
-  const minProviders = pipelineRunning || pipelinePaused
-    ? (displayConfig?.llmConsensus?.minProviders ?? llmMinProviders)
-    : llmMinProviders;
 
   // Calculate overall grade based on selected symbols
   const getOverallGrade = () => {
@@ -380,18 +340,6 @@ export function TradingPanel({
               </div>
             </div>
 
-            <div className="col-span-2 pt-3 border-t border-accent-gold/10 flex flex-col gap-2">
-              <div>
-                <p className="text-[9px] text-accent-gold mb-0.5 uppercase tracking-widest font-bold">
-                  {agentConsensusEnabled ? "Agent Consensus Nodes" : "LLM Nodes"}
-                </p>
-                <p className="text-[10px] text-text-muted">
-                  {agentConsensusEnabled
-                    ? "3/3 active · Hawk / Dove / Contrarian"
-                    : `${llmModels.filter(m => m.status === "active").length}/${llmModels.length} active`}
-                </p>
-              </div>
-            </div>
 
             {/* Smart Risk Management */}
             {displayConfig.smartRisk?.enabled && (
@@ -483,7 +431,7 @@ export function TradingPanel({
           {!pipelineRunning && !pipelinePaused && (
             <div className="flex flex-col items-center gap-2">
                <p className="text-[10px] text-text-muted text-center font-mono opacity-60">
-                 // Settings locked to validated backtest parameters
+                 {/* Settings locked to validated backtest parameters */}
                </p>
                {lastAutoBacktestAt && (
                  <p className="text-[9px] tracking-widest font-mono text-neon-green font-bold bg-neon-green/10 px-3 py-1.5 rounded border border-neon-green/30 shadow-[0_0_8px_rgba(57,255,136,0.2)]">
@@ -513,25 +461,7 @@ export function TradingPanel({
         }} 
       />
 
-      {/* LLM Visualization Config */}
-      <LlmConsensusConfig
-        enabled={true}
-        threshold={pipelineStatus?.config?.llmConsensus?.threshold ?? 0.7}
-        minProviders={minProviders}
-        providerTimeoutMs={pipelineStatus?.config?.llmConsensus?.providerTimeoutMs ?? 25000}
-        models={llmModels}
-        loading={false}
-        onToggle={() => {}}
-        onThresholdChange={() => {}}
-        onMinProvidersChange={() => {}}
-        onProviderTimeoutChange={() => {}}
-        showContributionIndicators={showContributionIndicators}
-        onShowContributionIndicatorsChange={setShowContributionIndicators}
-        showConsensusPanelByDefault={showConsensusPanelByDefault}
-        onShowConsensusPanelByDefaultChange={setShowConsensusPanelByDefault}
-        visualizationStyle={visualizationStyle}
-        onVisualizationStyleChange={setVisualizationStyle}
-      />
+      {/* Agent Consensus is the active path */}
 
       <AgentConsensusConfig
         enabled={agentConsensusEnabled}
@@ -550,9 +480,9 @@ export function TradingPanel({
           <div className="space-y-2">
             <button
               onClick={handleStart}
-              disabled={isStarting || !savedPipelineConfig || tokenLoading}
+              disabled={isStarting || !savedPipelineConfig}
               className={`w-full py-4 bg-black border border-accent-gold/40 text-accent-gold text-sm rounded-lg font-bold tracking-widest uppercase transition-all shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.5)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center gap-2 ${
-                isStarting || !savedPipelineConfig || tokenLoading
+                isStarting || !savedPipelineConfig
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-accent-gold/10 hover:shadow-[inset_0_4px_6px_rgba(255,255,255,0.05),0_0_15px_rgba(212,175,55,0.4)]"
               }`}
@@ -568,13 +498,6 @@ export function TradingPanel({
                   <span>ENGAGE PIPELINE</span>
                 </>
               )}
-            </button>
-            {/* Topup Token Button */}
-            <button
-              onClick={() => openPaymentModal("token_topup", paymentIsBooster)}
-              className="w-full py-2 bg-accent-gold/5 border border-accent-gold/30 hover:bg-accent-gold/15 text-accent-gold text-xs rounded-lg font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2"
-            >
-              💎 Topup Token (Rp 50.000)
             </button>
           </div>
         )}
@@ -620,13 +543,6 @@ export function TradingPanel({
         )}
       </div>
 
-      {/* Payment Modal - Midtrans Snap Token Topup */}
-      <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        userId={userId}
-        isBooster={paymentIsBooster}
-      />
     </div>
   );
 }

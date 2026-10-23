@@ -5,6 +5,15 @@ interface PaymentGateStatus {
   tokenBalance: number;
   hasInsufficientToken: boolean;
   isBooster: boolean;
+  /**
+   * Backend contract for GET /api/v1/payment/status-for-user/:userId.
+   * The server returns `hasAccess` (active registration + unexpired/lifetime
+   * access) and does NOT send `isPaid`. `isPaid` is the derived gate flag and
+   * MUST be mapped from `hasAccess` — otherwise it is always `undefined`
+   * (falsy) and every paid package holder is gated to the package purchase.
+   */
+  isPaid: boolean;
+  hasAccess?: boolean;
   plan?: string;
   isUnlimited?: boolean;
 }
@@ -21,6 +30,8 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
         tokenBalance: Number.POSITIVE_INFINITY,
         hasInsufficientToken: false,
         isBooster: true,
+        isPaid: true,
+        hasAccess: true,
         isUnlimited: true,
         plan: "dev",
       });
@@ -46,11 +57,15 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
         tokenBalance: data.tokenBalance,
         hasInsufficientToken: data.hasInsufficientToken,
         isBooster: data.isBooster,
+        // The endpoint has no `isPaid` field; derive it from `hasAccess` so a
+        // paid, unexpired/lifetime holder resolves to "none".
+        isPaid: data.isPaid ?? data.hasAccess === true,
+        hasAccess: data.hasAccess,
         plan: data.plan,
         isUnlimited: data.isUnlimited,
       });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Unable to load payment status");
       setStatus(null);
     } finally {
       setLoading(false);
@@ -58,6 +73,7 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
   }, [userId, forceFull]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatus();
 
     // Periodic refresh every 30 seconds to keep state in sync with backend
@@ -69,13 +85,9 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
   }, [fetchStatus]);
 
   // Helper untuk menentukan aksi yang dibutuhkan
-  const gateAction: "none" | "package" | "token_topup" | null = status
-    ? !status.isRegistered
-      ? "package"
-      : status.hasInsufficientToken && !status.isUnlimited
-      ? "token_topup"
-      : "none"
-    : null;
+  const gateAction: "none" | "package" | null = status
+    ? status.isPaid ? "none" : "package"
+    : null
 
   const refetch = () => {
     fetchStatus();
