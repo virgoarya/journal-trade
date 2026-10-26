@@ -1313,13 +1313,21 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             `[2/4] [${signal.symbol}] AGENT CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}`,
             { agentConsensus: adapted },
           );
-          this.addLog(userId, "CONFLUENCE",
-            `[2/4] [${signal.symbol}] Agent Votes: ${adapted.goodVotes}/${adapted.totalVotes} GOOD`,
-          );
           for (const vote of adapted.votes) {
             this.addLog(userId, "CONFLUENCE",
               `[2/4] [${signal.symbol}] ${vote.persona}: ${vote.bias} — ${vote.reasoning.substring(0, 100)}`,
             );
+          }
+
+          // AXIS-2 / t_b89d30a0: the agent branch computed `isTrade` but never
+          // acted on it — a BAD/SKIP verdict only *logged* "TRADE REJECTED" and
+          // fell through to STAGE 3/4, opening the order anyway. Gate it here,
+          // exactly like the LLM branch does at the `if (!isTrade) continue;` below.
+          if (!isTrade) {
+            this.addLog(userId, "CONFLUENCE",
+              `[2/4] [${signal.symbol}] Skipping trade — agent verdict ${adapted.verdict}`,
+            );
+            continue;
           }
 
         } else if (pipeline.config.llmConsensus?.enabled) {

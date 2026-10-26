@@ -399,18 +399,50 @@ describe("AXIS-1b: which consensus service the live tick actually calls", () => 
   }, 30000);
 });
 
-// ── AXIS-1c: VERDICT-GATE PARITY PROBE ───────────────────────────────────────
-// The agent branch (trading-pipeline.service.ts:1250-1324) computes
-// `isTrade` (line 1310) and logs it, but never gates the trade on it — there is
-// no `if (!isTrade) continue;` there. The LLM branch (line 1325-1404) DOES gate
-// at line 1400. These tests drive a REAL pipeline tick and assert which
-// behaviour is actually in place. They document CURRENT behaviour; they are not
-// a spec for the fix.
-describe("AXIS-1c: verdict gate parity (probe — documents CURRENT behaviour)", () => {
-  it("agent branch: BAD verdict does NOT stop the order (no gate at 1250-1324)", async () => {
+// ── AXIS-2: VERDICT-GATE PARITY (regression spec) ────────────────────────────
+// FIXED (AXIS-2 / t_b89d30a0): the agent branch now gates on `isTrade` exactly
+// like the LLM branch does at trading-pipeline.service.ts:1400.
+//   agent branch → `if (!isTrade) { continue; }` at the end of the branch
+//   LLM branch   → `if (!isTrade) { continue; }` at line 1400
+// Before the fix the agent branch only *logged* "TRADE REJECTED" and fell
+// through to STAGE 3/4, so a BAD/SKIP verdict still opened an order — the log
+// said rejected while the order was placed.
+// These tests drive a REAL pipeline tick and assert the gate is honoured.
+describe("AXIS-2: verdict gate parity (agent branch must gate like the LLM branch)", () => {
+  it("agent branch: BAD verdict stops the order (gate parity with LLM branch)", async () => {
     setStore({ enabled: true, debateMode: "parallel", memoryEnabled: true, toolEnabled: true, threshold: 0.6 });
     vi.mocked(agentConsensusService.adaptDebateResult).mockImplementation(() => ({
       verdict: "BAD", consensus: "bearish", goodVotes: 0, totalVotes: 3, votes: [],
+    }) as any);
+
+    const { status } = await startPipelineViaRoute();
+    expect(status).toBe(200);
+
+    // Prove the agent branch actually ran and produced its verdict.
+    await waitFor(() => vi.mocked(agentConsensusService.adaptDebateResult).mock.calls.length > 0);
+    // Give STAGE 3/4 a chance to run so a missing gate is caught.
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(vi.mocked(mt5McpService.openOrder)).not.toHaveBeenCalled();
+  }, 30000);
+
+  it("agent branch: SKIP verdict stops the order", async () => {
+    setStore({ enabled: true, debateMode: "parallel", memoryEnabled: true, toolEnabled: true, threshold: 0.6 });
+    vi.mocked(agentConsensusService.adaptDebateResult).mockImplementation(() => ({
+      verdict: "SKIP", consensus: "mixed", goodVotes: 0, totalVotes: 3, votes: [],
+    }) as any);
+
+    const { status } = await startPipelineViaRoute();
+    expect(status).toBe(200);
+
+    await waitFor(() => vi.mocked(agentConsensusService.adaptDebateResult).mock.calls.length > 0);
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(vi.mocked(mt5McpService.openOrder)).not.toHaveBeenCalled();
+  }, 30000);
+
+  it("agent branch: GOOD verdict still opens the order (gate is not over-blocking)", async () => {
+    setStore({ enabled: true, debateMode: "parallel", memoryEnabled: true, toolEnabled: true, threshold: 0.6 });
+    vi.mocked(agentConsensusService.adaptDebateResult).mockImplementation(() => ({
+      verdict: "GOOD", consensus: "bullish", goodVotes: 3, totalVotes: 3, votes: [],
     }) as any);
 
     const { status } = await startPipelineViaRoute();
@@ -420,7 +452,7 @@ describe("AXIS-1c: verdict gate parity (probe — documents CURRENT behaviour)",
     expect(vi.mocked(mt5McpService.openOrder)).toHaveBeenCalled();
   }, 30000);
 
-  it("LLM branch: BAD verdict DOES stop the order (gate at line 1400)", async () => {
+  it("LLM branch: BAD verdict DOES stop the order (gate at line 1400) — unchanged", async () => {
     setStore({ enabled: false, debateMode: "parallel", memoryEnabled: true, toolEnabled: true, threshold: 0.6 });
     vi.mocked(llmConsensusService.evaluate).mockImplementation(async () => ({
       verdict: "BAD", goodVotes: 0, totalVotes: 6, votes: [],
