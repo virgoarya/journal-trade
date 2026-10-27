@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAmountIDR, validateAmountIDR } from "../payment-pricing";
+import { getAmountIDR, validateAmountIDR, getPricingCatalog } from "../payment-pricing";
 
 describe("payment pricing acceptance", () => {
   it("rejects a client amount that is not the server price", () => {
@@ -33,5 +33,41 @@ describe("payment pricing acceptance", () => {
       amountIDR: 3_500_000,
       isBooster: true,
     }).ok).toBe(false);
+  });
+});
+
+describe("GET /api/v1/payment/prices catalog shape", () => {
+  it("returns basic, pro, premium packages with amountIDR, durationMs, label", () => {
+    const catalog = getPricingCatalog(false);
+    expect(catalog.currency).toBe("IDR");
+    expect(catalog.boosterDiscountRate).toBe(0.1);
+
+    for (const pkg of ["basic", "pro", "premium"] as const) {
+      const p = catalog.packages[pkg];
+      expect(p).toHaveProperty("amountIDR");
+      expect(p).toHaveProperty("durationMs");
+      expect(p).toHaveProperty("label");
+      expect(p.amountIDR).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns registration pricing in the catalog", () => {
+    const catalog = getPricingCatalog(false);
+    expect(catalog.registration.amountIDR).toBe(150_000);
+  });
+
+  it("applies booster discount to package prices when isBooster=true", () => {
+    const base = getPricingCatalog(false);
+    const boosted = getPricingCatalog(true);
+
+    for (const pkg of ["basic", "pro", "premium"] as const) {
+      const discounted = base.packages[pkg].amountIDR * (1 - base.boosterDiscountRate);
+      expect(boosted.packages[pkg].amountIDR).toBe(Math.round(discounted));
+    }
+  });
+
+  it("premium booster is discounted once (3_150_000), not twice", () => {
+    const boosted = getPricingCatalog(true);
+    expect(boosted.packages.premium.amountIDR).toBe(3_150_000);
   });
 });

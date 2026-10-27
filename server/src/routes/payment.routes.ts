@@ -6,6 +6,7 @@ import {
   confirmPayment,
   midtransCallback,
   getPaymentStatusHandler,
+  getPricingCatalogHandler,
 } from "../controllers/midtrans.controller";
 import { validate, validateBody } from "../middleware/validate";
 import { requireAuth } from "../middleware/auth";
@@ -51,6 +52,9 @@ router.get(
   validate({ params: userIdParamSchema }),
   getPaymentStatusHandler
 );
+
+/** GET /api/payment/prices — price catalog for frontend display (public, no auth) */
+router.get("/prices", getPricingCatalogHandler);
 
 /** GET /api/payment/token-balance/:userId — compatibility route */
 // Token balance route removed: access is package-based.

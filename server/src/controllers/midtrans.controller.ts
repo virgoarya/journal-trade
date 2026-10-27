@@ -10,7 +10,10 @@ import {
   getPaymentStatus,
 } from "../services/payment.service";
 import { Transaction } from "../models/Transaction";
-import { validateAmountIDR } from "../config/payment-pricing";
+import {
+  validateAmountIDR,
+  getPricingCatalog,
+} from "../config/payment-pricing";
 
 
 
@@ -217,5 +220,17 @@ export async function getPaymentStatusHandler(req: Request, res: Response) {
   } catch (err: any) {
     console.error("[Midtrans] getPaymentStatus error:", err.message);
     res.status(500).json({ error: "Failed to get payment status" });
+  }
+}
+
+/** GET /api/payment/prices — price catalog (public catalog, no auth required) */
+export async function getPricingCatalogHandler(req: Request, res: Response) {
+  try {
+    const isBooster = req.query.isBooster === "true";
+    const catalog = getPricingCatalog(isBooster);
+    res.json(catalog);
+  } catch (err: any) {
+    console.error("[Pricing] getPricingCatalog error:", err.message);
+    res.status(500).json({ error: "Failed to get pricing catalog" });
   }
 }
