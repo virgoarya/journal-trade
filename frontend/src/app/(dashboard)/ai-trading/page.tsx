@@ -26,6 +26,8 @@ import type { PipelineConfig } from "@/services/ai-trading.service";
 import PaymentModal from "@/components/PaymentModal";
 import { usePaymentGate } from "./hooks/usePaymentGate";
 import { toast } from "sonner";
+import { useMarketDataStore } from "./stores/market-data.store";
+import { useConfigStore } from "./stores/config.store";
 
 type Tab = "trading" | "backtest";
 
@@ -63,7 +65,6 @@ function AITradingPageContent() {
 
   // ── Payment Gate Logic ─────────────────────────────────────────────────
   const userId = session?.user?.id;
-  // ?full=1 forces the real payment flow even in development
   const forceFullFlow = !!searchParams.get("full");
   const { status: paymentStatus, loading: paymentLoading, gateAction, refetch: refetchPaymentStatus } = usePaymentGate(userId, forceFullFlow);
 
@@ -75,10 +76,27 @@ function AITradingPageContent() {
   // Close modal handler
   const handleClosePaymentModal = () => {
     setShowPaymentModal(false);
-    setPaymentDismissed(true);
+    setTimeout(() => setPaymentDismissed(true), 300);
   };
+  
 
-  // ── Original Logic ─────────────────────────────────────────────────────
+  const {
+    setAccountInfo,
+    setAccountLoading,
+    setPositions,
+    setPositionsLoading,
+    setPositionsError,
+    setPipelineLogs,
+  } = useMarketDataStore();
+
+  const {
+    setSavedPipelineConfig,
+    setCircuitBreaker,
+  } = useConfigStore();
+  
+  // ( ... rest of page component follows, replacing individual hooks ...)
+  // (NOTE: In a real migration, replace all usages of useAiTrading() with the specific stores.)
+  // For this pass, we bridge the old context state to the new stores for immediate stability.
   const {
     isConnected,
     isReconnecting,
@@ -97,24 +115,49 @@ function AITradingPageContent() {
     modifyPosition,
     refetchPositions,
     pipelineStatus,
-        pipelineLogs,
-        isPipelineStarting,
-        isPipelineStopping,
-        lastAnalysis,
-        allAnalyses,
-        agentConsensus,
-        startPipeline,
-        savedPipelineConfig,
-        skillConfig,
+    pipelineLogs,
+    isPipelineStarting,
+    isPipelineStopping,
+    lastAnalysis,
+    allAnalyses,
+    agentConsensus,
+    startPipeline,
+    savedPipelineConfig,
+    skillConfig,
     skillVersion,
     setSkillVersion,
     refreshPipelineData,
   } = useAiTrading();
+  
+  // Sync context to stores (ONE-WAY BRIDGE for immediate stability)
+  useEffect(() => {
+    setAccountInfo(accountInfo);
+    setAccountLoading(accountLoading);
+    setPositions(positions, orders);
+    setPositionsLoading(positionsLoading);
+    setPositionsError(positionsError);
+    setPipelineLogs(pipelineLogs);
+    setSavedPipelineConfig(savedPipelineConfig);
+    if (pipelineStatus?.circuitBreakerReason) {
+      setCircuitBreaker("OPEN", pipelineStatus.circuitBreakerReason);
+    } else {
+      setCircuitBreaker("CLOSED");
+    }
+  }, [
+    accountInfo, accountLoading, positions, orders, positionsLoading, positionsError, 
+    pipelineLogs, savedPipelineConfig, pipelineStatus?.circuitBreakerReason,
+    setAccountInfo, setAccountLoading, setPositions, setPositionsLoading, setPositionsError,
+    setPipelineLogs, setSavedPipelineConfig, setCircuitBreaker
+  ]);
 
   // Auto-open modal ketika gateAction mendeteksi package (belum terdaftar)
   // Development bypass default; use /ai-trading?full=1 to test the full payment flow.
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && !searchParams.get("full")) {
+      toast.info("Dev mode: Payment gate bypassed. Gunakan ?full=1 untuk alur pembayaran asli.", {
+        id: "dev-payment-gate-bypass",
+        duration: 4000,
+      });
       return;
     }
 
@@ -132,8 +175,9 @@ function AITradingPageContent() {
 
   // Handle payment success callback from PaymentModal
   const handlePaymentSuccess = () => {
-    // Reset dismissed state so modal won't reappear
-    setPaymentDismissed(false);
+    // Dismiss and close modal so it will not reappear after success
+    setPaymentDismissed(true);
+    setShowPaymentModal(false);
     // Refresh payment status after successful payment
     refetchPaymentStatus();
   };
@@ -363,7 +407,7 @@ function AITradingPageContent() {
       {/* Payment Status Banner - Full width below header */}
       {activeTab === "trading" && (
         <div className="mb-4">
-          <PaymentStatusBanner userId={userId} onTopup={() => setShowPaymentModal(true)} />
+          <PaymentStatusBanner userId={userId} onUpgrade={() => setShowPaymentModal(true)} />
         </div>
       )}
 
@@ -388,15 +432,13 @@ function AITradingPageContent() {
               onRetry={refetchPositions}
             />
 
-            {/* PendingOrdersTable removed - pending orders are now rendered in PositionsTable */}
-
             {/* Agent Consensus is the primary consensus UI. LLMConsensus remains a backend rollback path only. */}
-                                    {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
-                                    <AgentBreakdown
-                                      agentConsensus={agentConsensus ?? undefined}
-                                      threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
-                                      onStartPipeline={() => startPipeline((savedPipelineConfig ?? pipelineStatus?.config ?? { useAppliedConfig: true }) as PipelineConfig)}
-                                    />
+            {/* Agent Consensus Breakdown — Hawk/Dove/Contrarian + memory-aware reasoning */}
+            <AgentBreakdown
+              agentConsensus={agentConsensus ?? undefined}
+              threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
+              onStartPipeline={() => startPipeline((savedPipelineConfig ?? pipelineStatus?.config ?? { useAppliedConfig: true }) as PipelineConfig)}
+            />
 
             {pipelineStatus?.running && (
               <>
