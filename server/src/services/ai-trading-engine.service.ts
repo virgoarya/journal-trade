@@ -309,6 +309,7 @@ class AITradingEngine {
 
   /**
    * Calculate position size based on account risk.
+   * Tick-value basis: riskPerLot = (slDistance / tickSize) * tickValue.
    * Enforces HARD CAP of 1.0 LOT per position for all forex & crypto (BTCUSD) pairs.
    */
   calculatePositionSize(params: {
@@ -316,24 +317,26 @@ class AITradingEngine {
     riskPercent: number;
     entryPrice: number;
     stopLoss: number;
-    atr?: number;
-    contractSize: number;
+    tickSize: number;
+    tickValue: number;
     volumeMin: number;
     volumeMax: number;
     volumeStep: number;
     symbol?: string;
+    atr?: number;
   }): number {
     const {
       accountBalance,
       riskPercent,
       entryPrice,
       stopLoss,
-      atr,
-      contractSize,
+      tickSize,
+      tickValue,
       volumeMin,
       volumeMax,
       volumeStep,
       symbol = "",
+      atr,
     } = params;
 
     const riskAmount = accountBalance * (riskPercent / 100);
@@ -345,37 +348,40 @@ class AITradingEngine {
       slDistance = Math.max(slDistance, Math.min(minSlByAtr, maxOverride));
     }
 
-    let effectiveContractSize = contractSize > 0 ? contractSize : 100000;
-    const cleanSym = symbol.toUpperCase();
-
-    if (cleanSym.endsWith("JPY")) {
-      const approxJpyRate = entryPrice > 50 ? entryPrice : 155;
-      effectiveContractSize = effectiveContractSize / approxJpyRate;
-    } else if (cleanSym.endsWith("CAD")) {
-      effectiveContractSize = effectiveContractSize / 1.35;
-    } else if (cleanSym.endsWith("GBP")) {
-      effectiveContractSize = effectiveContractSize * 1.27;
-    } else if (cleanSym.endsWith("EUR")) {
-      effectiveContractSize = effectiveContractSize * 1.08;
-    } else if (cleanSym.endsWith("AUD")) {
-      effectiveContractSize = effectiveContractSize * 0.65;
-    } else if (cleanSym.includes("BTC") || cleanSym.includes("CRYPTO")) {
-      effectiveContractSize = contractSize > 0 ? contractSize : 1;
+    if (
+      slDistance <= 0 ||
+      accountBalance <= 0 ||
+      riskPercent <= 0 ||
+      tickSize == null ||
+      tickValue == null ||
+      tickSize <= 0 ||
+      tickValue <= 0 ||
+      entryPrice <= 0 ||
+      stopLoss <= 0 ||
+      Number.isNaN(entryPrice) ||
+      Number.isNaN(stopLoss) ||
+      Number.isNaN(tickSize) ||
+      Number.isNaN(tickValue) ||
+      volumeMin <= 0 ||
+      volumeStep <= 0 ||
+      volumeMax < volumeMin
+    ) {
+      return 0;
     }
 
-    let lotSize = 0;
-    if (slDistance > 0 && effectiveContractSize > 0) {
-      lotSize = riskAmount / (slDistance * effectiveContractSize);
-    }
+    const riskPerLot = (slDistance / tickSize) * tickValue;
+    let lotSize = riskAmount / riskPerLot;
 
+    // Floor to volumeStep (conservative, never round up)
     const rounded = Math.floor(lotSize / volumeStep) * volumeStep;
-    const decimals = volumeStep.toString().split('.')[1]?.length || 0;
+    const decimals = volumeStep.toString().split(".")[1]?.length || 0;
     let finalLot = parseFloat(rounded.toFixed(decimals));
-    
+
+    // volumeMin is a floor, not a target: if floored lot is below min, reject (0)
     if (finalLot < volumeMin) {
-      finalLot = volumeMin;
+      return 0;
     }
-    
+
     // HARD CAP: Max 1.0 lot per position for all forex & crypto pairs (User Rule)
     const MAX_LOT_CAP = 1.0;
     return Math.min(finalLot, volumeMax, MAX_LOT_CAP);

@@ -193,6 +193,8 @@ export interface MT5Symbol {
   point: number;
   digits: number;
   tradeContractSize: number;
+  tradeTickSize?: number;
+  tradeTickValue?: number;
   volumeMin: number;
   volumeMax: number;
   volumeStep: number;

@@ -1313,6 +1313,9 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             `[2/4] [${signal.symbol}] AGENT CONSENSUS RESULT: ${isTrade ? "TRADE APPROVED" : "TRADE REJECTED"}`,
             { agentConsensus: adapted },
           );
+          this.addLog(userId, "CONFLUENCE",
+            `[2/4] [${signal.symbol}] Agent Votes (${adapted.votes.length}): ${adapted.votes.map((v) => `${v.persona}=${v.bias}`).join(", ")}`,
+          );
           for (const vote of adapted.votes) {
             this.addLog(userId, "CONFLUENCE",
               `[2/4] [${signal.symbol}] ${vote.persona}: ${vote.bias} — ${vote.reasoning.substring(0, 100)}`,
@@ -1478,7 +1481,8 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             riskPercent: finalRiskPercent,
             entryPrice: signal.entry,
             stopLoss: signal.sl,
-            contractSize: symbolInfo.tradeContractSize,
+            tickSize: symbolInfo.tradeTickSize ?? symbolInfo.point,
+            tickValue: symbolInfo.tradeTickValue ?? symbolInfo.point * symbolInfo.tradeContractSize,
             volumeMin: symbolInfo.volumeMin,
             volumeMax: symbolInfo.volumeMax,
             volumeStep: symbolInfo.volumeStep,

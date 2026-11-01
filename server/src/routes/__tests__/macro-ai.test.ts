@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import macroAiRoutes from '../macro-ai.routes';
 import { macroAiService } from '../../services/macro-ai.service';
 import { marketDataService } from '../../services/market-data.service';
+import { userMemoryService } from '../../services/user-memory.service';
+import { ChatSession } from '../../models/ChatSession';
+import { ReflectionLog } from '../../models/ReflectionLog';
 
 vi.mock('../../middleware/auth', () => ({
   requireAuth: (req: any, res: any, next: any) => {
@@ -90,6 +93,29 @@ function getHandler(path: string, method: 'get' | 'post' = 'post') {
 describe('Macro AI API Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(macroAiService.chatStream).mockResolvedValue({ text: '', toolsUsed: [] } as any);
+    vi.mocked(userMemoryService.ensureName).mockResolvedValue(undefined);
+    vi.mocked(userMemoryService.getPromptContext).mockResolvedValue('');
+    vi.mocked(userMemoryService.getOrCreate).mockResolvedValue({ name: 'Test User', interactionCount: 1 } as any);
+    vi.mocked(ChatSession.find).mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([{ _id: 'session-1', title: 'Test Session' }]),
+        }),
+      }),
+    } as any);
+    vi.mocked(ChatSession.create).mockResolvedValue({ _id: 'session-2' } as any);
+    vi.mocked(ChatSession.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ _id: 'session-1', messages: [] }),
+    } as any);
+    vi.mocked(ChatSession.updateOne).mockResolvedValue({} as any);
+    vi.mocked(ReflectionLog.find).mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([{ _id: 'log-1', thought: 'reflect' }]),
+        }),
+      }),
+    } as any);
   });
 
   describe('POST /analyze-regime', () => {

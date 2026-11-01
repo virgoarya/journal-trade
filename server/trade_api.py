@@ -61,11 +61,11 @@ def pos_to_dict(p):
         "sl": p.sl,
         "tp": p.tp,
         "profit": p.profit,
-        "swap": p.swap,
-        "commission": p.commission,
-        "comment": p.comment,
-        "time": p.time,
-        "magic": p.magic,
+        "swap": getattr(p, "swap", 0.0),
+        "commission": getattr(p, "commission", 0.0),
+        "comment": getattr(p, "comment", ""),
+        "time": getattr(p, "time", 0),
+        "magic": getattr(p, "magic", 0),
     }
 
 def order_to_dict(o):

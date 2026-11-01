@@ -6,7 +6,8 @@ vi.mock("../../models/Registration", () => ({
   Registration: {
     findOneAndUpdate: vi.fn().mockResolvedValue({}),
     // WIP memanggil `.lean()` pada hasil findOne (baris 298).
-    findOne: vi.fn().mockReturnValue({
+    // Plain function (not vi.fn) to survive mockReset/mockClear in vitest config.
+    findOne: () => ({
       lean: () => Promise.resolve(null),
     }),
   },
@@ -15,17 +16,21 @@ vi.mock("../../models/Subscription", () => ({
   Subscription: { findOneAndUpdate: vi.fn().mockResolvedValue({}) },
 }));
 vi.mock("../../models/Transaction", () => ({
-  Transaction: { create: vi.fn().mockResolvedValue({}), findOne: vi.fn().mockResolvedValue(null) },
+  Transaction: { create: vi.fn().mockResolvedValue({}), findOne: () => null },
 }));
-vi.mock("../../db/mongoose", () => ({
-  authMongoClient: {
-    db: vi.fn().mockReturnValue({
-      collection: vi.fn().mockReturnValue({
-        findOne: vi.fn().mockResolvedValue({ id: "usr_abc", name: "Alex", email: "alex@example.com" }),
+vi.mock("../../db/mongoose", () => {
+  const mockCollection = {
+    findOne: async () => ({ id: "usr_abc", name: "Alex", email: "alex@example.com" }),
+  };
+  return {
+    authMongoClient: {
+      db: () => ({
+        collection: () => mockCollection,
       }),
-    }),
-  },
-}));
+    },
+    connectDB: async () => undefined,
+  };
+});
 
 vi.mock("mongoose", () => {
   const actual = vi.importActual("mongoose");

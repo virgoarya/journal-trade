@@ -61,18 +61,45 @@ class RiskManagerService {
         };
       }
 
-      // ── 3. Check total open risk capacity (Dynamic Risk Capacity) ──────
+      // ── 3. Check max open positions (hard guard, precedes risk capacity) ──
+      if (positions.length >= pipelineConfig.maxOpenPositions) {
+        return {
+          allowed: false,
+          reason: `Max open positions reached: ${positions.length} >= ${pipelineConfig.maxOpenPositions}`,
+          warnings,
+        };
+      }
+
+      // ── 4. Check total open risk capacity (Dynamic Risk Capacity) ──────
       let totalOpenRiskPercent = 0;
+      const symbolRiskCache: Record<string, { tickSize: number; tickValue: number }> = {};
+
       for (const pos of positions) {
-        if (pos.sl && pos.sl > 0 && pos.priceOpen > 0) {
-          const slPriceDiff = Math.abs(pos.priceOpen - pos.sl);
-          // Estimate risk in currency
-          const posRiskUsd = slPriceDiff * pos.volume * 100000;
-          const posRiskPct = accountInfo.balance > 0 ? (posRiskUsd / accountInfo.balance) * 100 : 0.5;
-          totalOpenRiskPercent += Math.min(posRiskPct, pipelineConfig.maxRiskPerTrade);
-        } else {
+        // Fail-closed: if we cannot price the risk in ticks, reject the trade
+        if (!pos.sl || pos.sl <= 0 || pos.priceOpen <= 0) {
           totalOpenRiskPercent += pipelineConfig.maxRiskPerTrade;
+          continue;
         }
+
+        const sym = pos.symbol;
+        if (!symbolRiskCache[sym]) {
+          const info = await mt5McpService.getSymbolInfo(sym);
+          if (!info || info.tradeTickSize == null || info.tradeTickValue == null || info.tradeTickSize <= 0 || info.tradeTickValue <= 0) {
+            return {
+              allowed: false,
+              reason: `Missing or invalid tick specification for ${sym}`,
+              warnings,
+            };
+          }
+          symbolRiskCache[sym] = { tickSize: info.tradeTickSize, tickValue: info.tradeTickValue };
+        }
+
+        const { tickSize, tickValue } = symbolRiskCache[sym];
+        const slDist = Math.abs(pos.priceOpen - pos.sl);
+        const riskPerLot = (slDist / tickSize) * tickValue;
+        const posRiskUsd = riskPerLot * pos.volume;
+        const posRiskPct = accountInfo.balance > 0 ? (posRiskUsd / accountInfo.balance) * 100 : 0.5;
+        totalOpenRiskPercent += Math.min(posRiskPct, pipelineConfig.maxRiskPerTrade);
       }
 
       // maxDailyRisk may be undefined (resolved from smart-risk settings) — treat
@@ -82,7 +109,7 @@ class RiskManagerService {
         : (pipelineConfig.maxOpenPositions * pipelineConfig.maxRiskPerTrade);
       // maxDailyRisk is the hard ceiling for total daily risk. Per-position risk is already bounded by maxRiskPerTrade above.
       const totalRiskCapacity = dailyRiskCap;
-      if (totalOpenRiskPercent + pipelineConfig.maxRiskPerTrade > totalRiskCapacity && positions.length >= pipelineConfig.maxOpenPositions) {
+      if (totalOpenRiskPercent + pipelineConfig.maxRiskPerTrade > totalRiskCapacity) {
         return {
           allowed: false,
           reason: `Max risk capacity reached: Total open risk ${totalOpenRiskPercent.toFixed(2)}% + new trade ${pipelineConfig.maxRiskPerTrade}% exceeds limit ${totalRiskCapacity.toFixed(2)}%`,
@@ -201,7 +228,7 @@ class RiskManagerService {
       const accountInfo = await mt5McpService.getAccountInfo();
       const positions = await mt5McpService.getPositions();
 
-      // Calculate open risk (sum of distance to SL * lot value * contract size)
+      // Calculate open risk (sum of distance to SL * lot value * volume)
       let openRisk = 0;
       const symbolCache: Record<string, any> = {};
 
@@ -210,31 +237,16 @@ class RiskManagerService {
 
         if (!symbolCache[pos.symbol]) {
           const info = await mt5McpService.getSymbolInfo(pos.symbol);
-          if (info) symbolCache[pos.symbol] = info;
+          if (!info || info.tradeTickSize == null || info.tradeTickValue == null || info.tradeTickSize <= 0 || info.tradeTickValue <= 0) {
+            throw new Error(`Missing tick specification for ${pos.symbol}`);
+          }
+          symbolCache[pos.symbol] = info;
         }
         
         const symInfo = symbolCache[pos.symbol];
-        // Smart contract size detection with fallbacks
-        let contractSize = symInfo?.tradeContractSize;
-        
-        if (!contractSize) {
-          const s = pos.symbol.toUpperCase();
-          if (s.includes("XAU") || s.includes("GOLD")) contractSize = 100;
-          else if (s.includes("BTC") || s.includes("CRYPTO")) contractSize = 1;
-          else if (s.includes("NAS") || s.includes("USA100") || s.includes("US30") || s.includes("DE40")) contractSize = 10;
-          else contractSize = 100000; // default forex
-        }
-
-        // Check for risk-free positions (Trailing Stop / Break Even)
-        const posType = pos.type as string | number;
-        if (posType === "BUY" || posType === 0) {
-          if (pos.sl >= pos.priceOpen) continue;
-        } else if (posType === "SELL" || posType === 1) {
-          if (pos.sl <= pos.priceOpen) continue;
-        }
-
         const slDist = Math.abs(pos.priceOpen - pos.sl);
-        openRisk += slDist * pos.volume * contractSize;
+        const riskPerLot = (slDist / symInfo.tradeTickSize) * symInfo.tradeTickValue;
+        openRisk += riskPerLot * pos.volume;
       }
       silentLogger.debug(`[RISK] calculateRiskMetrics: openRisk=${openRisk.toFixed(2)}, positions=${positions.length}`);
 

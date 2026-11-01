@@ -207,12 +207,7 @@ try {
     initAutoBacktestCron();
     console.log("[STARTUP] Auto-backtest cron initialized.");
 
-    // FlowLLM MCP removed — binary finance-mcp.exe never existed, DASHSCOPE_API_KEY was unused (Opsi B approved by Bang Vir)
-    //   if (!fs.existsSync(aitradosMcpPath)) {
-    //     console.warn(`[MCP] Aitrados binary not found at ${aitradosMcpPath}, skipping`);
-    //   } else {
-    //     console.log("Starting Aitrados MCP Server...");
-    //     mcpService.registerAitrados(aitradosMcpPath, 11999, "127.0.0.1")
+    // FlowLLM MCP removed — binary never existed, API key was unused (Opsi B approved by Bang Vir)
     //       .catch(e => console.warn("Aitrados MCP (non-critical):", e.message));
     //   }
     // }

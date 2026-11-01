@@ -49,6 +49,7 @@ router.post("/callback", midtransCallback);
 /** GET /api/payment/status-for-user/:userId — gate AI Trading page */
 router.get(
   "/status-for-user/:userId",
+  requireAuth,
   validate({ params: userIdParamSchema }),
   getPaymentStatusHandler
 );

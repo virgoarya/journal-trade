@@ -210,11 +210,23 @@ export async function midtransCallback(req: Request, res: Response) {
 /** GET /api/payment/status/:userId — full payment status (gate AI Trading page) */
 export async function getPaymentStatusHandler(req: Request, res: Response) {
   try {
+    // Get userId from authenticated session (set by requireAuth middleware)
+    const sessionUserId = req.user?.id;
+    if (!sessionUserId) {
+      return res.status(401).json({ error: "Unauthorized - authentication required" });
+    }
+
     let { userId } = req.params;
     if (Array.isArray(userId)) userId = userId[0];
     if (typeof userId !== "string") {
       return res.status(400).json({ error: "Invalid userId" });
     }
+
+    // Security: Users can only access their own payment status
+    if (userId !== sessionUserId) {
+      return res.status(403).json({ error: "Forbidden - cannot access other user's payment status" });
+    }
+
     const status = await getPaymentStatus(userId);
     res.json({ userId, ...status });
   } catch (err: any) {

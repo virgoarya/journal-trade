@@ -15,7 +15,8 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "audit:data": "tsx src/scripts/audit-data-freshness.ts"
+    "audit:data": "tsx src/scripts/audit-data-freshness.ts",
+    "verify:atlas": "tsx src/scripts/verify-atlas-app.ts"
   },
   "keywords": [],
   "author": "",
