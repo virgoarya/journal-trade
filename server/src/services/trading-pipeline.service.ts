@@ -61,6 +61,7 @@ export interface PipelineConfig {
     threshold: number;
     toolEnabled: boolean;
   };
+  macroNewsFailSafe?: boolean;
   smartRisk?: {
     enabled: boolean;
     capitalPreservation?: {
