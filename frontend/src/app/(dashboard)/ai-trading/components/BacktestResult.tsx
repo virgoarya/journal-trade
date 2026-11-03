@@ -85,11 +85,11 @@ function MetricCard({
   sub?: string;
 }) {
   return (
-    <div className="panel p-4 flex flex-col items-center justify-center text-center transition">
-      <Icon className={`w-5 h-5 ${color.includes("text-") ? color : "text-text-muted"} mb-3`} />
+    <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-4 flex flex-col items-center justify-center text-center transition-all hover:bg-black/60 hover:border-accent-gold/30 hover:shadow-lg">
+      <Icon className={`w-5 h-5 ${color.includes("text-") ? color : "text-text-muted"} mb-2.5`} />
       <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">{label}</p>
-      <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
-      {sub && <p className="text-[10px] text-text-muted mt-1">{sub}</p>}
+      <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
+      {sub && <p className="text-[9px] text-text-muted/70 mt-1 font-mono">{sub}</p>}
     </div>
   );
 }

@@ -14,7 +14,7 @@ import {
 } from "@/services/backtest.service";
 import {
   Terminal, XCircle, Cpu, TrendingUp, TrendingDown,
-  Activity, Loader2, BarChart3, Layers, Clock,
+  Activity, Loader2, BarChart3, Layers, Clock, Filter, Play, Pause, X, ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -62,6 +62,11 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [liveSessionStats, setLiveSessionStats] = useState<Array<{ session: string; count: number; pnl: number; color: string; wins: number; losses: number; winRate: number }>>([]);
   const sessionStatsRef = useRef<Map<string, { count: number; wins: number; losses: number; pnl: number }>>(new Map());
 
+  // New UI feature states
+  const [logFilter, setLogFilter] = useState<"all" | "info" | "trade_open" | "trade_close" | "error">("all");
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [isPrepareCanceled, setIsPrepareCanceled] = useState(false);
+
   const getSessionInfo = (timestamp?: number) => {
     if (!timestamp) return { name: "Off-Hours", color: "text-gray-400" };
     const h = new Date(timestamp * 1000).getUTCHours();
@@ -80,7 +85,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const [globalWins, setGlobalWins] = useState(0);
   const [globalLosses, setGlobalLosses] = useState(0);
   const [maxDrawdownPct, setMaxDrawdownPct] = useState(0);
-  
+
   const activeTradesRef = useRef<Map<string, StreamTradeOpen>>(new Map());
   const maxEquityRef = useRef<number>(config.initialBalance);
 
@@ -103,7 +108,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   const globalWinsRef = useRef(0);
   const globalLossesRef = useRef(0);
   const maxDrawdownPctRef = useRef(0);
-  
+
   const liveTradesBufferRef = useRef<any[]>([]);
   const [liveTrades, setLiveTrades] = useState<any[]>([]);
 
@@ -168,7 +173,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
 
   const journalRef = useRef<HTMLDivElement>(null);
   const liveTradesTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
     const el = journalRef.current;
@@ -227,7 +231,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       if (logsBufferRef.current.length > 0) {
         const bufferedLogs = [...logsBufferRef.current];
         logsBufferRef.current = [];
-        setLogs(prev => [...prev, ...bufferedLogs].slice(-50));
+        setLogs(prev => [...prev, ...bufferedLogs].slice(-100));
       }
 
       // Flush Stats
@@ -338,8 +342,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             accumulatedEquityRef.current.push(pt);
             equityBufferRef.current.push(pt);
 
-            // Synchronize active open trades from server — buffer for RAF flush
-            // (never setState per SSE event — that thrashes React)
             if (data.activeTrades && Array.isArray(data.activeTrades)) {
               liveTradesBufferRef.current = data.activeTrades;
               tradesDirtyRef.current = true;
@@ -351,9 +353,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           if (!mounted) return;
           try {
             const data = JSON.parse(e.data) as StreamCandle;
-            // Buffer candle — RAF loop will flush to state
             candleBufferRef.current = data;
-            // Update drawdown tracking in ref (no re-render)
             if (data.equity > maxEquityRef.current) {
                 maxEquityRef.current = data.equity;
             } else if (maxEquityRef.current > 0) {
@@ -383,8 +383,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               methStatsRef.current.set(meth, { count: 0, pnl: 0 });
             }
             methStatsRef.current.get(meth)!.count++;
-            
-            // Track open position locally
+
             activeTradesRef.current.set(`${data.symbol}-${data.time}`, data);
             tradesDirtyRef.current = true;
           } catch {}
@@ -416,7 +415,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
               statsDirtyRef.current = true;
             }
 
-            // Market Session Stats tracking (by Entry Time)
             const sess = getSessionInfo(data.entryTime || data.exitTime);
             if (!sessionStatsRef.current.has(sess.name)) {
               sessionStatsRef.current.set(sess.name, { count: 0, wins: 0, losses: 0, pnl: 0 });
@@ -427,11 +425,9 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             if (data.pnl >= 0) sData.wins++; else sData.losses++;
             sessionStatsDirtyRef.current = true;
 
-            // Remove from active trades — RAF loop flushes the UI
             activeTradesRef.current.delete(`${data.symbol}-${data.entryTime}`);
             tradesDirtyRef.current = true;
-            
-            // Update Global Win Rate
+
             if (data.pnl >= 0) { globalWinsRef.current++; setGlobalWins(globalWinsRef.current); }
             else { globalLossesRef.current++; setGlobalLosses(globalLossesRef.current); }
           } catch {}
@@ -446,25 +442,22 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
             data.trades = accumulatedTradesRef.current;
             data.equityCurve = accumulatedEquityRef.current;
             setPhase("complete");
-            
-            // Close EventSource cleanly before notifying parent
+
             if (es.readyState !== EventSource.CLOSED) {
               es.close();
             }
             eventSourceRef.current = null;
 
-            setTimeout(() => { 
+            setTimeout(() => {
               if (mounted) {
                 onCompleteRef.current(data);
-              } 
+              }
             }, 500);
           } catch (err) {
             console.error("Complete handler error:", err);
           }
         });
 
-        // Single error handler: network failures (readyState CONNECTING) AND
-        // server-sent error events both land here. errorHandledRef ensures it fires once.
         es.addEventListener("error", (e: any) => {
           if (!mounted || completedRef.current || errorHandledRef.current) return;
           errorHandledRef.current = true;
@@ -496,6 +489,7 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
   }, [newKey]);
 
   const handleCancelPreparation = async () => {
+    setIsPrepareCanceled(true);
     if (sessionId) {
       try {
         await backtestService.cancelSession(sessionId);
@@ -504,23 +498,6 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
       }
     }
     onCancel();
-  };
-
-  const handleStartSimulation = async () => {
-    if (!sessionId) return;
-    setStartingSimulation(true);
-    try {
-      const res = await backtestService.startSession(sessionId);
-      if (res.success) {
-        setPhase("running");
-      } else {
-        onError(res.error || "Failed to start simulation");
-      }
-    } catch (err: any) {
-      onError(err.message || "Failed to start simulation");
-    } finally {
-      setStartingSimulation(false);
-    }
   };
 
   const progressPercent = progress ? progress.percent : 0;
@@ -565,6 +542,25 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           <XCircle className="w-3.5 h-3.5" /> Stop
         </button>
       </div>
+
+      {/* Skeleton overlay during preparing phase */}
+      {phase === "preparing" && !sessionId && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-accent-gold/10 border border-accent-gold/30 flex items-center justify-center animate-pulse">
+            <Loader2 className="w-8 h-8 text-accent-gold animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-text-primary font-mono text-base font-bold tracking-wide">Preparing Historical Data</h4>
+            <p className="text-text-muted text-xs max-w-xs">Fetching candle and indicator streams from MT5 MCP for {config.symbols?.join(", ")}...</p>
+          </div>
+          <button
+            onClick={handleCancelPreparation}
+            className="mt-4 px-5 py-2.5 bg-red-950/40 hover:bg-red-900/50 text-red-300 rounded-xl border border-red-500/30 text-xs font-mono font-bold tracking-wider uppercase transition shadow-[0_0_15px_rgba(255,0,0,0.15)] flex items-center gap-2"
+          >
+            <XCircle className="w-4 h-4" /> Cancel Preparation
+          </button>
+        </div>
+      )}
 
       {/* Main View */}
       {(phase === "preparing" || phase === "running" || phase === "complete") && (
@@ -714,15 +710,31 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
           <div className="bg-black/40 border border-accent-gold/10 rounded-lg flex flex-col font-mono text-xs relative flex-1 min-h-0">
             <div className="px-3 py-2 border-b border-accent-gold/10 text-text-muted flex items-center justify-between shrink-0">
               <div className="flex items-center gap-1.5"><Terminal className="w-3.5 h-3.5" /> Run Log <span className="text-text-muted/60">({logs.length})</span></div>
-              {!autoScroll && (
-                <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
-                  className="text-accent-gold hover:text-yellow-400 text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10 animate-pulse">
-                  ↓ Scroll to Bottom
+              <div className="flex items-center gap-2">
+                <select value={logFilter} onChange={(e) => setLogFilter(e.target.value as any)} className="bg-bg-input text-[10px] px-1 py-0.5 rounded border border-border-default outline-none focus:border-accent-gold">
+                  <option value="all">All</option>
+                  <option value="info">Info</option>
+                  <option value="trade_open">Signals</option>
+                  <option value="trade_close">Trades</option>
+                  <option value="error">Errors</option>
+                </select>
+                <button onClick={() => setAutoScroll(!autoScroll)} className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border transition ${autoScroll ? "bg-accent-gold/10 text-accent-gold border-accent-gold/30" : "bg-bg-input text-text-muted border-border-default"}`}>
+                  {autoScroll ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                  {autoScroll ? "Auto" : "Pause"}
                 </button>
-              )}
+                {!autoScroll && (
+                  <button onClick={() => { setAutoScroll(true); if (journalRef.current) journalRef.current.scrollTop = journalRef.current.scrollHeight; }}
+                    className="text-accent-gold hover:text-yellow-400 text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border border-accent-gold/30 bg-accent-gold/10">
+                    ↓
+                  </button>
+                )}
+              </div>
             </div>
             <div ref={journalRef} onScroll={handleJournalScroll} className="overflow-y-auto p-2 space-y-0.5 max-h-[140px]">
-              {logs.map((log) => (
+              {logs.map((log) => {
+                const show = logFilter === "all" || log.type === logFilter;
+                if (!show) return null;
+                return (
                 <div key={log.id} className={`flex gap-2 py-0.5 px-2 rounded ${
                   log.type === "trade_open" ? "bg-blue-900/5"
                   : log.type === "trade_close"
@@ -733,7 +745,8 @@ export function BacktestStreamView({ config, onComplete, onError, onCancel }: Pr
                   <span className="text-gray-600 shrink-0 text-[10px] mt-0.5">[{log.candleTime || log.time}]</span>
                   <span className={`${log.type === "error" ? "text-red-400" : "text-gray-300"} leading-tight text-[11px]`}>{log.message}</span>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
         </div>

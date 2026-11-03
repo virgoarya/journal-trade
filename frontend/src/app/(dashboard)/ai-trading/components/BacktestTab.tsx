@@ -187,27 +187,32 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
 
       {/* History Panel */}
       {showHistory && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Backtest History</h3>
+        <div className="bg-black/40 border border-accent-gold/10 rounded-xl p-5 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary tracking-wider uppercase font-mono">Backtest History</h3>
+            <button onClick={loadHistory} className="text-[10px] text-accent-gold hover:text-yellow-400 font-mono uppercase">Refresh</button>
+          </div>
           {loadingHistory ? (
-            <p className="text-sm text-gray-500">Loading...</p>
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-10 bg-black/60 rounded-lg animate-pulse" />)}
+            </div>
           ) : historyItems.length === 0 ? (
-            <p className="text-sm text-gray-500">No backtests yet</p>
+            <p className="text-xs text-text-muted font-mono italic">No backtests recorded yet.</p>
           ) : (
-            <div className="grid gap-2 max-h-48 overflow-y-auto">
+            <div className="grid gap-2 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-accent-gold/20">
               {historyItems.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between bg-bg-input/50 rounded-lg px-3 py-2 text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="text-white font-medium">{item.symbol}</span>
-                    <span className="text-gray-500">{item.timeframe}</span>
-                    <span className="text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</span>
+                <div key={item.id} className="flex items-center justify-between bg-black/30 hover:bg-black/50 border border-accent-gold/5 hover:border-accent-gold/20 rounded-lg px-4 py-3 text-xs transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <span className="text-text-primary font-bold font-mono">{item.symbol}</span>
+                    <span className="text-text-muted font-mono">{item.timeframe}</span>
+                    <span className="text-text-muted/60 font-mono text-[10px]">{new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={item.result?.totalPnLPercent >= 0 ? "text-green-400" : "text-red-400"}>
+                  <div className="flex items-center gap-6">
+                    <span className={`font-bold font-mono ${item.result?.totalPnLPercent >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {item.result?.totalPnLPercent >= 0 ? "+" : ""}{item.result?.totalPnLPercent ?? 0}%
                     </span>
-                    <span className="text-gray-500">{item.result?.winRate ?? 0}% WR</span>
-                    {item.hasAiAnalysis && <span className="text-blue-400">AI</span>}
+                    <span className="text-text-muted font-mono">{item.result?.winRate ?? 0}% WR</span>
+                    {item.hasAiAnalysis && <span className="text-[9px] px-1.5 py-0.5 bg-blue-900/30 text-blue-400 rounded-sm font-bold">AI</span>}
                   </div>
                 </div>
               ))}
@@ -238,40 +243,13 @@ export function BacktestTab({ onBacktestComplete, onApplyToPipeline }: BacktestT
               isApplying={isApplying}
             />
           ) : (
-            <div className="relative">
-              <div className="opacity-30 pointer-events-none grayscale blur-[1px]">
-                <BacktestResult
-                  result={{
-                    totalTrades: 0,
-                    winRate: 0,
-                    totalPnL: 0,
-                    totalPnLPercent: 0,
-                    maxDrawdownPercent: 0,
-                    profitFactor: 0,
-                    recoveryFactor: 0,
-                    averageWin: 0,
-                    averageLoss: 0,
-                    symbols: ['-'],
-                    timeframe: '-',
-                    totalCandles: 0,
-                    winningTrades: 0,
-                    losingTrades: 0,
-                    symbolStats: [],
-                    equityCurve: []
-                  } as any}
-                  analysis={null}
-                  isAnalyzing={false}
-                  onAnalyze={() => {}}
-                  onApplyToPipeline={() => {}}
-                  isApplying={false}
-                />
+            <div className="bg-black/20 border border-accent-gold/5 rounded-2xl p-8 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-black/40 flex items-center justify-center border border-accent-gold/10">
+                <BarChart3 className="w-8 h-8 text-accent-gold/30" />
               </div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-50">
-                <div className="bg-black/80 p-6 rounded-2xl border border-accent-gold/30 shadow-[0_0_30px_rgba(212,175,55,0.1)] backdrop-blur-md text-center max-w-sm">
-                  <BarChart3 className="w-10 h-10 text-accent-gold/50 mx-auto mb-3" />
-                  <p className="text-accent-gold font-mono text-sm tracking-wider uppercase drop-shadow-[0_0_4px_rgba(212,175,55,0.6)]">Waiting for Simulation</p>
-                  <p className="text-text-muted text-[10px] mt-2">Configure parameters in the right panel and run the strategy tester to view results</p>
-                </div>
+              <div className="space-y-1">
+                <p className="text-text-primary font-mono text-sm tracking-wide">Ready for Analysis</p>
+                <p className="text-text-muted text-xs max-w-[240px]">Configure your strategy parameters in the sidebar and run a backtest to see live performance analytics.</p>
               </div>
             </div>
           )}
