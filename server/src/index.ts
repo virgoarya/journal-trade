@@ -196,12 +196,16 @@ try {
     console.log("[STARTUP] Better Auth initialized.");
 
     console.log("[STARTUP] Initializing MT5 native MCP stream...");
-    await initMt5NativeMcp(); // This starts the 9router and MT5 MCP connections
-    console.log("[STARTUP] MT5 native MCP stream initialized.");
+    try {
+      await initMt5NativeMcp(); // Non-blocking
+      console.log("[STARTUP] MT5 native MCP stream initialized.");
+    } catch (e: any) {
+      console.warn("⚠️ [STARTUP] MT5 native MCP stream skipped (non-critical on boot):", e.message);
+    }
 
     console.log("[STARTUP] Starting MT5 auto-sync...");
-    startMt5AutoSync().catch((e) => console.error("[MT5 Scheduler] Startup sync failed:", e));
-    console.log("[STARTUP] MT5 auto-sync started.");
+    startMt5AutoSync().catch((e) => console.warn("[MT5 Scheduler] Startup sync skipped:", e.message));
+    console.log("[STARTUP] MT5 auto-sync initialized.");
 
     console.log("[STARTUP] Initializing auto-backtest cron...");
     initAutoBacktestCron();
@@ -219,7 +223,7 @@ try {
       .then(() => console.log("[STARTUP] Internal native tools registered."))
       .catch(e => console.error("[STARTUP] Internal tools registration failed:", e));
 
-    // Auto-reconnect MT5 with saved credentials if any and restore active pipelines
+    // Auto-reconnect MT5 with saved credentials if any and restore active pipelines (Non-blocking)
     console.log("[STARTUP] Attempting MT5 auto-reconnect and pipeline recovery...");
     mt5McpService.tryAutoReconnect()
       .then(async () => {
@@ -228,10 +232,8 @@ try {
         console.log("[STARTUP] Pipeline recovery complete.");
       })
       .catch((e) => {
-        console.warn("⚠️ [MT5] Auto-reconnect skipped (no saved credentials or connection failed):", e.message);
-        // Still try to recover the pipelines so they run and can wait/reconnect
-        tradingPipelineService.recoverPipelines().catch((err) => console.error("⚠️ Pipeline recovery failed:", err));
-        console.log("[STARTUP] Pipeline recovery attempted despite MT5 auto-reconnect issue.");
+        console.warn("⚠️ [MT5] Auto-reconnect skipped (MT5 offline, UI will prompt user when AI Trading opens):", e.message);
+        tradingPipelineService.recoverPipelines().catch((err) => console.warn("⚠️ Pipeline recovery deferred:", err.message));
       });
 
     // LLM Health Check — test all 6 models, disable rate-limited ones

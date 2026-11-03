@@ -564,6 +564,8 @@ router.post(
         symbols.some((sym) => sym.name === s),
       );
 
+      console.log("DEBUG: Final Config for Pipeline:", JSON.stringify(finalConfig, null, 2));
+
       if (validSymbols.length === 0) {
         return apiResponse.error(
           res,

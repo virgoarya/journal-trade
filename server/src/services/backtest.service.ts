@@ -342,7 +342,7 @@ class BacktestService {
    * Phase 1: Fetch and prepare historical data without starting simulation.
    * Returns sessionId that can be used to start the simulation later.
    */
-  async prepareBacktestData(userId: string, config: Partial<BacktestConfig>, emitProgress?: StreamEventCallback): Promise<{
+  async prepareBacktestData(userId: string, config: Partial<BacktestConfig>, emitProgress?: StreamEventCallback, abortCheck?: () => boolean): Promise<{
     sessionId: string;
     symbolSummaries: Array<{ symbol: string; candles: number; fromDate: string; toDate: string }>;
   }> {
@@ -372,13 +372,21 @@ class BacktestService {
     // symbol doesn't block the whole progress bar. Results are cached in-memory:
     // repeat backtests with the same config skip MT5 entirely (instant re-run).
     const rateCache = RATE_CACHE;
-    const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+    // Optimize TTL: 10% of requested data range, capped at 3h
+    const dataRangeMs = (merged.toDate.getTime() - merged.fromDate.getTime());
+    const CACHE_TTL_MS = Math.min(3 * 60 * 60 * 1000, Math.max(15 * 60 * 1000, dataRangeMs / 10));
     const cacheKeyFor = (sym: string) => `${sym}|${merged.timeframe}|${fromTs}|${toTs}`;
 
     const fetchResults: Array<{ sym: string; rates: MT5Rate[]; closes: number[]; contractSize: number; volumeMin: number; volumeMax: number; volumeStep: number; spread?: number; point?: number; error: string | null }> = [];
     let completedFetches = 0;
 
     const fetchOne = async (sym: string) => {
+      // Abort check
+      if (abortCheck && abortCheck()) {
+        silentLogger.info(`[BACKTEST] Aborted prepare phase for ${sym}`);
+        return;
+      }
+
       const key = cacheKeyFor(sym);
       const hit = rateCache.get(key);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
@@ -391,7 +399,7 @@ class BacktestService {
       try {
         rates = await Promise.race([
           mt5McpService.getRatesRange(sym, merged.timeframe, fromTs, toTs),
-          new Promise<MT5Rate[]>((_, reject) => setTimeout(() => reject(new Error("MT5 Connection Timeout (15000ms)")), 15000))
+          new Promise<MT5Rate[]>((_, reject) => setTimeout(() => reject(new Error("MT5 Connection Timeout (45000ms)")), 45000))
         ]);
         if (rates.length < 50) {
           failMsg = `Not enough data for ${sym} ${merged.timeframe}: got ${rates.length} candles, skipping`;
@@ -484,13 +492,14 @@ class BacktestService {
     userId: string,
     config: Partial<BacktestConfig>,
     onEvent: StreamEventCallback,
+    abortCheck?: () => boolean,
   ): Promise<BacktestResult> {
     // If sessionId is provided in config, run in two-phase mode
     if (config.sessionId) {
       return this.runBacktestFromSession(userId, config.sessionId, onEvent);
     }
     // ── Unified stream: fetch data WITH progress → data_ready → auto-simulate ──
-    const { sessionId } = await this.prepareBacktestData(userId, config, onEvent);
+    const { sessionId } = await this.prepareBacktestData(userId, config, onEvent, abortCheck);
 
     const { backtestSessionManager } = require("./backtest-session.manager");
     const session = backtestSessionManager.getSession(sessionId, userId);

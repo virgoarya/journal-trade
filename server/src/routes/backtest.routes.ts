@@ -196,6 +196,13 @@ router.get("/stream", async (req: Request, res: Response) => {
  */
 router.post("/prepare", validate({ body: backtestRunSchema }), async (req, res, next) => {
   try {
+    let aborted = false;
+    req.on("close", () => {
+      aborted = true;
+    });
+
+    const abortCheck = () => aborted;
+
     const { symbols, timeframe, fromDate, toDate, initialBalance, entrySettings, trailingStop, maxRiskPerTrade, maxOpenPositions } = req.body;
     const { sessionId, symbolSummaries } = await backtestService.prepareBacktestData(req.user.id, {
       symbols,
@@ -207,7 +214,7 @@ router.post("/prepare", validate({ body: backtestRunSchema }), async (req, res, 
       trailingStop,
       maxRiskPerTrade,
       maxOpenPositions,
-    });
+    }, undefined, abortCheck);
     return apiResponse.success(res, { sessionId, symbolSummaries });
   } catch (error: any) {
     if (error.message?.includes("Not enough data") || error.message?.includes("Failed to fetch")) {

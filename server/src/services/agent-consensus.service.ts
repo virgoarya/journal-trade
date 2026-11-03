@@ -424,15 +424,27 @@ Maksimal 3 paragraf padat dalam Bahasa Indonesia institusional.`;
    * - Hawk: risk preference, past stop-outs, liquidity sensitivity
    * - Dove: opportunity patterns, winning trades, momentum signals
    * - Contrarian: past consensus failures, anomaly detection
+   * Optional symbol parameter prioritizes asset-specific learned experiences.
    */
-  async buildMemoryContext(userId: string, personaId: string): Promise<string> {
+  async buildMemoryContext(userId: string, personaId: string, symbol?: string): Promise<string> {
     const memory = await userMemoryService.getOrCreate(userId);
     const activeName = (memory.name || "").trim() || "Trader";
 
-    // Top-5 by confidence (ADR-0001). Facts written before the `confidence`
-    // field existed are treated as neutral 0.5 and compete on recency.
+    // Top-5 by confidence (ADR-0001). If symbol is specified, boost symbol-specific facts.
     const personaMemory = memory.agentMemories?.find((m: any) => m.personaId === personaId);
-    const personaFacts = topByConfidence(personaMemory?.facts || [], 5);
+    let allPersonaFacts = personaMemory?.facts || [];
+    if (symbol) {
+      const symUpper = symbol.toUpperCase();
+      allPersonaFacts = [...allPersonaFacts].sort((a: any, b: any) => {
+        const aHasSym = (a.fact || "").toUpperCase().includes(symUpper) ? 1 : 0;
+        const bHasSym = (b.fact || "").toUpperCase().includes(symUpper) ? 1 : 0;
+        if (bHasSym !== aHasSym) return bHasSym - aHasSym;
+        const ca = a.confidence ?? NEUTRAL_CONFIDENCE;
+        const cb = b.confidence ?? NEUTRAL_CONFIDENCE;
+        return cb - ca;
+      });
+    }
+    const personaFacts = topByConfidence(allPersonaFacts, 5);
 
     const generalFacts = topByConfidence(memory.learnedFacts || [], 5);
 

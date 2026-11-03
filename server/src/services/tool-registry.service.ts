@@ -104,6 +104,23 @@ class ToolRegistryService {
         }
     }
 
+    // Keyword detection untuk check_higher_timeframe_trend
+    if (/(higher timeframe|multi timeframe|h4|d1|tren waktu tinggi|analisis h4)/i.test(prompt)) {
+        silentLogger.info(`[ToolRegistry] Running check_higher_timeframe_trend`);
+        try {
+            const symbols = this.extractSymbolsForPrice(prompt);
+            const targetSymbol = symbols.length > 0 ? symbols[0] : "XAUUSD";
+            const tfMatch = prompt.match(/(H4|D1|H1|W1)/i);
+            const timeframe = tfMatch ? tfMatch[1].toUpperCase() : "H4";
+            const htf = await this.availableTools.check_higher_timeframe_trend(context, targetSymbol, timeframe);
+            enrichedContext.higherTimeframeTrend = htf;
+            toolsUsed.push("check_higher_timeframe_trend");
+        } catch (error: any) {
+            silentLogger.error(`[ToolRegistry] Error running check_higher_timeframe_trend: ${error.message}`);
+            enrichedContext.higherTimeframeTrendError = error.message;
+        }
+    }
+
 
     return { enrichedContext, toolsUsed };
   }

@@ -74,7 +74,8 @@ class UserMemoryService {
     userId: string,
     personaId: string,
     fact: string,
-    category: "user_preference" | "market_insight" | "persona_feedback" = "user_preference"
+    category: "user_preference" | "market_insight" | "persona_feedback" = "user_preference",
+    confidence: number = 0.5
   ): Promise<void> {
     if (!fact || !fact.trim()) return;
     try {
@@ -82,7 +83,12 @@ class UserMemoryService {
       const existingEntries = memory.agentMemories || [];
       const entryIdx = existingEntries.findIndex((e) => e.personaId === personaId);
 
-      const newFactItem = { date: new Date(), fact: fact.trim(), category };
+      const newFactItem = {
+        date: new Date(),
+        fact: fact.trim(),
+        category,
+        confidence: Math.min(1, Math.max(0, confidence)),
+      };
 
       if (entryIdx >= 0) {
         await UserAgentMemory.updateOne(

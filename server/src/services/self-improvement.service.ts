@@ -122,4 +122,118 @@ Buat 1-3 aturan singkat (System Rules) dalam Bahasa Indonesia agar agent tidak m
       return { success: false, error: e.message };
     }
   },
+
+  /**
+   * Continuous Self-Improvement: Reflect on closed trade outcomes (TP_HIT, SL_HIT, MANUAL)
+   * Dispatches reflection to 9Router, extracts persona lessons, and stores in UserAgentMemory.
+   */
+  reflectOnClosedTrade: async (tradeLog: any) => {
+    try {
+      const userId = tradeLog.userId;
+      if (!userId) return;
+
+      const symbol = tradeLog.signal?.symbol || "UNKNOWN";
+      const direction = tradeLog.signal?.direction || "BUY";
+      const reason = tradeLog.signal?.reason || "Signal confluence";
+      const methodology = tradeLog.signal?.primaryMethodology || "CONFLUENCE";
+      const closeReason = tradeLog.closeReason || "MANUAL";
+      const pnl = Number(tradeLog.pnl ?? 0);
+      const pnlPercent = Number(tradeLog.pnlPercent ?? 0);
+      const entry = tradeLog.executionPrice || tradeLog.signal?.entry;
+      const exit = tradeLog.closePrice;
+      const isWin = pnl > 0;
+      const isLoss = pnl < 0;
+
+      const prompt = `Anda adalah Reflection Critic untuk Multi-Agent AI Trading (Hermes Architecture).
+Analisis hasil trade tertutup berikut untuk pembelajaran agent:
+
+[DATA HASIL TRADE]
+- Symbol: ${symbol} (${direction})
+- Entry Price: ${entry} | Close Price: ${exit}
+- Hasil: ${closeReason} (PnL: $${pnl.toFixed(2)}, ${pnlPercent}%)
+- Alasan Masuk Awal: ${reason}
+- Metodologi: ${methodology}
+- Status: ${isWin ? "PROFIT (WIN)" : isLoss ? "LOSS (EVALUASI)" : "BREAKEVEN"}
+
+Buat 1 kalimat pelajaran singkat per persona dalam Bahasa Indonesia:
+1. HAWK: Batas risiko, invalidation level, atau pengetatan SL.
+2. DOVE: Realisasi momentum, follow-through tren, atau target TP.
+3. CONTRARIAN: Deteksi sweep likuiditas, fakeout, atau jebakan retail.
+
+Format output WAJIB persis seperti ini:
+HAWK: <pelajaran 1 kalimat>
+DOVE: <pelajaran 1 kalimat>
+CONTRARIAN: <pelajaran 1 kalimat>`;
+
+      let rawOutput = "";
+      for (const modelConfig of NINE_ROUTER_MODELS) {
+        try {
+          const resp = await axios.post(
+            `${env.NINE_ROUTER_URL}/chat/completions`,
+            {
+              model: modelConfig.model,
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 300,
+              temperature: 0.2,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${env.NINE_ROUTER_API_KEY || "sk-dummy"}`,
+                "Content-Type": "application/json",
+              },
+              timeout: 25000,
+            }
+          );
+          const content = resp.data?.choices?.[0]?.message?.content;
+          if (content && content.trim()) {
+            rawOutput = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+            break;
+          }
+        } catch {
+          // Fall through to next model in NINE_ROUTER_MODELS
+        }
+      }
+
+      if (!rawOutput) {
+        silentLogger.warn(`[SelfImprovement] 9Router models failed for trade ${symbol} reflection.`);
+        return;
+      }
+
+      const hawkMatch = rawOutput.match(/HAWK:\s*([^\n]+)/i);
+      const doveMatch = rawOutput.match(/DOVE:\s*([^\n]+)/i);
+      const contrarianMatch = rawOutput.match(/CONTRARIAN:\s*([^\n]+)/i);
+
+      // Higher confidence for losses so agents prioritize learning from mistakes (ADR-0001)
+      const confidence = isLoss ? 0.85 : 0.7;
+
+      if (hawkMatch && hawkMatch[1]?.trim()) {
+        const fact = `[${symbol} ${closeReason}] ${hawkMatch[1].trim()}`;
+        await userMemoryService.learnPersonaFact(userId, "hawk", fact, "market_insight", confidence);
+      }
+      if (doveMatch && doveMatch[1]?.trim()) {
+        const fact = `[${symbol} ${closeReason}] ${doveMatch[1].trim()}`;
+        await userMemoryService.learnPersonaFact(userId, "dove", fact, "market_insight", confidence);
+      }
+      if (contrarianMatch && contrarianMatch[1]?.trim()) {
+        const fact = `[${symbol} ${closeReason}] ${contrarianMatch[1].trim()}`;
+        await userMemoryService.learnPersonaFact(userId, "contrarian", fact, "market_insight", confidence);
+      }
+
+      await ReflectionLog.create({
+        agentType: "consensus",
+        userQuery: `Closed Trade ${symbol} ${direction} ${closeReason}`,
+        rawOutput,
+        wasCorrected: isLoss,
+        dataPoint: `${symbol}_PnL`,
+        expected: isWin ? "PROFIT" : "AVOID_LOSS",
+        actual: closeReason,
+      });
+
+      silentLogger.info(
+        `[SelfImprovement] Reflected on closed trade ${symbol} (#${tradeLog.mt5Ticket || "N/A"}), updated Hawk/Dove/Contrarian memories.`
+      );
+    } catch (e: any) {
+      silentLogger.warn(`[SelfImprovement] Failed to reflect on closed trade: ${e.message}`);
+    }
+  },
 };

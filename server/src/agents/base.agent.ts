@@ -28,6 +28,14 @@ export abstract class BaseAgent {
     const targetUserId = context.userId || "default_user";
     const userMemory = await userMemoryService.getPromptContext(targetUserId, this.personaId);
 
+    // Dynamic System Prompt based on regime
+    let systemPrompt = this.systemPrompt;
+    if (context.currentRegime === "VOLATILE") {
+        systemPrompt += "\n\n[REGIME: VOLATILE] Peringatan: Pasar sedang sangat bergejolak. Utamakan risiko minimal dan SL yang lebih ketat.";
+    } else if (context.currentRegime === "RANGING") {
+        systemPrompt += "\n\n[REGIME: RANGING] Peringatan: Pasar sedang sideway. Fokus pada level support/resistance utama, hindari breakout palsu.";
+    }
+
     // Build contextual prompt yang menyertakan hasil tool
     const enrichedPrompt = `
 [MEMORI USER]
@@ -36,6 +44,7 @@ ${userMemory}
 [CONTEXT MAKRO INTERNAL]
 Regime: ${context.currentRegime || "Unknown"}
 Liquidity: ${context.liquidityStatus || "Unknown"}
+Macro Sentiment Score: ${context.macroData?.sentimentScore || 0}
 Assets: ${JSON.stringify(context.assets || [])}
 
 [DATA TERBARU DARI TOOLS (MARKET PRICE, KALENDER, DLL)]
@@ -47,7 +56,7 @@ ${userPrompt}
 
     let replyText: string | null = null;
     const messages = [
-      { role: "system", content: this.systemPrompt },
+      { role: "system", content: systemPrompt },
       { role: "user", content: enrichedPrompt }
     ];
 
