@@ -80,6 +80,14 @@ export const llmConsensusSchema = z.object({
   providerTimeoutMs: z.number().int().min(1000).max(30000).default(8000).optional(),
 });
 
+export const agentConsensusSchema = z.object({
+  enabled: z.boolean().default(true),
+  debateMode: z.enum(["parallel", "sequential"]).default("parallel"),
+  memoryEnabled: z.boolean().default(true),
+  toolEnabled: z.boolean().default(true),
+  threshold: z.number().min(0.1).max(1.0).default(0.6),
+});
+
 export const pipelineConfigSchema = z.object({
   useAppliedConfig: z.boolean().optional(),
   symbols: z.array(z.string()).min(1, "At least one symbol required").max(2, "Max 2 pairs per config").optional(),
@@ -95,5 +103,7 @@ export const pipelineConfigSchema = z.object({
   entrySettings: entrySettingsSchema.optional(),
   methodologyWeights: methodologyWeightsSchema.optional(),
   activeMethodologies: activeMethodologiesSchema.optional(),
+  agentConsensus: agentConsensusSchema.optional(),
   llmConsensus: llmConsensusSchema.optional(),
+  macroNewsFailSafe: z.boolean().default(false).optional(),
 });
