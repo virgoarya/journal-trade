@@ -102,6 +102,10 @@ interface AiTradingContextType {
   setAgentConsensusDebateMode: React.Dispatch<React.SetStateAction<"parallel" | "sequential">>;
   agentConsensusMemoryEnabled: boolean;
   setAgentConsensusMemoryEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  agentConsensusToolEnabled: boolean;
+  setAgentConsensusToolEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  macroNewsFailSafe: boolean;
+  setMacroNewsFailSafe: React.Dispatch<React.SetStateAction<boolean>>;
   isSavingSettings: boolean;
 
   // Consensus Panel State
@@ -176,6 +180,8 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
   const [agentConsensusThreshold, setAgentConsensusThreshold] = useState(0.6);
   const [agentConsensusDebateMode, setAgentConsensusDebateMode] = useState<"parallel" | "sequential">("parallel");
   const [agentConsensusMemoryEnabled, setAgentConsensusMemoryEnabled] = useState(true);
+  const [agentConsensusToolEnabled, setAgentConsensusToolEnabled] = useState(true);
+  const [macroNewsFailSafe, setMacroNewsFailSafe] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Consensus Panel State
@@ -212,6 +218,8 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
         setAgentConsensusThreshold(res.data.agentConsensus?.threshold ?? 0.6);
         setAgentConsensusDebateMode(res.data.agentConsensus?.debateMode ?? "parallel");
         setAgentConsensusMemoryEnabled(res.data.agentConsensus?.memoryEnabled ?? true);
+        setAgentConsensusToolEnabled(res.data.agentConsensus?.toolEnabled ?? true);
+        setMacroNewsFailSafe(res.data.macroNewsFailSafe ?? false);
         if (res.data.savedPipelineConfig) {
           setSavedPipelineConfig(res.data.savedPipelineConfig);
         }
@@ -279,14 +287,16 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
           threshold: agentConsensusThreshold,
           debateMode: agentConsensusDebateMode,
           memoryEnabled: agentConsensusMemoryEnabled,
+          toolEnabled: agentConsensusToolEnabled,
         },
+        macroNewsFailSafe,
       });
     } catch (e) {
       console.error("Failed to save AI trading settings:", e);
     } finally {
       setIsSavingSettings(false);
     }
-  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs, agentConsensusEnabled, agentConsensusThreshold, agentConsensusDebateMode, agentConsensusMemoryEnabled]);
+  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs, agentConsensusEnabled, agentConsensusThreshold, agentConsensusDebateMode, agentConsensusMemoryEnabled, agentConsensusToolEnabled, macroNewsFailSafe]);
 
   // Debounced save when settings change.
   // Skip until the initial backend load finished (else defaults would overwrite saved settings),
@@ -381,6 +391,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setAgentConsensusDebateMode,
       agentConsensusMemoryEnabled,
       setAgentConsensusMemoryEnabled,
+      agentConsensusToolEnabled,
+      setAgentConsensusToolEnabled,
+      macroNewsFailSafe,
+      setMacroNewsFailSafe,
       isSavingSettings,
       showContributionIndicators,
       setShowContributionIndicators,
@@ -457,6 +471,10 @@ export function AiTradingProvider({ children }: { children: React.ReactNode }) {
       setAgentConsensusDebateMode,
       agentConsensusMemoryEnabled,
       setAgentConsensusMemoryEnabled,
+      agentConsensusToolEnabled,
+      setAgentConsensusToolEnabled,
+      macroNewsFailSafe,
+      setMacroNewsFailSafe,
       isSavingSettings,
       showContributionIndicators,
       setShowContributionIndicators,

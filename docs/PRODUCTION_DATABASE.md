@@ -112,6 +112,25 @@ node scripts/migrate-atlas.mjs
 
 ### 4.2 Verifikasi (bukti go/no-go)
 
+**Verifikasi dari sisi APP** (jalur produksi: `config/env.ts` + `db/mongoose.ts`) —
+ini yang menentukan app bisa start atau tidak:
+
+```bash
+cd server
+DATABASE_URL='mongodb+srv://<PROD_USER>:***@<CLUSTER>.mongodb.net/journal_trade_prod?retryWrites=true&w=majority' \
+DATABASE_NAME=journal_trade_prod \
+BETTER_AUTH_SECRET=<dummy> BETTER_AUTH_URL=http://localhost:5000 \
+DISCORD_CLIENT_ID=<dummy> DISCORD_CLIENT_SECRET=<dummy> DISCORD_GUILD_ID=<dummy> \
+FRONTEND_URL=http://localhost:3000 \
+npm run verify:atlas
+```
+
+Output JSON membuktikan: app tersambung lewat `connectDB()`, ping OK, replica set
+≥3 node, 29/29 koleksi, deteksi koleksi legacy, dan pembacaan lewat model layer.
+Exit code `0` = app production akan tersambung.
+
+**Verifikasi cluster saja** (MongoClient polos, tanpa start app):
+
 ```bash
 DATABASE_URL='...' DATABASE_NAME=journal_trade_prod VERIFY_WRITE_PROBE=1 \
 node scripts/verify-atlas.mjs

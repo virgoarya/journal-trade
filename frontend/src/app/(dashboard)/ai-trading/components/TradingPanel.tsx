@@ -51,6 +51,8 @@ export function TradingPanel({
     setAgentConsensusDebateMode,
     agentConsensusMemoryEnabled,
     setAgentConsensusMemoryEnabled,
+    agentConsensusToolEnabled,
+    setAgentConsensusToolEnabled,
   } = useAiTrading();
 
   const handleStart = async () => {
@@ -65,6 +67,9 @@ export function TradingPanel({
 
   // ── Circuit Breaker Alert State ─────────────────────────────────────
   const [circuitBreakerAlert, setCircuitBreakerAlert] = useState<string | null>(null);
+  
+  // Stale Data Detection (5s TTL)
+  const isStale = pipelineStatus?.fetchedAt && (Date.now() - new Date(pipelineStatus.fetchedAt).getTime() > 5000);
 
   // Watch for circuit breaker reason from backend
   useEffect(() => {
@@ -121,7 +126,12 @@ export function TradingPanel({
   const gradeInfo = getOverallGrade();
 
   return (
-    <div className="glass p-4 space-y-4 relative">
+    <div className={`glass p-4 space-y-4 relative ${isStale ? 'border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : ''}`}>
+      {isStale && (
+        <div className="absolute top-2 right-2 text-[10px] bg-orange-950/80 text-orange-400 px-2 py-0.5 rounded border border-orange-500/30 animate-pulse uppercase font-bold tracking-widest">
+          Data Stale
+        </div>
+      )}
 
       {/* ── Circuit Breaker Alert Modal ─────────────────────────────────── */}
       {circuitBreakerAlert && (
@@ -468,10 +478,12 @@ export function TradingPanel({
         threshold={agentConsensusThreshold}
         debateMode={agentConsensusDebateMode}
         memoryEnabled={agentConsensusMemoryEnabled}
+        toolEnabled={agentConsensusToolEnabled}
         onToggle={setAgentConsensusEnabled}
         onThresholdChange={setAgentConsensusThreshold}
         onDebateModeChange={setAgentConsensusDebateMode}
         onMemoryChange={setAgentConsensusMemoryEnabled}
+        onToolChange={setAgentConsensusToolEnabled}
       />
 
       {/* Pipeline Controls (Tactile Switches) */}

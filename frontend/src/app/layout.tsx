@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { OtaUpdaterModal } from "@/components/OtaUpdaterModal";
-import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -46,12 +45,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans mb-0 relative" suppressHydrationWarning>
-        <Script
+        <script
           src={process.env.NEXT_PUBLIC_MIDTRANS_ENV === "production"
             ? "https://app.midtrans.com/snap/snap.js"
             : "https://app.sandbox.midtrans.com/snap/snap.js"}
           data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-          strategy="afterInteractive"
         />
         {/* Ambient Background Glows */}
         <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-accent-gold/10 blur-[120px] pointer-events-none -z-10"></div>

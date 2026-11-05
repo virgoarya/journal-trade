@@ -62,7 +62,7 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = React.memo(func
             axisLine={false}
             tickLine={false}
             width={50}
-            tickFormatter={(value) => `$${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}`}
+            tickFormatter={(value: number) => `$${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}`}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#D4AF37', strokeWidth: 1, strokeDasharray: '4 4' }} />
           <Area

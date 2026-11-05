@@ -10,7 +10,7 @@ import type {
 } from "@/services/ai-trading.service";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { EmptyState } from "./EmptyState";
-import { METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types";
+import { METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types/index";
 
 interface Props {
   confluence?: ConfluenceResult;

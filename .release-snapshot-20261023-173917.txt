@@ -1,0 +1,48 @@
+=== HEAD ===
+7470d5804096b693cde629083e80c9dda0221f82
+=== STATUS ===
+ M client/components/payment/PaymentStatus.tsx
+ M client/lib/api/payment.ts
+ M client/pages/ai-trading/payment.tsx
+ M frontend/src/app/(dashboard)/ai-trading/components/AccountOverview.tsx
+ M frontend/src/app/(dashboard)/ai-trading/components/PaymentStatusBanner.tsx
+ M frontend/src/app/(dashboard)/ai-trading/hooks/useAccountInfo.ts
+ M frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts
+ M frontend/src/app/(dashboard)/ai-trading/page.tsx
+ M frontend/src/components/PaymentModal.tsx
+ M server/mcp-mt5-server/server.py
+ M server/src/mt5-streamer.ts
+ M server/src/services/__tests__/payment.service.test.ts
+ M server/src/services/ai-trading-engine.service.ts
+ M server/src/services/backtest.service.ts
+ M server/src/services/mt5-mcp.service.ts
+ M server/src/services/risk-manager.service.ts
+ M server/src/services/trading-pipeline.service.ts
+?? docs/smart-risk-prop-firm-cfd-patch-spec.md
+?? frontend/src/app/(dashboard)/ai-trading/components/__tests__/
+?? frontend/src/app/(dashboard)/ai-trading/hooks/__tests__/useAccountInfo.test.ts
+?? frontend/src/app/(dashboard)/ai-trading/hooks/account-info-normalizer.ts
+?? frontend/src/lib/__tests__/payment-endpoints.test.ts
+?? frontend/src/lib/payment-endpoints.ts
+?? server/src/services/__tests__/position-sizing.test.ts
+=== DIFF STAT ===
+ client/components/payment/PaymentStatus.tsx        |  23 ++-
+ client/lib/api/payment.ts                          |  34 ++++-
+ client/pages/ai-trading/payment.tsx                |   8 +-
+ .../ai-trading/components/AccountOverview.tsx      |  37 +++--
+ .../ai-trading/components/PaymentStatusBanner.tsx  | 163 ++++++++++-----------
+ .../(dashboard)/ai-trading/hooks/useAccountInfo.ts |  30 ++--
+ .../(dashboard)/ai-trading/hooks/usePaymentGate.ts |  26 ++--
+ frontend/src/app/(dashboard)/ai-trading/page.tsx   |   2 +-
+ frontend/src/components/PaymentModal.tsx           |  43 +++---
+ server/mcp-mt5-server/server.py                    |   6 +
+ server/src/mt5-streamer.ts                         |   4 +
+ .../src/services/__tests__/payment.service.test.ts |   9 ++
+ server/src/services/ai-trading-engine.service.ts   |  57 +++----
+ server/src/services/backtest.service.ts            |  19 ++-
+ server/src/services/mt5-mcp.service.ts             |   2 +
+ server/src/services/risk-manager.service.ts        |  49 +++++--
+ server/src/services/trading-pipeline.service.ts    |   3 +-
+ 17 files changed, 295 insertions(+), 220 deletions(-)
+=== SOURCE BUILD_ID ===
+t0WL8OA4v-ZZS6e-02cU9

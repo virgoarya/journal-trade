@@ -249,6 +249,9 @@ async function startBackend() {
   const envFilePath = fs.existsSync(appDataEnvPath) ? appDataEnvPath : path.join(serverCwd, ".env");
   const fileEnv = loadEnvFile(envFilePath);
   globalFileEnv = fileEnv;
+  console.log("[MAIN] fileEnv keys:", Object.keys(fileEnv));
+  console.log("[MAIN] DATABASE_URL present:", !!fileEnv.DATABASE_URL);
+  console.log("[MAIN] BETTER_AUTH_SECRET present:", !!fileEnv.BETTER_AUTH_SECRET);
   const logStream = getLogStream("backend.log");
 
   if (isDev) {
@@ -303,10 +306,15 @@ async function startBackend() {
       NODE_PATH: path.join(serverCwd, "node_modules"),
     };
 
+    // Debug: log the env being passed
+    console.log("[MAIN] Backend fork NODE_PATH:", forkEnv.NODE_PATH);
+    console.log("[MAIN] Backend fork cwd:", serverCwd);
+
     backendProcess = require("child_process").fork(serverScript, [], {
       cwd: serverCwd,
       env: forkEnv,
       stdio: "pipe",
+      execArgv: [], // Clear execArgv to avoid any flags from parent
     });
 
     backendProcess.stdout?.on("data", (d) => {
@@ -435,17 +443,20 @@ async function startFrontend() {
 
   const frontendDir = path.join(process.resourcesPath, "frontend");
   const serverJs = path.join(frontendDir, "server.js");
+  const nestedServerJs = path.join(frontendDir, "frontend", "server.js");
+  const actualServerJs = fs.existsSync(serverJs) ? serverJs : (fs.existsSync(nestedServerJs) ? nestedServerJs : serverJs);
+  const actualCwd = fs.existsSync(serverJs) ? frontendDir : (fs.existsSync(nestedServerJs) ? path.join(frontendDir, "frontend") : frontendDir);
 
-  if (!fs.existsSync(serverJs)) {
-    console.error(`[MAIN] Frontend server.js not found at: ${serverJs}`);
+  if (!fs.existsSync(actualServerJs)) {
+    console.error(`[MAIN] Frontend server.js not found at: ${serverJs} or ${nestedServerJs}`);
     frontendLastStderr = `Frontend server.js not found at: ${serverJs}`;
     return;
   }
 
-  console.log(`[MAIN] Starting frontend (production utilityProcess): ${serverJs}`);
+  console.log(`[MAIN] Starting frontend (production utilityProcess): ${actualServerJs}`);
 
-  frontendProcess = require("child_process").fork(serverJs, [], {
-    cwd: frontendDir,
+  frontendProcess = require("child_process").fork(actualServerJs, [], {
+    cwd: actualCwd,
     env: {
       ...process.env,
       ...globalFileEnv,
@@ -453,7 +464,7 @@ async function startFrontend() {
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
       BACKEND_URL: `http://localhost:${BACKEND_PORT}`,
-      NODE_PATH: path.join(frontendDir, "node_modules"),
+      NODE_PATH: path.join(actualCwd, "node_modules"),
     },
     stdio: "pipe",
   });
@@ -556,8 +567,19 @@ function createMainWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      devTools: isDev,
+      devTools: true, // Enable devtools for debugging OAuth issues
+      webSecurity: false, // temporarily disable for testing asset loading
     },
+  });
+
+  // Set standard Chrome User-Agent to avoid OAuth provider blocking Electron
+  mainWindow.webContents.setUserAgent(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  );
+
+  // Capture console logs from renderer for debugging
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[RENDERER CONSOLE ${level}] ${message} (${sourceId}:${line})`);
   });
 
   const targetUrl = `http://localhost:${FRONTEND_PORT}`;

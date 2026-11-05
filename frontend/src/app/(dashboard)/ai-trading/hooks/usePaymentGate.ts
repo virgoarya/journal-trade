@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
+import { PAYMENT_ENDPOINTS } from "@/lib/payment-endpoints";
 
 interface PaymentGateStatus {
   isRegistered: boolean;
-  tokenBalance: number;
-  hasInsufficientToken: boolean;
   isBooster: boolean;
   /**
    * Backend contract for GET /api/v1/payment/status-for-user/:userId.
@@ -15,7 +14,7 @@ interface PaymentGateStatus {
   isPaid: boolean;
   hasAccess?: boolean;
   plan?: string;
-  isUnlimited?: boolean;
+  accessEndDate?: string;
 }
 
 export function usePaymentGate(userId: string | undefined, forceFull: boolean = false) {
@@ -27,12 +26,9 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
     if (process.env.NODE_ENV === "development" && !forceFull) {
       setStatus({
         isRegistered: true,
-        tokenBalance: Number.POSITIVE_INFINITY,
-        hasInsufficientToken: false,
         isBooster: true,
         isPaid: true,
         hasAccess: true,
-        isUnlimited: true,
         plan: "dev",
       });
       setError(null);
@@ -49,20 +45,18 @@ export function usePaymentGate(userId: string | undefined, forceFull: boolean = 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/payment/status-for-user/${userId}`);
+      const res = await fetch(PAYMENT_ENDPOINTS.statusForUser(userId), {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStatus({
         isRegistered: data.isRegistered,
-        tokenBalance: data.tokenBalance,
-        hasInsufficientToken: data.hasInsufficientToken,
         isBooster: data.isBooster,
-        // The endpoint has no `isPaid` field; derive it from `hasAccess` so a
-        // paid, unexpired/lifetime holder resolves to "none".
-        isPaid: data.isPaid ?? data.hasAccess === true,
+        isPaid: !!data.hasAccess,
         hasAccess: data.hasAccess,
         plan: data.plan,
-        isUnlimited: data.isUnlimited,
+        accessEndDate: data.accessEndDate,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unable to load payment status");

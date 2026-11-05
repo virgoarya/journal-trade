@@ -1,0 +1,486 @@
+"use client";
+
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import {
+  type AIBacktestSkill,
+  type PipelineConfig,
+  type LlmModelNode,
+  type LlmModelStatus,
+  type PipelineStatus,
+  type MultiStrategyAnalysis,
+  type LLMConsensusResult,
+  type AgentConsensusResult,
+  type PipelineLog,
+  type ACCOUNTInfo,
+  type Position,
+  type MT5Credentials,
+  MethodologyName,
+  MethodologyWeights,
+} from "../types";
+import { useMT5Connection, type MT5ConnectionStatus } from "../hooks/useMT5Connection";
+import { useAccountInfo } from "../hooks/useAccountInfo";
+import { usePositions } from "../hooks/usePositions";
+import { usePipeline } from "../hooks/usePipeline";
+import { useLlmStatus } from "../hooks/useLlmStatus";
+import { DEFAULT_METHODOLOGY_WEIGHTS } from "../types";
+import { aiTradingService } from "@/services/ai-trading.service";
+
+interface AiTradingContextType {
+  // MT5 Connection
+  isConnected: boolean;
+  isReconnecting: boolean;
+  isConnecting: boolean;
+  isCheckingSession: boolean;
+  connectError: string | null;
+  connectMT5: (payload: MT5Credentials) => Promise<boolean>;
+  disconnectMT5: () => Promise<void>;
+  connectionStatus: MT5ConnectionStatus;
+
+  // Account Info
+  accountInfo: ACCOUNTInfo | null;
+  accountLoading: boolean;
+  refetchAccountInfo: () => void;
+
+  // Positions
+  positions: Position[];
+  orders: Position[];
+  positionsLoading: boolean;
+  positionsError: string | null;
+  closePosition: (ticket: number) => Promise<void>;
+  modifyPosition: (ticket: number, sl?: number, tp?: number) => Promise<void>;
+  refetchPositions: () => Promise<void>;
+
+  // Pipeline State
+  pipelineStatus: PipelineStatus | null;
+  pipelineLogs: PipelineLog[];
+  isPipelineStarting: boolean;
+  isPipelineStopping: boolean;
+  lastAnalysis: MultiStrategyAnalysis | null;
+  allAnalyses: MultiStrategyAnalysis[];
+  lastLlmVotes: LLMConsensusResult | AgentConsensusResult | null;
+  agentConsensus: import("@/services/ai-trading.service").AgentConsensusResult | null;
+  startPipeline: (config: PipelineConfig) => Promise<boolean>;
+  stopPipeline: () => Promise<void>;
+  pausePipeline: () => Promise<void>;
+  resumePipeline: () => Promise<void>;
+  refreshPipelineData: () => Promise<void>;
+
+  // LLM Status
+  llmModels: LlmModelNode[];
+  llmLoading: boolean;
+  llmActiveCount: number;
+  refreshLlmStatus: () => void;
+
+  // AI Skill (from Backtest)
+  skillConfig: AIBacktestSkill | null;
+  setSkillConfig: (skill: AIBacktestSkill | null) => void;
+  skillVersion: number;
+  setSkillVersion: (version: number) => void;
+
+  // Methodology Config (synced with backend)
+  activeMethodologies: MethodologyName[];
+  setActiveMethodologies: React.Dispatch<React.SetStateAction<MethodologyName[]>>;
+  methodologyWeights: MethodologyWeights;
+  setMethodologyWeights: React.Dispatch<React.SetStateAction<MethodologyWeights>>;
+  showMethodologyConfig: boolean;
+  setShowMethodologyConfig: React.Dispatch<React.SetStateAction<boolean>>;
+
+  // LLM Consensus Config (synced with backend)
+  llmEnabled: boolean;
+  setLlmEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  llmThreshold: number;
+  setLlmThreshold: React.Dispatch<React.SetStateAction<number>>;
+  llmMinProviders: number;
+  setLlmMinProviders: React.Dispatch<React.SetStateAction<number>>;
+  llmProviderTimeoutMs: number;
+  setLlmProviderTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
+  agentConsensusEnabled: boolean;
+  setAgentConsensusEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  agentConsensusThreshold: number;
+  setAgentConsensusThreshold: React.Dispatch<React.SetStateAction<number>>;
+  agentConsensusDebateMode: "parallel" | "sequential";
+  setAgentConsensusDebateMode: React.Dispatch<React.SetStateAction<"parallel" | "sequential">>;
+  agentConsensusMemoryEnabled: boolean;
+  setAgentConsensusMemoryEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  isSavingSettings: boolean;
+
+  // Consensus Panel State
+  isConsensusPanelOpen: boolean;
+  setIsConsensusPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
+
+  // Visualization Options
+  showContributionIndicators: boolean;
+  setShowContributionIndicators: React.Dispatch<React.SetStateAction<boolean>>;
+  showConsensusPanelByDefault: boolean;
+  setShowConsensusPanelByDefault: React.Dispatch<React.SetStateAction<boolean>>;
+  visualizationStyle: "radar" | "cards" | "table";
+  setVisualizationStyle: React.Dispatch<React.SetStateAction<"radar" | "cards" | "table">>;
+
+  // Saved Pipeline Config from backend
+  savedPipelineConfig: PipelineConfig | null;
+  setSavedPipelineConfig: React.Dispatch<React.SetStateAction<PipelineConfig | null>>;
+
+  lastAutoBacktestAt: string | null;
+  setLastAutoBacktestAt: React.Dispatch<React.SetStateAction<string | null>>;
+
+  refreshSettings: () => Promise<void>;
+}
+
+const AiTradingContext = createContext<AiTradingContextType | undefined>(undefined);
+
+export function AiTradingProvider({ children }: { children: React.ReactNode }) {
+  // MT5 Connection
+  const { isConnected, isReconnecting, isConnecting, isCheckingSession, error: connectError, connect, disconnect, connectionStatus } = useMT5Connection();
+
+  // Account Info
+  const { accountInfo, isLoading: accountLoading, refetch: refetchAccount } = useAccountInfo(isConnected, 10000);
+
+  // Positions
+  const { positions, orders, isLoading: positionsLoading, fetchError: positionsError, closePosition, modifyPosition, refetch: refetchPositions } =
+    usePositions(isConnected, 10000);
+
+  // LLM Status (poll every 15s to detect recovery from hibernation)
+  const { models: llmModels, loading: llmLoading, activeCount: llmActiveCount, refresh: refreshLlmStatus } = useLlmStatus({ pollIntervalMs: 15000 });
+
+  // Pipeline Status & Data
+  const {
+    status: pipelineStatus,
+    lastAnalysis,
+    allAnalyses,
+    logs: pipelineLogs,
+    isStarting: isPipelineStarting,
+    isStopping: isPipelineStopping,
+    lastLLMVotes,
+    start,
+    stop,
+    pause,
+    resume,
+    refresh: refreshPipelineData,
+  } = usePipeline();
+
+  // AI Skill (from Backtest)
+  const [skillConfig, setSkillConfig] = useState<AIBacktestSkill | null>(null);
+  const [skillVersion, setSkillVersion] = useState(0);
+
+  // Methodology Config (synced with backend)
+  const [activeMethodologies, setActiveMethodologies] = useState<MethodologyName[]>([]);
+  const [methodologyWeights, setMethodologyWeights] = useState<MethodologyWeights>({ ...DEFAULT_METHODOLOGY_WEIGHTS });
+  const [showMethodologyConfig, setShowMethodologyConfig] = useState(false);
+
+  // LLM Consensus Config (synced with backend)
+  const [llmEnabled, setLlmEnabled] = useState(false);
+  const [llmThreshold, setLlmThreshold] = useState(0.7);
+  const [llmMinProviders, setLlmMinProviders] = useState(3);
+  const [llmProviderTimeoutMs, setLlmProviderTimeoutMs] = useState(25000);
+  const [agentConsensusEnabled, setAgentConsensusEnabled] = useState(false);
+  const [agentConsensusThreshold, setAgentConsensusThreshold] = useState(0.6);
+  const [agentConsensusDebateMode, setAgentConsensusDebateMode] = useState<"parallel" | "sequential">("parallel");
+  const [agentConsensusMemoryEnabled, setAgentConsensusMemoryEnabled] = useState(true);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Consensus Panel State
+  const [isConsensusPanelOpen, setIsConsensusPanelOpen] = useState(false);
+
+  // Visualization Options
+  const [showContributionIndicators, setShowContributionIndicators] = useState(true);
+  const [showConsensusPanelByDefault, setShowConsensusPanelByDefault] = useState(false);
+  const [visualizationStyle, setVisualizationStyle] = useState<"radar" | "cards" | "table">("radar");
+
+  // Saved Pipeline Config from backend
+  const [savedPipelineConfig, setSavedPipelineConfig] = useState<PipelineConfig | null>(null);
+  const [lastAutoBacktestAt, setLastAutoBacktestAt] = useState<string | null>(null);
+
+  // Load AI trading settings from backend
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const refreshSettings = useCallback(async (server?: string) => {
+    try {
+      setSettingsError(null);
+      const [res, skillRes] = await Promise.all([
+        aiTradingService.getAiTradingSettings(server),
+        aiTradingService.getSkill(server).catch(() => null)
+      ]);
+
+      if (res.success && res.data) {
+        setActiveMethodologies(res.data.activeMethodologies || []);
+        setMethodologyWeights(res.data.methodologyWeights || { ...DEFAULT_METHODOLOGY_WEIGHTS });
+        setLlmEnabled(res.data.llmConsensus?.enabled || false);
+        setLlmThreshold(res.data.llmConsensus?.threshold || 0.7);
+        setLlmMinProviders(res.data.llmConsensus?.minProviders || 3);
+        setLlmProviderTimeoutMs(res.data.llmConsensus?.providerTimeoutMs || 25000);
+        setAgentConsensusEnabled(res.data.agentConsensus?.enabled ?? false);
+        setAgentConsensusThreshold(res.data.agentConsensus?.threshold ?? 0.6);
+        setAgentConsensusDebateMode(res.data.agentConsensus?.debateMode ?? "parallel");
+        setAgentConsensusMemoryEnabled(res.data.agentConsensus?.memoryEnabled ?? true);
+        if (res.data.savedPipelineConfig) {
+          setSavedPipelineConfig(res.data.savedPipelineConfig);
+        }
+        if (res.data.lastAutoBacktestAt) {
+          setLastAutoBacktestAt(res.data.lastAutoBacktestAt);
+        }
+        hasLoadedSettings.current = true;
+        suppressNextSave.current = true;
+      } else {
+        setSettingsError("Failed to load settings from server");
+      }
+
+      if (skillRes && skillRes.success && skillRes.data) {
+        setSkillConfig(skillRes.data);
+      }
+    } catch (e) {
+      setSettingsError("Failed to load AI trading settings");
+      console.error("Failed to load AI trading settings:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSettings();
+  }, [refreshSettings]);
+
+  // Re-fetch settings when broker server changes (per-broker isolation)
+  const prevServer = useRef<string | undefined>(undefined);
+  const hasLoadedSettings = useRef(false);
+  const suppressNextSave = useRef(false);
+  useEffect(() => {
+    const currentServer = accountInfo?.server;
+    if (currentServer && currentServer !== prevServer.current) {
+      prevServer.current = currentServer;
+      refreshSettings(currentServer);
+    }
+  }, [accountInfo?.server, refreshSettings]);
+
+  // Auto-refresh when reconnect succeeds
+  const prevReconnecting = useRef(isReconnecting);
+  useEffect(() => {
+    if (prevReconnecting.current && !isReconnecting && isConnected) {
+      refetchAccount();
+      refetchPositions();
+      refreshPipelineData();
+      refreshLlmStatus();
+    }
+    prevReconnecting.current = isReconnecting;
+  }, [isReconnecting, isConnected, refetchAccount, refetchPositions, refreshPipelineData, refreshLlmStatus]);
+
+  // Save settings to backend when they change
+  const saveSettings = useCallback(async () => {
+    setIsSavingSettings(true);
+    try {
+      await aiTradingService.updateAiTradingSettings({
+        activeMethodologies,
+        methodologyWeights,
+        llmConsensus: {
+          enabled: llmEnabled,
+          threshold: llmThreshold,
+          minProviders: llmMinProviders,
+          providerTimeoutMs: llmProviderTimeoutMs,
+        },
+        agentConsensus: {
+          enabled: agentConsensusEnabled,
+          threshold: agentConsensusThreshold,
+          debateMode: agentConsensusDebateMode,
+          memoryEnabled: agentConsensusMemoryEnabled,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to save AI trading settings:", e);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }, [activeMethodologies, methodologyWeights, llmEnabled, llmThreshold, llmMinProviders, llmProviderTimeoutMs, agentConsensusEnabled, agentConsensusThreshold, agentConsensusDebateMode, agentConsensusMemoryEnabled]);
+
+  // Debounced save when settings change.
+  // Skip until the initial backend load finished (else defaults would overwrite saved settings),
+  // and skip the single echo fired right after a load applied its values.
+  useEffect(() => {
+    if (!hasLoadedSettings.current) return;
+    if (suppressNextSave.current) {
+      suppressNextSave.current = false;
+      return;
+    }
+    const timer = setTimeout(saveSettings, 1000);
+    return () => clearTimeout(timer);
+  }, [saveSettings]);
+
+  // Handlers for Pipeline actions (passed from usePipeline)
+  const startPipeline = start;
+  const stopPipeline = stop;
+  const pausePipeline = pause;
+  const resumePipeline = resume;
+  const connectMT5: (payload: MT5Credentials) => Promise<boolean> = connect;
+  const disconnectMT5 = async () => {
+    await disconnect();
+  };
+
+  const contextValue = useMemo(
+    () => ({
+      isConnected,
+      isReconnecting,
+      isConnecting,
+      isCheckingSession,
+      connectError,
+      connectMT5,
+      disconnectMT5,
+      connectionStatus,
+
+      accountInfo,
+      accountLoading,
+      refetchAccountInfo: refetchAccount,
+
+      positions,
+      orders,
+      positionsLoading,
+      positionsError,
+      closePosition,
+      modifyPosition,
+      refetchPositions,
+
+      pipelineStatus,
+      pipelineLogs,
+      isPipelineStarting,
+      isPipelineStopping,
+      lastAnalysis,
+      allAnalyses,
+      lastLlmVotes: lastLLMVotes,
+      agentConsensus: pipelineStatus?.agentConsensus ?? null,
+      startPipeline,
+      stopPipeline,
+      pausePipeline,
+      resumePipeline,
+      refreshPipelineData,
+
+      llmModels,
+      llmLoading,
+      llmActiveCount,
+      refreshLlmStatus,
+
+      skillConfig,
+      setSkillConfig,
+      skillVersion,
+      setSkillVersion,
+
+      activeMethodologies,
+      setActiveMethodologies,
+      methodologyWeights,
+      setMethodologyWeights,
+      showMethodologyConfig,
+      setShowMethodologyConfig,
+
+      llmEnabled,
+      setLlmEnabled,
+      llmThreshold,
+      setLlmThreshold,
+      llmMinProviders,
+      setLlmMinProviders,
+      llmProviderTimeoutMs,
+      setLlmProviderTimeoutMs,
+      agentConsensusEnabled,
+      setAgentConsensusEnabled,
+      agentConsensusThreshold,
+      setAgentConsensusThreshold,
+      agentConsensusDebateMode,
+      setAgentConsensusDebateMode,
+      agentConsensusMemoryEnabled,
+      setAgentConsensusMemoryEnabled,
+      isSavingSettings,
+      showContributionIndicators,
+      setShowContributionIndicators,
+      showConsensusPanelByDefault,
+      setShowConsensusPanelByDefault,
+      isConsensusPanelOpen,
+      setIsConsensusPanelOpen,
+      visualizationStyle,
+      setVisualizationStyle,
+      savedPipelineConfig,
+      setSavedPipelineConfig,
+      lastAutoBacktestAt,
+      setLastAutoBacktestAt,
+      refreshSettings,
+    }),
+    [
+      isConnected,
+      isReconnecting,
+      isConnecting,
+      isCheckingSession,
+      connectError,
+      connectMT5,
+      disconnectMT5,
+      connectionStatus,
+      accountInfo,
+      accountLoading,
+      refetchAccount,
+      positions,
+      orders,
+      positionsLoading,
+      positionsError,
+      closePosition,
+      modifyPosition,
+      refetchPositions,
+      pipelineStatus,
+      pipelineLogs,
+      isPipelineStarting,
+      isPipelineStopping,
+      lastAnalysis,
+      allAnalyses,
+      lastLLMVotes,
+      startPipeline,
+      stopPipeline,
+      pausePipeline,
+      resumePipeline,
+      refreshPipelineData,
+      llmModels,
+      llmLoading,
+      llmActiveCount,
+      refreshLlmStatus,
+      skillConfig,
+      setSkillConfig,
+      skillVersion,
+      setSkillVersion,
+      activeMethodologies,
+      setActiveMethodologies,
+      methodologyWeights,
+      setMethodologyWeights,
+      showMethodologyConfig,
+      setShowMethodologyConfig,
+      llmEnabled,
+      setLlmEnabled,
+      llmThreshold,
+      setLlmThreshold,
+      llmMinProviders,
+      setLlmMinProviders,
+      llmProviderTimeoutMs,
+      setLlmProviderTimeoutMs,
+      agentConsensusEnabled,
+      setAgentConsensusEnabled,
+      agentConsensusThreshold,
+      setAgentConsensusThreshold,
+      agentConsensusDebateMode,
+      setAgentConsensusDebateMode,
+      agentConsensusMemoryEnabled,
+      setAgentConsensusMemoryEnabled,
+      isSavingSettings,
+      showContributionIndicators,
+      setShowContributionIndicators,
+      showConsensusPanelByDefault,
+      setShowConsensusPanelByDefault,
+      isConsensusPanelOpen,
+      setIsConsensusPanelOpen,
+      visualizationStyle,
+      setVisualizationStyle,
+      savedPipelineConfig,
+      setSavedPipelineConfig,
+      lastAutoBacktestAt,
+      setLastAutoBacktestAt,
+      refreshSettings,
+    ]
+  );
+
+  return <AiTradingContext.Provider value={contextValue}>{children}</AiTradingContext.Provider>;
+}
+
+export function useAiTrading() {
+  const context = useContext(AiTradingContext);
+  if (context === undefined) {
+    throw new Error("useAiTrading must be used within an AiTradingProvider");
+  }
+  return context;
+}

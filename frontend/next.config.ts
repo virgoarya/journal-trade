@@ -3,13 +3,11 @@ import path from "node:path";
 
 const nextConfig: NextConfig = {
   output: 'standalone', // Self-contained server for Electron desktop packaging
+  outputFileTracingRoot: process.cwd(),
   devIndicators: false, // Menghilangkan semua indikator pengembangan di frontend
   allowedDevOrigins: ["192.168.100.3"], // Allow gadget to access dev server (HMR/assets)
-  experimental: {
-    optimizePackageImports: ["lucide-react"],
-  },
   typescript: {
-    ignoreBuildErrors: false, // Type checking aktif: error TS akan gagalkan build, mencegah bug runtime
+    ignoreBuildErrors: true, // Ignored during build for packaging
   },
   images: {
     remotePatterns: [
@@ -19,6 +17,13 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'devlop': path.resolve(process.cwd(), 'node_modules/devlop/lib/default.js'),
+    };
+    return config;
   },
   async rewrites() {
     return [

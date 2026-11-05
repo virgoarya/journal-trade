@@ -1,0 +1,127 @@
+=== REBUILD SCOPE MANIFEST ===
+TIMESTAMP: 2026-10-23T18:54:54+07:00
+HEAD: 7470d5804096b693cde629083e80c9dda0221f82
+BUILD_CONSUMED_TREE_AT: 2026-10-23 18:29:54 (+07:00)
+
+=== GIT STATUS --SHORT (raw, including metadata artifacts) ===
+ M client/components/payment/PaymentStatus.tsx
+ M client/lib/api/payment.ts
+ M client/pages/ai-trading/payment.tsx
+ M frontend/src/app/(dashboard)/ai-trading/components/AccountOverview.tsx
+ M frontend/src/app/(dashboard)/ai-trading/components/PaymentStatusBanner.tsx
+ M frontend/src/app/(dashboard)/ai-trading/hooks/useAccountInfo.ts
+ M frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts
+ M frontend/src/app/(dashboard)/ai-trading/page.tsx
+ M frontend/src/components/PaymentModal.tsx
+ M server/mcp-mt5-server/server.py
+ M server/src/mt5-streamer.ts
+ M server/src/services/__tests__/payment.service.test.ts
+ M server/src/services/ai-trading-engine.service.ts
+ M server/src/services/backtest.service.ts
+ M server/src/services/mt5-mcp.service.ts
+ M server/src/services/risk-manager.service.ts
+ M server/src/services/trading-pipeline.service.ts
+?? .release-manifest-20261023-185454.txt
+?? .release-snapshot-20261023-173917.txt
+?? docs/smart-risk-prop-firm-cfd-patch-spec.md
+?? frontend/src/app/(dashboard)/ai-trading/components/__tests__/
+?? frontend/src/app/(dashboard)/ai-trading/hooks/__tests__/useAccountInfo.test.ts
+?? frontend/src/app/(dashboard)/ai-trading/hooks/account-info-normalizer.ts
+?? frontend/src/lib/__tests__/payment-endpoints.test.ts
+?? frontend/src/lib/payment-endpoints.ts
+?? server/src/services/__tests__/position-sizing.test.ts
+
+=== GIT DIFF --STAT ===
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+ client/components/payment/PaymentStatus.tsx        |  23 ++-
+ client/lib/api/payment.ts                          |  34 ++++-
+ client/pages/ai-trading/payment.tsx                |   8 +-
+ .../ai-trading/components/AccountOverview.tsx      |  37 +++--
+ .../ai-trading/components/PaymentStatusBanner.tsx  | 163 ++++++++++-----------
+ .../(dashboard)/ai-trading/hooks/useAccountInfo.ts |  30 ++--
+ .../(dashboard)/ai-trading/hooks/usePaymentGate.ts |  26 ++--
+ frontend/src/app/(dashboard)/ai-trading/page.tsx   |   2 +-
+ frontend/src/components/PaymentModal.tsx           |  43 +++---
+ server/mcp-mt5-server/server.py                    |   6 +
+ server/src/mt5-streamer.ts                         |   4 +
+ .../src/services/__tests__/payment.service.test.ts |   9 ++
+ server/src/services/ai-trading-engine.service.ts   |  57 +++----
+ server/src/services/backtest.service.ts            |  19 ++-
+ server/src/services/mt5-mcp.service.ts             |   2 +
+ server/src/services/risk-manager.service.ts        |  49 +++++--
+ server/src/services/trading-pipeline.service.ts    |   3 +-
+ 17 files changed, 295 insertions(+), 220 deletions(-)
+
+=== SCOPE COUNTS ===
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+tracked modified : 17
+untracked paths  : 7
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+in-scope files   : 24
+
+=== TRACKED MODIFIED PATHS ===
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+client/components/payment/PaymentStatus.tsx
+client/lib/api/payment.ts
+client/pages/ai-trading/payment.tsx
+frontend/src/app/(dashboard)/ai-trading/components/AccountOverview.tsx
+frontend/src/app/(dashboard)/ai-trading/components/PaymentStatusBanner.tsx
+frontend/src/app/(dashboard)/ai-trading/hooks/useAccountInfo.ts
+frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts
+frontend/src/app/(dashboard)/ai-trading/page.tsx
+frontend/src/components/PaymentModal.tsx
+server/mcp-mt5-server/server.py
+server/src/mt5-streamer.ts
+server/src/services/__tests__/payment.service.test.ts
+server/src/services/ai-trading-engine.service.ts
+server/src/services/backtest.service.ts
+server/src/services/mt5-mcp.service.ts
+server/src/services/risk-manager.service.ts
+server/src/services/trading-pipeline.service.ts
+
+=== UNTRACKED PATHS (expanded to files) ===
+docs/smart-risk-prop-firm-cfd-patch-spec.md
+frontend/src/app/(dashboard)/ai-trading/components/__tests__/PaymentStatusBanner.test.tsx
+frontend/src/app/(dashboard)/ai-trading/hooks/__tests__/useAccountInfo.test.ts
+frontend/src/app/(dashboard)/ai-trading/hooks/account-info-normalizer.ts
+frontend/src/lib/__tests__/payment-endpoints.test.ts
+frontend/src/lib/payment-endpoints.ts
+server/src/services/__tests__/position-sizing.test.ts
+
+=== SHA256 — EVERY FILE IN SCOPE ===
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+aeacc5a4a357b110d315c8d7c0fa9511c5428af285ef5ddfc4ab0259140e91ef *client/components/payment/PaymentStatus.tsx
+27a0ed608a99473b0fe455f907c1fb2d09e4459340331593fe2496bdda719c21 *client/lib/api/payment.ts
+001076952966a60a442fabd9a205d43699cfaae1954405cec40ed982970cb64b *client/pages/ai-trading/payment.tsx
+d476eb1ada655132b9f59fd05816e4172464d48c7c0a3f3375e07e79e2adeaa4 *docs/smart-risk-prop-firm-cfd-patch-spec.md
+e155e0d4f191f91d07f7a52155cb7ef83bb93f3b10f92719d3f5dc494a8988e4 *frontend/src/app/(dashboard)/ai-trading/components/__tests__/PaymentStatusBanner.test.tsx
+167e29f92db209f408a4d3069bf9bd3bf6ee53b9fa8984bde189123b9915a372 *frontend/src/app/(dashboard)/ai-trading/components/AccountOverview.tsx
+1517dd11caa1ca273486979e3ae6fd2550a12fb3e59652a4c463684c50472997 *frontend/src/app/(dashboard)/ai-trading/components/PaymentStatusBanner.tsx
+7acd50cc02b1c69b7c8938ab4ed0401d40b0fae5683782d9532aaa09cb483d34 *frontend/src/app/(dashboard)/ai-trading/hooks/__tests__/useAccountInfo.test.ts
+39a58d56e53e7a096fee6133900441628dbc6ba2fb981f5b613a41f7ae277f0a *frontend/src/app/(dashboard)/ai-trading/hooks/account-info-normalizer.ts
+67eebaa454b3f7659b2bbc29af247807e47433e5a085a7ed6a248fafa3784e61 *frontend/src/app/(dashboard)/ai-trading/hooks/useAccountInfo.ts
+50718f750e917a3f963982dbab02f77e2f3885922934bc71b1237ff712fa6bd3 *frontend/src/app/(dashboard)/ai-trading/hooks/usePaymentGate.ts
+4c25ab62c59525b5308be455ff8090849c0d8a53ac704808498ec1ce1d6ea136 *frontend/src/app/(dashboard)/ai-trading/page.tsx
+f149d8aa97115588f2a98c5f060c73f518a7a3d2ffa645e9ac7de1d7e175024e *frontend/src/components/PaymentModal.tsx
+e72fd5d2eb483c270de32c13fd43eb1cd7cf356bee5b9a30526a9d3459c4b676 *frontend/src/lib/__tests__/payment-endpoints.test.ts
+11d2d45a8ff9ca32e72d4cd48f80ee44d32c24ee458b086fe411dc6042d8206d *frontend/src/lib/payment-endpoints.ts
+77503c63152f275b5108830322877d1d8387197c2b4661201130deeaaf8ba91a *server/mcp-mt5-server/server.py
+bfd9a962cee47f4e875e49fea18ab0733b8cf4f95d78575d204d874a63373e8f *server/src/mt5-streamer.ts
+ba94eec29f55cb34e7fe99758692dbba465f4036e49eaaf7782d44258894fe48 *server/src/services/__tests__/payment.service.test.ts
+b1719b83f9c4adff3c684f3988e4c2eaa0fe5dea42ae348f342c867aed6953e5 *server/src/services/__tests__/position-sizing.test.ts
+0a5d73b0f2771c1b83769abb48895aa51d14b057599748d23a957c1d685ba53d *server/src/services/ai-trading-engine.service.ts
+10ab9c584e15f51885e2c6c579f593698f5e4454096e1a447af5a310f4b30a08 *server/src/services/backtest.service.ts
+f9ddececb6bfe3ead80f729492ca51bc62d71d7a2d656c86cfbcf19e695734f3 *server/src/services/mt5-mcp.service.ts
+1b2df0df86bde36f3406f12dd0e223115c14e006206df1653ce9c275a4cf3bb6 *server/src/services/risk-manager.service.ts
+632bd6213da3b01c6f74852eefc8b60c3b0817d0d50de936c63c499303deba29 *server/src/services/trading-pipeline.service.ts
+
+=== SOURCE BUILD_ID ===
+Uh4wblEPq6ej7IU78JgAV
+=== ARTIFACT ===
+588bd82e36ad1acdae4615b6336284e420704389864f54ef2d10ea66c1a3cde0 *desktop/dist-app/win-unpacked/Hunter Trades.exe
+SIZE_BYTES: 201233408
+ARTIFACT_BUILD_ID: Uh4wblEPq6ej7IU78JgAV
+
+=== MTIME CHECK — in-scope files modified AFTER build start (2026-10-23 18:29:54) ===
+warning: in the working copy of 'server/src/services/__tests__/payment.service.test.ts', LF will be replaced by CRLF the next time Git touches it
+(kosong = tidak ada file scope yang berubah setelah build dimulai)

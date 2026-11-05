@@ -1,0 +1,460 @@
+import { apiClient } from "@/lib/api-client";
+import { StreamCandleSchema } from "@/types/stream-validation";
+
+// ─── SSE Stream Event Types ──────────────────────────────────────────
+
+export interface StreamProgress {
+  currentCandle: number;
+  totalCandles: number;
+  percent: number;
+}
+
+export interface StreamDataReady {
+  sessionId: string;
+  symbols: string[];
+  timeframe: string;
+  fromDate: string;
+  toDate: string;
+  totalCandles: number;
+  totalSymbols: number;
+}
+
+export interface StreamCandle {
+  time: number;
+  symbol: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  rsi: number;
+  atr: number;
+  pattern: string;
+  equity: number;
+  floatingPnL: number;
+  marginLevel: number;
+}
+
+export interface StreamTradeOpen {
+  time: number;
+  symbol: string;
+  direction: string;
+  entryPrice: number;
+  sl: number;
+  tp: number;
+  volume: number;
+  confidence: number;
+  rsi: number;
+  pattern: string;
+  primaryMethodology?: string;
+}
+
+export interface StreamTradeClose {
+  entryTime: number;
+  exitTime: number;
+  symbol: string;
+  direction: string;
+  entryPrice: number;
+  exitPrice: number;
+  volume?: number;
+  pnl: number;
+  pnlPercent: number;
+  reason: string;
+  confidence: number;
+  primaryMethodology?: string;
+  rr: number;
+  exitMethodology?: string;
+}
+
+export type SSEEvent =
+  | { type: "progress"; data: StreamProgress }
+  | { type: "data_ready"; data: StreamDataReady }
+  | { type: "candle"; data: StreamCandle }
+  | { type: "trade_open"; data: StreamTradeOpen }
+  | { type: "trade_close"; data: StreamTradeClose }
+  | { type: "complete"; data: BacktestResult }
+  | { type: "error"; data: { message: string } };
+
+// ─── Types ───────────────────────────────────────────────────────────
+
+export interface BacktestConfig {
+  symbols: string[];
+  timeframe: "M5" | "M15" | "H1" | "H4" | "D1";
+  fromDate: string;
+  toDate: string;
+  initialBalance: number;
+  entrySettings: {
+    rsiOversold: number;
+    rsiOverbought: number;
+    atrMultiplierSL: number;
+    atrMultiplierTP: number;
+  };
+  trailingStop: {
+    enabled: boolean;
+    activationATR: number;
+    trailATR: number;
+    breakEven: boolean;
+  };
+  maxRiskPerTrade: number;
+  maxDailyRisk?: number;
+  maxOpenPositions: number;
+  leverage: number;
+  signalInterval: number;
+  speedMs?: number;
+  activeMethodologies?: string[];
+  sessionId?: string;
+  smartRisk?: {
+    enabled: boolean;
+    capitalPreservation?: {
+      enabled: boolean;
+      activationGrowthPct: number;
+      riskReductionMultiplier: number;
+    };
+    dailyLimits?: {
+      enabled: boolean;
+      profitTargetPct: number;
+      lossLimitPct: number;
+    };
+    drawdownRecovery?: {
+      enabled: boolean;
+      activationDrawdownPct: number;
+      riskReductionMultiplier: number;
+    };
+    globalDrawdownLimit?: {
+      enabled: boolean;
+      maxDrawdownPct: number;
+    };
+  };
+}
+export interface BacktestTrade {
+  entryTime: number;
+  exitTime: number;
+  symbol: string;
+  direction: "BUY" | "SELL";
+  entryPrice: number;
+  exitPrice: number;
+  sl: number;
+  tp: number;
+  volume: number;
+  pnl: number;
+  pnlPercent: number;
+  closeReason: "TP_HIT" | "SL_HIT" | "SIGNAL_REVERSE" | "TIMEOUT" | "TRAILING_STOP";
+  rsiAtEntry: number;
+  atrAtEntry: number;
+  pattern: string;
+  confidence: number;
+  primaryMethodology?: string;
+  methodologyConfidence?: number;
+  methodologyCount?: number;
+}
+
+export interface BacktestResult {
+  backtestId?: string;
+  symbols: string[];
+  timeframe: string;
+  fromDate: string;
+  toDate: string;
+  totalCandles: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalPnL: number;
+  totalPnLPercent: number;
+  maxDrawdown: number;
+  maxDrawdownPercent: number;
+  profitFactor: number;
+  recoveryFactor: number;
+  sharpeRatio: number;
+  averageWin: number;
+  averageLoss: number;
+  largestWin: number;
+  largestLoss: number;
+  equityCurve: Array<{ time: number; equity: number; floatingPnL?: number; openTrades?: number }>;
+  trades: BacktestTrade[];
+  symbolStats?: Array<{
+    symbol: string;
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    breakEvenTrades: number;
+    totalPnL: number;
+    winRate: number;
+  }>;
+  methodologyStats?: Array<{
+    methodology: string;
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    totalPnL: number;
+    winRate: number;
+    avgConfidence: number;
+  }>;
+  sessionStats?: Array<{
+    session: string;
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    totalPnL: number;
+    winRate: number;
+  }>;
+}
+
+export interface BacktestAnalysis {
+  summary: string;
+  lessonsLearned: string[];
+  strengths: string[];
+  weaknesses: string[];
+  recommendedParamChanges: Record<string, any>;
+  overallGrade: "A" | "B" | "C" | "D" | "F";
+  confidenceToApply: number;
+  methodologyRecommendations?: Array<{
+    methodology: string;
+    verdict: "KEEP" | "ADJUST" | "DISABLE";
+    reason: string;
+  }>;
+  symbolInsights?: Array<{
+    symbol: string;
+    verdict: "PROFITABLE" | "UNPROFITABLE" | "MIXED";
+    totalTrades: number;
+    totalPnL: number;
+    suggestion: string;
+  }>;
+  recoveryFactorAnalysis?: string;
+}
+
+export interface OptimizationConfig {
+  symbol: string;
+  timeframe: string;
+  fromDate: string;
+  toDate: string;
+  initialBalance: number;
+  optimizationMetric: "profitFactor" | "winRate" | "sharpeRatio" | "totalPnLPercent";
+  maxCombinations: number;
+}
+
+export interface OptimizationResult {
+  config: OptimizationConfig;
+  totalCombinationsTested: number;
+  bestParams: {
+    entrySettings: {
+      rsiOversold: number;
+      rsiOverbought: number;
+      atrMultiplierSL: number;
+      atrMultiplierTP: number;
+    };
+    trailingStop: {
+      enabled: boolean;
+      activationATR: number;
+      trailATR: number;
+    };
+    maxRiskPerTrade: number;
+    maxOpenPositions: number;
+  };
+  bestResult: {
+    totalTrades: number;
+    winRate: number;
+    totalPnLPercent: number;
+    profitFactor: number;
+    maxDrawdownPercent: number;
+    sharpeRatio: number;
+  };
+  allResults: Array<{
+    params: Record<string, any>;
+    metrics: Record<string, number>;
+    grade: string;
+  }>;
+}
+
+export interface BacktestHistoryItem {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  dateRange: { from: string; to: string };
+  result: {
+    totalTrades: number;
+    winRate: number;
+    totalPnLPercent: number;
+    profitFactor: number;
+    maxDrawdownPercent: number;
+  };
+  hasAiAnalysis: boolean;
+  createdAt: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Build an SSE stream URL from a BacktestConfig.
+ * Encodes all config fields as query params for GET /api/v1/backtest/stream.
+ */
+export function buildStreamUrl(config: BacktestConfig): string {
+  const p = new URLSearchParams();
+  p.set("symbols", config.symbols.join(","));
+  p.set("timeframe", config.timeframe);
+  p.set("fromDate", config.fromDate);
+  p.set("toDate", config.toDate);
+  p.set("initialBalance", String(config.initialBalance));
+  p.set("rsiOversold", String(config.entrySettings.rsiOversold));
+  p.set("rsiOverbought", String(config.entrySettings.rsiOverbought));
+  p.set("atrMultiplierSL", String(config.entrySettings.atrMultiplierSL));
+  p.set("atrMultiplierTP", String(config.entrySettings.atrMultiplierTP));
+  p.set("trailingEnabled", String(config.trailingStop.enabled));
+  p.set("activationATR", String(config.trailingStop.activationATR));
+  p.set("trailATR", String(config.trailingStop.trailATR));
+  p.set("maxRiskPerTrade", String(config.maxRiskPerTrade));
+  p.set("maxOpenPositions", String(config.maxOpenPositions));
+  if (config.maxDailyRisk !== undefined) {
+    p.set("maxDailyRisk", String(config.maxDailyRisk));
+  }
+  if (config.smartRisk) {
+    p.set("smartRisk", JSON.stringify(config.smartRisk));
+  }
+  p.set("leverage", String(config.leverage));
+  p.set("signalInterval", String(config.signalInterval));
+  p.set("speedMs", String(config.speedMs ?? 0));
+  if (config.activeMethodologies && config.activeMethodologies.length > 0) {
+    p.set("activeMethodologies", config.activeMethodologies.join(","));
+  }
+  if (config.sessionId) {
+    p.set("sessionId", config.sessionId);
+  }
+  return `/api/v1/backtest/stream?${p.toString()}`;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────
+
+class BacktestService {
+  async run(config: BacktestConfig) {
+    const res = await apiClient.post<BacktestResult>(
+      "/api/v1/backtest/run",
+      config,
+    );
+    return res;
+  }
+
+  /**
+   * Phase 1: Prepare historical data without starting simulation.
+   * Returns sessionId for the frontend to start simulation later.
+   */
+  async prepare(config: BacktestConfig) {
+    const res = await apiClient.post<{ sessionId: string; symbolSummaries: Array<{ symbol: string; candles: number; fromDate: string; toDate: string }> }>(
+      "/api/v1/backtest/prepare",
+      config,
+    );
+    return res;
+  }
+
+  /**
+   * Phase 2: Start the simulation for a prepared session.
+   */
+  async startSession(sessionId: string) {
+    const res = await apiClient.post<{ started: boolean }>(
+      `/api/v1/backtest/session/${sessionId}/start`,
+      {},
+    );
+    return res;
+  }
+
+  /**
+   * Cancel a prepared session (cleanup).
+   */
+  async cancelSession(sessionId: string) {
+    const res = await apiClient.post<{ cancelled: boolean }>(
+      `/api/v1/backtest/session/${sessionId}/cancel`,
+      {},
+    );
+    return res;
+  }
+
+  async analyze(backtestId: string) {
+    const res = await apiClient.post<BacktestAnalysis>(
+      "/api/v1/backtest/analyze",
+      { backtestId },
+    );
+    return res;
+  }
+
+
+  async optimize(config: OptimizationConfig) {
+    const res = await apiClient.post<OptimizationResult>(
+      "/api/v1/backtest/optimize",
+      config,
+    );
+    return res;
+  }
+
+  async applyToLivePipeline(backtestId: string) {
+    const res = await apiClient.post<{ applied: boolean; changes: Record<string, any> }>(
+      "/api/v1/backtest/apply",
+      { backtestId },
+    );
+    return res;
+  }
+
+  async getHistory(limit = 20, skip = 0) {
+    const res = await apiClient.get<{
+      experiences: BacktestHistoryItem[];
+      total: number;
+    }>(`/api/v1/backtest/history?limit=${limit}&skip=${skip}`);
+    return res;
+  }
+
+  async getById(id: string) {
+    const res = await apiClient.get<BacktestResult>(
+      `/api/v1/backtest/${id}`,
+    );
+    return res;
+  }
+
+  async delete(id: string) {
+    const res = await apiClient.delete<{ deleted: boolean }>(
+      `/api/v1/backtest/${id}`,
+    );
+    return res;
+  }
+
+  /**
+   * Helper to validate and connect to SSE stream with heartbeat monitor.
+   */
+  connectStream(url: string, onMessage: (data: any) => void) {
+    const eventSource = new EventSource(url);
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+
+    const resetHeartbeat = () => {
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      heartbeatTimer = setTimeout(() => {
+        console.warn("Backtest SSE: No data received for 10s");
+      }, 10000);
+    };
+
+    resetHeartbeat();
+
+    eventSource.onmessage = (event) => {
+      resetHeartbeat();
+      const parsed = JSON.parse(event.data);
+      if (parsed.type === "candle") {
+        const result = StreamCandleSchema.safeParse(parsed.data);
+        if (!result.success) {
+          console.error("Invalid StreamCandle data:", result.error);
+          return;
+        }
+        onMessage({ ...parsed, data: result.data });
+      } else {
+        onMessage(parsed);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("EventSource failed:", err);
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      eventSource.close();
+    };
+
+    return () => {
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      eventSource.close();
+    };
+  }
+}
+
+export const backtestService = new BacktestService();

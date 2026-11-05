@@ -78,25 +78,26 @@ function FactItem({
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -5 }}
-      className="bg-black/30 border border-accent-gold/10 rounded-lg p-3 group"
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs text-gray-300 leading-relaxed flex-1">{fact}</p>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEdit}
-            className="p-1 text-text-muted hover:text-accent-gold transition-colors"
-            aria-label="Edit fact"
-          >
-            <Edit3 className="w-3 h-3" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-text-muted hover:text-neon-red transition-colors"
-            aria-label="Delete fact"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+      <div className="bg-black/30 border border-accent-gold/10 rounded-lg p-3 group">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs text-gray-300 leading-relaxed flex-1">{fact}</p>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={onEdit}
+              className="p-1 text-text-muted hover:text-accent-gold transition-colors"
+              aria-label="Edit fact"
+            >
+              <Edit3 className="w-3 h-3" />
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-1 text-text-muted hover:text-neon-red transition-colors"
+              aria-label="Delete fact"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -177,9 +178,8 @@ function PersonaSection({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
           >
-            <div className="p-3 space-y-2">
+            <div className="overflow-hidden p-3 space-y-2">
               {memories.facts.length === 0 ? (
                 <p className="text-[10px] text-text-muted text-center py-2">No memories yet</p>
               ) : (

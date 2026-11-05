@@ -7,7 +7,6 @@ import { env } from "./config/env";
 import { corsMiddleware } from "./config/cors";
 import { MARKET_SYMBOLS } from "./config/market.config";
 import apiRoutes from "./routes";
-import agentConsensusRoutes from "./routes/agent-consensus.routes";
 import { errorHandler } from "./middleware/error-handler";
 import { connectDB } from "./db/mongoose";
 import { createAuth } from "./auth";
@@ -41,7 +40,7 @@ app.set('trust proxy', false); // req.ip = socket address; rate limiter keys not
 app.use(corsMiddleware);
 app.use(express.json());
 
-app.get("/health", (req, res) => res.status(200).json({ status: "OK", timestamp: new Date().toISOString() }));
+app.get(["/health", "/api/health"], (req, res) => res.status(200).json({ status: "OK", timestamp: new Date().toISOString() }));
 
 const PORT = env.PORT || 5000;
 const QUOTE_STREAM_INTERVAL_MS = 15_000;
@@ -103,7 +102,11 @@ app.use((req, res, next) => {
         next(err);
       });
     } else {
-      res.status(503).json({ error: "Database connecting, please retry in a moment" });
+      res.status(503).json({
+        error: "Database connecting, please retry in a moment",
+        message: "Database connecting, please retry in a moment",
+        ready: false,
+      });
     }
   } else {
     next();
@@ -112,7 +115,6 @@ app.use((req, res, next) => {
 
 // Apply general API rate limiter to all API routes
 app.use("/api", apiRoutes);
-app.use("/api", agentConsensusRoutes); // Register agent‑consensus endpoint
 app.use(errorHandler);
 
 const server = createServer(app);

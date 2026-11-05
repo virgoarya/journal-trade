@@ -1,6 +1,6 @@
 "use client";
 
-import { type LLMConsensusVote, type LLMConsensusResult, MODEL_COLORS, VERDICT_STYLES, type LlmModelNode } from "../types";
+import { type LLMConsensusVote, type LLMConsensusResult, MODEL_COLORS, VERDICT_STYLES, type LlmModelNode } from "../types/index";
 import { LLMProviderLogo } from "./llm-logos";
 import { Zap, ZapOff, Clock, AlertCircle } from "lucide-react";
 import { parseReasoningPoints } from "../utils/reasoningParser";

@@ -7,7 +7,7 @@
  * hook ↔ komponen overlay.
  */
 import { createContext } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react/dist/lucide-react.d.ts";
 import {
   LayoutDashboard,
   LineChart,

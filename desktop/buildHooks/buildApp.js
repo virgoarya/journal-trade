@@ -8,14 +8,15 @@ console.log('======================================================\n');
 
 const projectRoot = path.resolve(__dirname, '../..');
 const desktopDir = path.resolve(projectRoot, 'desktop');
-const outDir = path.resolve(desktopDir, 'dist-app', 'win-unpacked');
+const outDir = path.resolve(desktopDir, 'dist-build', 'win-unpacked');
 const resourcesDir = path.join(outDir, 'resources');
 
 function runRobocopy(source, destination, excludeFiles = '') {
     fs.mkdirSync(destination, { recursive: true });
     const xfParam = excludeFiles ? `/XF ${excludeFiles}` : '';
+    // Use /MIR to mirror the source to destination, /R:3 /W:3 for retry
     try {
-        execSync(`robocopy "${source}" "${destination}" /E ${xfParam} /MT:16 /R:1 /W:1 /NP /NFL /NDL /NJH /NJS`, { stdio: 'inherit' });
+        execSync(`robocopy "${source}" "${destination}" /MIR ${xfParam} /MT:16 /R:3 /W:3 /NP /NFL /NDL /NJH /NJS`, { stdio: 'inherit' });
     } catch (e) {
         if (e.status && e.status > 7) {
             console.error(`Robocopy error status ${e.status} from ${source} to ${destination}`);
@@ -145,33 +146,46 @@ if (!fs.existsSync(serverLockSrc)) {
     process.exit(1);
 }
 fs.copyFileSync(serverLockSrc, path.join(targetServer, 'package-lock.json'));
-// Copy .npmrc so npm ci respects allowScripts (e.g. 9router postinstall)
+
+// Copy pre-built node_modules from project server (avoids npm ci issues in build env)
+const srcNodeModules = path.join(projectRoot, 'server', 'node_modules');
+const targetNodeModules = path.join(targetServer, 'node_modules');
+if (fs.existsSync(srcNodeModules)) {
+    console.log('[4.1/6] Copying pre-built backend node_modules...');
+    runRobocopy(srcNodeModules, targetNodeModules);
+    console.log('  ✓ Copied server production node_modules');
+} else {
+    console.error('❌ server/node_modules not found — run npm ci in server folder first');
+    process.exit(1);
+}
+
+// Copy .npmrc for reference
 const serverNpmrcSrc = path.join(projectRoot, 'server', '.npmrc');
 if (fs.existsSync(serverNpmrcSrc)) {
     fs.copyFileSync(serverNpmrcSrc, path.join(targetServer, '.npmrc'));
 }
-// Fast build: skip heavy npm ci, copy node_modules directly from root/server or use robocopy
-console.log(`[4.1/6] Copying backend dependencies directly (skipping npm ci)...`);
-const targetNodeModules = path.join(targetServer, 'node_modules');
-const devServerNodeModules = path.join(projectRoot, 'server', 'node_modules');
-if (fs.existsSync(devServerNodeModules)) {
-    runRobocopy(devServerNodeModules, targetNodeModules);
-    console.log('  ✓ Copied existing server node_modules');
-} else {
-    console.log('  ⚠️ Dev server node_modules not found, running npm install...');
-    execSync('npm install --no-audit --no-fund', { cwd: targetServer, stdio: 'inherit' });
-}
 
-// 4.2/6 Generate Prisma client (postinstall may be blocked by allowScripts)
+// 4.2/6 Generate Prisma client (skip if already present — avoids EPERM
+// on the query-engine DLL when a dev server is running in the project root)
 const prismaSchemaDest = path.join(targetServer, 'prisma', 'schema.prisma');
 if (fs.existsSync(prismaSchemaDest)) {
-    console.log('[4.2/6] Generating Prisma client...');
-    try {
-        execSync('npx prisma generate', { cwd: targetServer, stdio: 'inherit' });
-        console.log('  ✓ Prisma client generated');
-    } catch (e) {
-        console.error(`[buildApp] prisma generate failed: ${e.message}`);
-        process.exit(1);
+    const srcClientDir = path.join(projectRoot, 'server', 'node_modules', '.prisma', 'client');
+    if (fs.existsSync(srcClientDir) && fs.existsSync(path.join(srcClientDir, 'query_engine-windows.dll.node'))) {
+        console.log('[4.2/6] Copying existing Prisma client (skipping generate)...');
+        fs.mkdirSync(path.join(targetServer, 'node_modules', '.prisma'), { recursive: true });
+        runRobocopy(srcClientDir, path.join(targetServer, 'node_modules', '.prisma', 'client'));
+        console.log('  ✓ Prisma client copied');
+    } else {
+        console.log('[4.2/6] Prisma client missing or incomplete, attempting generate...');
+        try {
+            execSync('npx prisma generate --schema=prisma/schema.prisma', { cwd: path.join(projectRoot, 'server'), stdio: 'inherit' });
+            fs.mkdirSync(path.join(targetServer, 'node_modules', '@prisma'), { recursive: true });
+            runRobocopy(path.join(projectRoot, 'server', 'node_modules', '@prisma', 'client'), path.join(targetServer, 'node_modules', '@prisma', 'client'));
+            console.log('  ✓ Prisma client generated');
+        } catch (e) {
+            console.error(`[buildApp] prisma generate failed: ${e.message}`);
+            process.exit(1);
+        }
     }
 }
 

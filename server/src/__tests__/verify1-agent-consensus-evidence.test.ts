@@ -196,6 +196,7 @@ vi.mock("../services/macro-news.service", () => ({
       avoidTrading: false,
       error: false,
     })),
+    getSentimentScore: vi.fn(async () => 0),
   },
 }));
 
@@ -223,6 +224,7 @@ import { tradingPipelineService } from "../services/trading-pipeline.service";
 import aiTradingRoutes from "../routes/ai-trading.routes";
 import { agentConsensusService } from "../services/agent-consensus.service";
 import { llmConsensusService } from "../services/llm-consensus.service";
+import { macroNewsService } from "../services/macro-news.service";
 
 function setStore(agentConsensus: any) {
   store = {

@@ -756,11 +756,11 @@ export function YieldCurvePanel({ className }: YieldCurvePanelProps) {
                 tick={{ fill: "#cbd5e1", fontSize: 11, fontFamily: "monospace", fontWeight: 500 }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(val) => `${val}%`}
+                tickFormatter={(val: number) => `${val}%`}
               />
               <Tooltip
                 cursor={{ stroke: "#ffffff10", strokeWidth: 1 }}
-                content={({ active, payload }) => {
+                content={({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload: { tenor: string } }> }) => {
                   if (active && payload && payload.length) {
                     const value = Number(payload[0].value ?? 0);
                     return (

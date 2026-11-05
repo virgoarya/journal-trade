@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { CreditCard, Zap, X, Sparkles, Shield, CheckCircle2, Crown, Flame } from "lucide-react";
 import { toast } from "sonner";
+import { PAYMENT_ENDPOINTS } from "@/lib/payment-endpoints";
 
 type PackageType = "basic" | "pro" | "premium";
 
@@ -38,6 +39,21 @@ interface PaymentModalProps {
   onSuccess?: () => void;
 }
 
+interface PackagePricing {
+  type: PackageType;
+  amountIDR: number;
+  baseAmountIDR: number;
+  durationMs: number | null;
+  label: string;
+}
+
+// Fallback pricing jika fetch gagal
+const FALLBACK_PRICING: Record<PackageType, { price: number; duration: string }> = {
+  basic: { price: 1_500_000, duration: "3 Bulan Akses" },
+  pro: { price: 2_500_000, duration: "6 Bulan Akses" },
+  premium: { price: 3_500_000, duration: "Lifetime Akses" },
+};
+
 export default function PaymentModal({
   userId,
   isBooster,
@@ -45,21 +61,74 @@ export default function PaymentModal({
   onClose,
   onSuccess,
 }: PaymentModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus management - move focus to modal when opened
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      const firstFocusable = modalRef.current.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }
+  }, [isOpen]);
+
+  // Escape key handler
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape" && isOpen) {
+      e.preventDefault();
+      onClose();
+    }
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener("keydown", handleEscape);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = "hidden";
+    }
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, handleEscape]);
+
   const [loading, setLoading] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<PackageType>("premium");
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [pricingCatalog, setPricingCatalog] = useState<Record<PackageType, PackagePricing> | null>(null);
 
-  // Harga dasar (sebelum diskon booster jika ada)
-  const pricing = {
-    basic: { price: 1_500_000, duration: "3 Bulan Akses" },
-    pro: { price: 2_500_000, duration: "6 Bulan Akses" },
-    premium: { price: 3_500_000, duration: "Lifetime Akses" },
-  };
+  // Ambil catalog harga resmi dari backend saat mount
+  useEffect(() => {
+    let mounted = true;
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch(PAYMENT_ENDPOINTS.prices(isBooster));
+        if (!res.ok) throw new Error("Failed to get pricing");
+        const data = await res.json();
+        if (mounted && data?.packages) {
+          setPricingCatalog(data.packages);
+        }
+      } catch (err) {
+        console.error("[PaymentModal] Failed to fetch prices from backend:", err);
+      }
+    };
+    fetchPrices();
+    return () => {
+      mounted = false;
+    };
+  }, [isBooster]);
 
   const getEffectivePrice = (pkgKey: "basic" | "pro" | "premium") => {
-    const rawPrice = pricing[pkgKey].price;
-    return isBooster ? Math.round(rawPrice * 0.9) : rawPrice;
-  };
+      if (!pricingCatalog) return 0;
+      return pricingCatalog[pkgKey]?.amountIDR ?? 0;
+    };
+
+    const getOriginalPrice = (pkgKey: "basic" | "pro" | "premium") => {
+      if (!pricingCatalog) return null;
+      return isBooster ? pricingCatalog[pkgKey]?.baseAmountIDR ?? null : null;
+    };
 
   const handlePaymentSuccess = () => {
     setPaymentSuccess(true);
@@ -77,17 +146,18 @@ export default function PaymentModal({
       const amountIDR = getEffectivePrice(selectedPackage);
 
       // 1. Dapatkan Snap Token dari backend
-      const res = await fetch("/api/v1/payment/package", {
+      const res = await fetch(PAYMENT_ENDPOINTS.token, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          amountIDR,
-          isBooster,
-          orderType: "package",
-          packageType: selectedPackage,
-        }),
-      });
+          body: JSON.stringify({
+            userId,
+            amountIDR,
+            isBooster,
+            orderType: "package",
+            packageType: selectedPackage,
+          }),
+        });
 
       const data = (await res.json()) as PaymentResponse;
       if (!res.ok || !data.token) {
@@ -117,14 +187,21 @@ export default function PaymentModal({
       snap.pay(data.token, {
         onSuccess: async () => {
           try {
-            const confirmRes = await fetch("/api/v1/payment/confirm", {
+            const confirmRes = await fetch(PAYMENT_ENDPOINTS.confirm, {
               method: "POST",
+              credentials: "include",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ orderId: data.orderId }),
             });
             if (!confirmRes.ok) {
               const errData = await confirmRes.json().catch(() => ({}));
-              throw new Error(errData.detail || errData.error || "Gagal konfirmasi pembayaran");
+              // Extract error message from various possible response formats
+              const errorMsg =
+                (typeof errData?.detail === "string" && errData.detail) ||
+                (typeof errData?.error === "string" && errData.error) ||
+                (typeof errData?.error?.message === "string" && errData.error.message) ||
+                "Gagal konfirmasi pembayaran";
+              throw new Error(errorMsg);
             }
             toast.success("✅ Pembayaran berhasil diproses!");
             handlePaymentSuccess();
@@ -139,20 +216,32 @@ export default function PaymentModal({
           toast.info("⏳ Menunggu penyelesaian pembayaran di Midtrans.");
           const pollInterval = setInterval(async () => {
             try {
-              const res = await fetch(`/api/v1/payment/status/${data.orderId}`);
+              const res = await fetch(PAYMENT_ENDPOINTS.status(data.orderId || ""), { credentials: "include" });
               const status = await res.json();
               if (status.transaction_status === "settlement" || status.transaction_status === "capture") {
                 clearInterval(pollInterval);
                 try {
-                  await fetch("/api/v1/payment/confirm", {
+                  const confirmRes = await fetch(PAYMENT_ENDPOINTS.confirm, {
                     method: "POST",
+                    credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ orderId: data.orderId }),
                   });
+                  if (!confirmRes.ok) {
+                    const errData = await confirmRes.json().catch(() => ({}));
+                    const errorMsg =
+                      (typeof errData?.detail === "string" && errData.detail) ||
+                      (typeof errData?.error === "string" && errData.error) ||
+                      (typeof errData?.error?.message === "string" && errData.error.message) ||
+                      "Gagal konfirmasi";
+                    console.error("[PaymentModal] Pending confirm error:", errorMsg);
+                  }
+                  toast.success("Pembayaran berhasil dikonfirmasi!");
+                  handlePaymentSuccess();
                 } catch (e) {
                   console.error("[PaymentModal] Pending confirm error:", e);
+                  handlePaymentSuccess(); // Still mark as success since settlement was reached
                 }
-                toast.success("Pembayaran berhasil dikonfirmasi!");
                 handlePaymentSuccess();
               }
             } catch (error) {
@@ -192,7 +281,7 @@ export default function PaymentModal({
       title: "Basic",
       subtitle: "3 Bulan Akses",
       price: getEffectivePrice("basic"),
-      originalPrice: isBooster ? pricing.basic.price : null,
+      originalPrice: getOriginalPrice("basic"),
       highlight: false,
       badge: "STARTER",
       badgeClass: "bg-gray-800 text-gray-300 border-gray-700",
@@ -211,7 +300,7 @@ export default function PaymentModal({
       title: "Pro",
       subtitle: "6 Bulan Akses + Free EA",
       price: getEffectivePrice("pro"),
-      originalPrice: isBooster ? pricing.pro.price : null,
+      originalPrice: getOriginalPrice("pro"),
       highlight: false,
       badge: "POPULER",
       badgeClass: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -232,7 +321,7 @@ export default function PaymentModal({
       title: "Premium",
       subtitle: "Lifetime + Unlimited AI",
       price: getEffectivePrice("premium"),
-      originalPrice: isBooster ? pricing.premium.price : null,
+      originalPrice: getOriginalPrice("premium"),
       highlight: true,
       badge: "ULTIMATE BEST VALUE",
       badgeClass: "bg-gradient-to-r from-[#D4AF37] to-[#F3E5AB] text-black font-extrabold border-[#D4AF37]",
@@ -253,9 +342,15 @@ export default function PaymentModal({
   const selectedAmount = getEffectivePrice(selectedPackage);
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="payment-modal-title"
+      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+    >
       <div className="bg-[#0A0A0F] border border-[#D4AF37]/30 rounded-3xl w-full max-w-6xl shadow-[0_0_80px_rgba(212,175,55,0.12)] animate-in zoom-in-95 duration-300 relative my-auto overflow-hidden">
-        
+
         {/* Ambient Top Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-28 bg-gradient-to-b from-[#D4AF37]/15 to-transparent blur-3xl pointer-events-none" />
 
@@ -285,7 +380,7 @@ export default function PaymentModal({
               <div className="p-2 bg-[#D4AF37]/15 rounded-xl border border-[#D4AF37]/30 text-[#D4AF37]">
                 <Sparkles className="w-5 h-5" />
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-wide font-mono">
+              <h2 id="payment-modal-title" className="text-2xl sm:text-3xl font-extrabold text-white tracking-wide font-mono">
                 PILIH PAKET AI TRADING
               </h2>
               {isBooster && (
@@ -301,10 +396,12 @@ export default function PaymentModal({
           </div>
 
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="self-end sm:self-center text-gray-400 hover:text-white transition-colors p-2.5 hover:bg-white/5 rounded-xl border border-transparent hover:border-white/10"
+            aria-label="Tutup pembayaran"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -344,21 +441,21 @@ export default function PaymentModal({
 
                     {/* Price Block */}
                     <div className="my-5 pb-5 border-b border-white/10">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl sm:text-4xl font-extrabold font-mono text-[#D4AF37] tracking-tight">
-                          Rp {pkg.price.toLocaleString("id-ID")}
-                        </span>
-                      </div>
-                      {pkg.originalPrice && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500 line-through font-mono">
-                            Rp {pkg.originalPrice.toLocaleString("id-ID")}
-                          </span>
-                          <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                            Hemat 10%
-                          </span>
-                        </div>
-                      )}
+                                          <div className="flex items-baseline gap-2">
+                                            <span className="text-3xl sm:text-4xl font-extrabold font-mono text-[#D4AF37] tracking-tight">
+                                              Rp {pkg.price.toLocaleString("id-ID")}
+                                            </span>
+                                          </div>
+                                          {pkg.originalPrice && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                              <span className="text-xs text-gray-500 line-through font-mono">
+                                                Rp {pkg.originalPrice.toLocaleString("id-ID")}
+                                              </span>
+                                              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                                Hemat 10%
+                                              </span>
+                                            </div>
+                                          )}
                     </div>
 
                     {/* Features List */}
@@ -410,7 +507,7 @@ export default function PaymentModal({
                   Rp {selectedAmount.toLocaleString("id-ID")}
                 </span>
                 <span className="text-xs text-gray-400 font-mono">
-                  ({pricing[selectedPackage as "basic" | "pro" | "premium"]?.duration || "1x Pembayaran"})
+                  ({selectedPackage === "basic" ? "3 Bulan Akses" : selectedPackage === "pro" ? "6 Bulan Akses" : "Lifetime Akses"})
                 </span>
               </div>
             </div>

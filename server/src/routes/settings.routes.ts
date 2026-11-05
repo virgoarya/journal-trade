@@ -10,7 +10,7 @@ import { TradingAccount } from "../models/TradingAccount";
 import { Playbook } from "../models/Playbook";
 import { AiReview } from "../models/AiReview";
 import { DailySnapshot } from "../models/DailySnapshot";
-import { UserSettings, DEFAULT_METHODOLOGY_WEIGHTS, DEFAULT_ACTIVE_METHODOLOGIES, type MethodologyName } from "../models/UserSettings";
+import { UserSettings, DEFAULT_METHODOLOGY_WEIGHTS, DEFAULT_ACTIVE_METHODOLOGIES, DEFAULT_AGENT_CONSENSUS, type MethodologyName } from "../models/UserSettings";
 import { MT5Connection } from "../models/MT5Connection";
 
 const updateSettingsSchema = z.object({
@@ -29,7 +29,7 @@ const updateSettingsSchema = z.object({
 
 export const aiTradingSettingsSchema = z.object({
   methodologyWeights: z.record(z.string(), z.number()).optional(),
-  activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "crt"])).optional(),
+  activeMethodologies: z.array(z.enum(["smc", "ict", "msnr", "ictCrt"])).optional(),
   llmConsensus: z.object({
     enabled: z.boolean().optional(),
     minProviders: z.number().int().min(1).max(6).optional(),
@@ -45,15 +45,8 @@ export const aiTradingSettingsSchema = z.object({
     toolEnabled: z.boolean().optional(),
     threshold: z.number().min(0.1).max(1.0).optional(),
   }).optional(),
+  macroNewsFailSafe: z.boolean().optional(),
 });
-
-const DEFAULT_AGENT_CONSENSUS = {
-  enabled: false,
-  debateMode: "parallel" as const,
-  memoryEnabled: true,
-  toolEnabled: true,
-  threshold: 0.6,
-};
 
 const router = Router();
 router.use(requireAuth);
@@ -104,6 +97,7 @@ router.get("/ai-trading", async (req, res, next) => {
       activeMethodologies: appliedActiveMeth || settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
       agentConsensus: settings.aiTrading?.agentConsensus || DEFAULT_AGENT_CONSENSUS,
+      macroNewsFailSafe: settings.aiTrading?.macroNewsFailSafe ?? false,
       savedPipelineConfig: configToReturn,
       lastAutoBacktestAt: settings.lastAutoBacktestAt,
     });
@@ -114,7 +108,7 @@ router.get("/ai-trading", async (req, res, next) => {
 router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { methodologyWeights, activeMethodologies, llmConsensus, agentConsensus } = req.body;
+    const { methodologyWeights, activeMethodologies, llmConsensus, agentConsensus, macroNewsFailSafe } = req.body;
 
     // Keep both sources in sync: aiTrading.* (panel defaults) AND the
     // per-broker applied config — otherwise GET prefers brokerConfig and the
@@ -139,18 +133,23 @@ router.patch("/ai-trading", validateRequest({ body: aiTradingSettingsSchema }), 
       update["aiTrading.agentConsensus"] = agentConsensus;
       update[`savedPipelineConfigs.${brokerServer}.agentConsensus`] = agentConsensus;
     }
-    
+    if (typeof macroNewsFailSafe === "boolean") {
+      update["aiTrading.macroNewsFailSafe"] = macroNewsFailSafe;
+      update[`savedPipelineConfigs.${brokerServer}.macroNewsFailSafe`] = macroNewsFailSafe;
+    }
+
     const settings = await UserSettings.findOneAndUpdate(
       { userId },
       { $set: update },
       { returnDocument: "after", upsert: true }
     );
-    
+
     return apiResponse.success(res, {
       methodologyWeights: settings.aiTrading?.methodologyWeights || DEFAULT_METHODOLOGY_WEIGHTS,
       activeMethodologies: settings.aiTrading?.activeMethodologies || DEFAULT_ACTIVE_METHODOLOGIES,
       llmConsensus: settings.aiTrading?.llmConsensus || { enabled: false, minProviders: 2, threshold: 0.5, providerTimeoutMs: 8000 },
       agentConsensus: settings.aiTrading?.agentConsensus || DEFAULT_AGENT_CONSENSUS,
+      macroNewsFailSafe: settings.aiTrading?.macroNewsFailSafe ?? false,
     });
   } catch (error) { next(error); }
 });

@@ -50,6 +50,12 @@ export const createAuth = () => {
       // Allow local LAN IPs (e.g. for accessing from phone on same WiFi)
       "http://192.168.100.3:3000", // Explicitly allow gadget IP
       "http://192.168.100.3:5000",
+      // Desktop / Electron origins
+      "file://",
+      "file://*",
+      "null",
+      "app://",
+      "app://*",
     ],
     socialProviders: {
       discord: {

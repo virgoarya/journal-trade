@@ -13,10 +13,10 @@ const router = Router();
 router.use(requireAuth);
 
 /**
- * POST /v1/agent-consensus/deep-research
+ * POST /deep-research
  * Jalankan siklus thinking kritis tingkat tinggi.
  */
-router.post("/v1/agent-consensus/deep-research", async (req: Request, res: Response) => {
+router.post("/deep-research", async (req: Request, res: Response) => {
   try {
     silentLogger.info(`[API] Triggering Deep Research cycle`);
     const results = await deepResearchService.runDeepResearch();
@@ -28,10 +28,10 @@ router.post("/v1/agent-consensus/deep-research", async (req: Request, res: Respo
 });
 
 /**
- * GET /v1/agent-consensus/insights
+ * GET /insights
  * Ambil riwayat insight terbaru — MILIK USER yang login.
  */
-router.get("/v1/agent-consensus/insights", async (req: Request, res: Response) => {
+router.get("/insights", async (req: Request, res: Response) => {
   try {
     const { type = "proactive", personaId, limit = 10 } = req.query;
     const userId = (req as any).user?.id;
@@ -53,11 +53,11 @@ router.get("/v1/agent-consensus/insights", async (req: Request, res: Response) =
 });
 
 /**
- * POST /v1/agent-consensus
+ * POST /
  * MODE: parallel (default) atau sequential
  * Body: { prompt: string, context?: any, mode?: "parallel" | "sequential" }
  */
-router.post("/v1/agent-consensus", async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
     const { prompt, context, mode = "parallel" } = req.body;
 
@@ -83,7 +83,7 @@ router.post("/v1/agent-consensus", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /v1/agent-consensus/parallel
+ * POST /parallel
  */
 router.post("/parallel", async (req: Request, res: Response) => {
   try {
@@ -97,7 +97,7 @@ router.post("/parallel", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /parallel
+ * POST /sequential
  */
 router.post("/sequential", async (req: Request, res: Response) => {
   try {
@@ -111,11 +111,11 @@ router.post("/sequential", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /v1/agent-consensus/debate
+ * POST /debate
  * Sequential debate chain (Hawk → Dove → Contrarian → Consensus)
  * Body: { prompt: string, context?: any }
  */
-router.post("/v1/agent-consensus/debate", async (req: Request, res: Response) => {
+router.post("/debate", async (req: Request, res: Response) => {
   try {
     const { prompt, context } = req.body;
     if (!prompt) {
@@ -134,12 +134,12 @@ router.post("/v1/agent-consensus/debate", async (req: Request, res: Response) =>
 });
 
 /**
- * POST /v1/agent-consensus/single/:persona
+ * POST /single/:persona
  * Jalankan satu agent saja
  * Body: { prompt: string, context?: any }
  * Params: persona = hawk | dove | contrarian
  */
-router.post("/v1/agent-consensus/single/:persona", async (req: Request, res: Response) => {
+router.post("/single/:persona", async (req: Request, res: Response) => {
   try {
     const { persona } = req.params;
     const { prompt, context } = req.body;
@@ -162,11 +162,11 @@ router.post("/v1/agent-consensus/single/:persona", async (req: Request, res: Res
 });
 
 /**
- * GET /v1/agent-consensus/proactive
+ * GET /proactive
  * Get latest proactive insights MILIK USER yang login (difilter by userId).
  * Query: ?limit=10
  */
-router.get("/v1/agent-consensus/proactive", async (req: Request, res: Response) => {
+router.get("/proactive", async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const userId = (req as any).user?.id;
@@ -179,10 +179,10 @@ router.get("/v1/agent-consensus/proactive", async (req: Request, res: Response) 
 });
 
 /**
- * GET /v1/agent-consensus/proactive/latest
+ * GET /proactive/latest
  * Get latest 1 insight per agent (terbaru) — untuk user yang login.
  */
-router.get("/v1/agent-consensus/proactive/latest", async (req: Request, res: Response) => {
+router.get("/proactive/latest", async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     const insights = await proactiveAlertService.getLatestPerAgent(userId);
@@ -194,10 +194,10 @@ router.get("/v1/agent-consensus/proactive/latest", async (req: Request, res: Res
 });
 
 /**
- * POST /v1/agent-consensus/proactive/run
+ * POST /proactive/run
  * Trigger proactive analysis cycle manually
  */
-router.post("/v1/agent-consensus/proactive/run", async (req: Request, res: Response) => {
+router.post("/proactive/run", async (req: Request, res: Response) => {
   try {
     silentLogger.info(`[API] Manual proactive cycle triggered`);
     // Run async - don't wait

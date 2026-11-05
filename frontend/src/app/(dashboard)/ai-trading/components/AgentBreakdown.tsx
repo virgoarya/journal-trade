@@ -19,6 +19,11 @@ interface PersonaConfig {
   emoji: string;
   description: string;
   icon: typeof Shield;
+  colors: {
+    bg: string;
+    text: string;
+    border: string;
+  };
 }
 
 const PERSONAS: PersonaConfig[] = [
@@ -28,6 +33,7 @@ const PERSONAS: PersonaConfig[] = [
     emoji: "🦅",
     description: "Risk Agent — Capital Preservation",
     icon: Shield,
+    colors: { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/40" },
   },
   {
     id: "dove",
@@ -35,6 +41,7 @@ const PERSONAS: PersonaConfig[] = [
     emoji: "🕊️",
     description: "Opportunity Agent — Momentum & Breakouts",
     icon: TrendingUp,
+    colors: { bg: "bg-sky-500/20", text: "text-sky-400", border: "border-sky-500/40" },
   },
   {
     id: "contrarian",
@@ -42,6 +49,7 @@ const PERSONAS: PersonaConfig[] = [
     emoji: "🦇",
     description: "Skeptic Agent — Anomaly Detection",
     icon: AlertTriangle,
+    colors: { bg: "bg-rose-500/20", text: "text-rose-400", border: "border-rose-500/40" },
   },
 ];
 
@@ -81,6 +89,7 @@ function getPersonaConfig(personaId: string): PersonaConfig {
     emoji: "🤖",
     description: "Agent",
     icon: Shield,
+    colors: { bg: "bg-white/5", text: "text-text-muted", border: "border-white/10" },
   };
 }
 
@@ -159,18 +168,19 @@ function VoteDistribution({ votes }: { votes: AgentVote[] }) {
         const share = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
         const persona = getPersonaConfig(vote.persona);
         const biasStyle = getBiasStyle(vote.bias);
+        const personaColors = (persona as PersonaConfig & { colors: typeof persona.colors }).colors;
 
         return (
           <div key={vote.persona} className="flex items-center gap-2" role="listitem">
             <span className="text-sm w-6 text-center" aria-hidden="true">{persona.emoji}</span>
             <div className="flex-1">
               <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="text-text-muted">{persona.label} (×{weight})</span>
+                <span className={personaColors.text}>{persona.label} (×{weight})</span>
                 <span className={biasStyle.text}>{Math.round(share)}%</span>
               </div>
               <div className="h-1.5 bg-black/60 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${biasStyle.bg}`}
+                  className={`h-full rounded-full transition-all duration-500 ${personaColors.bg}`}
                   style={{ width: `${share}%` }}
                 />
               </div>
@@ -213,6 +223,7 @@ function AgentCard({ vote, defaultOpen = false }: { vote: AgentVote; defaultOpen
   const persona = getPersonaConfig(vote.persona);
   const biasStyle = getBiasStyle(vote.bias);
   const Icon = persona.icon;
+  const personaColors = (persona as PersonaConfig & { colors: typeof persona.colors }).colors;
 
   return (
     <div className="glass rounded-lg overflow-hidden">
@@ -226,7 +237,7 @@ function AgentCard({ vote, defaultOpen = false }: { vote: AgentVote; defaultOpen
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm text-white">{persona.label}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${biasStyle.bg} ${biasStyle.text}`}>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${personaColors.bg} ${personaColors.text} ${personaColors.border}`}>
               {vote.bias}
             </span>
           </div>

@@ -24,14 +24,14 @@
       "Bash(node --*:*)"
     ],
     "deny": [
-      "file:./.env",
-      "file:.env*",
-      "file:./.env.local",
-      "file:./.env.*.local",
-      "file:./.kilo/**",
-      "file:./node_modules/**",
-      "file:./server/node_modules/**",
-      "file:./frontend/node_modules/**"
+      "File:./.env",
+      "File:.env*",
+      "File:./.env.local",
+      "File:./.env.*.local",
+      "File:./.kilo/**",
+      "File:./node_modules/**",
+      "File:./server/node_modules/**",
+      "File:./frontend/node_modules/**"
     ],
     "defaultMode": "manual"
   }

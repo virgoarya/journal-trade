@@ -1,6 +1,6 @@
 "use client";
 
-import { type LLMConsensusResult } from "../types";
+import type { LLMConsensusResult } from "../types/index";
 
 interface LLMConsensusEntry {
   timestamp: string;

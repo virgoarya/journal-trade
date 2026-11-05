@@ -87,8 +87,8 @@ export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
                 key={stableKey}
-                className="bg-black/40 border border-border-subtle/50 rounded-lg p-3 text-xs font-mono hover:border-accent-gold/30 transition-colors"
               >
+                <div className="bg-black/40 border border-border-subtle/50 rounded-lg p-3 text-xs font-mono hover:border-accent-gold/30 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${dirColor}`}>
@@ -122,6 +122,7 @@ export function AITradeHistories({ triggerRefresh }: { triggerRefresh?: number }
                 <div className="mt-2 pt-2 border-t border-border-subtle/50 text-[10px] text-gray-400 flex gap-2 items-start leading-relaxed">
                   <ChevronRight className="w-3 h-3 text-accent-gold mt-0.5 shrink-0" />
                   <span>{t.signal?.reason || t.closeReason || "AI execution completed"}</span>
+                </div>
                 </div>
               </motion.div>
             );

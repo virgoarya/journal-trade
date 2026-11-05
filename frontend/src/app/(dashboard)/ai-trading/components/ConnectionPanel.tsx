@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, PlugZap, Eye, EyeOff, Key, ShieldCheck, ChevronDown, ChevronUp, Copy, CheckCircle2, Terminal } from "lucide-react";
+import { Loader2, PlugZap, Eye, EyeOff, Key, ShieldCheck, ChevronDown, ChevronUp, Copy, CheckCircle2, Terminal, ShieldAlert, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 
 interface MT5Credentials {
@@ -17,12 +17,18 @@ interface ConnectionPanelProps {
   onConnect: (creds: MT5Credentials) => Promise<boolean>;
   isConnecting: boolean;
   error: string | null;
+  circuitBreakerState?: "OPEN" | "CLOSED" | "HALF_OPEN" | string;
+  circuitBreakerReason?: string | null;
+  onResetCircuitBreaker?: () => void;
 }
 
 export function ConnectionPanel({
   onConnect,
   isConnecting,
   error,
+  circuitBreakerState = "CLOSED",
+  circuitBreakerReason = null,
+  onResetCircuitBreaker,
 }: ConnectionPanelProps) {
   const [apiKey, setApiKey] = useState("");
   const [mcpUrl, setMcpUrl] = useState("http://127.0.0.1:22346/mcp");
@@ -30,6 +36,12 @@ export function ConnectionPanel({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  const isCircuitBreakerOpen =
+    circuitBreakerState === "OPEN" ||
+    circuitBreakerState === "HALF_OPEN" ||
+    Boolean(circuitBreakerReason) ||
+    Boolean(error && /circuit\s*breaker/i.test(error));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +103,51 @@ export function ConnectionPanel({
               <span>Panduan Mendapatkan API Key MT5</span>
             </button>
           </div>
+
+          {/* Circuit Breaker Status Indicator */}
+          {isCircuitBreakerOpen && (
+            <div
+              data-testid="circuit-breaker-banner"
+              className="mb-6 p-4 rounded-xl border border-neon-red/40 bg-neon-red/10 text-left relative overflow-hidden shadow-[0_0_20px_rgba(255,56,100,0.15)] animate-fade-in"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-neon-red/20 border border-neon-red/30 flex-shrink-0 mt-0.5">
+                  <ShieldAlert className="w-5 h-5 text-neon-red animate-pulse" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neon-red bg-neon-red/20 px-2 py-0.5 rounded border border-neon-red/30 inline-flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neon-red animate-ping" />
+                      Circuit Breaker: {circuitBreakerState || "OPEN"}
+                    </span>
+                    {onResetCircuitBreaker && (
+                      <button
+                        type="button"
+                        onClick={onResetCircuitBreaker}
+                        className="text-[10px] text-accent-gold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <h4 className="text-xs font-bold text-white tracking-wide">
+                    Proteksi Risiko Aktif — Koneksi Dikunci Sementara
+                  </h4>
+                  <p className="text-[11px] text-gray-300 mt-1 leading-relaxed">
+                    {circuitBreakerReason ||
+                      "Koneksi ke terminal MT5 MCP dicegah sementara setelah deteksi error berulang atau batas risiko terlampaui. Terminal akan mencoba auto-reconnect saat status stabil."}
+                  </p>
+                  <div className="mt-2.5 pt-2 border-t border-neon-red/20 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-muted">
+                    <span>
+                      Port MCP: <code className="text-accent-gold font-mono">{mcpUrl || "http://127.0.0.1:22346/mcp"}</code>
+                    </span>
+                    <span>State: <strong className="text-neon-red">{circuitBreakerState || "TRIPPED"}</strong></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">

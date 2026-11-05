@@ -1,8 +1,6 @@
 ﻿"use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   Bot,
   Send,
@@ -234,10 +232,8 @@ Silakan tanyakan apa saja seputar jurnal dan statistik Anda!`,
                   : "bg-bg-base/40 border-border-subtle/40 text-text-primary rounded-tl-none"
               } leading-relaxed`}
             >
-              <div className="prose prose-invert max-w-none text-xs md:text-sm prose-p:my-1 prose-ul:my-1 prose-li:my-0.5">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
+              <div className="prose prose-invert max-w-none text-xs md:text-sm whitespace-pre-wrap">
+                {msg.content}
               </div>
             </div>
           </div>

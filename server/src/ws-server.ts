@@ -10,6 +10,9 @@ export interface AuthenticatedWebSocket extends WebSocket {
   channels: Set<MacroChannel>;
   isAuthenticated: boolean;
   isAlive: boolean;
+  // Explicitly declare WebSocket properties TypeScript doesn't pick up from extension
+  readyState: number;
+  bufferedAmount: number;
 }
 
 let wss: WebSocketServer | undefined;

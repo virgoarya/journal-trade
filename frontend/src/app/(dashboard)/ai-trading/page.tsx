@@ -28,6 +28,7 @@ import { usePaymentGate } from "./hooks/usePaymentGate";
 import { toast } from "sonner";
 import { useMarketDataStore } from "./stores/market-data.store";
 import { useConfigStore } from "./stores/config.store";
+import { HUDErrorBoundary } from "./components/HUDErrorBoundary";
 
 type Tab = "trading" | "backtest";
 
@@ -314,6 +315,7 @@ function AITradingPageContent() {
 
   return (
     <div className="min-h-screen p-4 pb-24 font-mono">
+      <HUDErrorBoundary>
       {/* Reconnecting Overlay */}
       {isReconnecting && !offlinePreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -549,6 +551,7 @@ function AITradingPageContent() {
         onClose={handleClosePaymentModal}
         onSuccess={handlePaymentSuccess}
       />
+      </HUDErrorBoundary>
 
     </div>
   );

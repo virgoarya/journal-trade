@@ -237,6 +237,7 @@ import { riskManagerService } from "../services/risk-manager.service";
 import { agentConsensusService } from "../services/agent-consensus.service";
 import { llmConsensusService } from "../services/llm-consensus.service";
 import { marketRegimeService } from "../services/market-regime.service";
+import { macroNewsService } from "../services/macro-news.service";
 import { AITradeLog } from "../models/AITradeLog";
 
 // vitest.config.ts sets mockReset:true, which wipes the implementations given
@@ -283,6 +284,13 @@ beforeEach(() => {
   vi.mocked(AITradeLog.find).mockImplementation(() => ({ sort: () => ({ limit: () => ({ lean: async () => [] }) }) }) as any);
   vi.mocked(marketRegimeService.analyze).mockImplementation(() => ({ regime: "NEUTRAL", adx: 20, volatility: 1, confidence: 50 }) as any);
   vi.mocked(mt5McpService.getHistory).mockImplementation(async () => [] as any);
+  vi.mocked(macroNewsService.getMacroContext).mockImplementation(async () => ({
+    avoidTrading: false,
+    highImpactEvents: [],
+    summary: "mocked",
+    error: false,
+  }) as any);
+  vi.mocked(macroNewsService.getSentimentScore).mockImplementation(async () => 0 as any);
 });
 
 function setStore(agentConsensus: any) {

@@ -83,9 +83,14 @@ export function PositionsTable({
   };
 
   const [isClosingAll, setIsClosingAll] = useState(false);
+  const [isConfirmingCloseAll, setIsConfirmingCloseAll] = useState(false);
   const handleCloseAll = async () => {
-    if (!window.confirm("Are you sure you want to close ALL open positions?")) return;
+    if (!isConfirmingCloseAll) {
+      setIsConfirmingCloseAll(true);
+      return;
+    }
     setIsClosingAll(true);
+    setIsConfirmingCloseAll(false);
     try {
       for (const pos of marketPositions) {
         try {
@@ -173,6 +178,8 @@ if (error) {
                 >
                   {isClosingAll ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isConfirmingCloseAll ? (
+                    <span className="text-xs font-bold">⚠ Click again to confirm</span>
                   ) : (
                     <XCircle className="w-3.5 h-3.5" />
                   )}
@@ -192,7 +199,7 @@ if (error) {
               </div>
             )}
 
-            {marketPositions.length === 0 && !error ? (
+            {marketPositions.length === 0 ? (
               <div className="px-4 py-8 text-center text-gray-500 text-sm">
                 No open positions
               </div>

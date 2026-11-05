@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type MethodologyName = "smc" | "ict" | "msnr";
+export type MethodologyName = "smc" | "ict" | "msnr" | "ictCrt";
 
 export interface IUserSettings extends Document {
   userId: string;
@@ -25,6 +25,14 @@ export interface IUserSettings extends Document {
       threshold: number;
       providerTimeoutMs: number;
     };
+    agentConsensus?: {
+      enabled: boolean;
+      debateMode: "parallel" | "sequential";
+      memoryEnabled: boolean;
+      toolEnabled: boolean;
+      threshold: number;
+    };
+    macroNewsFailSafe?: boolean;
   };
   savedPipelineConfig?: Record<string, any>;
   savedPipelineConfigs?: Map<string, Record<string, any>>;
@@ -35,11 +43,20 @@ const DEFAULT_METHODOLOGY_WEIGHTS: Record<MethodologyName, number> = {
   smc: 1.0,
   ict: 1.0,
   msnr: 0.8,
+  ictCrt: 0.9,
 };
 
 const DEFAULT_ACTIVE_METHODOLOGIES: MethodologyName[] = [
-  "smc", "ict", "msnr"
+  "smc", "ict", "msnr", "ictCrt"
 ];
+
+const DEFAULT_AGENT_CONSENSUS = {
+  enabled: false,
+  debateMode: "parallel" as const,
+  memoryEnabled: true,
+  toolEnabled: true,
+  threshold: 0.6,
+};
 
 const UserSettingsSchema = new Schema<IUserSettings>({
   userId: { type: String, required: true, unique: true, index: true },
@@ -63,7 +80,7 @@ const UserSettingsSchema = new Schema<IUserSettings>({
     },
     activeMethodologies: {
       type: [String],
-      enum: ["smc", "ict", "msnr"],
+      enum: ["smc", "ict", "msnr", "ictCrt"],
       default: () => DEFAULT_ACTIVE_METHODOLOGIES,
     },
     llmConsensus: {
@@ -72,6 +89,14 @@ const UserSettingsSchema = new Schema<IUserSettings>({
       threshold: { type: Number, default: 0.5 },
       providerTimeoutMs: { type: Number, default: 8000 },
     },
+    agentConsensus: {
+      enabled: { type: Boolean, default: false },
+      debateMode: { type: String, enum: ["parallel", "sequential"], default: "parallel" },
+      memoryEnabled: { type: Boolean, default: true },
+      toolEnabled: { type: Boolean, default: true },
+      threshold: { type: Number, default: 0.6 },
+    },
+    macroNewsFailSafe: { type: Boolean, default: false },
   },
   savedPipelineConfig: { type: Schema.Types.Mixed },
   savedPipelineConfigs: { type: Schema.Types.Mixed, default: {} },
@@ -82,4 +107,4 @@ const UserSettingsSchema = new Schema<IUserSettings>({
 });
 
 export const UserSettings = mongoose.models.UserSettings || mongoose.model<IUserSettings>("UserSettings", UserSettingsSchema);
-export { DEFAULT_METHODOLOGY_WEIGHTS, DEFAULT_ACTIVE_METHODOLOGIES };
+export { DEFAULT_METHODOLOGY_WEIGHTS, DEFAULT_ACTIVE_METHODOLOGIES, DEFAULT_AGENT_CONSENSUS };

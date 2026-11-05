@@ -5,10 +5,12 @@ interface Props {
   threshold: number;
   debateMode: "parallel" | "sequential";
   memoryEnabled: boolean;
+  toolEnabled: boolean;
   onToggle: (value: boolean) => void;
   onThresholdChange: (value: number) => void;
   onDebateModeChange: (value: "parallel" | "sequential") => void;
   onMemoryChange: (value: boolean) => void;
+  onToolChange: (value: boolean) => void;
 }
 
 export function AgentConsensusConfig({
@@ -16,10 +18,12 @@ export function AgentConsensusConfig({
   threshold,
   debateMode,
   memoryEnabled,
+  toolEnabled,
   onToggle,
   onThresholdChange,
   onDebateModeChange,
   onMemoryChange,
+  onToolChange,
 }: Props) {
   return (
     <div className="border-t border-accent-gold/20 pt-3 mt-3 space-y-3">
@@ -47,6 +51,10 @@ export function AgentConsensusConfig({
       <label className="flex items-center justify-between text-[10px] text-text-muted cursor-pointer">
         Memory injection
         <input aria-label="Enable agent memory" type="checkbox" checked={memoryEnabled} onChange={(e) => onMemoryChange(e.target.checked)} className="accent-accent-gold" />
+      </label>
+      <label className="flex items-center justify-between text-[10px] text-text-muted cursor-pointer">
+        Tool use
+        <input aria-label="Enable agent tools" type="checkbox" checked={toolEnabled} onChange={(e) => onToolChange(e.target.checked)} className="accent-accent-gold" />
       </label>
     </div>
   );

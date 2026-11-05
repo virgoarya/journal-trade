@@ -237,6 +237,45 @@ router.get("/rates", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/ai-trading/rates/range
+ * Get OHLCV rates for a symbol within a date range (for backtesting/replay).
+ */
+router.get("/rates/range", async (req, res, next) => {
+  try {
+    if (!mt5McpService.isConnected) {
+      return apiResponse.error(res, "MT5 not connected", "NOT_CONNECTED", 400);
+    }
+
+    const { symbol, timeframe, from, to } = req.query as any;
+    if (!symbol || !from || !to) {
+      return apiResponse.error(res, "Symbol, from, and to required", "VALIDATION", 400);
+    }
+
+    const fromTs = parseInt(from);
+    const toTs = parseInt(to);
+    if (isNaN(fromTs) || isNaN(toTs)) {
+      return apiResponse.error(res, "Invalid timestamp", "VALIDATION", 400);
+    }
+
+    // Limit range to reasonable size (max ~1 year of M1 data = ~525600 candles)
+    if (toTs - fromTs > 365 * 24 * 60 * 60) {
+      return apiResponse.error(res, "Date range too large (max 1 year)", "VALIDATION", 400);
+    }
+
+    const rates = await mt5McpService.getRatesRange(
+      symbol,
+      timeframe || "M15",
+      fromTs,
+      toTs,
+    );
+
+    return apiResponse.success(res, { symbol, rates });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==================== POSITIONS ====================
 
 /**

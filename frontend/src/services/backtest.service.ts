@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api-client";
+import { StreamCandleSchema } from "@/types/stream-validation";
 
 // ─── SSE Stream Event Types ──────────────────────────────────────────
 
@@ -410,6 +411,49 @@ class BacktestService {
       `/api/v1/backtest/${id}`,
     );
     return res;
+  }
+
+  /**
+   * Helper to validate and connect to SSE stream with heartbeat monitor.
+   */
+  connectStream(url: string, onMessage: (data: any) => void) {
+    const eventSource = new EventSource(url);
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+
+    const resetHeartbeat = () => {
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      heartbeatTimer = setTimeout(() => {
+        console.warn("Backtest SSE: No data received for 10s");
+      }, 10000);
+    };
+
+    resetHeartbeat();
+
+    eventSource.onmessage = (event) => {
+      resetHeartbeat();
+      const parsed = JSON.parse(event.data);
+      if (parsed.type === "candle") {
+        const result = StreamCandleSchema.safeParse(parsed.data);
+        if (!result.success) {
+          console.error("Invalid StreamCandle data:", result.error);
+          return;
+        }
+        onMessage({ ...parsed, data: result.data });
+      } else {
+        onMessage(parsed);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("EventSource failed:", err);
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      eventSource.close();
+    };
+
+    return () => {
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      eventSource.close();
+    };
   }
 }
 

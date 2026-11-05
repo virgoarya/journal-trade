@@ -152,6 +152,8 @@ Integrasi dengan program MetaTrader 5 lokal/VPS untuk auto-sync trade.
   - Cek apakah gateway MT5 sedang terhubung dan melihat detail lisensi/koneksi terminal.
 - `GET /positions` **[Auth Required]**
   - Mengambil posisi trading aktif saat ini yang sedang berjalan di terminal MT5.
+- `GET /prices`
+  - Katalog harga paket (booster-aware). Mengembalikan detail registrasi dan paket (basic/pro/premium) dengan `amountIDR` (diskon) dan `baseAmountIDR` (undiscounted).
 - `POST /connect` **[Auth Required]**
   - Memulai jabat tangan (handshake) dan mengaktifkan koneksi ke MT5.
 - `POST /disconnect` **[Auth Required]**

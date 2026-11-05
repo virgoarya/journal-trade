@@ -2,8 +2,8 @@
 
 import { BrainCircuit } from "lucide-react";
 import { useState, useEffect } from "react";
-import { MODEL_COLORS, type LlmModelNode } from "../types";
-import type { LLMConsensusResult } from "../types";
+import { MODEL_COLORS, type LlmModelNode } from "../types/index";
+import type { LLMConsensusResult } from "../types/index";
 
 // ─── Constants ───────────────────────────────────────────────────
 

@@ -25,6 +25,7 @@ import devTestRoutes from "./dev-test.routes";
 import paymentRoutes from "./payment.routes";
 import centralBankDifferentialsRoutes from "./central-bank-differentials.routes";
 import macroCandlesRoutes from "./macro-candles.routes";
+import agentConsensusRoutes from "./agent-consensus.routes";
 
 import { aiLimiter } from "../middleware/rate-limit";
 
@@ -82,6 +83,7 @@ router.use("/v1/macro-regime", macroRegimeRoutes);
 router.use("/v1/nexus", nexusRoutes);
 router.use("/v1/ai-coach", aiLimiter, aiCoachRoutes);
 router.use("/v1/ai-trading", aiTradingRoutes);
+router.use("/v1/agent-consensus", aiLimiter, agentConsensusRoutes);
 router.use("/v1/backtest", backtestRoutes);
 router.use("/v1/dev", devTestRoutes);
 router.use("/v1/broker-registration", brokerRegistrationRoutes);

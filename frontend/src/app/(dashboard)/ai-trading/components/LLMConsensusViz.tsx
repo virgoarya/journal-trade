@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useMemo, useState, useEffect, Suspense, lazy } from "react";
-import { type LLMConsensusResult, type LLMConsensusVote, MODEL_COLORS, type LlmModelNode, ALL_LLM_PROVIDERS } from "../types";
+import { type LLMConsensusResult, type LLMConsensusVote, MODEL_COLORS, type LlmModelNode, ALL_LLM_PROVIDERS } from "../types/index";
 import { SkeletonLoader } from "./SkeletonLoader";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LLMProviderCard } from "./LLMProviderCard";

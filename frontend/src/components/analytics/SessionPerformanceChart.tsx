@@ -54,7 +54,7 @@ export const SessionPerformanceChart: React.FC<SessionPerformanceChartProps> = (
             axisLine={false}
             tickLine={false}
             width={50}
-            tickFormatter={(value) => `$${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}`}
+            tickFormatter={(value: number) => `$${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}`}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(212,175,55,0.05)' }} />
           <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={80}>

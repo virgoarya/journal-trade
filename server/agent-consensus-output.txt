@@ -1,0 +1,211 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v4.1.12 D:/Journal Trade/server
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > route -> pipeline merge lands enabled:true in the live PipelineConfig (line 1250 predicate)
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > route -> pipeline merge lands enabled:true in the live PipelineConfig (line 1250 predicate)
+DEBUG: live.agentConsensus: {"enabled":true,"debateMode":"parallel","memoryEnabled":true,"toolEnabled":true,"threshold":0.6}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > rollback flag: enabled:false keeps the LLM path (ADR-0002)
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": false,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1b: which consensus service the live tick actually calls > agentConsensus.enabled=true -> runParallelDebate called, llmConsensus.evaluate NOT called
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1b: which consensus service the live tick actually calls > agentConsensus.enabled=false -> runParallelDebate NOT called, order proceeds to Stage 3
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": false,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: BAD verdict stops the order (gate parity with LLM branch)
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: SKIP verdict stops the order
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: GOOD verdict still opens the order (gate is not over-blocking)
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1d: store precedence at the merge (ai-trading.routes.ts:545-548) > broker store wins: aiTrading=false + savedPipelineConfigs[server]=true -> enabled:true
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+stdout | src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1d: store precedence at the merge (ai-trading.routes.ts:545-548) > stale broker store shadows a generic enable: aiTrading=true + savedPipelineConfigs[server]=false -> enabled:false
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": false,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > route -> pipeline merge lands enabled:true in the live PipelineConfig (line 1250 predicate) 228ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > rollback flag: enabled:false keeps the LLM path (ADR-0002) 11ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1: agentConsensus.enabled=true selects the Agent path > settings PATCH schema accepts agentConsensus (enables + rollback both writable) 1ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1b: which consensus service the live tick actually calls > agentConsensus.enabled=true -> runParallelDebate called, llmConsensus.evaluate NOT called 7ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1b: which consensus service the live tick actually calls > agentConsensus.enabled=false -> runParallelDebate NOT called, order proceeds to Stage 3 8ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: BAD verdict stops the order (gate parity with LLM branch) 6ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: SKIP verdict stops the order 6ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-2: verdict gate parity (agent branch must gate like the LLM branch) > agent branch: GOOD verdict still opens the order (gate is not over-blocking) 6ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1d: store precedence at the merge (ai-trading.routes.ts:545-548) > broker store wins: aiTrading=false + savedPipelineConfigs[server]=true -> enabled:true 5ms
+ ✓ src/__tests__/agent-consensus-routing-e2e.test.ts > AXIS-1d: store precedence at the merge (ai-trading.routes.ts:545-548) > stale broker store shadows a generic enable: aiTrading=true + savedPipelineConfigs[server]=false -> enabled:false 6ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  06:22:27
+   Duration  16.24s (transform 1.02s, setup 56ms, import 15.49s, tests 295ms, environment 0ms)
+

@@ -1,0 +1,252 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
+import { brokerRegistrationService } from "@/services/broker-registration.service";
+import { ArrowLeft, Check, ExternalLink, Loader2 } from "lucide-react";
+import { ValetaxRegistrationIframe } from "./components/ValetaxRegistrationIframe";
+
+type Step = "select" | "register" | "confirm";
+
+const EXNESS_REFERRAL = "https://one.exnessonelink.com/boarding/sign-up/a/c717fhr01j/?campaign=42313";
+
+export default function BrokerRegistrationPage() {
+  const router = useRouter();
+  const { data: session, isPending: sessionPending } = useSession();
+
+  const [step, setStep] = useState<Step>("select");
+  const [selectedBroker, setSelectedBroker] = useState<"exness" | "valetax" | null>(null);
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!sessionPending && !session) router.push("/");
+  }, [session, sessionPending, router]);
+
+  const handleSelect = (broker: "exness" | "valetax") => {
+    setSelectedBroker(broker);
+    setStep("register");
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedBroker || !email.trim()) return;
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      const result = await brokerRegistrationService.save({
+        referralBroker: selectedBroker,
+        referralEmail: email.trim(),
+      });
+
+      if (result.success) {
+        setStep("confirm");
+      } else {
+        setError(result.error || "Gagal menyimpan");
+      }
+    } catch (err: any) {
+      setError(err.message || "System error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(EXNESS_REFERRAL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  if (sessionPending) return null;
+
+  return (
+    <div className="h-screen bg-bg-void text-text-primary font-sans flex flex-col items-center justify-center p-4 relative overflow-hidden selection:bg-accent-gold/30 selection:text-primary">
+      <main className="w-full max-w-[640px] flex flex-col gap-4">
+        <button
+          onClick={() => (step === "select" ? router.push("/dashboard") : setStep("select"))}
+          className="flex items-center gap-2 text-text-muted hover:text-accent-gold transition text-xs uppercase tracking-widest self-start"
+        >
+          <ArrowLeft className="w-4 h-4" />{" "}
+          {step === "select" ? "Kembali" : "Ganti Broker"}
+        </button>
+
+        <div className="text-center space-y-2">
+          <h1 className="text-accent-gold text-xl font-bold tracking-[0.2em] uppercase">
+            Registrasi Broker
+          </h1>
+          <p className="text-text-muted text-xs tracking-wider">
+            Daftar akun broker baru untuk digunakan dengan AI Trading
+          </p>
+        </div>
+
+        {step === "select" && (
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6">
+            <p className="text-sm text-text-secondary">
+              Pilih salah satu broker di bawah untuk mendaftar akun baru.
+              Akun ini akan digunakan khusus untuk AI Trading.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                onClick={() => handleSelect("exness")}
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-4 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
+              >
+                <img src="/exness.png" alt="Exness" className="w-36 h-36 object-contain" />
+              </button>
+
+              <button
+                onClick={() => handleSelect("valetax")}
+                className="group bg-bg-surface border border-border-subtle rounded-xl p-4 hover:border-accent-gold/50 hover:bg-accent-gold/5 transition-all flex items-center justify-center"
+              >
+                <img src="/valetax.png" alt="Valetax" className="w-36 h-36 object-contain" />
+              </button>
+             </div>
+
+            {/* Disclaimer */}
+            <div className="p-3 bg-data-loss/5 border border-data-loss/10 rounded-xl text-center">
+              <p className="text-[9px] text-text-muted leading-relaxed">
+                <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
+                AI Trading melibatkan risiko finansial yang signifikan. Segala kerugian yang timbul dari penggunaan AI Trading
+                sepenuhnya menjadi tanggung jawab pengguna. Platform Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {step === "register" && selectedBroker && (
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-6 space-y-4">
+            {selectedBroker === "exness" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary mb-1">Daftar Exness</h3>
+                  <p className="text-[10px] text-text-muted">
+                    Klik tombol di bawah untuk membuka halaman pendaftaran Exness
+                  </p>
+                </div>
+
+                <a
+                  href={EXNESS_REFERRAL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between w-full bg-accent-gold text-bg-void px-5 py-3 rounded-xl text-xs font-bold tracking-widest uppercase hover:brightness-110 transition-all"
+                >
+                  Buka Halaman Pendaftaran
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+
+                <button
+                  onClick={copyLink}
+                  className="w-full text-center text-[10px] text-text-muted hover:text-accent-gold transition"
+                >
+                  {copied ? "Link tersalin" : "Atau salin link"}
+                </button>
+
+                <p className="text-[10px] text-text-muted mt-2">
+                  Setelah pendaftaran berhasil, cek inbox email Anda untuk Verifikasi/KYC akun broker.
+                </p>
+
+                <div className="border-t border-border-subtle pt-4">
+                  <p className="text-[10px] text-text-muted mb-2">
+                    Setelah selesai daftar, masukkan email yang digunakan:
+                  </p>
+                  <input
+                    type="email"
+                    required
+                    placeholder="email@contoh.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-2 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedBroker === "valetax" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary mb-1">Daftar Valetax</h3>
+                  <p className="text-[10px] text-text-muted">
+                    Gunakan form di bawah untuk mendaftar akun Valetax
+                  </p>
+                </div>
+
+                <ValetaxRegistrationIframe />
+
+                <p className="text-[10px] text-text-muted mt-2">
+                  Setelah pendaftaran berhasil, cek inbox email Anda untuk Verifikasi/KYC akun broker.
+                </p>
+
+                <div className="border-t border-border-subtle pt-4">
+                  <p className="text-[10px] text-text-muted mb-2">
+                    Setelah selesai daftar, masukkan email yang digunakan:
+                  </p>
+                  <input
+                    type="email"
+                    required
+                    placeholder="email@contoh.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-bg-input border border-border-subtle focus:border-accent-gold/50 focus:ring-0 rounded-xl px-4 py-2 text-text-primary text-sm transition-all placeholder:text-text-muted/30"
+                  />
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-3 bg-data-loss/10 border border-data-loss/20 rounded-xl text-data-loss text-xs">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleConfirm}
+              disabled={!email.trim() || isSubmitting}
+              className="w-full py-3 bg-accent-gold text-bg-void text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all disabled:opacity-40 uppercase"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...
+                </span>
+              ) : (
+                "Konfirmasi & Selesai"
+              )}
+            </button>
+
+            <p className="text-[9px] text-text-muted leading-relaxed text-center">
+              <span className="text-data-loss font-bold uppercase tracking-wider">Disclaimer:</span>{" "}
+              Dengan menekan tombol di atas, Anda menyetujui bahwa segala risiko dan kerugian dari penggunaan AI Trading
+              sepenuhnya menjadi tanggung jawab Anda. Hunter Trades tidak bertanggung jawab atas kerugian dana akun trading Anda.
+            </p>
+          </section>
+        )}
+
+        {step === "confirm" && (
+          <section className="bg-bg-elevated/70 backdrop-blur-xl border border-border-subtle rounded-2xl p-8 space-y-6 text-center">
+            <div className="w-16 h-16 bg-accent-gold/10 rounded-2xl flex items-center justify-center mx-auto">
+              <Check className="w-8 h-8 text-accent-gold" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-text-primary mb-2">Registrasi Tersimpan</h2>
+              <p className="text-sm text-text-secondary">
+                Data registrasi broker berhasil disimpan.
+                Kamu sekarang bisa menggunakan AI Trading.
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/ai-trading")}
+              className="px-10 py-3 bg-accent-gold text-bg-void text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all uppercase"
+            >
+              Lanjut ke AI Trading
+            </button>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

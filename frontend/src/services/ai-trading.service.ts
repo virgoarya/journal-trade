@@ -116,12 +116,9 @@ export interface PipelineConfig {
     enabled: boolean;
     threshold?: number;
     memoryEnabled?: boolean;
-    agentWeights?: {
-      hawk?: number;
-      dove?: number;
-      contrarian?: number;
-    };
+    toolEnabled?: boolean;
   };
+  macroNewsFailSafe?: boolean;
   smartRisk?: {
     enabled: boolean;
     capitalPreservation?: {
@@ -184,6 +181,7 @@ export interface PipelineStatus {
   running: boolean;
   paused: boolean;
   startedAt: string | null;
+  fetchedAt?: string;
   config: PipelineConfig | null;
   /** If pipeline was auto-stopped by a circuit breaker, this is the reason shown to the user */
   circuitBreakerReason?: string;
@@ -417,6 +415,14 @@ class AITradingService {
     return res;
   }
 
+  async getRatesRange(symbol: string, timeframe: string, from: number, to: number) {
+    const params = new URLSearchParams({ symbol, timeframe, from: String(from), to: String(to) });
+    const res = await apiClient.get<{ rates: Rate[] }>(
+      `/api/v1/ai-trading/rates/range?${params}`,
+    );
+    return res;
+  }
+
   // ── Positions ──────────────────────────────────────────────────────
   async getPositions() {
     const res = await apiClient.get<{ positions: Position[]; orders?: any[]; total: number }>(
@@ -617,7 +623,9 @@ class AITradingService {
         threshold: number;
         debateMode: "parallel" | "sequential";
         memoryEnabled: boolean;
+        toolEnabled: boolean;
       };
+      macroNewsFailSafe?: boolean;
       savedPipelineConfig?: PipelineConfig;
       lastAutoBacktestAt?: string;
     }>(`/api/v1/settings/ai-trading${query}`);
@@ -640,6 +648,7 @@ class AITradingService {
       memoryEnabled?: boolean;
       toolEnabled?: boolean;
     };
+    macroNewsFailSafe?: boolean;
   }) {
     const res = await apiClient.patch<{
       methodologyWeights: MethodologyWeights;
@@ -650,6 +659,14 @@ class AITradingService {
         threshold: number;
         providerTimeoutMs: number;
       };
+      agentConsensus?: {
+        enabled: boolean;
+        threshold: number;
+        debateMode: "parallel" | "sequential";
+        memoryEnabled: boolean;
+        toolEnabled: boolean;
+      };
+      macroNewsFailSafe?: boolean;
     }>("/api/v1/settings/ai-trading", params);
     return res;
   }

@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useMemo, Component, ErrorInfo, ReactNode } from "react";
+import React, { useState, useMemo, useCallback, Component, ErrorInfo, ReactNode } from "react";
 import {
   type BacktestResult as BacktestResultData,
   type BacktestAnalysis,
+  type BacktestTrade,
 } from "@/services/backtest.service";
+import { TradingChart } from "./TradingChart";
+import { useMarketReplay } from "../hooks/useMarketReplay";
+import { ReplayControls } from "./TradingChart";
 import {
   Loader2,
   TrendingUp,
@@ -52,18 +56,24 @@ const safeDateStr = (ts: any): string => {
   if (isNaN(num)) return "-";
   const ms = num < 1e11 ? num * 1000 : num;
   const date = new Date(ms);
-  if (isNaN(date.getTime())) return "-";
-  return date.toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
+  return isNaN(date.getTime()) ? "-" : date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 };
 
+// ── Error Boundary ──────────────────────────────────────────────────────
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
 interface Props {
-  result: BacktestResultData;
+  result: BacktestResultData | null;
   analysis: BacktestAnalysis | null;
   isAnalyzing: boolean;
   onAnalyze: () => void;
@@ -71,31 +81,7 @@ interface Props {
   isApplying: boolean;
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  color = "text-text-primary",
-  sub,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  color?: string;
-  sub?: string;
-}) {
-  return (
-    <div className="bg-black/40 border border-accent-gold/10 rounded-lg p-4 flex flex-col items-center justify-center text-center transition-all hover:bg-black/60 hover:border-accent-gold/30 hover:shadow-lg">
-      <Icon className={`w-5 h-5 ${color.includes("text-") ? color : "text-text-muted"} mb-2.5`} />
-      <p className="text-text-muted text-[10px] uppercase tracking-[0.2em] font-semibold mb-1">{label}</p>
-      <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
-      {sub && <p className="text-[9px] text-text-muted/70 mt-1 font-mono">{sub}</p>}
-    </div>
-  );
-}
-
-// ── React Error Boundary to prevent page crashes ─────────────────────
-class BacktestResultErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+class BacktestResultErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -208,9 +194,39 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
       ? "text-yellow-400"
       : "text-red-400";
 
+  // MetricCard component
+  const MetricCard = ({
+    icon: Icon,
+    label,
+    value,
+    color = "text-text-secondary",
+    sub = null,
+  }: {
+    icon: React.ElementType;
+    label: string;
+    value: string;
+    color?: string;
+    sub?: string | null;
+  }) => (
+    <div className="bg-surface/60 border border-border-subtle/80 rounded-xl p-4 flex flex-col items-start gap-1">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-text-muted" />
+        <span className="text-[10px] uppercase tracking-wider text-text-muted font-mono">{label}</span>
+      </div>
+      <div className={`font-mono font-bold text-text-primary ${color} text-xl tracking-wide`}>{value}</div>
+      {sub && <span className="text-[9px] text-text-muted font-mono">{sub}</span>}
+    </div>
+  );
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass p-6 space-y-6 relative overflow-hidden">
-      <div className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-3xl pointer-events-none ${isProfitable ? "bg-green-500/10" : "bg-red-500/10"}`} />
+    <div className="glass p-6 space-y-6 relative overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+      <div
+        className={`absolute -top-32 -left-32 w-64 h-64 rounded-full blur-3xl pointer-events-none ${isProfitable ? "bg-green-500/10" : "bg-red-500/10"}`}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-accent-gold/20 pb-4 relative z-10">
@@ -290,6 +306,18 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
         </div>
       )}
 
+      {/* Market Replay - Replay trades on historical price data */}
+      {(result.symbols && result.symbols.length > 0 && result.timeframe) && (
+        <ReplaySection
+          symbol={result.symbols[0]}
+          timeframe={result.timeframe as any}
+          fromDate={result.fromDate}
+          toDate={result.toDate}
+          trades={result.trades}
+          equityCurve={result.equityCurve}
+        />
+      )}
+
       {/* Symbol Performance */}
       {result.symbolStats && Array.isArray(result.symbolStats) && result.symbolStats.length > 0 && (
         <div className="space-y-4 relative z-10">
@@ -360,9 +388,10 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
                 const worstStat = allStats.length ? [...allStats].sort((a: any, b: any) => safeNum(a?.totalPnL) - safeNum(b?.totalPnL))[0] : null;
                 const isBest = bestStat?.methodology === meth.methodology && safeNum(meth.totalPnL) > 0;
                 const isWorst = worstStat?.methodology === meth.methodology && safeNum(meth.totalPnL) < 0;
+
                 return (
                   <tr key={idx} className="hover:bg-surface/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-text-primary flex items-center gap-2 capitalize">
+                    <td className="px-4 py-3 font-medium text-text-primary flex items-center gap-2 whitespace-nowrap">
                       {meth.methodology || "-"}
                       {isBest && <span className="text-[8px] bg-green-500/20 text-green-400 px-1 rounded">BEST</span>}
                       {isWorst && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 rounded">WORST</span>}
@@ -377,7 +406,7 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
                     <td className={`px-4 py-3 text-right font-mono font-medium ${safeNum(meth.totalPnL) >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {safeNum(meth.totalPnL) >= 0 ? "+" : ""}${safeFixed(meth.totalPnL, 2)}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-text-muted">{safeFixed(meth.avgConfidence, 0)}%</td>
+                    <td className="px-4 py-3 text-right font-mono text-text-secondary">{safeFixed(meth.avgConfidence, 0)}%</td>
                   </tr>
                 );
               })}
@@ -386,14 +415,14 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
         </div>
       </div>
 
-      {/* ── MARKET SESSION PERFORMANCE ── */}
+      {/* Session Performance */}
       {result.sessionStats && Array.isArray(result.sessionStats) && result.sessionStats.length > 0 && (
         <div className="space-y-4 pt-6 border-t border-border-subtle relative z-10">
           <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
             <Clock className="w-4 h-4 text-accent-gold" />
-            Market Session Performance (Entry Time)
+            Session Performance
           </h4>
-          <div className="bg-surface/80 border border-border-subtle/80 rounded-xl overflow-hidden overflow-x-auto">
+          <div className="bg-surface/80 border border-border-subtle/80 rounded-xl overflow-hidden">
             <table className="w-full text-left text-sm text-text-muted">
               <thead className="bg-surface/50 text-xs uppercase text-text-muted border-b border-border-subtle">
                 <tr>
@@ -405,137 +434,119 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
-                {result.sessionStats.map((sess, idx) => {
-                  const allStats = result.sessionStats || [];
-                  const bestStat = allStats.length ? [...allStats].sort((a: any, b: any) => safeNum(b?.totalPnL) - safeNum(a?.totalPnL))[0] : null;
-                  const worstStat = allStats.length ? [...allStats].sort((a: any, b: any) => safeNum(a?.totalPnL) - safeNum(b?.totalPnL))[0] : null;
-                  const isBest = bestStat?.session === sess.session && safeNum(sess.totalPnL) > 0;
-                  const isWorst = worstStat?.session === sess.session && safeNum(sess.totalPnL) < 0;
-                  const color = sess.session === "Asian" ? "text-yellow-400" : sess.session === "London" ? "text-blue-400" : sess.session === "New York" ? "text-red-400" : "text-gray-400";
-                  return (
-                    <tr key={idx} className="hover:bg-surface/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-text-primary flex items-center gap-2">
-                        <span className={color}>{sess.session}</span>
-                        {isBest && <span className="text-[8px] bg-green-500/20 text-green-400 px-1 rounded">BEST</span>}
-                        {isWorst && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 rounded">WORST</span>}
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono">{safeNum(sess.totalTrades)}</td>
-                      <td className="px-4 py-3 text-center font-mono">{safeFixed(sess.winRate, 1)}%</td>
-                      <td className="px-4 py-3 text-center font-mono text-xs">
-                        <span className="text-green-400">{safeNum(sess.winningTrades)}W</span>
-                        <span className="text-text-muted"> / </span>
-                        <span className="text-red-400">{safeNum(sess.losingTrades)}L</span>
-                      </td>
-                      <td className={`px-4 py-3 text-right font-mono font-medium ${safeNum(sess.totalPnL) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {safeNum(sess.totalPnL) >= 0 ? "+" : ""}${safeFixed(sess.totalPnL, 2)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {(result.sessionStats || []).map((sess, idx) => (
+                  <tr key={idx} className="hover:bg-surface/30 transition-colors">
+                    <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">{sess.session || "-"}</td>
+                    <td className="px-4 py-3 text-center font-mono">{safeNum(sess.totalTrades)}</td>
+                    <td className="px-4 py-3 text-center font-mono">{safeFixed(sess.winRate, 1)}%</td>
+                    <td className="px-4 py-3 text-center font-mono text-xs">
+                      <span className="text-green-400">{safeNum(sess.winningTrades)}W</span>
+                      <span className="text-text-muted"> / </span>
+                      <span className="text-red-400">{safeNum(sess.losingTrades)}L</span>
+                    </td>
+                    <td className={`px-4 py-3 text-right font-mono font-medium ${safeNum(sess.totalPnL) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {safeNum(sess.totalPnL) >= 0 ? "+" : ""}${safeFixed(sess.totalPnL, 2)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-3 relative z-10">
-        <button
-          onClick={onAnalyze}
-          disabled={isAnalyzing || !result.backtestId}
-          className="flex-1 py-3 px-4 bg-surface border border-blue-900/40 text-blue-400 hover:bg-blue-950/50 hover:border-blue-800/60 font-medium rounded-xl flex justify-center items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
-          <span>{isAnalyzing ? "Analyzing..." : "Run AI Analysis"}</span>
-        </button>
-        <button
-          onClick={onApplyToPipeline}
-          disabled={isApplying || !result.backtestId}
-          className="flex-1 py-3 px-4 bg-accent-gold text-black border border-accent-gold hover:bg-accent-gold/90 font-semibold rounded-xl flex justify-center items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-[0_0_15px_rgba(212,175,55,0.2)]"
-        >
-          {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-          <span>Apply to Live Pipeline</span>
-        </button>
-      </div>
-
       {/* AI Analysis */}
       {isAnalyzing && (
-        <div className="flex items-center justify-center py-8 relative z-10">
-          <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-          <span className="ml-2 text-sm text-text-muted">Analyzing backtest patterns...</span>
+        <div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex items-center justify-center py-8 relative z-10">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+              <span className="ml-2 text-sm text-text-muted">Analyzing backtest patterns...</span>
+            </div>
+          </motion.div>
         </div>
       )}
 
       {analysis && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pt-6 border-t border-border-subtle relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-text-primary flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-              </span>
-              AI Insight Engine
-            </h4>
-            {analysis.confidenceToApply && (
-              <span className="text-xs font-medium text-text-muted bg-surface px-2 py-1 rounded-md border border-border-subtle">
-                Confidence: <span className="text-text-primary">{analysis.confidenceToApply}%</span>
-              </span>
-            )}
-          </div>
-
-          {analysis.methodologyRecommendations && analysis.methodologyRecommendations.length > 0 && (
-            <div className="mb-4 p-4 bg-surface/80 border border-border-subtle/80 rounded-xl">
-              <p className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-3 flex items-center gap-2">
-                <Layers className="w-3 h-3" /> Methodology Recommendations
-              </p>
-              {analysis.methodologyRecommendations.map((r, i) => {
-                const vColor = r.verdict === "KEEP" ? "text-green-400" : r.verdict === "ADJUST" ? "text-yellow-400" : "text-red-400";
-                return (
-                  <div key={i} className="flex items-start gap-2 text-sm text-text-secondary mb-2">
-                    <span className={`font-semibold shrink-0 ${vColor}`}>{r.verdict}</span>
-                    <span className="text-text-muted">{r.methodology}:</span>
-                    <span>{r.reason}</span>
-                  </div>
-                );
-              })}
+        <div>
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+          >
+            <div className="pt-6 border-t border-border-subtle relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold text-text-primary flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                </span>
+                AI Insight Engine
+              </h4>
+              {analysis.confidenceToApply && (
+                <span className="text-xs font-medium text-text-muted bg-surface px-2 py-1 rounded-md border border-border-subtle">
+                  Confidence: <span className="text-text-primary">{analysis.confidenceToApply}%</span>
+                </span>
+              )}
             </div>
-          )}
 
-          <div className="p-5 bg-surface/80 border border-border-subtle/80 rounded-xl">
-            <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap font-sans">{analysis.summary}</p>
-            {analysis.strengths?.length > 0 && (
-              <div className="mt-4 space-y-1">
-                {analysis.strengths.map((s, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                    <span className="text-text-secondary">{s}</span>
-                  </div>
-                ))}
+            {analysis.methodologyRecommendations && analysis.methodologyRecommendations.length > 0 && (
+              <div className="mb-4 p-4 bg-surface/80 border border-border-subtle/80 rounded-xl">
+                <p className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-3 flex items-center gap-2">
+                  <Layers className="w-3 h-3" /> Methodology Recommendations
+                </p>
+                {analysis.methodologyRecommendations.map((r, i) => {
+                  const vColor = r.verdict === "KEEP" ? "text-green-400" : r.verdict === "ADJUST" ? "text-yellow-400" : "text-red-400";
+                  return (
+                    <div key={i} className="flex items-start gap-2 text-sm text-text-secondary mb-2">
+                      <span className={`font-semibold shrink-0 ${vColor}`}>{r.verdict}</span>
+                      <span className="text-text-muted">{r.methodology}:</span>
+                      <span>{r.reason}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
-            {analysis.weaknesses?.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {analysis.weaknesses.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm">
-                    <span className="w-4 h-4 text-red-400 mt-0.5 shrink-0 text-center">!</span>
-                    <span className="text-text-secondary">{w}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {analysis.lessonsLearned?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border-subtle">
-                <h5 className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-3">Lessons</h5>
-                {analysis.lessonsLearned.map((l, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-text-muted mb-1">
-                    <ChevronRight className="w-4 h-4 text-accent-gold mt-0.5 shrink-0" />
-                    <span>{l}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
+
+            <div className="p-5 bg-surface/80 border border-border-subtle/80 rounded-xl">
+              <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap font-sans">{analysis.summary}</p>
+              {analysis.strengths?.length > 0 && (
+                <div className="mt-4 space-y-1">
+                  {analysis.strengths.map((s, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                      <span className="text-text-secondary">{s}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analysis.weaknesses?.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {analysis.weaknesses.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <span className="w-4 h-4 text-red-400 mt-0.5 shrink-0 text-center">!</span>
+                      <span className="text-text-secondary">{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analysis.lessonsLearned?.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border-subtle">
+                  <h5 className="text-xs uppercase tracking-wider text-text-muted font-semibold mb-3">Lessons</h5>
+                  {analysis.lessonsLearned.map((l, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-text-muted mb-1">
+                      <ChevronRight className="w-4 h-4 text-accent-gold mt-0.5 shrink-0" />
+                      <span>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       {/* Trade History */}
@@ -557,21 +568,21 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
                     <th className="text-left px-3 py-2">Entry</th>
                     <th className="text-left px-3 py-2">Exit</th>
                     <th className="text-center px-3 py-2">Dir</th>
-                    <th className="text-right px-3 py-2">Lot</th>
-                    <th className="text-right px-3 py-2">Entry</th>
-                    <th className="text-right px-3 py-2">Exit</th>
+                    <th className="text-center px-3 py-2">Vol</th>
+                    <th className="text-right px-3 py-2">Entry Px</th>
+                    <th className="text-right px-3 py-2">Exit Px</th>
                     <th className="text-right px-3 py-2">PnL</th>
-                    <th className="text-right px-3 py-2">RR</th>
+                    <th className="text-right px-3 py-2">R</th>
                     <th className="text-center px-3 py-2">Method</th>
                     <th className="text-center px-3 py-2">Reason</th>
                     <th className="text-center px-3 py-2">Conf</th>
                     <th className="text-left px-3 py-2">Comment</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800/50">
+                <tbody className="divide-y divide-gray-800/30">
                   {paginatedTrades.map((t, i) => (
-                    <tr key={i} className="hover:bg-bg-input/30">
-                      <td className="px-3 py-2 text-text-muted font-mono">{(t as any).symbol || "-"}</td>
+                    <tr key={i} className="hover:bg-surface/30 transition-colors">
+                      <td className="px-3 py-2 text-text-secondary font-mono text-[11px]">{t.symbol || "-"}</td>
                       <td className="px-3 py-2 text-text-secondary text-[11px]">{safeDateStr(t.entryTime)}</td>
                       <td className="px-3 py-2 text-text-secondary text-[11px]">{safeDateStr(t.exitTime)}</td>
                       <td className="px-3 py-2 text-center">
@@ -630,6 +641,124 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
         )}
       </div>
     </motion.div>
+  </div>
+  );
+}
+
+// ============================================================================
+// Replay Section - Replay backtest trades on historical price data
+// ============================================================================
+
+interface ReplaySectionProps {
+  symbol: string;
+  timeframe: "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1";
+  fromDate: string;
+  toDate: string;
+  trades: BacktestTrade[];
+  equityCurve: Array<{ time: number; equity: number; floatingPnL?: number; openTrades?: number }>;
+}
+
+function ReplaySection({ symbol, timeframe, fromDate, toDate, trades, equityCurve }: ReplaySectionProps) {
+  const { state, loadHistory, play, pause, stop, setSpeed, jumpTo, stepForward, stepBackward, progress } = useMarketReplay();
+  const [showReplay, setShowReplay] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Convert trades to signals for TradingChart
+  const signals = useMemo(() => {
+    return trades.map(t => ({
+      time: t.entryTime,
+      type: (t.direction === "BUY" ? "buy" : "sell") as "buy" | "sell",
+      price: t.entryPrice,
+      label: t.direction === "BUY" ? "BUY" : "SELL",
+    }));
+  }, [trades]);
+
+  const handleLoadReplay = useCallback(async () => {
+    try {
+      const from = new Date(fromDate).getTime() / 1000;
+      const to = new Date(toDate).getTime() / 1000;
+      await loadHistory(symbol, timeframe, from, to);
+      setHistoryLoaded(true);
+    } catch (err) {
+      console.error("Failed to load replay history:", err);
+    }
+  }, [loadHistory, symbol, timeframe, fromDate, toDate]);
+
+  if (!showReplay && !historyLoaded) {
+    return (
+      <div className="mt-6 border-t border-accent-gold/20 pt-6 relative z-10">
+        <button
+          onClick={() => setShowReplay(true)}
+          className="flex items-center gap-2 w-full py-3 bg-black/30 border border-accent-gold/20 hover:bg-black/50 hover:border-accent-gold/40 rounded-xl text-text-primary transition-all font-mono text-sm"
+        >
+          <BarChart3 className="w-5 h-5 text-accent-gold" />
+          <span className="font-medium">Load Market Replay</span>
+          <span className="text-text-muted ml-auto">Replay {symbol} {timeframe} trades</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 border-t border-accent-gold/20 pt-6 relative z-10 space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+          <Activity className="w-4 h-4 text-accent-gold" />
+          Market Replay - {symbol} {timeframe}
+        </h4>
+        <button
+          onClick={() => setShowReplay(false)}
+          className="text-xs text-text-muted hover:text-text-primary font-mono uppercase"
+        >
+          Hide Replay
+        </button>
+      </div>
+
+      {!historyLoaded ? (
+        <div className="bg-black/30 border border-accent-gold/10 rounded-xl p-6 flex flex-col items-center justify-center space-y-4 text-center">
+          <p className="text-text-muted">Click to load historical data from MT5 for replay</p>
+          <button
+            onClick={handleLoadReplay}
+            className="px-6 py-2.5 bg-accent-gold/10 border border-accent-gold/40 text-accent-gold hover:bg-accent-gold/20 rounded-lg font-bold text-sm uppercase tracking-wider transition-all"
+          >
+            Load History from MT5
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-4">
+            <TradingChart
+              candles={state.candles}
+              currentIndex={state.currentIndex}
+              totalCandles={state.totalCandles}
+              isPlaying={state.isPlaying}
+              speed={state.speed}
+              symbol={symbol}
+              timeframe={timeframe}
+              signals={signals}
+              height={400}
+            />
+          </div>
+          <ReplayControls
+            isPlaying={state.isPlaying}
+            speed={state.speed}
+            currentIndex={state.currentIndex}
+            totalCandles={state.totalCandles}
+            progress={progress}
+            currentTime={state.currentIndex >= 0 ? state.candles[state.currentIndex]?.time ?? null : null}
+            startTime={state.candles[0]?.time ?? null}
+            endTime={state.candles[state.candles.length - 1]?.time ?? null}
+            onPlay={play}
+            onPause={pause}
+            onStop={stop}
+            onStepBack={stepBackward}
+            onStepForward={stepForward}
+            onSpeedChange={setSpeed}
+            onJumpTo={jumpTo}
+          />
+        </>
+      )}
+    </div>
   );
 }
 

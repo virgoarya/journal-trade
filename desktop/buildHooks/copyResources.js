@@ -34,6 +34,12 @@ const targetServerNodeModules = path.join(resourcesDir, 'server', 'node_modules'
 console.log(`[copyResources] Copying server node_modules -> ${targetServerNodeModules}`);
 runRobocopy(serverNodeModules, targetServerNodeModules);
 
+// 1.5 Copy backend server dist
+const serverDist = path.resolve(projectDir, '../server/dist');
+const targetServerDist = path.join(resourcesDir, 'server', 'dist');
+console.log(`[copyResources] Copying server dist -> ${targetServerDist}`);
+runRobocopy(serverDist, targetServerDist);
+
 // 2. Copy frontend standalone bundle (server.js, package.json, .next, node_modules)
 const frontendStandaloneDir = path.resolve(projectDir, '../frontend/.next/standalone/frontend');
 const targetFrontend = path.join(resourcesDir, 'frontend');

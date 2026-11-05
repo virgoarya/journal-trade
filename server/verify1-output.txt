@@ -1,0 +1,147 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+ RUN  v4.1.12 D:/Journal Trade/server
+
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts
+◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=true -> the pipeline log buffer contains the AGENT CONSENSUS lines
+DEBUG: Store set to: {
+  "aiTrading": {
+    "agentConsensus": {
+      "enabled": true,
+      "debateMode": "parallel",
+      "memoryEnabled": true,
+      "toolEnabled": true,
+      "threshold": 0.6
+    },
+    "llmConsensus": {
+      "enabled": true,
+      "threshold": 0.7
+    }
+  },
+  "savedPipelineConfigs": {
+    "BrokerX": {
+      "symbols": [
+        "XAUUSD"
+      ],
+      "timeframe": "M15",
+      "maxDailyRisk": 3,
+      "maxRiskPerTrade": 1,
+      "agentConsensus": {
+        "enabled": true,
+        "debateMode": "parallel",
+        "memoryEnabled": true,
+        "toolEnabled": true,
+        "threshold": 0.6
+      }
+    }
+  }
+}
+
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=true -> the pipeline log buffer contains the AGENT CONSENSUS lines
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": true,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+[23:19:38] [32mINFO[39m: [36m[PIPELINE] Started for user verify1_axis on M15 with 3 methodologies (isRecovery=false)[39m
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=true -> the pipeline log buffer contains the AGENT CONSENSUS lines
+DEBUG: startPipeline status: 200
+DEBUG: startPipeline body: {
+  "success": true,
+  "data": {
+    "running": true,
+    "config": {
+      "symbols": [
+        "XAUUSD"
+      ],
+      "timeframe": "M15",
+      "maxDailyRisk": 3,
+      "maxRiskPerTrade": 1,
+      "agentConsensus": {
+        "enabled": true,
+        "debateMode": "parallel",
+        "memoryEnabled": true,
+        "toolEnabled": true,
+        "threshold": 0.6
+      },
+      "llmConsensus": {
+        "enabled": true,
+        "threshold": 0.7
+      }
+    }
+  }
+}
+DEBUG: tradingPipelineService.activePipelines size: 1
+DEBUG: Pipeline exists: true
+DEBUG: Pipeline busy: false
+DEBUG: Pipeline running: true
+DEBUG: Pipeline config: {"enabled":true,"debateMode":"parallel","memoryEnabled":true,"toolEnabled":true,"threshold":0.6}
+
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=true -> the pipeline log buffer contains the AGENT CONSENSUS lines
+
+===== VERIFY-1 LOG SNIPPET (agentConsensus.enabled=true) =====
+[CONFLUENCE] [2/4] [XAUUSD] AGENT CONSENSUS: Running multi-agent debate across Hawk, Dove, Contrarian...
+[CONFLUENCE] [2/4] [XAUUSD] AGENT CONSENSUS RESULT: TRADE APPROVED
+[CONFLUENCE] [2/4] [XAUUSD] Agent Votes (3): hawk=bullish, dove=bullish, contrarian=bullish
+[CONFLUENCE] [2/4] [XAUUSD] hawk: bullish — trend aligned
+[CONFLUENCE] [2/4] [XAUUSD] dove: bullish — risk acceptable
+[CONFLUENCE] [2/4] [XAUUSD] contrarian: bullish — no divergence
+===========================================================
+
+
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=false -> NO AGENT CONSENSUS lines; order proceeds directly to Stage 3
+DEBUG: Final Config for Pipeline: {
+  "symbols": [
+    "XAUUSD"
+  ],
+  "timeframe": "M15",
+  "maxDailyRisk": 3,
+  "maxRiskPerTrade": 1,
+  "agentConsensus": {
+    "enabled": false,
+    "debateMode": "parallel",
+    "memoryEnabled": true,
+    "toolEnabled": true,
+    "threshold": 0.6
+  },
+  "llmConsensus": {
+    "enabled": true,
+    "threshold": 0.7
+  }
+}
+
+ ✓ src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=true -> the pipeline log buffer contains the AGENT CONSENSUS lines 30157ms
+[23:20:08] [32mINFO[39m: [36m[PIPELINE] Started for user verify1_axis on M15 with 3 methodologies (isRecovery=false)[39m
+stdout | src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=false -> NO AGENT CONSENSUS lines; order proceeds directly to Stage 3
+
+===== VERIFY-1 LOG SNIPPET (agentConsensus.enabled=false -> no Stage 2) =====
+AGENT CONSENSUS lines: 0 | Total [2/4] lines: 0
+==========================================================================
+
+
+ ✓ src/__tests__/verify1-agent-consensus-evidence.test.ts > VERIFY-1: Agent Consensus log evidence (real route + real pipeline service) > enabled=false -> NO AGENT CONSENSUS lines; order proceeds directly to Stage 3 2019ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  06:19:35
+   Duration  34.88s (transform 498ms, setup 44ms, import 2.19s, tests 32.19s, environment 0ms)
+

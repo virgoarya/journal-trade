@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Trading Dashboard — Visual Preview</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:       #0d0d0d;
+    --surface:  #141210;
+    --card:     #1a1815;
+    --border:   rgba(212,175,55,0.15);
+    --gold:     #d4af37;
+    --gold-dim: #8a7324;
+    --neon:     #39ff88;
+    --red:      #ff3858;
+    --orange:   #f59e0b;
+    --text:     #f0efec;
+    --muted:    #898781;
+    --bar-s:    #2a78d6;
+    --bar-o:    #eb6834;
+    --bar-a:    #1baf7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 13px; line-height: 1.5; padding: 20px;
+  }
+  h1 { font-size: 16px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); margin: 0 0 18px; }
+  h2 { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-dim); margin: 0 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+
+  .grid { display: grid; gap: 14px; }
+  .col-2 { grid-template-columns: repeat(2, 1fr); }
+  .col-3 { grid-template-columns: repeat(3, 1fr); }
+  .col-4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .card-gold { border-color: rgba(212,175,55,0.35); box-shadow: 0 0 18px rgba(212,175,55,0.06); }
+
+  /* KPI tiles */
+  .kpi { display: flex; flex-direction: column; gap: 4px; }
+  .kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .kpi-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kpi-value.gold { color: var(--gold); }
+  .kpi-value.neon { color: var(--neon); }
+  .kpi-value.red  { color: var(--red); }
+
+  /* Methodology weights */
+  .method-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .method-name { width: 90px; font-size: 11px; font-weight: 600; color: var(--text); }
+  .bar-track { flex: 1; height: 14px; background: rgba(255,255,255,0.06); border-radius: 7px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 7px; transition: width .4s ease; }
+  .bar-fill.smc { background: #8b5cf6; }
+  .bar-fill.ict { background: #3b82f6; }
+  .bar-fill.msnr { background: #10b981; }
+  .bar-label { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; font-weight: 700; color: #fff; }
+
+  /* Consensus persona chips */
+  .persona { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border); margin: 4px 4px 0 0; font-size: 11px; }
+  .persona-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .persona.hawk   .persona-dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .persona.dove   .persona-dot { background: #3b82f6; box-shadow: 0 0 6px #3b82f6; }
+  .persona.contrarian .persona-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .persona .bias { font-weight: 700; margin-left: 4px; }
+  .persona .bias.bullish { color: var(--neon); }
+  .persona .bias.bearish { color: var(--red); }
+
+  /* Signal timeline */
+  .timeline { display: flex; flex-direction: column; gap: 6px; }
+  .tl-row { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+  .tl-time { width: 72px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tl-stage { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; border: 1px solid var(--border); color: var(--text); flex-shrink: 0; }
+  .tl-stage.done { background: var(--neon); color: #0d0d0d; border-color: var(--neon); }
+  .tl-stage.active { background: var(--gold); color: #0d0d0d; border-color: var(--gold); animation: pulse 1.6s infinite; }
+  .tl-stage.wait { background: transparent; color: var(--muted); }
+  .tl-msg { color: var(--text); }
+  .tl-msg.success { color: var(--neon); }
+  .tl-msg.skip { color: var(--muted); font-style: italic; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(212,175,55,0); }
+  }
+
+  /* Confluence bars */
+  .conf-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+  .conf-label { width: 42px; font-size: 10px; font-weight: 700; color: var(--muted); text-align: right; }
+  .conf-bar { flex: 1; height: 10px; background: rgba(255,255,255,0.06); border-radius: 5px; overflow: hidden; }
+  .conf-fill { height: 100%; border-radius: 5px; }
+  .conf-fill.high { background: var(--neon); }
+  .conf-fill.mid  { background: var(--gold); }
+  .conf-fill.low  { background: var(--red); opacity: .7; }
+  .conf-pct { width: 36px; font-size: 10px; font-weight: 700; text-align: right; }
+
+  /* Vote bar */
+  .vote-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; margin-top: 6px; }
+  .vote-seg { transition: width .5s ease; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; color: #0d0d0d; }
+
+  .footer { margin-top: 16px; font-size: 10px; color: var(--muted); text-align: center; }
+
+  /* Toggle chips */
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 10px; }
+  .chip.on { background: rgba(57,255,136,0.08); border-color: rgba(57,255,136,0.3); color: var(--neon); }
+  .chip.off { color: var(--muted); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .col-2, .col-3, .col-4 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>AI Trading Dashboard — Visual Preview</h1>
+
+<!-- Row 1: KPI + Config chips -->
+<div class="grid col-4">
+  <div class="card card-gold">
+    <div class="kpi">
+      <span class="kpi-label">Pipeline Status</span>
+      <span class="kpi-value neon">RUNNING</span>
+      <span class="kpi-label" style="margin-top:4px">Timeframe: M15</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <span class="kpi-label">Active Positions</span>
+      <span class="kpi-value gold">2</span>
+      <span class="kpi-label" style="margin-top:4px">Daily PnL: +$1,240</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <span class="kpi-label">Win Rate (30d)</span>
+      <span class="kpi-value neon">64%</span>
+      <span class="kpi-label" style="margin-top:4px">Profit Factor: 2.1</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <span class="kpi-label">Current Drawdown</span>
+      <span class="kpi-value" style="color:#f59e0b">3.2%</span>
+      <span class="kpi-label" style="margin-top:4px">Limit: 10%</span>
+    </div>
+  </div>
+</div>
+
+<!-- Row 2: Methodologies + Consensus -->
+<div class="grid col-2">
+
+  <!-- Active Methodologies -->
+  <div class="card">
+    <h2>Active Methodologies</h2>
+    <div class="method-row">
+      <span class="method-name">SMC</span>
+      <div class="bar-track"><div class="bar-fill smc" style="width:100%"></div><span class="bar-label">1.0</span></div>
+    </div>
+    <div class="method-row">
+      <span class="method-name">ICT</span>
+      <div class="bar-track"><div class="bar-fill ict" style="width:100%"></div><span class="bar-label">1.0</span></div>
+    </div>
+    <div class="method-row">
+      <span class="method-name">MSNR</span>
+      <div class="bar-track"><div class="bar-fill msnr" style="width:80%"></div><span class="bar-label">0.8</span></div>
+    </div>
+    <div style="margin-top:10px">
+      <span class="chip on">Agent Consensus ON</span>
+      <span class="chip on">Macro News Fail-Safe OFF</span>
+    </div>
+  </div>
+
+  <!-- Agent Consensus -->
+  <div class="card card-gold">
+    <h2>Agent Consensus (Stage 2/4)</h2>
+    <div>
+      <span class="persona hawk"><span class="persona-dot"></span>Hawk <span class="bias bullish">BULLISH</span></span>
+      <span class="persona dove"><span class="persona-dot"></span>Dove <span class="bias bullish">BULLISH</span></span>
+      <span class="persona contrarian"><span class="persona-dot"></span>Contrarian <span class="bias bullish">BULLISH</span></span>
+    </div>
+    <div style="margin-top:10px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px">
+        <span>Vote distribution</span>
+        <span>3 / 3 approved</span>
+      </div>
+      <div class="vote-bar">
+        <div class="vote-seg" style="width:33.3%;background:#ef4444">H</div>
+        <div class="vote-seg" style="width:33.3%;background:#3b82f6">D</div>
+        <div class="vote-seg" style="width:33.3%;background:#f59e0b">C</div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--neon);font-weight:700">
+        CONSENSUS: TRADE APPROVED
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Row 3: Confluence breakdown + Pipeline timeline -->
+<div class="grid col-2">
+
+  <!-- Confluence -->
+  <div class="card">
+    <h2>Confluence Breakdown — XAUUSD</h2>
+    <div class="conf-row">
+      <span class="conf-label">SMC</span>
+      <div class="conf-bar"><div class="conf-fill high" style="width:82%"></div></div>
+      <span class="conf-pct" style="color:var(--neon)">82%</span>
+    </div>
+    <div class="conf-row">
+      <span class="conf-label">ICT</span>
+      <div class="conf-bar"><div class="conf-fill high" style="width:76%"></div></div>
+      <span class="conf-pct" style="color:var(--neon)">76%</span>
+    </div>
+    <div class="conf-row">
+      <span class="conf-label">MSNR</span>
+      <div class="conf-bar"><div class="conf-fill mid" style="width:64%"></div></div>
+      <span class="conf-pct" style="color:var(--gold)">64%</span>
+    </div>
+    <div style="margin-top:10px;padding:8px;background:rgba(57,255,136,0.05);border:1px solid rgba(57,255,136,0.2);border-radius:8px">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Final Signal</div>
+      <div style="font-size:13px;font-weight:800;color:var(--neon);margin-top:2px">BUY @ 2,000 | SL: 1990 | TP: 2020</div>
+    </div>
+  </div>
+
+  <!-- Pipeline timeline -->
+  <div class="card">
+    <h2>Pipeline Timeline — XAUUSD</h2>
+    <div class="timeline">
+      <div class="tl-row">
+        <span class="tl-time">14:30:01</span>
+        <span class="tl-stage done">1/4</span>
+        <span class="tl-msg">Multi-strategy analysis complete</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-time">14:30:02</span>
+        <span class="tl-stage done">2/4</span>
+        <span class="tl-msg success">AGENT CONSENSUS: TRADE APPROVED</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-time">14:30:03</span>
+        <span class="tl-stage done">3/4</span>
+        <span class="tl-msg">Risk check passed · size 0.01 lot</span>
+      </div>
+      <div class="tl-row">
+        <span class="tl-time">14:30:04</span>
+        <span class="tl-stage active">4/4</span>
+        <span class="tl-msg">Order #1 opened @ 2000.00</span>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <div class="card" style="flex:1;padding:10px">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Confidence</div>
+        <div style="font-size:18px;font-weight:800;color:var(--gold)">80<span style="font-size:11px">%</span></div>
+      </div>
+      <div class="card" style="flex:1;padding:10px">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Confluence</div>
+        <div style="font-size:18px;font-weight:800;color:var(--neon)">74<span style="font-size:11px">%</span></div>
+      </div>
+      <div class="card" style="flex:1;padding:10px">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase">RR Ratio</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text)">1:2</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Row 4: Full-width equity / signals chart area -->
+<div class="card">
+  <h2>Equity Curve &amp; Signal Activity</h2>
+  <canvas id="chart" height="140" style="width:100%;display:block"></canvas>
+</div>
+
+<div class="footer">Preview generated: 2026-11-04 · Hunter Trades Journal — AI Trading Dashboard</div>
+
+<script>
+  // Minimal equity curve visualization — drawn on canvas to keep this a single file.
+  const canvas = document.getElementById('chart');
+  if (canvas && canvas.getContext) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 140 * dpr;
+    canvas.style.height = '140px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = 140;
+
+    // Simulated equity series (growing)
+    const equity = [10000,10060,10120,10180,10210,10280,10310,10380,10420,10500,10540,10620,10680,10750,10810,10890];
+    const signals = [false,false,false,true,false,false,true,false,false,false,true,false,false,false,true,false];
+    const pad = { t: 10, r: 10, b: 20, l: 45 };
+    const cw = W - pad.l - pad.r;
+    const ch = H - pad.t - pad.b;
+    const min = Math.min(...equity) - 50;
+    const max = Math.max(...equity) + 50;
+    const x = i => pad.l + (i / (equity.length - 1)) * cw;
+    const y = v => pad.t + ch - ((v - min) / (max - min)) * ch;
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const yy = pad.t + (i / 4) * ch;
+      ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
+    }
+
+    // Area fill
+    ctx.beginPath();
+    ctx.moveTo(x(0), y(equity[0]));
+    equity.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+    ctx.lineTo(x(equity.length - 1), pad.t + ch);
+    ctx.lineTo(x(0), pad.t + ch);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+    grad.addColorStop(0, 'rgba(57,255,136,0.18)');
+    grad.addColorStop(1, 'rgba(57,255,136,0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    equity.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+    ctx.strokeStyle = '#39ff88';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Signal dots
+    signals.forEach((s, i) => {
+      if (!s) return;
+      ctx.beginPath();
+      ctx.arc(x(i), y(equity[i]), 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#d4af37';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // Y labels
+    ctx.fillStyle = '#898781';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    for (let i = 0; i < 5; i++) {
+      const val = min + ((4 - i) / 4) * (max - min);
+      ctx.fillText('$' + Math.round(val).toLocaleString(), pad.l - 6, pad.t + (i / 4) * ch + 3);
+    }
+  }
+</script>
+</body>
+</html>

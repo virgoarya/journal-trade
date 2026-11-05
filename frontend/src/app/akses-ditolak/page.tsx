@@ -38,13 +38,8 @@ export default function AccessDeniedPage() {
   };
 
   const handleLogout = async () => {
-    await signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          router.push("/");
-        },
-      },
-    });
+    await signOut({ fetchOptions: {} });
+    router.push("/");
   };
 
   // Loading state for session

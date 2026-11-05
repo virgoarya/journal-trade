@@ -1,6 +1,6 @@
 "use client";
 
-import { type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types";
+import { type MethodologyName, type MethodologyWeights, METHODOLOGY_LABELS, METHODOLOGY_COLORS } from "../types/index";
 import { Brain } from "lucide-react";
 
 interface MethodologyConfigProps {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { type SymbolInfo } from "../types";
+import { SymbolInfo } from "../types/index";
 import { Plus, X } from "lucide-react";
 
 interface SymbolSelectorProps {

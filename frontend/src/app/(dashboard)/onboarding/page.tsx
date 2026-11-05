@@ -110,11 +110,14 @@ export default function OnboardingPage() {
         {/* Stepper */}
         <nav className="flex justify-between items-start relative px-2">
           <div className="absolute top-4 left-10 right-10 h-[1px] bg-white/10 -z-10">
-            <motion.div 
-              className="h-full bg-[var(--color-accent-gold)]" 
-              initial={{ width: "0%" }}
-              animate={{ width: currentStep === 1 ? "0%" : currentStep === 2 ? "50%" : "100%" }}
-            ></motion.div>
+            <div className="h-full">
+              <motion.div
+                initial={{ width: "0%" }}
+                animate={{ width: currentStep === 1 ? "0%" : currentStep === 2 ? "50%" : "100%" }}
+              >
+                <div className="h-full bg-[var(--color-accent-gold)]" />
+              </motion.div>
+            </div>
           </div>
 
           {/* Steps */}
@@ -142,13 +145,13 @@ export default function OnboardingPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <AnimatePresence mode="wait">
               {currentStep === 1 && (
-                <motion.div 
+                <motion.div
                   key="step1"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6 text-center py-4"
                 >
+                  <div className="space-y-6 text-center py-4">
                   <div className="w-16 h-16 bg-[var(--color-accent-gold)]/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <ShieldCheck className="w-8 h-8 text-[var(--color-accent-gold)]" />
                   </div>
@@ -157,7 +160,7 @@ export default function OnboardingPage() {
                     Welcome to Hunter Trades. The first step to becoming an <span className="text-[var(--color-accent-gold)] font-bold">Elite Trader</span> starts with disciplined record-keeping. Let's set up your trading account.
                   </p>
                   <div className="pt-6">
-                    <button 
+                    <button
                       type="button"
                       onClick={handleNext}
                       className="px-10 py-3 bg-[var(--color-accent-gold)] text-[#050508] text-xs font-bold tracking-widest rounded-xl hover:brightness-110 transition-all shadow-[0_0_20px_rgba(var(--color-accent-gold),0.2)] uppercase flex items-center mx-auto gap-2"
@@ -165,17 +168,18 @@ export default function OnboardingPage() {
                       Start Setup <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
-                </motion.div>
+                </div>
+              </motion.div>
               )}
 
               {currentStep === 2 && (
-                <motion.div 
+                <motion.div
                   key="step2"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
                 >
+                  <div className="space-y-6">
                   <div>
                     <h2 className="text-xl font-bold text-white mb-2">Account Configuration</h2>
                     <p className="text-[#d0c5af]/70 text-sm">Set your initial capital and execution platform for precise calculations.</p>
@@ -267,18 +271,18 @@ export default function OnboardingPage() {
                       Continue
                     </button>
                   </div>
-                </motion.div>
+              </div>
+            </motion.div>
               )}
 
               {currentStep === 3 && (
-                <motion.div 
+                <motion.div
                   key="step3"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
                 >
-                  <div>
+                  <div className="space-y-6">
                     <h2 className="text-xl font-bold text-white mb-2">Risk Rules</h2>
                     <p className="text-[#d0c5af]/70 text-sm">Follow these limits to ensure your trading longevity.</p>
                   </div>

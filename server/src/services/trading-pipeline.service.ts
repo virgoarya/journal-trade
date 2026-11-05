@@ -1671,7 +1671,8 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
         for (const sym of lockedSymbolsThisTick) {
           pipeline.busySymbols.delete(sym);
         }
-        pipeline.running = false;
+        // DO NOT set pipeline.running = false here - it's a pipeline lifecycle flag, not a per-tick flag
+        // running is set to false only in stopPipeline()
       }
     }
   private marketClosedCache = new Map<string, number>();

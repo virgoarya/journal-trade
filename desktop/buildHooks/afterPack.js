@@ -22,6 +22,15 @@ exports.default = async function(context) {
         // Robocopy returns exit code 1-7 for successful copies with changes
     }
 
+    // 1.5 Copy backend server dist
+    const serverDist = path.resolve(projectDir, '../server/dist');
+    const targetServerDist = path.join(resourcesDir, 'server', 'dist');
+    console.log(`[afterPack] Copying server dist -> ${targetServerDist}`);
+    fs.mkdirSync(targetServerDist, { recursive: true });
+    try {
+        execSync(`robocopy "${serverDist}" "${targetServerDist}" /E /MT:16 /R:1 /W:1 /NP /NFL /NDL /NJH /NJS`, { stdio: 'inherit' });
+    } catch (e) {}
+
     // 2. Copy frontend standalone bundle (server.js, .next, node_modules, package.json)
     const frontendStandaloneDir = path.resolve(projectDir, '../frontend/.next/standalone/frontend');
     const targetFrontend = path.join(resourcesDir, 'frontend');
@@ -53,13 +62,15 @@ exports.default = async function(context) {
     const hasNext = fs.existsSync(path.join(targetFrontend, 'node_modules', 'next'));
     const hasServerJs = fs.existsSync(path.join(targetFrontend, 'server.js'));
     const hasExpress = fs.existsSync(path.join(targetServerNodeModules, 'express'));
+    const hasServerDist = fs.existsSync(targetServerDist);
     console.log(`[afterPack] Verification in ${resourcesDir}:`);
     console.log(`  - hasNext: ${hasNext}`);
     console.log(`  - hasServerJs: ${hasServerJs}`);
     console.log(`  - hasExpress: ${hasExpress}`);
+    console.log(`  - hasServerDist: ${hasServerDist}`);
 
-    if (!hasNext || !hasServerJs || !hasExpress) {
-        throw new Error(`[afterPack] Verification failed! Required resources are missing.`);
+    if (!hasNext || !hasServerJs || !hasExpress || !hasServerDist) {
+        throw new Error(`[afterPack] Verification failed! Required resources are missing. hasNext=${hasNext} hasServerJs=${hasServerJs} hasExpress=${hasExpress} hasServerDist=${hasServerDist}`);
     }
 
     console.log(`================== [afterPack Hook Complete] ==================\n`);
