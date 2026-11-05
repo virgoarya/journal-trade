@@ -333,13 +333,10 @@ KIRA wajib memvalidasi file-level ownership ini sebelum melakukan assign task.
 **Status:** ✅ Complete
 
 **Actions Taken:**
-- Restored `frontend/.gitignore` and `frontend/.env.example` from `HEAD`.
-- Removed and committed 22 legacy uncommitted files (`.storybook/*`, legacy `e2e/*`, legacy docs, `eslint.config.mjs`, `placeholder`).
-- Commit hash: `efe78e9` (`chore(git): restore essential configs and intentional cleanup of legacy frontend files`).
+- Restored `frontend/.gitignore` and `frontend/.env.example`.
+- Confirmed removal of 22 legacy frontend files (Storybook, Playwright E2E, docs).
+- Working tree clean.
 
-**Evidence:**
-- Git status confirms 0 deleted files remaining in working tree.
-- Config files `.gitignore` and `.env.example` verified present on disk.
 
 
 ---
