@@ -3,6 +3,7 @@ import { aiTradingEngine, type TradingSignal, type Timeframe, type MultiStrategy
 import { riskManagerService } from "./risk-manager.service";
 import { llmConsensusService, type LLMConsensusConfig, type LLMConsensusResult } from "./llm-consensus.service";
 import { agentConsensusService } from "./agent-consensus.service";
+import type { AgentConsensusResult } from "./agent-consensus.service";
 import { selfImprovementService } from "./self-improvement.service";
 import { macroNewsService } from "./macro-news.service";
 import { marketRegimeService } from "./market-regime.service";
@@ -112,6 +113,7 @@ export interface PipelineStatus {
   /** If pipeline was auto-stopped by a circuit breaker, this is the reason shown to the user */
   circuitBreakerReason?: string;
   busySymbols: Set<string>;
+  agentConsensus?: AgentConsensusResult | null;
 }
 
 export interface PipelineLog {
@@ -123,6 +125,7 @@ export interface PipelineLog {
 
 interface ActivePipeline {
   config: PipelineConfig;
+  agentConsensus?: AgentConsensusResult | null;
   intervals: Map<string, NodeJS.Timeout>;
   trailingInterval: NodeJS.Timeout | null;
   logs: PipelineLog[];
@@ -630,6 +633,7 @@ busySymbols: new Set<string>(),
         mt5CircuitState: mt5McpService.circuitBreakerState,
         llmCircuitStates: pipeline.llmCircuitStates,
         busySymbols: pipeline.busySymbols,
+        agentConsensus: pipeline.agentConsensus || null,
       };
       }
       // Get current MT5 account ID
@@ -740,6 +744,7 @@ busySymbols: new Set<string>(),
       mt5CircuitState: mt5McpService.circuitBreakerState,
       llmCircuitStates: llmConsensusService.getCircuitStates(),
       busySymbols: pipeline.busySymbols,
+      agentConsensus: pipeline.agentConsensus || null,
     };
 
     // Save to cache
@@ -1371,6 +1376,7 @@ Provide verdict: GOOD/BAD/SKIP with reasoning.`;
             agentResult,
             agentConsensusConfig.threshold ?? 0.6,
           );
+          pipeline.agentConsensus = adapted;
           const isTrade = adapted.verdict === "GOOD";
 
           this.addLog(userId, "CONFLUENCE",
