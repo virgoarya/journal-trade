@@ -4,6 +4,18 @@ import { silentLogger } from "../utils/silent-logger";
 import { userMemoryService } from "./user-memory.service";
 import { AITradeLog } from "../models/AITradeLog";
 
+export interface AgentConsensusResult {
+  verdict: "GOOD" | "BAD" | "SKIP";
+  totalVotes: number;
+  goodVotes: number;
+  votes: {
+    persona: string;
+    bias: string;
+    reasoning: string;
+  }[];
+  consensus: string;
+}
+
 export interface DebateResult {
   hawk: { reply: string; toolsUsed: string[] };
   dove: { reply: string; toolsUsed: string[] };
