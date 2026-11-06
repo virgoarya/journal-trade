@@ -440,6 +440,7 @@ function AITradingPageContent() {
               agentConsensus={agentConsensus ?? undefined}
               threshold={pipelineStatus?.config?.agentConsensus?.threshold ?? 0.6}
               onStartPipeline={() => startPipeline((savedPipelineConfig ?? pipelineStatus?.config ?? { useAppliedConfig: true }) as PipelineConfig)}
+              isStarting={isPipelineStarting}
             />
 
             {pipelineStatus?.running && (

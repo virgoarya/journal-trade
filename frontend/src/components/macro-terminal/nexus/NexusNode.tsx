@@ -39,12 +39,13 @@ export function NexusNode({
 }: NexusNodeProps) {
   return (
     <motion.div
+      className="absolute"
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
       style={{ left: `${x}%`, top: `${y}%` }}
     >
-      <div className="absolute flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 z-10 w-full h-full">
+      <div className="absolute flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 z-10">
         {pulsate && (
           <div className="absolute w-28 h-28 rounded-full blur-2xl pointer-events-none" style={{ backgroundColor: glowColor }}>
             <motion.div

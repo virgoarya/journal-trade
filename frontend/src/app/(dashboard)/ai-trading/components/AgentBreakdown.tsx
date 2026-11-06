@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Shield, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Shield, TrendingUp, AlertTriangle, Loader2, Zap } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import type { AgentConsensusResult, AgentVote } from "@/services/ai-trading.service";
 
@@ -11,6 +11,7 @@ interface Props {
   agentConsensus?: AgentConsensusResult | null;
   threshold?: number;
   onStartPipeline?: () => Promise<boolean>;
+  isStarting?: boolean;
 }
 
 interface PersonaConfig {
@@ -273,11 +274,16 @@ export function AgentBreakdown({ agentConsensus, threshold = 0.6, onStartPipelin
         {onStartPipeline && (
           <button
             onClick={onStartPipeline}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-accent-gold/20 border border-accent-gold/40 text-accent-gold text-sm font-medium rounded-lg hover:bg-accent-gold/30 transition-colors"
+            disabled={isStarting}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent-gold/20 border border-accent-gold/40 text-accent-gold text-sm font-medium rounded-lg hover:bg-accent-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Start trading pipeline"
           >
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-            Start Pipeline
+            {isStarting ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Zap className="w-4 h-4" aria-hidden="true" />
+            )}
+            {isStarting ? "Starting..." : "Start Pipeline"}
           </button>
         )}
       </div>
