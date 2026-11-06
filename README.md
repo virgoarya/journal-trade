@@ -3,7 +3,7 @@
 > Trading journal + AI trading engine dengan integrasi **MetaTrader 5**.
 > Dijalankan sebagai aplikasi desktop Windows: user install sekali, klik icon, semua service jalan.
 
-Repositori: `journal-trade` · Versi saat ini: **1.2.1** · Nama aplikasi: **Hunter Trades**
+Repositori: `journal-trade` · Versi saat ini: **1.2.2** · Nama aplikasi: **Hunter Trades**
 
 ---
 
@@ -36,7 +36,7 @@ Langkah-langkah ini untuk **pengguna biasa** yang ingin memakai aplikasi — buk
 
 1. **Unduh installer**
    Buka halaman [GitHub Releases](https://github.com/virgoarya/journal-trade/releases) dan unduh
-   file bernama **`Hunter Trades Setup 1.2.1.exe`**.
+   file bernama **`Hunter Trades Setup 1.2.2.exe`**.
 
 2. **Jalankan installer**
    - Klik dua kali file `.exe` yang sudah diunduh.
@@ -114,7 +114,7 @@ akan tetap ada di sana. Klik kanan ikon tray untuk:
 
 ### Untuk user (install aplikasi production)
 
-1. Unduh **`Hunter Trades Setup 1.2.1.exe`** dari halaman GitHub Releases.
+1. Unduh **`Hunter Trades Setup 1.2.2.exe`** dari halaman GitHub Releases.
 2. Jalankan installer, pilih folder instalasi, selesaikan wizard.
 3. Klik icon **Hunter Trades** di Desktop atau Start Menu.
 4. **Hanya saat pertama kali:** jendela *Setup Configuration* muncul (karena
@@ -613,4 +613,4 @@ UNLICENSED — proprietary. Seluruh hak cipta milik Hunter Trades.
 
 ---
 
-*Hunter Trades Journal · Terminal Noir · v1.2.1*
+*Hunter Trades Journal · Terminal Noir · v1.2.2*

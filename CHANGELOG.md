@@ -13,7 +13,7 @@
 
 ---
 
-## 🚀 [v1.2.2] — 2026-11-03
+## 🚀 [v1.2.2] — 2026-11-06
 
 ### Added
 - **Multi-Timeframe Verification Tool**: AI Agent kini memiliki tool `check_higher_timeframe_trend` (H4/D1) untuk memvalidasi struktur pasar sebelum memberikan keputusan trading, mengurangi false breakout.
