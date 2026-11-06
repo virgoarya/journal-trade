@@ -265,7 +265,7 @@ function AgentCard({ vote, defaultOpen = false }: { vote: AgentVote; defaultOpen
 
 // ─── Main Export ─────────────────────────────────────────
 
-export function AgentBreakdown({ agentConsensus, threshold = 0.6, onStartPipeline }: Props) {
+export function AgentBreakdown({ agentConsensus, threshold = 0.6, onStartPipeline, isStarting }: Props) {
   if (!agentConsensus) {
     return (
       <div className="glass rounded-lg p-4 text-center space-y-3">
@@ -274,7 +274,7 @@ export function AgentBreakdown({ agentConsensus, threshold = 0.6, onStartPipelin
         {onStartPipeline && (
           <button
             onClick={onStartPipeline}
-            disabled={isStarting}
+            disabled={!!isStarting}
             className="inline-flex items-center gap-2 px-4 py-2 bg-accent-gold/20 border border-accent-gold/40 text-accent-gold text-sm font-medium rounded-lg hover:bg-accent-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Start trading pipeline"
           >

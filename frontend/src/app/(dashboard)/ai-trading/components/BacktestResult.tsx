@@ -242,8 +242,51 @@ function BacktestResultContent({ result, analysis, isAnalyzing, onAnalyze, onApp
           </div>
         </div>
         {result.backtestId && (
-          <div className="text-xs font-mono text-text-muted bg-black/60 px-3 py-1.5 rounded border border-accent-gold/30">
-            ID: {String(result.backtestId).substring(0, 8)}
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-mono text-text-muted bg-black/60 px-3 py-1.5 rounded border border-accent-gold/30">
+              ID: {String(result.backtestId).substring(0, 8)}
+            </div>
+            {(() => {
+              const [confirming, setConfirming] = React.useState(false);
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!confirming) {
+                      setConfirming(true);
+                      setTimeout(() => setConfirming(false), 4000);
+                    } else {
+                      setConfirming(false);
+                      onApplyToPipeline();
+                    }
+                  }}
+                  disabled={isApplying}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 border ${
+                    confirming
+                      ? "bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse"
+                      : "bg-accent-gold/10 hover:bg-accent-gold/20 border-accent-gold/40 text-accent-gold"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title="Apply backtest parameters to active live pipeline"
+                >
+                  {isApplying ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Applying...</span>
+                    </>
+                  ) : confirming ? (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Confirm Apply?</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Apply to Live</span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>
