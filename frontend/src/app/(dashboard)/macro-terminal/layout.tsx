@@ -235,7 +235,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-border-subtle pb-0 shrink-0 overflow-x-auto scrollbar-hide">
+      <div className="flex items-center gap-2 border-b border-border-subtle pb-0 shrink-0 overflow-x-auto scrollbar-hide relative z-50">
         {TABS.map((tab) => {
           const isActive = pathname.startsWith(tab.path);
           return (
