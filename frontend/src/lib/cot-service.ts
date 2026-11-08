@@ -30,7 +30,6 @@ function calcCotIndex(net: number, history: number[]): number {
 
 // ── Direction Bias Score (−10 .. +10) ──
 function calcDBS(netSM: number, netLS: number, cotSM: number, cotLS: number, wowSM: number): number {
-  // Component 1: Smart Money alignment (0–4)
   let scoreSM = 0;
   if (netSM > 0) {
     if (cotSM >= 75) scoreSM = 4;
@@ -42,16 +41,15 @@ function calcDBS(netSM: number, netLS: number, cotSM: number, cotLS: number, wow
     else scoreSM = -1;
   }
 
-  // Component 2: Divergence (0–4)
   const diverging = Math.sign(netSM) !== Math.sign(netLS);
   let scoreDiv = 0;
   if (diverging) {
-    if (netSM > 0) { // SM long, LS short
+    if (netSM > 0) {
       if (cotLS < 15) scoreDiv = 4;
       else if (cotLS < 30) scoreDiv = 3;
       else if (cotLS < 45) scoreDiv = 2;
       else scoreDiv = 1;
-    } else { // SM short, LS long
+    } else {
       if (cotLS > 85) scoreDiv = -4;
       else if (cotLS > 70) scoreDiv = -3;
       else if (cotLS > 55) scoreDiv = -2;
@@ -59,7 +57,6 @@ function calcDBS(netSM: number, netLS: number, cotSM: number, cotLS: number, wow
     }
   }
 
-  // Component 3: WoW momentum (0–2)
   let scoreWoW = 0;
   const wowAbs = Math.abs(wowSM);
   if (netSM > 0) scoreWoW = wowSM > 0 ? (wowAbs > 10000 ? 2 : 1) : (wowAbs > 10000 ? -2 : -1);
@@ -153,11 +150,83 @@ function groupBySymbol(records: any[]): GroupedHistory {
       commLong, commShort, nonCL, nonCS, retailLong, retailShort,
     });
   }
-  // Sort each group by date ascending (oldest first) for WoW
   for (const code of Object.keys(grouped)) {
     grouped[code].sort((a, b) => a.date.localeCompare(b.date));
   }
   return grouped;
+}
+
+/** Detect if data is already enhanced (from API) vs raw CFTC records */
+function isEnhancedData(data: any[]): boolean {
+  if (!Array.isArray(data) || data.length === 0) return false;
+  const first = data[0];
+  // Enhanced data has these fields; raw CFTC has cftc_contract_market_code
+  return first.cftc_contract_market_code === undefined && first.symbol !== undefined && first.commercialLong !== undefined;
+}
+
+/** Enhance raw CFTC records with analytics (COT Index, DBS, WoW) */
+function enhanceRecords(records: any[]): CotItem[] {
+  const seen = new Set<string>();
+  const latest: any[] = [];
+  for (const r of records) {
+    const code = r.cftc_contract_market_code;
+    if (!seen.has(code) && SYMBOLS_MAP[code]) {
+      seen.add(code);
+      latest.push(r);
+    }
+  }
+
+  const history = groupBySymbol(records);
+
+  return latest.map(r => {
+    const item = mapRecord(r);
+    const code = r.cftc_contract_market_code;
+    const hist = history[code] || [];
+
+    const smNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.commNet);
+    const lsNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.nonCommNet);
+    const currentSM = hist.length > 0 ? hist[hist.length - 1].commNet : 0;
+    const currentLS = hist.length > 0 ? hist[hist.length - 1].nonCommNet : 0;
+    const cotSM = smNets.length > 1 ? calcCotIndex(currentSM, smNets) : 50;
+    const cotLS = lsNets.length > 1 ? calcCotIndex(currentLS, lsNets) : 50;
+
+    let wowSM = 0, wowLS = 0;
+    if (hist.length >= 2) {
+      const prev = hist[hist.length - 2];
+      const curr = hist[hist.length - 1];
+      wowSM = curr.commNet - prev.commNet;
+      wowLS = curr.nonCommNet - prev.nonCommNet;
+    }
+
+    const oi = hist.length > 0
+      ? hist[hist.length - 1].commLong + hist[hist.length - 1].commShort
+          + hist[hist.length - 1].nonCL + hist[hist.length - 1].nonCS
+          + hist[hist.length - 1].retailLong + hist[hist.length - 1].retailShort
+      : 0;
+
+    const dbs = calcDBS(currentSM, currentLS, cotSM, cotLS, wowSM);
+
+    const divergence = Math.sign(currentSM) !== Math.sign(currentLS);
+    let enhancedPhase = item.phase;
+    if (divergence && cotSM <= 15 && cotLS >= 75) {
+      enhancedPhase = { label: wowSM > 0 ? "ACCUMULATION" : "DISTRIBUTION", color: wowSM > 0 ? "blue" : "yellow", isWarning: true };
+    } else if (divergence && cotSM >= 85 && cotLS <= 25) {
+      enhancedPhase = { label: wowSM < 0 ? "DISTRIBUTION" : "MARK UP", color: wowSM < 0 ? "yellow" : "green", isWarning: wowSM < 0 };
+    }
+
+    return {
+      ...item,
+      phase: enhancedPhase,
+      cotIndexSM: Math.round(cotSM),
+      cotIndexLS: Math.round(cotLS),
+      wowDeltaSM: wowSM,
+      wowDeltaLS: wowLS,
+      openInterest: oi,
+      dbs,
+      directionBias: dbLabel(dbs),
+      divergence,
+    };
+  });
 }
 
 export async function getCotData(): Promise<CotItem[]> {
@@ -168,7 +237,7 @@ export async function getCotData(): Promise<CotItem[]> {
       ? `${COT_API}?$where=${encodeURIComponent(`cftc_contract_market_code in (${codes})`)}&$limit=500&$order=${encodeURIComponent("report_date_as_yyyy_mm_dd DESC")}`
       : `/api/macro/cot`;
 
-    const res = await fetch(url, isServer ? { next: { revalidate: 3600 } } : {});
+    const res = await fetch(url, isServer ? { cache: "no-store" } : {});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     let records: any[];
@@ -181,77 +250,13 @@ export async function getCotData(): Promise<CotItem[]> {
 
     if (!Array.isArray(records) || records.length === 0) return getFallbackData();
 
-    // 1. Map latest records for display
-    // CFTC returns sorted DESC → latest first. Group latest per symbol.
-    const seen = new Set<string>();
-    const latest: any[] = [];
-    for (const r of records) {
-      const code = r.cftc_contract_market_code;
-      if (!seen.has(code) && SYMBOLS_MAP[code]) {
-        seen.add(code);
-        latest.push(r);
-      }
+    // If data is already enhanced (from API route), return directly
+    if (isEnhancedData(records)) {
+      return records as CotItem[];
     }
 
-    // 2. Build history for COT Index & WoW
-    const history = groupBySymbol(records);
-
-    // 3. Enhance each latest with analytics
-    const enhanced: CotItem[] = latest.map(r => {
-      const item = mapRecord(r);
-      const code = r.cftc_contract_market_code;
-      const hist = history[code] || [];
-
-      // COT Index for SM & LS
-      const smNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.commNet);
-      const lsNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.nonCommNet);
-      const currentSM = hist.length > 0 ? hist[hist.length - 1].commNet : 0;
-      const currentLS = hist.length > 0 ? hist[hist.length - 1].nonCommNet : 0;
-      const cotSM = smNets.length > 1 ? calcCotIndex(currentSM, smNets) : 50;
-      const cotLS = lsNets.length > 1 ? calcCotIndex(currentLS, lsNets) : 50;
-
-      // WoW Δ
-      let wowSM = 0, wowLS = 0;
-      if (hist.length >= 2) {
-        const prev = hist[hist.length - 2];
-        const curr = hist[hist.length - 1];
-        wowSM = curr.commNet - prev.commNet;
-        wowLS = curr.nonCommNet - prev.nonCommNet;
-      }
-
-      // Open Interest
-      const oi = hist.length > 0
-        ? hist[hist.length - 1].commLong + hist[hist.length - 1].commShort
-            + hist[hist.length - 1].nonCL + hist[hist.length - 1].nonCS
-            + hist[hist.length - 1].retailLong + hist[hist.length - 1].retailShort
-        : 0;
-
-      // Direction Bias Score
-      const dbs = calcDBS(currentSM, currentLS, cotSM, cotLS, wowSM);
-
-      // Enhanced sentiment with COT Index
-      const divergence = Math.sign(currentSM) !== Math.sign(currentLS);
-      let enhancedPhase = item.phase;
-      if (divergence && cotSM <= 15 && cotLS >= 75) {
-        enhancedPhase = { label: wowSM > 0 ? "ACCUMULATION" : "DISTRIBUTION", color: wowSM > 0 ? "blue" : "yellow", isWarning: true };
-      } else if (divergence && cotSM >= 85 && cotLS <= 25) {
-        enhancedPhase = { label: wowSM < 0 ? "DISTRIBUTION" : "MARK UP", color: wowSM < 0 ? "yellow" : "green", isWarning: wowSM < 0 };
-      }
-
-      return {
-        ...item,
-        phase: enhancedPhase,
-        cotIndexSM: Math.round(cotSM),
-        cotIndexLS: Math.round(cotLS),
-        wowDeltaSM: wowSM,
-        wowDeltaLS: wowLS,
-        openInterest: oi,
-        dbs,
-        directionBias: dbLabel(dbs),
-        divergence,
-      };
-    });
-
+    // Otherwise, enhance raw CFTC records
+    const enhanced = enhanceRecords(records);
     return enhanced.length > 0 ? enhanced : getFallbackData();
   } catch (e) {
     console.error("[COT] fetch failed:", e);
