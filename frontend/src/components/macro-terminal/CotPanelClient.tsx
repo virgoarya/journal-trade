@@ -38,21 +38,22 @@ function getPhaseReasoning(item: CotItem): string {
 
   const smDesc = smNet > 0 ? "Smart Money Akumulasi" : "Smart Money Hedging/Distribusi";
   const lsDesc = lsIndex >= 75 ? "Spekulan Extreme Long (FOMO)" : lsIndex <= 25 ? "Spekulan Extreme Short (Panik)" : "Spekulan Posisi Moderat";
-  const retailDesc = retailNet > 0 ? "Retail Bullish (Likuiditas Institusi)" : "Retail Bearish";
+  const retailIndex = item.cotIndexRetail ?? 50;
+  const retailDesc = retailIndex >= 75 ? "Retail Extreme Long (Euphoria)" : retailIndex <= 25 ? "Retail Extreme Short (Kapitulasi)" : "Retail Posisi Moderat";
 
   if (phaseLabel === "ACCUMULATION") {
-    return `[ACCUMULATION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText}\n• Reasoning: Institusi membeli saat spekulan & retail panik jual. Smart traders follow SM entry.`;
+    return `[ACCUMULATION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText} (Index ${retailIndex}%)\n• Reasoning: Konfirmasi institusional membeli saat spekulan & retail panik jual. Smart traders follow SM entry.`;
   }
   if (phaseLabel === "DISTRIBUTION") {
-    return `[DISTRIBUTION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText}\n• Reasoning: Institusi melepas inventory saat spekulan & retail euphoria/FOMO. Waspada reversal.`;
+    return `[DISTRIBUTION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText} (Index ${retailIndex}%)\n• Reasoning: Institusi melepas inventory saat spekulan & retail euphoria/FOMO. Waspada reversal.`;
   }
   if (phaseLabel === "MARK UP") {
-    return `[MARK UP]\n• Smart Money: ${smText} (Anchor Long)\n• Large Specs: ${lsText} (Trend Participation)\n• Reasoning: Tren naik sehat. Institusi mempertahankan long, spekulan mulai ikut mendorong harga.`;
+    return `[MARK UP]\n• Smart Money: ${smText} (Anchor Long)\n• Large Specs: ${lsText} (Trend Participation)\n• Retail: ${retailText} (Index ${retailIndex}%)\n• Reasoning: Tren naik sehat. Institusi mempertahankan long, spekulan mulai ikut mendorong harga.`;
   }
   if (phaseLabel === "MARK DOWN") {
-    return `[MARK DOWN]\n• Smart Money: ${smText} (Anchor Short)\n• Large Specs: ${lsText} (Trend Participation)\n• Reasoning: Tren turun kuat. Institusi mempertahankan short, spekulan ikut menekan harga.`;
+    return `[MARK DOWN]\n• Smart Money: ${smText} (Anchor Short)\n• Large Specs: ${lsText} (Trend Participation)\n• Retail: ${retailText} (Index ${retailIndex}%)\n• Reasoning: Tren turun kuat. Institusi mempertahankan short, spekulan ikut menekan harga.`;
   }
-  return `[NEUTRAL]\n• Smart Money: ${smText}\n• Large Specs: ${lsText}\n• Reasoning: Tidak ada arah institusional yang dominan. Pasar konsolidasi.`;
+  return `[NEUTRAL]\n• Smart Money: ${smText}\n• Large Specs: ${lsText}\n• Retail: ${retailText} (Index ${retailIndex}%)\n• Reasoning: Tidak ada arah institusional yang dominan. Pasar konsolidasi.`;
 }
 
 function getDbsReasoning(item: CotItem): string {
@@ -100,16 +101,26 @@ function NetBar({ long, short }: { long: number; short: number }) {
   );
 }
 
-function PositionCell({ long, short, label }: { long: number; short: number; label: string }) {
+function PositionCell({ long, short, label, cotIndex }: { long: number; short: number; label: string; cotIndex?: number }) {
   const net = long - short;
+  const idxColor = cotIndex !== undefined
+    ? cotIndex >= 75 || cotIndex <= 25 ? "text-amber-400 border-amber-400/30" : "text-zinc-400 border-white/5"
+    : "text-zinc-600 border-white/5";
   return (
     <div className="flex flex-col gap-0.5 min-w-[120px]">
       <div className="flex justify-between items-end font-mono text-[10px]">
         <span className="text-zinc-500 uppercase tracking-tighter">{label}</span>
         <span className="text-zinc-300 font-medium">{fmt(long)} / {fmt(short)}</span>
       </div>
-      <div className={`flex justify-end font-mono text-[11px] font-bold tabular-nums ${netColor(net)}`}>
-        {net > 0 ? "+" : ""}{fmt(net)}
+      <div className="flex justify-end items-center gap-2">
+        <div className={`font-mono text-[11px] font-bold tabular-nums ${netColor(net)}`}>
+          {net > 0 ? "+" : ""}{fmt(net)}
+        </div>
+        {cotIndex !== undefined && (
+          <span className={`text-[8px] font-mono font-bold tabular-nums px-1 py-0.5 rounded bg-black/40 ${idxColor}`}>
+            {cotIndex}%
+          </span>
+        )}
       </div>
       <NetBar long={long} short={short} />
     </div>
@@ -355,14 +366,22 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                         </div>
                       </td>
                       <td className="px-3 py-4 text-center">
-                        <div className="flex items-center justify-center gap-1" title={`COT Index (0-100% over 52w):\n- Smart Money: ${item.cotIndexSM ?? 50}% (${(item.cotIndexSM ?? 50) >= 70 ? "Bullish/Akumulasi tinggi" : (item.cotIndexSM ?? 50) <= 30 ? "Bearish/Distribusi tinggi" : "Netral"})\n- Large Specs: ${item.cotIndexLS ?? 50}%`}>
-                          <span className={`w-8 h-6 flex items-center justify-center rounded bg-black/40 border border-white/5 font-mono text-[10px] font-bold tabular-nums ${(item.cotIndexSM ?? 50) >= 70 ? "text-emerald-400" : (item.cotIndexSM ?? 50) <= 30 ? "text-red-400" : "text-zinc-400"}`}>
-                            {item.cotIndexSM ?? "—"}
-                          </span>
-                          <span className="text-zinc-700 font-mono text-[10px]">/</span>
-                          <span className={`w-8 h-6 flex items-center justify-center rounded bg-black/40 border border-white/5 font-mono text-[10px] font-bold tabular-nums ${(item.cotIndexLS ?? 50) >= 70 ? "text-emerald-400" : (item.cotIndexLS ?? 50) <= 30 ? "text-red-400" : "text-zinc-400"}`}>
-                            {item.cotIndexLS ?? "—"}
-                          </span>
+                        <div className="flex flex-col items-center gap-0.5" title={`COT Index (0-100% over 52w):\n- Smart Money: ${item.cotIndexSM ?? 50}%\n- Large Specs: ${item.cotIndexLS ?? 50}%\n- Retail: ${item.cotIndexRetail ?? 50}%`}>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className={`w-7 h-6 flex items-center justify-center rounded bg-black/40 border border-white/5 font-mono text-[9px] font-bold tabular-nums ${(item.cotIndexSM ?? 50) >= 70 ? "text-emerald-400" : (item.cotIndexSM ?? 50) <= 30 ? "text-red-400" : "text-zinc-400"}`}>
+                              {item.cotIndexSM ?? "—"}
+                            </span>
+                            <span className="text-zinc-700 font-mono text-[9px]">/</span>
+                            <span className={`w-7 h-6 flex items-center justify-center rounded bg-black/40 border border-white/5 font-mono text-[9px] font-bold tabular-nums ${(item.cotIndexLS ?? 50) >= 70 ? "text-emerald-400" : (item.cotIndexLS ?? 50) <= 30 ? "text-red-400" : "text-zinc-400"}`}>
+                              {item.cotIndexLS ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[7px] font-mono text-zinc-600 uppercase tracking-wider">Rtl</span>
+                            <span className={`w-7 h-4 flex items-center justify-center rounded bg-black/40 border border-white/5 font-mono text-[8px] font-bold tabular-nums ${(item.cotIndexRetail ?? 50) >= 70 ? "text-emerald-400" : (item.cotIndexRetail ?? 50) <= 30 ? "text-red-400" : "text-zinc-400"}`}>
+                              {item.cotIndexRetail ?? "—"}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-3 py-4 text-center">
@@ -381,18 +400,18 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                         )}
                       </td>
                       <td className="px-4 py-4">
-                        <div title={`Smart Money (Commercials Net: ${(item.commercialLong - item.commercialShort).toLocaleString()}): Long ${item.commercialLong.toLocaleString()} vs Short ${item.commercialShort.toLocaleString()}`}>
-                          <PositionCell long={item.commercialLong} short={item.commercialShort} label="Smart Money" />
+                        <div title={`Smart Money (Commercials Net: ${(item.commercialLong - item.commercialShort).toLocaleString()}): Long ${item.commercialLong.toLocaleString()} vs Short ${item.commercialShort.toLocaleString()}\nSmart Money COT Index (52w): ${item.cotIndexSM ?? 50}%`}>
+                          <PositionCell long={item.commercialLong} short={item.commercialShort} label="Smart Money" cotIndex={item.cotIndexSM} />
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div title={`Large Specs Net: ${(item.nonCommercialLong - item.nonCommercialShort).toLocaleString()}: Long ${item.nonCommercialLong.toLocaleString()} vs Short ${item.nonCommercialShort.toLocaleString()}`}>
-                          <PositionCell long={item.nonCommercialLong} short={item.nonCommercialShort} label="Large Specs" />
+                        <div title={`Large Specs Net: ${(item.nonCommercialLong - item.nonCommercialShort).toLocaleString()}: Long ${item.nonCommercialLong.toLocaleString()} vs Short ${item.nonCommercialShort.toLocaleString()}\nLarge Specs COT Index (52w): ${item.cotIndexLS ?? 50}%`}>
+                          <PositionCell long={item.nonCommercialLong} short={item.nonCommercialShort} label="Large Specs" cotIndex={item.cotIndexLS} />
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div title={`Retailers Net: ${(item.retailLong - item.retailShort).toLocaleString()}: Long ${item.retailLong.toLocaleString()} vs Short ${item.retailShort.toLocaleString()}`}>
-                          <PositionCell long={item.retailLong} short={item.retailShort} label="Retailers" />
+                        <div title={`Retailers Net: ${(item.retailLong - item.retailShort).toLocaleString()}: Long ${item.retailLong.toLocaleString()} vs Short ${item.retailShort.toLocaleString()}\nRetail COT Index (52w): ${item.cotIndexRetail ?? 50}%`}>
+                          <PositionCell long={item.retailLong} short={item.retailShort} label="Retailers" cotIndex={item.cotIndexRetail} />
                         </div>
                       </td>
                       <td className="px-3 py-4 text-center">
