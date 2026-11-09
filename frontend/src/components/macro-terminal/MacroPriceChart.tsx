@@ -248,12 +248,20 @@ export function MacroPriceChart({ className }: { className?: string }) {
     });
 
     // volume — pane sendiri, skala terpisah
+    // v5 API: price scale options harus diterapkan via chart options atau series.priceScale()
     volumeSeriesRef.current = chart.addSeries(
       HistogramSeries,
-      { priceScaleId: "volume", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false },
+      {
+        priceScaleId: "volume",
+        priceFormat: { type: "volume" },
+        lastValueVisible: false,
+        priceLineVisible: false
+      },
       VOLUME_PANE
     );
-    chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } });
+    volumeSeriesRef.current.priceScale().applyOptions({
+      scaleMargins: { top: 0.15, bottom: 0 }
+    });
 
     // crosshair → hover legend
     const onMove = (param: MouseEventParams) => {

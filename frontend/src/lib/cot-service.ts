@@ -5,7 +5,7 @@ const COT_API = "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
 const EXTREME_THRESHOLD = 1.5;
 const LOOKBACK_WEEKS = 52;
 
-function getMarketPhase(managedMoneyNet: number, commercialsNet: number, cotIndexLS: number = 50): MarketPhase {
+function getMarketPhase(managedMoneyNet: number, commercialsNet: number, cotIndexLS: number = 50, cotIndexRetail: number = 50): MarketPhase {
   const smLong = commercialsNet > 0;
   const smShort = commercialsNet < 0;
   const lsLong = managedMoneyNet > 0;
@@ -14,23 +14,30 @@ function getMarketPhase(managedMoneyNet: number, commercialsNet: number, cotInde
     return { label: "NEUTRAL", color: "gray", isWarning: false };
   }
 
-  // Institutional Desk Logic: Smart Money anchor + Large Specs (LS) COT Index determinant
+  // Institutional Desk Logic: Smart Money anchor + Large Specs (LS) & Retail COT Index determinant
   if (smLong) {
+    // If LS extreme short OR Retail extreme long (both panic) → ACCUMULATION
+    if (cotIndexLS <= 25 && cotIndexRetail >= 75) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // Strong divergence
+    }
     if (cotIndexLS <= 25) {
-      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM long, LS extreme short
+      return { label: "ACCUMULATION", color: "blue", isWarning: true };
     }
-    if (cotIndexLS >= 75) {
-      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM long, LS extreme long
+    if (cotIndexLS >= 75 || cotIndexRetail <= 25) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
     }
-    return { label: "MARK UP", color: "green", isWarning: false }; // SM long, LS moderate long
+    return { label: "MARK UP", color: "green", isWarning: false };
   } else if (smShort) {
+    if (cotIndexLS >= 75 && cotIndexRetail <= 25) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true };
+    }
     if (cotIndexLS >= 75) {
-      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM short, LS extreme long
+      return { label: "ACCUMULATION", color: "blue", isWarning: true };
     }
-    if (cotIndexLS <= 25) {
-      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM short, LS extreme short
+    if (cotIndexLS <= 25 || cotIndexRetail >= 75) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
     }
-    return { label: "MARK DOWN", color: "red", isWarning: false }; // SM short, LS moderate short
+    return { label: "MARK DOWN", color: "red", isWarning: false };
   }
 
   return { label: "NEUTRAL", color: "gray", isWarning: false };
@@ -202,10 +209,13 @@ function enhanceRecords(records: any[]): CotItem[] {
 
     const smNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.commNet);
     const lsNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.nonCommNet);
+    const retailNets = hist.slice(-LOOKBACK_WEEKS).map(h => h.retailNet);
     const currentSM = hist.length > 0 ? hist[hist.length - 1].commNet : 0;
     const currentLS = hist.length > 0 ? hist[hist.length - 1].nonCommNet : 0;
+    const currentRetail = hist.length > 0 ? hist[hist.length - 1].retailNet : 0;
     const cotSM = smNets.length > 1 ? calcCotIndex(currentSM, smNets) : 50;
     const cotLS = lsNets.length > 1 ? calcCotIndex(currentLS, lsNets) : 50;
+    const cotRetail = retailNets.length > 1 ? calcCotIndex(currentRetail, retailNets) : 50;
 
     let wowSM = 0, wowLS = 0;
     if (hist.length >= 2) {
@@ -224,13 +234,14 @@ function enhanceRecords(records: any[]): CotItem[] {
     const dbs = calcDBS(currentSM, currentLS, cotSM, cotLS, wowSM);
 
     const divergence = Math.sign(currentSM) !== Math.sign(currentLS);
-    const phase = getMarketPhase(currentLS, currentSM, cotLS);
+    const phase = getMarketPhase(currentLS, currentSM, cotLS, cotRetail);
 
     return {
       ...item,
       phase,
       cotIndexSM: Math.round(cotSM),
       cotIndexLS: Math.round(cotLS),
+      cotIndexRetail: Math.round(cotRetail),
       wowDeltaSM: wowSM,
       wowDeltaLS: wowLS,
       openInterest: oi,
