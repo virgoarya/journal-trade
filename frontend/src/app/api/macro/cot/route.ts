@@ -18,6 +18,38 @@ const SYMBOLS_MAP: Record<string, { symbol: string; name: string; category: stri
 
 const LOOKBACK_WEEKS = 52;
 
+const EXTREME_THRESHOLD = 1.5;
+
+function getMarketPhase(managedMoneyNet: number, commercialsNet: number, cotIndexLS: number = 50) {
+  const smLong = commercialsNet > 0;
+  const smShort = commercialsNet < 0;
+
+  if (Math.abs(commercialsNet) < 1000) {
+    return { label: "NEUTRAL", color: "gray", isWarning: false };
+  }
+
+  // Institutional Desk Logic: Smart Money anchor + Large Specs (LS) COT Index determinant
+  if (smLong) {
+    if (cotIndexLS <= 25) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM long, LS extreme short
+    }
+    if (cotIndexLS >= 75) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM long, LS extreme long
+    }
+    return { label: "MARK UP", color: "green", isWarning: false }; // SM long, LS moderate long
+  } else if (smShort) {
+    if (cotIndexLS >= 75) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM short, LS extreme long
+    }
+    if (cotIndexLS <= 25) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM short, LS extreme short
+    }
+    return { label: "MARK DOWN", color: "red", isWarning: false }; // SM short, LS moderate short
+  }
+
+  return { label: "NEUTRAL", color: "gray", isWarning: false };
+}
+
 function calcCotIndex(net: number, history: number[]): number {
   const sorted = [...history].sort((a, b) => a - b);
   const min = sorted[0];
@@ -194,6 +226,8 @@ export async function GET() {
         sentiment = netPosition > 0 ? "BULLISH" : "BEARISH";
       }
 
+      const phase = getMarketPhase(currentLS, currentSM, cotIndexLS);
+
       return {
         symbol: meta.symbol,
         name: meta.name,
@@ -212,6 +246,7 @@ export async function GET() {
         cotIndexLS,
         wowDeltaSM,
         dbs,
+        phase,
         lastUpdate: item.report_date_as_yyyy_mm_dd || new Date().toISOString(),
       };
     });

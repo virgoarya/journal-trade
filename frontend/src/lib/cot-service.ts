@@ -5,17 +5,34 @@ const COT_API = "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
 const EXTREME_THRESHOLD = 1.5;
 const LOOKBACK_WEEKS = 52;
 
-function getMarketPhase(managedMoneyNet: number, commercialsNet: number): MarketPhase {
-  const mmPositive = managedMoneyNet > 0;
-  const commNetShort = commercialsNet < 0;
-  const commNetLong = commercialsNet > 0;
-  const commAbs = Math.abs(commercialsNet);
-  const mmAbs = Math.abs(managedMoneyNet);
+function getMarketPhase(managedMoneyNet: number, commercialsNet: number, cotIndexLS: number = 50): MarketPhase {
+  const smLong = commercialsNet > 0;
+  const smShort = commercialsNet < 0;
+  const lsLong = managedMoneyNet > 0;
 
-  if (mmPositive && !commNetShort) return { label: "MARK UP", color: "green", isWarning: false };
-  if (mmPositive && commNetShort && commAbs > managedMoneyNet * EXTREME_THRESHOLD) return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
-  if (!mmPositive && !commNetLong) return { label: "MARK DOWN", color: "red", isWarning: false };
-  if (!mmPositive && commNetLong && commercialsNet > mmAbs * EXTREME_THRESHOLD) return { label: "ACCUMULATION", color: "blue", isWarning: true };
+  if (Math.abs(commercialsNet) < 1000) {
+    return { label: "NEUTRAL", color: "gray", isWarning: false };
+  }
+
+  // Institutional Desk Logic: Smart Money anchor + Large Specs (LS) COT Index determinant
+  if (smLong) {
+    if (cotIndexLS <= 25) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM long, LS extreme short
+    }
+    if (cotIndexLS >= 75) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM long, LS extreme long
+    }
+    return { label: "MARK UP", color: "green", isWarning: false }; // SM long, LS moderate long
+  } else if (smShort) {
+    if (cotIndexLS >= 75) {
+      return { label: "DISTRIBUTION", color: "yellow", isWarning: true }; // SM short, LS extreme long
+    }
+    if (cotIndexLS <= 25) {
+      return { label: "ACCUMULATION", color: "blue", isWarning: true }; // SM short, LS extreme short
+    }
+    return { label: "MARK DOWN", color: "red", isWarning: false }; // SM short, LS moderate short
+  }
+
   return { label: "NEUTRAL", color: "gray", isWarning: false };
 }
 
@@ -207,16 +224,11 @@ function enhanceRecords(records: any[]): CotItem[] {
     const dbs = calcDBS(currentSM, currentLS, cotSM, cotLS, wowSM);
 
     const divergence = Math.sign(currentSM) !== Math.sign(currentLS);
-    let enhancedPhase = item.phase;
-    if (divergence && cotSM <= 15 && cotLS >= 75) {
-      enhancedPhase = { label: wowSM > 0 ? "ACCUMULATION" : "DISTRIBUTION", color: wowSM > 0 ? "blue" : "yellow", isWarning: true };
-    } else if (divergence && cotSM >= 85 && cotLS <= 25) {
-      enhancedPhase = { label: wowSM < 0 ? "DISTRIBUTION" : "MARK UP", color: wowSM < 0 ? "yellow" : "green", isWarning: wowSM < 0 };
-    }
+    const phase = getMarketPhase(currentLS, currentSM, cotLS);
 
     return {
       ...item,
-      phase: enhancedPhase,
+      phase,
       cotIndexSM: Math.round(cotSM),
       cotIndexLS: Math.round(cotLS),
       wowDeltaSM: wowSM,

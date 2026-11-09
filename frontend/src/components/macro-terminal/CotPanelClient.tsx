@@ -8,19 +8,6 @@ import { CotDivergenceScanner } from "./CotDivergenceScanner";
 
 const CATEGORY_ORDER = ["Energy", "Metals", "Currencies", "Indices"];
 
-const EXTREME_THRESHOLD = 1.5;
-function derivePhase(item: CotItem): MarketPhase {
-  if (item.phase) return item.phase;
-  const mmNet = item.nonCommercialLong - item.nonCommercialShort;
-  const commNet = item.commercialLong - item.commercialShort;
-  const mmAbs = Math.abs(mmNet);
-  const commAbs = Math.abs(commNet);
-  if (mmNet > 0 && commNet >= 0) return { label: "MARK UP", color: "green", isWarning: false };
-  if (mmNet > 0 && commNet < 0 && commAbs > mmNet * EXTREME_THRESHOLD) return { label: "DISTRIBUTION", color: "yellow", isWarning: true };
-  if (mmNet < 0 && commNet <= 0) return { label: "MARK DOWN", color: "red", isWarning: false };
-  if (mmNet < 0 && commNet > 0 && commNet > mmAbs * EXTREME_THRESHOLD) return { label: "ACCUMULATION", color: "blue", isWarning: true };
-  return { label: "NEUTRAL", color: "gray", isWarning: false };
-}
 const CATEGORY_ICONS: Record<string, string> = {
   Energy: "⚡",
   Metals: "🥇",
@@ -36,6 +23,48 @@ function netColor(net: number) {
   if (net > 0) return "text-emerald-400";
   if (net < 0) return "text-red-400";
   return "text-zinc-400";
+}
+
+function getPhaseReasoning(item: CotItem): string {
+  const smNet = item.commercialLong - item.commercialShort;
+  const lsNet = item.nonCommercialLong - item.nonCommercialShort;
+  const retailNet = item.retailLong - item.retailShort;
+  const phaseLabel = item.phase?.label || "NEUTRAL";
+  const lsIndex = item.cotIndexLS ?? 50;
+
+  const smText = smNet > 0 ? `Net Long (+${fmt(smNet)})` : `Net Short (${fmt(smNet)})`;
+  const lsText = lsNet > 0 ? `Net Long (+${fmt(lsNet)})` : `Net Short (${fmt(lsNet)})`;
+  const retailText = retailNet > 0 ? `Net Long (+${fmt(retailNet)})` : `Net Short (${fmt(retailNet)})`;
+
+  const smDesc = smNet > 0 ? "Smart Money Akumulasi" : "Smart Money Hedging/Distribusi";
+  const lsDesc = lsIndex >= 75 ? "Spekulan Extreme Long (FOMO)" : lsIndex <= 25 ? "Spekulan Extreme Short (Panik)" : "Spekulan Posisi Moderat";
+  const retailDesc = retailNet > 0 ? "Retail Bullish (Likuiditas Institusi)" : "Retail Bearish";
+
+  if (phaseLabel === "ACCUMULATION") {
+    return `[ACCUMULATION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText}\n• Reasoning: Institusi membeli saat spekulan & retail panik jual. Smart traders follow SM entry.`;
+  }
+  if (phaseLabel === "DISTRIBUTION") {
+    return `[DISTRIBUTION]\n• Smart Money: ${smText} (${smDesc})\n• Large Specs: ${lsText} (${lsDesc})\n• Retail: ${retailText}\n• Reasoning: Institusi melepas inventory saat spekulan & retail euphoria/FOMO. Waspada reversal.`;
+  }
+  if (phaseLabel === "MARK UP") {
+    return `[MARK UP]\n• Smart Money: ${smText} (Anchor Long)\n• Large Specs: ${lsText} (Trend Participation)\n• Reasoning: Tren naik sehat. Institusi mempertahankan long, spekulan mulai ikut mendorong harga.`;
+  }
+  if (phaseLabel === "MARK DOWN") {
+    return `[MARK DOWN]\n• Smart Money: ${smText} (Anchor Short)\n• Large Specs: ${lsText} (Trend Participation)\n• Reasoning: Tren turun kuat. Institusi mempertahankan short, spekulan ikut menekan harga.`;
+  }
+  return `[NEUTRAL]\n• Smart Money: ${smText}\n• Large Specs: ${lsText}\n• Reasoning: Tidak ada arah institusional yang dominan. Pasar konsolidasi.`;
+}
+
+function getDbsReasoning(item: CotItem): string {
+  const dbs = item.dbs ?? 0;
+  const bias = item.directionBias?.replace(/_/g, " ") || "NEUTRAL";
+  let action = "Wait / Sideways";
+  if (dbs >= 4) action = "High Conviction BUY";
+  else if (dbs <= -4) action = "High Conviction SELL";
+  else if (dbs > 0) action = "Mild Bullish";
+  else if (dbs < 0) action = "Mild Bearish";
+
+  return `Direction Bias Score: ${dbs > 0 ? `+${dbs}` : dbs} (${bias})\n• Rekomendasi: ${action}\n• Kalkulasi: Berdasarkan posisi Smart Money, divergensi dengan Large Specs, dan perubahan mingguan (WoW).`;
 }
 
 function PhaseBadge({ phase }: { phase?: MarketPhase }) {
@@ -321,7 +350,9 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                         </div>
                       </td>
                       <td className="px-3 py-4 text-center">
-                        <PhaseBadge phase={derivePhase(item)} />
+                        <div title={getPhaseReasoning(item)}>
+                          <PhaseBadge phase={item.phase} />
+                        </div>
                       </td>
                       <td className="px-3 py-4 text-center">
                         <div className="flex items-center justify-center gap-1" title={`COT Index (0-100% over 52w):\n- Smart Money: ${item.cotIndexSM ?? 50}% (${(item.cotIndexSM ?? 50) >= 70 ? "Bullish/Akumulasi tinggi" : (item.cotIndexSM ?? 50) <= 30 ? "Bearish/Distribusi tinggi" : "Netral"})\n- Large Specs: ${item.cotIndexLS ?? 50}%`}>
@@ -336,7 +367,7 @@ export function CotPanelClient({ cotData }: CotPanelClientProps) {
                       </td>
                       <td className="px-3 py-4 text-center">
                         {item.dbs !== undefined ? (
-                          <div title={`Direction Bias Score (${item.dbs > 0 ? `+${item.dbs}` : item.dbs}): ${item.directionBias?.replace(/_/g, " ") || "NEUTRAL"}\n- Menunjukkan kekuatan arah tren institusional dari skala -10 (Sangat Bearish) hingga +10 (Sangat Bullish).`} className={`inline-flex items-center justify-center min-w-[32px] h-6 px-1.5 rounded-md font-mono text-[11px] font-black tabular-nums border ${
+                          <div title={getDbsReasoning(item)} className={`inline-flex items-center justify-center min-w-[32px] h-6 px-1.5 rounded-md font-mono text-[11px] font-black tabular-nums border ${
                             item.dbs >= 4 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_10px_rgba(52,211,153,0.1)]" :
                             item.dbs >= 1 ? "text-emerald-400/80 bg-emerald-500/5 border-emerald-500/10" :
                             item.dbs <= -4 ? "text-red-400 bg-red-500/10 border-red-500/30 shadow-[0_0_10px_rgba(248,113,113,0.1)]" :
